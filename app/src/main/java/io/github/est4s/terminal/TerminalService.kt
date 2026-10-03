@@ -36,7 +36,7 @@ class TerminalService : Service() {
 
     private val binder = LocalBinder()
     private val client by lazy { SessionClient(this) }
-    var tabs = newTabs()
+    var tabs: Tabs<TerminalSession> = newTabs()
         private set
     private var notifiedCount = -1
 
@@ -96,7 +96,7 @@ class TerminalService : Service() {
         sessions.forEach { it.finishIfRunning() }
     }
 
-    private fun newTabs() = Tabs<TerminalSession> {
+    private fun newTabs(): Tabs<TerminalSession> = Tabs {
         if (!tabs.isEmpty && tabs.tabs.size != notifiedCount) updateNotification()
         activity?.onTabsChanged()
     }
