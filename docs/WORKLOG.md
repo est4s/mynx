@@ -13,7 +13,7 @@ Newest entries first. Rules for keeping it up to date: see
   saved and shown in a dialog on the next launch. proot ships as
   `libproot.so` + `libproot-loader.so` and is on the shell's `PATH`. The
   APK carries `assets/debian-rootfs.tar.xz`; the first launch unpacks it into
-  `filesDir/debian` with a progress screen (not started yet). APK: 30 MB.
+  `filesDir/debian` with a progress screen (~5 s). APK: 30 MB.
 - **Build:** GitHub Actions runs the TDD check and all tests, builds proot
   with the NDK (cached), then builds a debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
   phone.
@@ -42,11 +42,9 @@ Logic goes into `core` test-first; the Android and CI parts are spikes per
    2026-10-03 (3)).
 3. ~~**Debian rootfs in the APK.**~~ Done (log 2026-10-03 (4)). Nothing to
    check on the phone until 1.4 unpacks it.
-4. ~~**First-run install.**~~ Code done (log 2026-10-03 (5)). **Owner
-   checks on the phone:** a fresh start shows "Setting up Debian… N%" with a
-   progress bar, then the terminal; `cat debian/etc/os-release` says trixie;
-   `cat debian/etc/resolv.conf` has the nameservers; closing the app mid-way
-   and reopening restarts the install cleanly. Note how long it takes.
+4. ~~**First-run install.**~~ Done and confirmed on the phone (log
+   2026-10-03 (5)): unpacking takes ~5 s. The interrupted-install check
+   (swipe away mid-unpack, reopen) hasn't been tried yet.
 5. **Start Debian** with the command from `prootLaunch()` in `core`, which
    builds roughly:
    ```
@@ -98,7 +96,11 @@ Then continue with roadmap step 2 (tabs and the background service).
   the end, instead of a separate marker file: same guarantee, one less
   thing to get out of sync.
 
-**Open issues:** not yet confirmed on the device.
+**Owner confirmed on the phone:** progress screen then terminal, ~5 s;
+`os-release` says trixie; `resolv.conf` written. Interrupt-and-reopen not
+tried yet.
+
+**Commits:** `3aede1b`
 
 ### 2026-10-03 (4): step 1.3, Debian rootfs in the APK
 

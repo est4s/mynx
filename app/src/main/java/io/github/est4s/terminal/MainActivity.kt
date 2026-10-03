@@ -21,7 +21,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
+import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.prootLaunch
 import java.io.File
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -134,23 +136,19 @@ class MainActivity : Activity() {
         setTextColor(Color.parseColor("#FF2BD6"))
     }
 
-    // Until Debian starts (step 1.5), proot is reachable from this Android shell
-    // for testing: `libproot.so --version`.
     fun startShell(): TerminalSession {
         val libDir = applicationInfo.nativeLibraryDir
-        val prootTmp = File(cacheDir, "proot").apply { mkdirs() }
+        val launch = prootLaunch(ProotPaths(
+            proot = "$libDir/libproot.so",
+            loader = "$libDir/libproot-loader.so",
+            rootfs = installer.rootfs.absolutePath,
+            tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
+        ))
         return TerminalSession(
-            "/system/bin/sh",
+            launch.argv.first(),
             filesDir.absolutePath,
-            arrayOf("sh"),
-            arrayOf(
-                "TERM=xterm-256color",
-                "HOME=${filesDir.absolutePath}",
-                "TMPDIR=${cacheDir.absolutePath}",
-                "PATH=/system/bin:$libDir",
-                "PROOT_LOADER=$libDir/libproot-loader.so",
-                "PROOT_TMP_DIR=${prootTmp.absolutePath}",
-            ),
+            launch.argv.toTypedArray(),
+            launch.env.map { (k, v) -> "$k=$v" }.toTypedArray(),
             2000,
             SessionClient(this),
         )
