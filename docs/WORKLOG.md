@@ -10,9 +10,10 @@ Newest entries first. Rules for keeping it up to date: see
 
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
-  (with their folders) restored after Android kills the app. Two things
-  are untested: hardware keyboard shortcuts (owner has no keyboard, see
-  "Hardware keyboard checks") and restoring renamed tabs (no rename UI yet).
+  (with their folders and names) restored after Android kills the app.
+  Tabs can be renamed with a long-press (or Ctrl+Shift+R). Still
+  untested: hardware keyboard shortcuts (owner has no keyboard, see
+  "Hardware keyboard checks").
 - **Next: roadmap step 3 (*Default setup*)**, planned with the owner;
   start with 3.1 (neon colours and font). See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
@@ -33,7 +34,7 @@ Newest entries first. Rules for keeping it up to date: see
   debug APK. `scripts/deliver.sh` installs it on the phone.
 - **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
   `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt`, `TabShortcuts.kt`,
-  `TabState.kt` and `HostPath.kt` (68 tests in all). `app/` is
+  `TabState.kt` and `HostPath.kt` (73 tests in all). `app/` is
   `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
@@ -132,8 +133,9 @@ profiles (step 8), the in-app keyboard (step 5).
   gets `PROMPT_COMMAND` writing `$PWD` to `/tmp/.pocket-terminal/cwd-N`
   (Debian path), read by `cwdOf()`; the dir is cleared when the service
   starts. `exit()` deletes the state file.
-- `app/.../MainActivity.kt`: install screen, tab strip (`renderStrip()`),
-  `onTabAction()`, insets, crash dialog. Colours are constants at the top
+- `app/.../MainActivity.kt`: install screen, tab strip (`renderStrip()`,
+  long-press → `showRename()` dialog), `onTabAction()`, insets, crash
+  dialog. Colours are constants at the top
   (`ACCENT`, `MARK`, …). The terminal font is the default monospace.
 - `core/`: `ProotLaunch.kt` (argv/env incl. `cwdFile`), `RootfsInstaller`,
   `FakeProc`, `Tabs`, `TabShortcuts`, `TabState`, `HostPath`.
@@ -148,6 +150,7 @@ in-app keyboard (step 5) can send these combos:
 - Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous tab, wrapping round
 - Ctrl+Alt+1…9 jump to tab N (no-op past the last tab)
 - Ctrl+Shift+PgUp / PgDn move the selected tab left / right
+- Ctrl+Shift+R opens the rename dialog; Enter in it saves, Esc cancels
 - holding a shortcut acts once (no row of new tabs)
 - Ctrl+T, Ctrl+W, Tab, Ctrl+Alt+0 still reach the shell (e.g. Ctrl+W
   deletes a word in bash)
@@ -168,6 +171,30 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-03 (11): rename tabs
+
+Owner asked for renaming without a hardware keyboard before starting
+step 3, so the README's "long-press a tab for rename" came forward (the
+rest of that long-press menu, colour/duplicate/close others, is still
+later).
+
+**Done**
+- `core`, test-first (5 tests): `Tabs.renameInput()` (the shown title)
+  and `Tabs.applyRenameInput()` (trimmed; blank = automatic title; saving
+  the shown title unchanged doesn't pin it), `TabAction.Rename` on
+  Ctrl+Shift+R (Windows Terminal has no default; Ctrl+R still reaches
+  bash).
+- Long-press a tab → "Rename tab" dialog with the keyboard up; IME Done
+  saves; **Automatic** button only on renamed tabs.
+
+**Owner confirmed on the phone:** rename shows in the strip; clearing goes
+back to "Tab N"; renamed tabs keep their names after a force-stop (the
+step 2 restore check that couldn't be run before); a rename beats the
+shell's OSC title and **Automatic** brings the shell title back; typing
+works after cancelling.
+
+**Commits:** `e37ac70`
 
 ### 2026-10-03 (10): step 2.5, restore tabs; step 2 done
 
