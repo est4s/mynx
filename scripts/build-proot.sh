@@ -71,13 +71,13 @@ cp talloc.h "$work/talloc/include/"
 echo "== proot $PROOT_TAG"
 cd "$work"
 git clone -q --depth 1 --branch "$PROOT_TAG" https://github.com/termux/proot.git
+# Uses strcmp/memset without including string.h; current clang rejects that.
+sed -i '1i #include <string.h>' proot/src/extension/ashmem_memfd/ashmem_memfd.c
 # The loader is a separate file found through PROOT_LOADER at runtime: the
 # bundled one would be extracted to app storage, where Android forbids exec.
 # Flags go in through the environment: on the command line they would replace
 # the makefile's own flags instead of adding to them.
-# `-include string.h`: ashmem_memfd.c uses strcmp/memset without including it,
-# which current clang rejects.
-CPPFLAGS="-I$work/talloc/include -DARG_MAX=131072 -include string.h" LDFLAGS="-L$work/talloc/lib" \
+CPPFLAGS="-I$work/talloc/include -DARG_MAX=131072" LDFLAGS="-L$work/talloc/lib" \
     make -C proot/src -j"$(nproc)" proot loader/loader PROOT_UNBUNDLE_LOADER=/nonexistent
 
 mkdir -p "$out"
