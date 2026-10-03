@@ -25,13 +25,26 @@ can install it with one tap.
 - Your files and installed packages survive app updates. Updates only add
   on top of an existing install and never overwrite it.
 
-### Multiple terminals
-- Run as many terminal sessions as you like, side by side.
-- Switch with tabs, a swipe gesture or a session drawer; rename and close
-  sessions.
-- Sessions keep running in the background (foreground service with an
-  optional wakelock), so long jobs survive switching apps.
-- Open a new session in the current profile or a different one.
+### Multiple terminals, in tabs
+Terminals open in **browser-style tabs**, laid out like Windows Terminal:
+- A **tab strip** along the top. Each tab shows the profile's icon, a title
+  and a **×** close button.
+- A **+** button opens a new tab in the current profile. The **⌄** next to it
+  lists your profiles, so you can open a tab in any of them.
+- Tab titles follow what's running (for example `vim notes.txt`), or you can
+  rename a tab yourself.
+- Tabs take their **profile's colour**, so you can tell profiles apart at a
+  glance. You can also pick a colour for a single tab.
+- **Drag to reorder** tabs. Long-press a tab for rename, colour, duplicate,
+  close others.
+- **Swipe** across the terminal to move to the next or previous tab.
+- With many tabs, the strip scrolls sideways, and a tab overview shows them
+  all at once.
+- An **activity dot** on background tabs shows new output, and a bell icon
+  marks a terminal bell.
+- Tabs keep running in the background (foreground service with an optional
+  wakelock), so long jobs survive switching apps. Open tabs are restored when
+  you reopen the app.
 
 ### In-app keyboard
 A keyboard drawn inside the app. It's not a system keyboard, so the rest of the
@@ -117,7 +130,7 @@ Because Debian runs through `proot` rather than a virtual machine:
 
 ## Roadmap
 1. **Core:** app opens a terminal into the built-in Debian.
-2. **Multiple terminals:** sessions, tabs, background service.
+2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
 4. **In-app keyboard:** terminal layout, shortcuts, game mode.
 5. **Customization:** theme, keyboard and menu editors.
