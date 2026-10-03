@@ -1,22 +1,25 @@
 # Agent guide
 
 Context for AI agents (and humans) working on this repo. Read `README.md` first
-for **what** the app does. This file covers **how** we build it, the decisions
-already made, and what to do next.
+for **what** the app does. This file covers **how** we build it and the decisions
+already made. Status and next steps live in `docs/WORKLOG.md`.
 
 Keep this file up to date: when a decision changes or a milestone lands, update
 the relevant section in the same commit.
 
 ---
 
-## Status
+## Status, work log and next steps
 
-- **Done:** app skeleton + CI. The app is a single screen that says "build
-  pipeline works" and shows its version and build number. It installs and runs
-  on the owner's phone.
-- **TDD setup done:** `core` module with tests, local test loop on the
-  phone, pre-commit hook and CI checks (see [TDD](#tdd-required)).
-- **Next:** roadmap step 1, *Core*. See [Next step](#next-step-roadmap-1-core).
+**Read [`docs/WORKLOG.md`](docs/WORKLOG.md) before starting work.** It says
+where the project stands, what was done in earlier sessions, and exactly what
+to do next.
+
+**Update it before you finish** a session or hand off:
+- add a dated entry at the top of the log: what you did, decisions made (and
+  why), anything left broken or half-done, commits
+- rewrite "Next" so a fresh agent can continue without asking
+- commit it together with the work it describes
 
 ## Naming
 
@@ -139,62 +142,6 @@ These come from the README scope and apply to every feature:
   accounts.
 - **Licenses:** keep GPL components (proot) as separate executables and link
   their source from the app's About screen.
-
----
-
-## Next step: roadmap 1, Core
-
-**Goal:** opening the app shows a terminal running `bash` inside the built-in
-Debian.
-
-Suggested order (each step should end in a build the owner can install).
-Logic goes into `core` test-first; the Android and CI parts are spikes per
-[Spikes](#spikes). The proot command is already done:
-`core/.../ProotLaunch.kt`, built by TDD as the first example.
-
-1. **Terminal view with a local shell.** Add the terminal libraries, put a
-   `TerminalView` on screen and start `/system/bin/sh` in a `TerminalSession`.
-   Proves keyboard input, rendering and colours. Show the soft keyboard on tap
-   for now; the in-app keyboard comes in step 5.
-2. **proot in the APK.** New CI job: clone `termux/proot` at a pinned commit,
-   build `libproot.so` and `libproot-loader.so` for `arm64-v8a` with the NDK,
-   cache the result and put them in `app/src/main/jniLibs/arm64-v8a/` before
-   the Gradle build (don't commit the binaries). Check: run
-   `libproot.so --version` in the terminal.
-3. **Debian rootfs in the APK.** New CI step: export `debian:trixie` (arm64)
-   to a `.tar.xz` and put it in `app/src/main/assets/` before the Gradle build.
-   Watch the APK size; the bare rootfs should be ~30 MB compressed.
-4. **First-run install.** Unpack the rootfs into `filesDir/debian/` with a
-   progress screen. Use `org.apache.commons:commons-compress` +
-   `org.tukaani:xz`. The unpacking logic belongs in `core`, test-first
-   (feed it small test archives). Handle symlinks and file modes; convert hard links into
-   copies or symlinks (Android's storage doesn't allow them for apps). Write a
-   marker file only after everything succeeds, so an interrupted install
-   restarts cleanly. Then write `/etc/resolv.conf` (e.g. `1.1.1.1`, `8.8.8.8`;
-   Android has none) and `/etc/hosts`.
-5. **Start Debian** with the command from `prootLaunch()` in `core`, which
-   builds roughly:
-   ```
-   libproot.so --kill-on-exit --link2symlink -0 \
-     -r <filesDir>/debian -w /root \
-     -b /dev -b /proc -b /sys -b /storage \
-     /usr/bin/env -i HOME=/root TERM=xterm-256color LANG=C.UTF-8 \
-       PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-       /bin/bash --login
-   ```
-   with `PROOT_LOADER` and `PROOT_TMP_DIR` (a folder in `cacheDir`) in the
-   environment. Android blocks some `/proc` files; if tools break, bind fake
-   ones like `proot-distro` does (`/proc/loadavg`, `/proc/stat`,
-   `/proc/uptime`, `/proc/version`, `/proc/vmstat`).
-
-**Done when:**
-- a fresh install shows a progress screen, then a `root@…` bash prompt
-- `apt update && apt install -y htop` works, and `htop` draws correctly
-- installing the next build as an update keeps installed packages and files
-- errors (failed unpack, proot crash) appear on screen with details, not as a
-  silent crash
-
-Then continue with roadmap step 2 (tabs and the background service).
 
 ---
 
