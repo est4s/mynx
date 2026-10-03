@@ -9,6 +9,7 @@ set -euo pipefail
 # source dir -> test dir. Add a line when a new tested module or test suite appears.
 pairs=(
     "core/src/main/ core/src/test/"
+    "rootfs/root/ tests/shell/"
 )
 
 files=$(cat)

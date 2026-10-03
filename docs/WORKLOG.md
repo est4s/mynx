@@ -15,8 +15,9 @@ Newest entries first. Rules for keeping it up to date: see
   untested: hardware keyboard shortcuts (owner has no keyboard, see
   "Hardware keyboard checks").
 - **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
-  Font) is done and confirmed on the phone. **Next: 3.2 (customized
-  rootfs).** See "Next".
+  Font) is done and confirmed on the phone. 3.2 (customized rootfs) is
+  built, **waiting for the owner's check (needs a data clear)**; then 3.3
+  (launcher menu). See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -114,7 +115,25 @@ Original plan for 3.1:
   in Debian (e.g. `~/.config/pocket-terminal/colors.properties`) so users
   and agents can edit it; reading it can wait for 3.2's rootfs if simpler.
 
-**3.2 Customized rootfs.**
+**3.2 Customized rootfs. Built, not yet confirmed.** Owner clears the
+app's data (Settings → Apps → Pocket Terminal → Storage → Clear storage),
+opens it, and checks:
+- prompt is starship: a Debian logo, `~` in cyan, pink `❯`; icons render
+- the tab is named `~`, and after `cd /etc` it's `etc`
+- `ls`, `ll`, `la`, `tree` show eza output with icons
+- `rogue`, `drive`, `flap` start the games; quitting returns to the shell
+- `apt update && apt install -y cowsay` prints no `debconf:` warnings
+- `cat ~/.config/pocket-terminal/colors.properties` shows the Neon file;
+  colours are still neon
+- `mc` opens Midnight Commander (F10 quits)
+- folder restore still works: `cd /etc` in a second tab, force-stop the
+  app, reopen: both tabs back, the second in `/etc`
+- `cat <(echo ok)` prints `ok` (process substitution: broken in the dev
+  Debian, see AGENTS.md "proot notes"; if broken here too, fix it in the
+  proot binds)
+- APK size (was 33 MB)
+
+Original plan for 3.2:
 - Ship the neon theme file into Debian as
   `/root/.config/pocket-terminal/colors.properties`: copy it from
   `core/src/main/resources/io/github/est4s/terminal/core/neon.colors.properties`
@@ -162,7 +181,9 @@ Original plan for 3.1:
   (`ACCENT`, `MARK`, …). The terminal font is the default monospace.
 - `core/`: `ProotLaunch.kt` (argv/env incl. `cwdFile`), `RootfsInstaller`,
   `FakeProc`, `Tabs`, `TabShortcuts`, `TabState`, `HostPath`.
-- Rootfs: `scripts/build-rootfs.sh` exports plain `debian:trixie`.
+- Rootfs: `scripts/build-rootfs.sh` builds `rootfs/Dockerfile` (3.2).
+  The menu goes in there too (e.g. `rootfs/bin/menu` →
+  `/usr/local/bin/menu`), its bats tests in `tests/shell/`.
 
 ### Hardware keyboard checks (later)
 The owner has no hardware keyboard, so these are untested. Run them when
@@ -194,6 +215,44 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-03 (13): step 3.2, customized rootfs
+
+**Done**
+- `rootfs/Dockerfile`, built by `scripts/build-rootfs.sh` with buildx for
+  arm64 (CI adds `setup-qemu-action` and `setup-buildx-action`), on the
+  `debian:trixie` digest it pulled (recorded in `debian-rootfs.txt` as
+  before). Installs `apt-utils dialog eza mc python3 starship`
+  (no recommends; apt lists removed). Copies `rootfs/root/` (`.bashrc`,
+  `.config/starship.toml`) into `/root`, the Neon colours file from
+  `core`'s resources (named build context `neon`) to
+  `/root/.config/pocket-terminal/colors.properties`, and the games to
+  `/opt/neon-games/` with `rogue`, `drive`, `flap` in `/usr/local/bin`.
+- Root's `.bashrc`, test-first with bats (7 tests in
+  `tests/shell/bashrc.bats`): eza aliases only when eza exists; tab title
+  = folder name (`~` at home) via `pocket_set_title`; starship init with
+  `starship_precmd_user_func`. Tested: the app's `PROMPT_COMMAND` (tab
+  folder reporting) still runs with and without starship (starship moves
+  it into `STARSHIP_PROMPT_COMMAND` and evals it). `LANG`, and
+  `~/.local/bin` first on `PATH`.
+- CI runs `bats tests/shell` after the Kotlin tests; `check-tdd.sh` pairs
+  `rootfs/root/` with `tests/shell/`.
+- `scripts/bats-lite.sh`: tiny bats stand-in for the phone (see AGENTS.md).
+
+**Gotcha:** real bats can't run on the phone. It uses process
+substitution, and proot-distro's `/dev/fd` is a frozen copy of one
+process's fd folder (`cat <(echo hi)` fails). Might affect the app's own
+Debian too; on the check list.
+
+**Decisions**
+- Games live in `/opt/neon-games/` (system-wide, not in `/root`), so a
+  later app update can replace them with a migration without touching
+  user files; scores stay in `~`.
+- Title is the folder name only: tabs are narrow on a phone.
+- No QEMU-built image locally (no docker on the phone): the Dockerfile is
+  verified by the CI build and the owner's checks.
+
+**Commits:** (pending)
 
 ### 2026-10-03 (12): step 3.1, neon colours and font
 

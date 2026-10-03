@@ -46,6 +46,11 @@ jobs:
       - name: Test
         run: ./gradlew --no-daemon test
 
+      - name: Shell tests
+        run: |
+          sudo apt-get install -y -qq bats >/dev/null
+          bats tests/shell
+
       # proot is built from source with the NDK and cached; the binaries are
       # never committed. The cache key changes with the script (which pins the
       # versions) and the runner's NDK.
@@ -71,6 +76,13 @@ jobs:
         run: |
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp build/proot/*.so app/src/main/jniLibs/arm64-v8a/
+
+      # The rootfs is built for arm64 and its RUN steps execute under QEMU.
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v4
 
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets

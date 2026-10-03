@@ -1,0 +1,48 @@
+# Prompt: starship (https://starship.rs/config/), in the Neon colours.
+add_newline = true
+format = """$os$directory$git_branch$git_status$python$nodejs$rust$golang$cmd_duration
+$character"""
+
+[os]
+disabled = false
+style = "bold #b967ff"
+[os.symbols]
+Debian = " "
+
+[directory]
+style = "bold #03edf9"
+truncation_length = 3
+truncation_symbol = "…/"
+read_only = " 󰌾"
+
+[git_branch]
+symbol = " "
+style = "bold #ff7edb"
+
+[git_status]
+style = "#fede5d"
+
+[python]
+symbol = " "
+style = "#fede5d"
+
+[nodejs]
+symbol = " "
+style = "#72f1b8"
+
+[rust]
+symbol = " "
+style = "#fe4450"
+
+[golang]
+symbol = " "
+style = "#03edf9"
+
+[cmd_duration]
+min_time = 2000
+format = " [ $duration]($style)"
+style = "#c8c2d8"
+
+[character]
+success_symbol = "[❯](bold #ff7edb)"
+error_symbol = "[❯](bold #fe4450)"

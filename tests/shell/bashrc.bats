@@ -1,0 +1,68 @@
+#!/usr/bin/env bats
+# The root .bashrc that ships in the Debian image (rootfs/root/.bashrc).
+
+BASHRC="$BATS_TEST_DIRNAME/../../rootfs/root/.bashrc"
+
+setup() {
+    export HOME="$BATS_TEST_TMPDIR/home"
+    mkdir -p "$HOME"
+    # Only stubs and the basics, so the host's starship/eza don't leak in.
+    STUBS="$BATS_TEST_TMPDIR/bin"
+    mkdir -p "$STUBS"
+    for tool in bash cat printf mkdir; do ln -sf "$(command -v $tool)" "$STUBS/$tool"; done
+}
+
+# Runs $1 in an interactive bash that has read the .bashrc. On its own
+# line: bash expands aliases only in lines read after they're defined.
+in_shell() {
+    PATH="$STUBS" bash --norc --noprofile -i -c "source '$BASHRC'"$'\n'"$1" 2>/dev/null
+}
+
+stub() {
+    printf '#!/bin/sh\n%s\n' "$2" >"$STUBS/$1"
+    chmod +x "$STUBS/$1"
+}
+
+@test "tab title is the folder name" {
+    mkdir -p "$HOME/src/app"
+    run in_shell "cd '$HOME/src/app' && pocket_set_title"
+    [ "$output" = $'\e]0;app\a' ]
+}
+
+@test "tab title is ~ at home and / at the root" {
+    run in_shell "cd ~ && pocket_set_title && cd / && pocket_set_title"
+    [ "$output" = $'\e]0;~\a\e]0;/\a' ]
+}
+
+@test "ls and friends use eza when it's installed" {
+    stub eza 'echo "eza $*"'
+    run in_shell "ls; ll; la; tree"
+    [ "${lines[0]}" = "eza --icons=auto --group-directories-first" ]
+    [ "${lines[1]}" = "eza -l --icons=auto --group-directories-first --git" ]
+    [ "${lines[2]}" = "eza -la --icons=auto --group-directories-first --git" ]
+    [ "${lines[3]}" = "eza --tree --icons=auto" ]
+}
+
+@test "no eza aliases without eza" {
+    run in_shell "alias ls"
+    [ "$status" -ne 0 ]
+}
+
+@test "without starship, the prompt sets the title and keeps the app's command" {
+    export PROMPT_COMMAND='printf app'
+    run in_shell 'cd ~ && eval "$PROMPT_COMMAND"'
+    [ "$output" = $'\e]0;~\aapp' ]
+}
+
+@test "with starship, the prompt sets the title and keeps the app's command" {
+    command -v starship >/dev/null || skip "starship not installed"
+    ln -sf "$(command -v starship)" "$STUBS/starship"
+    export PROMPT_COMMAND='printf app'
+    run in_shell 'cd ~ && starship_precmd'
+    [ "$output" = $'\e]0;~\aapp' ]
+}
+
+@test "home's local bin comes first on PATH" {
+    run in_shell 'echo "$PATH"'
+    [ "${output%%:*}" = "$HOME/.local/bin" ]
+}

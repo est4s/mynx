@@ -115,11 +115,14 @@ See README "How it works". The details:
   native library directory, not from its data directory. Set
   `packaging.jniLibs.useLegacyPackaging = true` so the libraries are extracted
   to `applicationInfo.nativeLibraryDir`, and run them from there.
-- **Debian:** an arm64 rootfs built in CI from the official Docker Hub image
-  (`debian:trixie`, `--platform linux/arm64`, then `docker export`). Later
-  steps customize it at build time (packages, dotfiles, launcher menu, games)
-  with a Dockerfile and buildx/QEMU. Ship it compressed in the APK's assets
-  and unpack it on first launch into the app's private storage.
+- **Debian:** an arm64 rootfs built in CI by `scripts/build-rootfs.sh`
+  from `rootfs/Dockerfile` (buildx + QEMU, `--output type=tar`) on top of
+  the official `debian:trixie` image, pinned to the digest it pulled. The
+  Dockerfile adds packages, root's dotfiles (`rootfs/root/`), the games
+  (`rootfs/games/` → `/opt/neon-games/`, commands `rogue`, `drive`,
+  `flap`) and the Neon colours file (from `core`'s resources, via the
+  `neon` build context). Ship it compressed in the APK's assets and unpack
+  it on first launch into the app's private storage.
 - **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
   in CI by `scripts/fetch-font.sh` (release pinned by hash) into
   `app/src/main/assets/fonts/` with its `OFL.txt`; never committed.
@@ -161,6 +164,9 @@ See README "How it works". The details:
 - App data paths come in two spellings (`/data/user/0/<app>` from
   `filesDir`, `/data/data/<app>` from the kernel). Don't compare paths by
   prefix across the two.
+- **`/dev/fd` in the dev Debian (proot-distro) is a frozen copy of one
+  process's fd folder**, so `cat <(echo hi)` fails there. Whether the app's
+  Debian has the same problem is on the 3.2 check list.
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the owner can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.
@@ -216,9 +222,13 @@ does this automatically through `.claude/settings.json`.)
   services, permissions, USB, camera). Keep logic out of it. When Android
   code needs tests, add Robolectric tests in `app/src/test/`; they only run
   in CI.
-- **Shell code** (the `pocket` CLI, rootfs build scripts): tests with `bats`
-  in `tests/shell/`, runnable here in Debian. Add the suite and its CI step
-  with the first shell feature.
+- **Shell code** (the `pocket` CLI, root's dotfiles in `rootfs/root/`):
+  tests with `bats` in `tests/shell/`. CI runs real bats. **On the phone
+  run `scripts/bats-lite.sh tests/shell/*.bats`**: real bats needs process
+  substitution, which the dev Debian's `/dev/fd` breaks (see "proot
+  notes"); bats-lite supports only `@test`, `setup`, `run`, `skip`,
+  `$output`, `$lines`, `$status` and the temp/dir variables. Build scripts
+  are checked by the CI build itself.
 
 When you add a tested source set, add its `source test` pair to
 `scripts/check-tdd.sh`.
