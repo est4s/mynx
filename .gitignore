@@ -4,3 +4,5 @@ local.properties
 *.iml
 .idea/
 .kotlin/
+# Built in CI by scripts/build-proot.sh, never committed.
+app/src/main/jniLibs/

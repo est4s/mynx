@@ -57,19 +57,27 @@ class MainActivity : Activity() {
         session.finishIfRunning()
     }
 
-    fun startShell(): TerminalSession = TerminalSession(
-        "/system/bin/sh",
-        filesDir.absolutePath,
-        arrayOf("sh"),
-        arrayOf(
-            "TERM=xterm-256color",
-            "HOME=${filesDir.absolutePath}",
-            "TMPDIR=${cacheDir.absolutePath}",
-            "PATH=/system/bin",
-        ),
-        2000,
-        SessionClient(this),
-    )
+    // Until Debian starts (step 1.5), proot is reachable from this Android shell
+    // for testing: `libproot.so --version`.
+    fun startShell(): TerminalSession {
+        val libDir = applicationInfo.nativeLibraryDir
+        val prootTmp = File(cacheDir, "proot").apply { mkdirs() }
+        return TerminalSession(
+            "/system/bin/sh",
+            filesDir.absolutePath,
+            arrayOf("sh"),
+            arrayOf(
+                "TERM=xterm-256color",
+                "HOME=${filesDir.absolutePath}",
+                "TMPDIR=${cacheDir.absolutePath}",
+                "PATH=/system/bin:$libDir",
+                "PROOT_LOADER=$libDir/libproot-loader.so",
+                "PROOT_TMP_DIR=${prootTmp.absolutePath}",
+            ),
+            2000,
+            SessionClient(this),
+        )
+    }
 
     fun restartShell() {
         session = startShell()

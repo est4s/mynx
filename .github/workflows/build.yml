@@ -46,6 +46,32 @@ jobs:
       - name: Test
         run: ./gradlew --no-daemon test
 
+      # proot is built from source with the NDK and cached; the binaries are
+      # never committed. The cache key changes with the script (which pins the
+      # versions) and the runner's NDK.
+      - name: NDK version
+        id: ndk
+        run: |
+          echo "home=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_OUTPUT"
+          echo "version=$(grep Pkg.Revision "$ANDROID_NDK_LATEST_HOME/source.properties" | cut -d' ' -f3)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        id: proot-cache
+        with:
+          path: build/proot
+          key: proot-${{ hashFiles('scripts/build-proot.sh') }}-ndk-${{ steps.ndk.outputs.version }}
+
+      - name: Build proot
+        if: steps.proot-cache.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.home }}
+        run: scripts/build-proot.sh build/proot
+
+      - name: Add proot to the APK
+        run: |
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp build/proot/*.so app/src/main/jniLibs/arm64-v8a/
+
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
 

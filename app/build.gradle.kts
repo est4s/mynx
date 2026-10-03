@@ -38,6 +38,12 @@ android {
         buildConfig = true
     }
 
+    // proot runs as an executable, and Android only allows exec from the
+    // extracted native library dir, so the .so files must be extracted.
+    packaging {
+        jniLibs.useLegacyPackaging = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
