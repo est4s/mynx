@@ -9,6 +9,7 @@ import android.util.TypedValue
 import android.view.View
 import android.view.WindowInsets
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import java.io.File
@@ -36,8 +37,13 @@ class MainActivity : Activity() {
             isFocusableInTouchMode = true
         }
         textSizePx = dp(12)
-        setContentView(terminalView)
-        applySystemInsets(terminalView)
+        // TerminalView ignores its own padding, so inset a container around it.
+        val root = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            addView(terminalView)
+        }
+        setContentView(root)
+        applySystemInsets(root)
 
         session = startShell()
         terminalView.attachSession(session)

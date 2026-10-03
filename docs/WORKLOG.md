@@ -93,8 +93,10 @@ Then continue with roadmap step 2 (tabs and the background service).
   `/system/bin/sh` (cwd and `HOME` = `filesDir`). `TerminalClients.kt` holds
   the session/view client callbacks: tap shows the soft keyboard, pinch
   changes the font size, clipboard copy/paste, Enter restarts a finished shell.
-- Edge-to-edge (targetSdk 35+ ignores `adjustResize`): the view pads itself
-  by the system bar and IME insets.
+- Edge-to-edge (targetSdk 35+ ignores `adjustResize`): a `FrameLayout`
+  around the terminal pads itself by the system bar and IME insets.
+  `TerminalView` ignores its own padding (it draws from 0,0), so padding the
+  view directly put the first row under the status bar.
 - `configChanges` on the activity so rotation/keyboard changes don't recreate
   it and kill the shell (the background service in step 2 replaces this).
 - Uncaught exceptions are written to `filesDir/last-crash.txt` and shown in
@@ -105,7 +107,10 @@ Then continue with roadmap step 2 (tabs and the background service).
 - No spike branch: this step is pure Android glue with no logic for `core`,
   so there was nothing to rebuild test-first. No tests added for it.
 
-**Open issues:** not yet confirmed on the device.
+**Owner confirmed on the phone:** keyboard, rendering, colours, pinch zoom,
+rotation and shell restart work. The first build drew under the status bar
+(fixed above; confirm the fix and that the keyboard doesn't cover the bottom
+rows).
 
 ### 2026-10-03: scope, build pipeline, TDD
 
