@@ -12,12 +12,14 @@ Newest entries first. Rules for keeping it up to date: see
   `/system/bin/sh` (step 1.1, confirmed on the phone). Crashes are
   saved and shown in a dialog on the next launch. proot ships as
   `libproot.so` + `libproot-loader.so` and is on the shell's `PATH`. The
-  APK carries `assets/debian-rootfs.tar.xz` (not unpacked yet). APK: 30 MB.
+  APK carries `assets/debian-rootfs.tar.xz`; the first launch unpacks it into
+  `filesDir/debian` with a progress screen (not started yet). APK: 30 MB.
 - **Build:** GitHub Actions runs the TDD check and all tests, builds proot
   with the NDK (cached), then builds a debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
   phone.
 - **Code:** `core/` has the proot launch command (`ProotLaunch.kt`, 7
-  tests). Nothing in `app/` uses `core` yet.
+  tests) and the rootfs installer (`RootfsInstaller.kt`, 13 tests), which
+  `app/` uses on first launch.
 - **Roadmap:** working on step 1, *Core*.
 
 ---
@@ -40,14 +42,11 @@ Logic goes into `core` test-first; the Android and CI parts are spikes per
    2026-10-03 (3)).
 3. ~~**Debian rootfs in the APK.**~~ Done (log 2026-10-03 (4)). Nothing to
    check on the phone until 1.4 unpacks it.
-4. **First-run install.** Unpack the rootfs into `filesDir/debian/` with a
-   progress screen. Use `org.apache.commons:commons-compress` +
-   `org.tukaani:xz`. The unpacking logic belongs in `core`, test-first
-   (feed it small test archives). Handle symlinks and file modes; convert hard links into
-   copies or symlinks (Android's storage doesn't allow them for apps). Write a
-   marker file only after everything succeeds, so an interrupted install
-   restarts cleanly. Then write `/etc/resolv.conf` (e.g. `1.1.1.1`, `8.8.8.8`;
-   Android has none) and `/etc/hosts`.
+4. ~~**First-run install.**~~ Code done (log 2026-10-03 (5)). **Owner
+   checks on the phone:** a fresh start shows "Setting up Debian… N%" with a
+   progress bar, then the terminal; `cat debian/etc/os-release` says trixie;
+   `cat debian/etc/resolv.conf` has the nameservers; closing the app mid-way
+   and reopening restarts the install cleanly. Note how long it takes.
 5. **Start Debian** with the command from `prootLaunch()` in `core`, which
    builds roughly:
    ```
@@ -75,6 +74,31 @@ Then continue with roadmap step 2 (tabs and the background service).
 ---
 
 ## Log
+
+### 2026-10-03 (5): step 1.4, first-run install
+
+**Done**
+- `core`: `RootfsInstaller(baseDir)`, test-first (13 tests). Unpacks the
+  `.tar.xz` (commons-compress 1.28.0 + xz 1.12) into `debian.partial`,
+  writes `etc/resolv.conf` (1.1.1.1, 8.8.8.8) and `etc/hosts`, then renames
+  it to `debian`. Hard links become copies; symlinks are kept verbatim;
+  device nodes/FIFOs are skipped; the owner always keeps rw (and x on
+  dirs) so apt can replace files later. Refuses `..` paths and writing
+  through symlinks; refuses to install over an existing `debian`; clearing a
+  stale `debian.partial` doesn't follow symlinks. Progress in percent of
+  compressed bytes read.
+- Tried it on the real CI rootfs here (throwaway test, not committed):
+  4414 files, 294 symlinks, ~3 min under proot on the phone; looked right.
+- `app`: `MainActivity` shows a progress screen and unpacks on a background
+  thread if `filesDir/debian` is missing, then shows the terminal. Errors
+  show the stack trace on screen with a Retry button.
+
+**Decisions**
+- "Installed" = the final `debian` dir exists, made by an atomic rename at
+  the end, instead of a separate marker file: same guarantee, one less
+  thing to get out of sync.
+
+**Open issues:** not yet confirmed on the device.
 
 ### 2026-10-03 (4): step 1.3, Debian rootfs in the APK
 
