@@ -16,9 +16,9 @@ Newest entries first. Rules for keeping it up to date: see
   "Hardware keyboard checks").
 - **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
   Font) and 3.2 (customized rootfs: starship, eza, games, mc, no debconf
-  warnings) are done and confirmed on the phone. 3.3 (launcher menu) is
-  built, **waiting for the owner's check (needs a data clear)**; then
-  3.4 (agent docs in the home folder). See "Next".
+  warnings) and 3.3 (launcher menu) are done and confirmed on the phone.
+  **Next: 3.4 (agent docs in the home folder)**, the last part of step
+  3. See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -149,8 +149,8 @@ Original plan for 3.2:
 - Bats tests for any shell scripts added (AGENTS.md: add the suite and CI
   step with the first shell feature).
 
-**3.3 Launcher menu. Built, not yet confirmed.** Owner clears the app's
-data, opens it, and checks:
+**3.3 Launcher menu. Done, owner confirmed.** Checks the owner ran after
+clearing the app's data (kept for regressions):
 - the boot splash plays (glitching title, `[ OK ]` lines incl. `debian
   13.x` and `games: 3 found`), then the menu; the tab is named `Menu`
 - status line: time · Debian 13.x · free space
@@ -271,7 +271,9 @@ the same order whatever the locale.
 official installer, don't bundle; belongs with AI agent support), a
 backup that works without proot-distro.
 
-**Commits:** (pending)
+**Owner confirmed on the phone:** all the 3.3 checks above pass.
+
+**Commits:** `726ade9`, `9969039`
 
 ### 2026-10-03 (13): step 3.2, customized rootfs
 
