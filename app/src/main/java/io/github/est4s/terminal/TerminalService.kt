@@ -15,11 +15,20 @@ import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tabs
+import io.github.est4s.terminal.core.childPid
 import io.github.est4s.terminal.core.closesOnExit
+import io.github.est4s.terminal.core.guestPath
+import io.github.est4s.terminal.core.hostPath
+import io.github.est4s.terminal.core.parseSavedTabs
+import io.github.est4s.terminal.core.restore
+import io.github.est4s.terminal.core.serialize
+import io.github.est4s.terminal.core.snapshot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
 import java.io.File
+import java.nio.file.Files
+import java.util.WeakHashMap
 
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
@@ -39,6 +48,12 @@ class TerminalService : Service() {
     var tabs: Tabs<TerminalSession> = newTabs()
         private set
     private var notifiedCount = -1
+    private val stateFile by lazy { File(filesDir, "state/tabs") }
+    private val rootfs by lazy { RootfsInstaller(filesDir).rootfs.canonicalPath }
+    // Last folder known for each session: where it started, or where its shell
+    // was when last asked. Restored tabs only start when first shown, so this
+    // keeps their folder until then.
+    private val knownCwd = WeakHashMap<TerminalSession, String>()
 
     /** The activity showing the sessions, if any. Sessions must never hold it otherwise. */
     var activity: MainActivity? = null
@@ -60,14 +75,20 @@ class TerminalService : Service() {
         super.onDestroy()
     }
 
-    /** The session to show, opening a tab if none is open. */
-    fun currentSession(): TerminalSession = tabs.selected?.session ?: newSession()
+    /** The session to show: the selected tab, else the saved tabs, else a new tab. */
+    fun currentSession(): TerminalSession {
+        tabs.selected?.let { return it.session }
+        val saved = runCatching { parseSavedTabs(stateFile.readText()) }.getOrNull()
+            ?: return newSession()
+        tabs.restore(saved) { cwd -> startShell(cwd) }
+        return tabs.selected!!.session
+    }
 
     fun newSession(): TerminalSession = startShell().also { tabs.open(it) }
 
-    /** Replaces a finished session with a fresh shell in the same tab. */
+    /** Replaces a finished session with a fresh shell in the same tab and folder. */
     fun restart(old: TerminalSession) {
-        tabs.replaceSession(old, startShell())
+        tabs.replaceSession(old, startShell(knownCwd[old]))
     }
 
     fun closeTab(session: TerminalSession) {
@@ -80,8 +101,9 @@ class TerminalService : Service() {
         if (tabs.find(session) != null && closesOnExit(session.exitStatus)) closeTab(session)
     }
 
-    /** Kills every session, stops the service and closes the app. */
+    /** Kills every session, stops the service and closes the app. The next start is fresh. */
     fun exit() {
+        stateFile.delete()
         killAll()
         activity?.finishAndRemoveTask()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -98,19 +120,56 @@ class TerminalService : Service() {
 
     private fun newTabs(): Tabs<TerminalSession> = Tabs {
         if (!tabs.isEmpty && tabs.tabs.size != notifiedCount) updateNotification()
+        saveTabs()
         activity?.onTabsChanged()
     }
 
+    /**
+     * Saves the tabs so they come back after Android kills the app. Runs on
+     * every tab change and when the app goes to the background (folders
+     * change without tab changes). Never fails: losing tabs beats crashing.
+     */
+    fun saveTabs() {
+        if (tabs.isEmpty) return
+        runCatching {
+            stateFile.parentFile!!.mkdirs()
+            val tmp = File(stateFile.path + ".tmp")
+            tmp.writeText(tabs.snapshot(::cwdOf).serialize())
+            tmp.renameTo(stateFile)
+        }
+    }
+
+    // The shell is proot's child; its /proc cwd link is the host path.
+    private fun cwdOf(session: TerminalSession): String? {
+        // pid is 0 before a session starts (restored tabs not shown yet) and -1 after it exits.
+        if (session.pid <= 0) return knownCwd[session]
+        val current = runCatching {
+            val stats = File("/proc").listFiles().orEmpty().mapNotNull { dir ->
+                val pid = dir.name.toIntOrNull() ?: return@mapNotNull null
+                runCatching { pid to File(dir, "stat").readText() }.getOrNull()
+            }.toMap()
+            val shell = childPid(session.pid, stats) ?: return@runCatching null
+            guestPath(Files.readSymbolicLink(File("/proc/$shell/cwd").toPath()).toString(), rootfs)
+        }.getOrNull()
+        if (current != null) knownCwd[session] = current
+        return knownCwd[session]
+    }
+
+    // A saved folder that's gone (or unreadable) falls back to /root.
+    private fun workDirFor(cwd: String?): String =
+        cwd?.takeIf { hostPath(it, rootfs)?.let { host -> File(host).isDirectory } == true } ?: "/root"
+
     // TerminalSession delivers its output on the Looper of the thread that
     // created it, so this must run on the main thread.
-    private fun startShell(): TerminalSession {
+    private fun startShell(cwd: String? = null): TerminalSession {
+        val workDir = workDirFor(cwd)
         val libDir = applicationInfo.nativeLibraryDir
         val launch = prootLaunch(ProotPaths(
             proot = "$libDir/libproot.so",
             loader = "$libDir/libproot-loader.so",
             rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        ), workDir = workDir, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -120,7 +179,7 @@ class TerminalService : Service() {
             launch.env.map { (k, v) -> "$k=$v" }.toTypedArray(),
             2000,
             client,
-        )
+        ).also { knownCwd[it] = workDir }
     }
 
     // Called while the activity is visible: Android 12+ only allows going

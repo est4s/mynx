@@ -86,6 +86,13 @@ class MainActivity : Activity() {
         showLastCrash()
     }
 
+    // Folders change without tab changes, and leaving the app is the last
+    // chance to save before Android may kill it.
+    override fun onStop() {
+        service?.saveTabs()
+        super.onStop()
+    }
+
     // Sessions live in the service and keep running after the activity is gone.
     override fun onDestroy() {
         service?.let { if (it.activity === this) it.activity = null }

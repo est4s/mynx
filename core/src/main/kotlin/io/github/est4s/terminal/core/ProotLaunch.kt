@@ -12,7 +12,7 @@ data class ProotPaths(
 /** A process to start: [argv] and the extra [env] it needs. */
 data class Launch(val argv: List<String>, val env: Map<String, String>)
 
-private val HOST_BINDS = listOf("/dev", "/proc", "/sys", "/storage")
+internal val HOST_BINDS = listOf("/dev", "/proc", "/sys", "/storage")
 
 private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
