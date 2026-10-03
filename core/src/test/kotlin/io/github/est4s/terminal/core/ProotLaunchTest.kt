@@ -78,6 +78,22 @@ class ProotLaunchTest {
         assertEquals(listOf("/dev", "/proc", "/sys", "/storage", "/data/files/fake-proc/stat:/proc/stat"), binds)
     }
 
+    @Test
+    fun `has the shell write its folder to a file after each prompt`() {
+        val argv = prootLaunch(paths, cwdFile = "/tmp/.pocket-terminal/cwd-3").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue(
+            "PROMPT_COMMAND={ printf '%s' \"\$PWD\" > /tmp/.pocket-terminal/cwd-3; } 2>/dev/null" in shellEnv,
+            shellEnv.toString(),
+        )
+    }
+
+    @Test
+    fun `sets no prompt command unless asked`() {
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PROMPT_COMMAND=") })
+    }
+
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]
 
     private fun List<String>.valuesAfter(flag: String) =

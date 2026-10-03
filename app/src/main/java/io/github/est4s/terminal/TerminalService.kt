@@ -15,11 +15,8 @@ import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tabs
-import io.github.est4s.terminal.core.childPid
 import io.github.est4s.terminal.core.closesOnExit
-import io.github.est4s.terminal.core.guestPath
 import io.github.est4s.terminal.core.hostPath
-import io.github.est4s.terminal.core.parentPid
 import io.github.est4s.terminal.core.parseSavedTabs
 import io.github.est4s.terminal.core.restore
 import io.github.est4s.terminal.core.serialize
@@ -28,13 +25,12 @@ import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.WeakHashMap
 
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
+private const val CWD_DIR = "/tmp/.pocket-terminal"
 
 /**
  * Owns the terminal sessions and keeps them running while the app is in the
@@ -52,16 +48,21 @@ class TerminalService : Service() {
     private var notifiedCount = -1
     private val stateFile by lazy { File(filesDir, "state/tabs") }
     private val rootfs by lazy { RootfsInstaller(filesDir).rootfs.absolutePath }
-    private val isRootfs = { path: String ->
-        runCatching { Files.isSameFile(Paths.get(path), Paths.get(rootfs)) }.getOrDefault(false)
-    }
-    // TEMPORARY (step 2.5 debugging): how each folder lookup went, readable
-    // from Debian at /storage/emulated/0/Android/data/<app id>/files/cwd-debug.txt.
-    private val cwdTrace = StringBuilder()
-    // Last folder known for each session: where it started, or where its shell
-    // was when last asked. Restored tabs only start when first shown, so this
-    // keeps their folder until then.
+    // Each shell writes its folder to a file here after every prompt (see
+    // prootLaunch's cwdFile). Inside Debian's /tmp, so the shell can write it.
+    private val cwdDir by lazy { File(rootfs, CWD_DIR) }
+    private val cwdFiles = WeakHashMap<TerminalSession, File>()
+    private var nextShellId = 1
+    // Last folder known for each session: where it started, or what its shell
+    // last reported. Restored tabs only start when first shown, so this keeps
+    // their folder until then.
     private val knownCwd = WeakHashMap<TerminalSession, String>()
+
+    override fun onCreate() {
+        super.onCreate()
+        // Reports from a previous run would belong to the wrong shells.
+        cwdDir.deleteRecursively()
+    }
 
     /** The activity showing the sessions, if any. Sessions must never hold it otherwise. */
     var activity: MainActivity? = null
@@ -96,12 +97,14 @@ class TerminalService : Service() {
 
     /** Replaces a finished session with a fresh shell in the same tab and folder. */
     fun restart(old: TerminalSession) {
-        tabs.replaceSession(old, startShell(knownCwd[old]))
+        tabs.replaceSession(old, startShell(cwdOf(old)))
+        cwdFiles.remove(old)?.delete()
     }
 
     fun closeTab(session: TerminalSession) {
         tabs.close(session)
         session.finishIfRunning()
+        cwdFiles.remove(session)?.delete()
         if (tabs.isEmpty) exit()
     }
 
@@ -142,35 +145,14 @@ class TerminalService : Service() {
         runCatching {
             stateFile.parentFile!!.mkdirs()
             val tmp = File(stateFile.path + ".tmp")
-            cwdTrace.setLength(0)
-            cwdTrace.append("rootfs=$rootfs\n")
             tmp.writeText(tabs.snapshot(::cwdOf).serialize())
             tmp.renameTo(stateFile)
-            getExternalFilesDir(null)?.let { File(it, "cwd-debug.txt").writeText(cwdTrace.toString()) }
         }
     }
 
-    // The shell is proot's child; its /proc cwd link is the host path.
     private fun cwdOf(session: TerminalSession): String? {
-        // pid is 0 before a session starts (restored tabs not shown yet) and -1 after it exits.
-        if (session.pid <= 0) {
-            cwdTrace.append("pid=${session.pid} known=${knownCwd[session]}\n")
-            return knownCwd[session]
-        }
-        val current = runCatching {
-            val stats = File("/proc").listFiles().orEmpty().mapNotNull { dir ->
-                val pid = dir.name.toIntOrNull() ?: return@mapNotNull null
-                runCatching { pid to File(dir, "stat").readText() }.getOrNull()
-            }.toMap()
-            cwdTrace.append("pid=${session.pid} stats=${stats.size} children=")
-            cwdTrace.append(stats.filterValues { parentPid(it) == session.pid }.values.joinToString(" | ") { it.take(40) })
-            val shell = childPid(session.pid, stats) ?: return@runCatching null
-            val link = Files.readSymbolicLink(File("/proc/$shell/cwd").toPath()).toString()
-            cwdTrace.append(" shell=$shell link=$link")
-            guestPath(link, isRootfs)
-        }.onFailure { cwdTrace.append(" error=$it") }.getOrNull()
-        cwdTrace.append(" -> $current\n")
-        if (current != null) knownCwd[session] = current
+        val reported = runCatching { cwdFiles[session]?.readText()?.trim() }.getOrNull()
+        if (!reported.isNullOrEmpty()) knownCwd[session] = reported
         return knownCwd[session]
     }
 
@@ -182,13 +164,15 @@ class TerminalService : Service() {
     // created it, so this must run on the main thread.
     private fun startShell(cwd: String? = null): TerminalSession {
         val workDir = workDirFor(cwd)
+        val cwdName = "cwd-${nextShellId++}"
+        cwdDir.mkdirs()
         val libDir = applicationInfo.nativeLibraryDir
         val launch = prootLaunch(ProotPaths(
             proot = "$libDir/libproot.so",
             loader = "$libDir/libproot-loader.so",
             rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), workDir = workDir, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -198,7 +182,10 @@ class TerminalService : Service() {
             launch.env.map { (k, v) -> "$k=$v" }.toTypedArray(),
             2000,
             client,
-        ).also { knownCwd[it] = workDir }
+        ).also {
+            knownCwd[it] = workDir
+            cwdFiles[it] = File(cwdDir, cwdName)
+        }
     }
 
     // Called while the activity is visible: Android 12+ only allows going

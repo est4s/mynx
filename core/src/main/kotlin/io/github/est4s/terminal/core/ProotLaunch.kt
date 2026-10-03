@@ -18,9 +18,16 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
 
 /**
  * Command that starts a login bash inside Debian. [fakeProc] maps `/proc`
- * files Android blocks to stand-ins (see [writeFakeProc]).
+ * files Android blocks to stand-ins (see [writeFakeProc]). With [cwdFile]
+ * (a Debian path), the shell writes its folder there after each prompt:
+ * proot tracks the folder itself, so the host can't see it in /proc.
  */
-fun prootLaunch(paths: ProotPaths, workDir: String = "/root", fakeProc: Map<String, String> = emptyMap()): Launch {
+fun prootLaunch(
+    paths: ProotPaths,
+    workDir: String = "/root",
+    fakeProc: Map<String, String> = emptyMap(),
+    cwdFile: String? = null,
+): Launch {
     val argv = buildList {
         add(paths.proot)
         add("--kill-on-exit")
@@ -32,6 +39,8 @@ fun prootLaunch(paths: ProotPaths, workDir: String = "/root", fakeProc: Map<Stri
         fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
         // env -i: the shell must not inherit Android's environment (PATH, LD_*, ANDROID_*).
         addAll(listOf("/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8", "PATH=$DEBIAN_PATH"))
+        // Silent if the file can't be written (e.g. its folder was deleted).
+        cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         addAll(listOf("/bin/bash", "--login"))
     }
     val env = mapOf(
