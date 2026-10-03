@@ -8,6 +8,8 @@ import android.view.MotionEvent
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalViewClient
+import io.github.est4s.terminal.core.KeyPress
+import io.github.est4s.terminal.core.tabShortcut
 
 private const val TAG = "PocketTerminal"
 
@@ -72,6 +74,12 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
     override fun copyModeChanged(copyMode: Boolean) {}
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
+        val key = KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")
+        tabShortcut(KeyPress(key, ctrl = e.isCtrlPressed, shift = e.isShiftPressed, alt = e.isAltPressed))?.let {
+            // Holding the keys must not open or close a row of tabs.
+            if (e.repeatCount == 0) activity.onTabAction(it)
+            return true
+        }
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
             activity.restartShell(session)
             return true
