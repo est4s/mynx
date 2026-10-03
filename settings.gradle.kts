@@ -11,6 +11,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Termux's terminal libraries are only published on JitPack.
+        maven("https://jitpack.io") {
+            content { includeGroup("com.github.termux.termux-app") }
+        }
     }
 }
 

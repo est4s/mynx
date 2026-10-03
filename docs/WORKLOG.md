@@ -8,8 +8,9 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **App:** a single screen that says "build pipeline works" and shows the
-  version and build number. Installs and runs on the owner's phone.
+- **App:** a full-screen Termux `TerminalView` running Android's
+  `/system/bin/sh` (step 1.1, waiting for on-device confirmation). Crashes are
+  saved and shown in a dialog on the next launch.
 - **Build:** GitHub Actions runs the TDD check and all tests, then builds a
   debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
   phone.
@@ -31,10 +32,13 @@ Logic goes into `core` test-first; the Android and CI parts are spikes per
 [Spikes](../AGENTS.md#spikes). The proot command is already done:
 `core/.../ProotLaunch.kt`, built by TDD as the first example.
 
-1. **Terminal view with a local shell.** Add the terminal libraries, put a
-   `TerminalView` on screen and start `/system/bin/sh` in a `TerminalSession`.
-   Proves keyboard input, rendering and colours. Show the soft keyboard on tap
-   for now; the in-app keyboard comes in step 5.
+1. ~~**Terminal view with a local shell.**~~ Code done, see log
+   2026-10-03 (2). **Owner checks on the phone:** tap shows the keyboard and
+   typing works; `ls -la /system/bin | head` renders; colours work
+   (`printf '\e[31mred \e[32mgreen \e[0m\n'`); pinch zooms the font;
+   rotating keeps the session; `exit` then Enter starts a new shell; the
+   terminal isn't hidden behind the status bar or the keyboard. Fix anything
+   reported before moving on.
 2. **proot in the APK.** New CI job: clone `termux/proot` at a pinned commit,
    build `libproot.so` and `libproot-loader.so` for `arm64-v8a` with the NDK,
    cache the result and put them in `app/src/main/jniLibs/arm64-v8a/` before
@@ -78,6 +82,30 @@ Then continue with roadmap step 2 (tabs and the background service).
 ---
 
 ## Log
+
+### 2026-10-03 (2): step 1.1, terminal view with a local shell
+
+**Done**
+- Added Termux `terminal-view:v0.118.3` from JitPack (repo limited to the
+  `com.github.termux.termux-app` group). API checked against the published
+  sources jar, since `app/` can't compile on the phone.
+- `MainActivity` is now a `TerminalView` + `TerminalSession` running
+  `/system/bin/sh` (cwd and `HOME` = `filesDir`). `TerminalClients.kt` holds
+  the session/view client callbacks: tap shows the soft keyboard, pinch
+  changes the font size, clipboard copy/paste, Enter restarts a finished shell.
+- Edge-to-edge (targetSdk 35+ ignores `adjustResize`): the view pads itself
+  by the system bar and IME insets.
+- `configChanges` on the activity so rotation/keyboard changes don't recreate
+  it and kill the shell (the background service in step 2 replaces this).
+- Uncaught exceptions are written to `filesDir/last-crash.txt` and shown in
+  a dialog on next launch (no logcat on the dev phone).
+- `abiFilters = arm64-v8a`: proot and the rootfs will be arm64 only.
+
+**Decisions**
+- No spike branch: this step is pure Android glue with no logic for `core`,
+  so there was nothing to rebuild test-first. No tests added for it.
+
+**Open issues:** not yet confirmed on the device.
 
 ### 2026-10-03: scope, build pipeline, TDD
 

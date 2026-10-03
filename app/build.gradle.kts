@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
 }
 
 android {
@@ -17,6 +18,9 @@ android {
         targetSdk = 36
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "0.0.1"
+
+        // proot and the Debian rootfs will be arm64-only, so ship nothing else.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     signingConfigs {
