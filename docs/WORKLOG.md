@@ -11,7 +11,8 @@ Newest entries first. Rules for keeping it up to date: see
 - **App:** a full-screen Termux `TerminalView` running Android's
   `/system/bin/sh` (step 1.1, confirmed on the phone). Crashes are
   saved and shown in a dialog on the next launch. proot ships as
-  `libproot.so` + `libproot-loader.so` and is on the shell's `PATH`.
+  `libproot.so` + `libproot-loader.so` and is on the shell's `PATH`. The
+  APK carries `assets/debian-rootfs.tar.xz` (not unpacked yet). APK: 30 MB.
 - **Build:** GitHub Actions runs the TDD check and all tests, builds proot
   with the NDK (cached), then builds a debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
   phone.
@@ -37,9 +38,8 @@ Logic goes into `core` test-first; the Android and CI parts are spikes per
    phone (log 2026-10-03 (2)).
 2. ~~**proot in the APK.**~~ Done and confirmed on the phone (log
    2026-10-03 (3)).
-3. **Debian rootfs in the APK.** New CI step: export `debian:trixie` (arm64)
-   to a `.tar.xz` and put it in `app/src/main/assets/` before the Gradle build.
-   Watch the APK size; the bare rootfs should be ~30 MB compressed.
+3. ~~**Debian rootfs in the APK.**~~ Done (log 2026-10-03 (4)). Nothing to
+   check on the phone until 1.4 unpacks it.
 4. **First-run install.** Unpack the rootfs into `filesDir/debian/` with a
    progress screen. Use `org.apache.commons:commons-compress` +
    `org.tukaani:xz`. The unpacking logic belongs in `core`, test-first
@@ -75,6 +75,27 @@ Then continue with roadmap step 2 (tabs and the background service).
 ---
 
 ## Log
+
+### 2026-10-03 (4): step 1.3, Debian rootfs in the APK
+
+**Done**
+- `scripts/build-rootfs.sh <out-dir>`: `docker pull --platform linux/arm64
+  debian:trixie`, `docker create` + `docker export` (no container runs, so
+  no QEMU), drops `.dockerenv`, `xz -T0 -9`. Also writes
+  `debian-rootfs.txt` (`image=<repo digest>`, `built=<UTC time>`).
+- CI runs it into `app/src/main/assets/` (gitignored), ~50 s, no cache.
+- `androidResources.noCompress += "xz"`; the APK artifact uploads with
+  `compression-level: 0`.
+- Sizes: tar 146 MB, `.tar.xz` 28.4 MB (stored), APK 30 MB.
+
+**Notes**
+- The recorded digest is the multi-arch index digest of `debian:trixie`
+  (`RepoDigests`), which identifies the release; the arm64 manifest digest
+  differs.
+- The tar has docker's empty `etc/hostname`, `etc/hosts`, `etc/resolv.conf`
+  placeholders; 1.4 writes real `resolv.conf` and `hosts`.
+
+**Commits:** `5acb33f`
 
 ### 2026-10-03 (3): step 1.2, proot in the APK
 
