@@ -75,7 +75,9 @@ git clone -q --depth 1 --branch "$PROOT_TAG" https://github.com/termux/proot.git
 # bundled one would be extracted to app storage, where Android forbids exec.
 # Flags go in through the environment: on the command line they would replace
 # the makefile's own flags instead of adding to them.
-CPPFLAGS="-I$work/talloc/include -DARG_MAX=131072" LDFLAGS="-L$work/talloc/lib" \
+# `-include string.h`: ashmem_memfd.c uses strcmp/memset without including it,
+# which current clang rejects.
+CPPFLAGS="-I$work/talloc/include -DARG_MAX=131072 -include string.h" LDFLAGS="-L$work/talloc/lib" \
     make -C proot/src -j"$(nproc)" proot loader/loader PROOT_UNBUNDLE_LOADER=/nonexistent
 
 mkdir -p "$out"
