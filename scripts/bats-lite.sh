@@ -30,9 +30,12 @@ for file in "$@"; do
     for i in "${!names[@]}"; do
         total=$((total + 1))
         tmp=$(mktemp -d)
-        if ( BATS_TEST_TMPDIR=$tmp; set +u -e; eval "$src"
-             declare -F setup >/dev/null && setup
-             "bats_test_$((i + 1))" ) 3>&1 >"$tmp.log" 2>&1; then
+        # Not inside `if`: bash ignores set -e there, even in a subshell,
+        # and a failed [ ] would no longer fail the test.
+        ( BATS_TEST_TMPDIR=$tmp; set +u -e; eval "$src"
+          if declare -F setup >/dev/null; then setup; fi
+          "bats_test_$((i + 1))" ) 3>&1 >"$tmp.log" 2>&1
+        if [[ $? == 0 ]]; then
             echo "ok   ${names[i]}"
         else
             echo "FAIL ${names[i]}"; sed 's/^/     /' "$tmp.log"; failed=$((failed + 1))

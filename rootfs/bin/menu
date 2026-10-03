@@ -14,6 +14,7 @@ STATE=$STATE_DIR/menu
 THEMES=(neon amber phosphor)
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
+export LC_COLLATE=C       # games in the same order whatever the locale
 ITEM_W=26                 # width of a menu row (" ▶ 1. " + 20-char label)
 
 # --- terminal --------------------------------------------------------------

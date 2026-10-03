@@ -43,8 +43,9 @@ keys() {
     game "$HOME/games/my-game.sh"
     source "$MENU"
     menu_items games
-    [ "${ITEMS[*]}" = "Neon Flap Neon Rogue My Game" ]
-    [ "${ACTS[0]}" = "game:$BATS_TEST_TMPDIR/games/neon_flap" ]
+    # Byte order in each folder, whatever the locale: - sorts before _.
+    [ "${ITEMS[*]}" = "Neon Rogue Neon Flap My Game" ]
+    [ "${ACTS[1]}" = "game:$BATS_TEST_TMPDIR/games/neon_flap" ]
     [ "${ACTS[2]}" = "game:$HOME/games/my-game.sh" ]
 }
 

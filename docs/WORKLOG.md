@@ -260,6 +260,13 @@ in-app keyboard (step 5) can send these combos:
   Update, splash), 5 more for the `.bashrc` hook. `check-tdd.sh` pairs
   `rootfs/bin/` with `tests/shell/`.
 
+**Gotcha: bats-lite gave false passes.** It ran each test inside
+`if ( … )`, where bash ignores `set -e` even in the subshell, so only a
+test's last command could fail it. CI's real bats caught a wrong
+expectation (game order). Fixed; the 3.2 `.bashrc` tests were rerun and
+pass for real. The menu now sets `LC_COLLATE=C`, so games are listed in
+the same order whatever the locale.
+
 **Not ported, maybe later:** a "Claude Code" item (README: offer the
 official installer, don't bundle; belongs with AI agent support), a
 backup that works without proot-distro.
