@@ -64,6 +64,7 @@ class MainActivity : Activity() {
     private var scheme: ColorScheme? = null
     private val strip get() = (scheme ?: NEON).stripColors()
     private var shownColorProblems = emptyList<String>()
+    private var traceCount = 0
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -104,6 +105,26 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         if (::terminalView.isInitialized) applyColors()
+        traceColors("onStart")
+    }
+
+    // TEMPORARY: white terminal background bug. Remove once fixed.
+    fun traceColors(where: String) {
+        runCatching {
+            fun hex(c: Int?) = c?.let { String.format("#%08x", it) } ?: "null"
+            val view = if (::terminalView.isInitialized) terminalView else null
+            val palette = view?.mEmulator?.mColors?.mCurrentColors
+            val line = "$where scheme.bg=${hex(scheme?.background)} " +
+                "view.bg=${hex((view?.background as? android.graphics.drawable.ColorDrawable)?.color)} " +
+                "view.bgClass=${view?.background?.javaClass?.simpleName} " +
+                "decor.bg=${hex((window.decorView.background as? android.graphics.drawable.ColorDrawable)?.color)} " +
+                "decor.bgClass=${window.decorView.background?.javaClass?.simpleName} " +
+                "emu.bg=${hex(palette?.get(TextStyle.COLOR_INDEX_BACKGROUND))} " +
+                "emu.fg=${hex(palette?.get(TextStyle.COLOR_INDEX_FOREGROUND))} " +
+                "lib.bg=${hex(TerminalColors.COLOR_SCHEME.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND])} " +
+                "hw=${view?.isHardwareAccelerated} size=${view?.width}x${view?.height}\n"
+            File(getExternalFilesDir(null), "colors-trace.txt").appendText(line)
+        }
     }
 
     // Folders change without tab changes, and leaving the app is the last
@@ -177,6 +198,7 @@ class MainActivity : Activity() {
         terminalView.attachSession(session)
         terminalView.requestFocus()
         renderStrip()
+        traceColors("showTerminal")
     }
 
     // Rebuilt on every change; changes are rare (output only reports when a
@@ -308,6 +330,9 @@ class MainActivity : Activity() {
         }
         service?.tabs?.tabs?.forEach { it.session.emulator?.mColors?.reset() }
 
+        // Like Termux: the library never paints default-background cells, so
+        // everything behind the terminal must be the scheme's background.
+        window.decorView.setBackgroundColor(next.background)
         root.setBackgroundColor(next.background)
         terminalView.setBackgroundColor(next.background)
         stripScroll.setBackgroundColor(strip.background)
@@ -398,7 +423,10 @@ class MainActivity : Activity() {
     }
 
     fun onScreenUpdated(session: TerminalSession) {
-        if (::terminalView.isInitialized && terminalView.currentSession === session) terminalView.onScreenUpdated()
+        if (::terminalView.isInitialized && terminalView.currentSession === session) {
+            terminalView.onScreenUpdated()
+            if (traceCount++ < 3) traceColors("screen")
+        }
     }
 
     fun showKeyboard() {
