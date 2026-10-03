@@ -234,7 +234,7 @@ library's published sources (v0.118.3). Risk to watch: `NEON` loads a
 Java resource from the `core` jar; if Android doesn't package it, the app
 crashes on start and the crash dialog will say so.
 
-**Commits:** (pending)
+**Commits:** `b39ecac`
 
 ### 2026-10-03 (11): rename tabs
 
