@@ -10,9 +10,10 @@ Newest entries first. Rules for keeping it up to date: see
 
 - **App:** a full-screen Termux `TerminalView` running Android's
   `/system/bin/sh` (step 1.1, confirmed on the phone). Crashes are
-  saved and shown in a dialog on the next launch.
-- **Build:** GitHub Actions runs the TDD check and all tests, then builds a
-  debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
+  saved and shown in a dialog on the next launch. proot ships as
+  `libproot.so` + `libproot-loader.so` and is on the shell's `PATH`.
+- **Build:** GitHub Actions runs the TDD check and all tests, builds proot
+  with the NDK (cached), then builds a debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
   phone.
 - **Code:** `core/` has the proot launch command (`ProotLaunch.kt`, 7
   tests). Nothing in `app/` uses `core` yet.
@@ -34,11 +35,8 @@ Logic goes into `core` test-first; the Android and CI parts are spikes per
 
 1. ~~**Terminal view with a local shell.**~~ Done and confirmed on the
    phone (log 2026-10-03 (2)).
-2. **proot in the APK.** New CI job: clone `termux/proot` at a pinned commit,
-   build `libproot.so` and `libproot-loader.so` for `arm64-v8a` with the NDK,
-   cache the result and put them in `app/src/main/jniLibs/arm64-v8a/` before
-   the Gradle build (don't commit the binaries). Check: run
-   `libproot.so --version` in the terminal.
+2. ~~**proot in the APK.**~~ Done and confirmed on the phone (log
+   2026-10-03 (3)).
 3. **Debian rootfs in the APK.** New CI step: export `debian:trixie` (arm64)
    to a `.tar.xz` and put it in `app/src/main/assets/` before the Gradle build.
    Watch the APK size; the bare rootfs should be ~30 MB compressed.
@@ -77,6 +75,42 @@ Then continue with roadmap step 2 (tabs and the background service).
 ---
 
 ## Log
+
+### 2026-10-03 (3): step 1.2, proot in the APK
+
+**Done**
+- `scripts/build-proot.sh <out-dir>` builds Termux's proot `v5.1.107.96`
+  (the release Termux ships) for arm64, API 26, with talloc 2.5.0 linked
+  statically. CI runs it with the runner's NDK (29.0.14206865), caches
+  `build/proot` keyed on the script hash + NDK version, and copies the two
+  `.so` files into `app/src/main/jniLibs/arm64-v8a/` (gitignored).
+- `packaging.jniLibs.useLegacyPackaging = true`, so they're extracted to
+  `nativeLibraryDir` and can be executed.
+- The test shell has `nativeLibraryDir` on `PATH` plus `PROOT_LOADER` and
+  `PROOT_TMP_DIR` (`cacheDir/proot`).
+- Confirmed on the phone: `libproot.so --version` prints the banner
+  (`process_vm = yes, seccomp_filter = yes`); `libproot.so -0 /system/bin/id`
+  prints `uid=0(root)`, so tracing through the unbundled loader works.
+
+**Decisions / gotchas**
+- Loader unbundled (`PROOT_UNBUNDLE_LOADER`, path given via `PROOT_LOADER`):
+  the bundled loader is extracted to app storage, where exec is forbidden.
+- The 32-bit loader gets built (the makefile requires it on arm64) but isn't
+  shipped: the Pixel 10 has no 32-bit support, and the rootfs is arm64-only.
+- No `libandroid-shmem` (Termux links it for SysV shm); proot's own sysvipc
+  extension is enough for now.
+- Build fixes: proot's `ashmem_memfd.c` lacks `#include <string.h>` (patched
+  in by `sed`; hence the `-dirty` version suffix; force-including it
+  globally breaks the freestanding loader). talloc needs libreplace's objects
+  in the static archive (`rep_memset_explicit`; no `memset_explicit` before
+  API 34).
+- Building locally with Termux's clang fails differently (its headers hide
+  `memset_explicit` but waf's link check finds it) and takes ~20 min under
+  proot; iterate in CI instead.
+- No bats tests for the build script: it's verified by the CI build and the
+  on-device check above.
+
+**Commits:** `eef890e`, `2263916`, `515cfc9`, `0bda401`
 
 ### 2026-10-03 (2): step 1.1, terminal view with a local shell
 
