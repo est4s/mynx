@@ -31,40 +31,159 @@ Newest entries first. Rules for keeping it up to date: see
 ### Roadmap step 2: Tabs
 
 **Goal:** several terminals in a Windows Terminal-style tab strip, kept
-alive by a background service. Scope: README "Multiple terminals, in tabs".
-Profiles (tab colours per profile, the ⌄ profile menu) come in step 8;
-swipe gestures are touch, so low priority (see AGENTS.md design rules).
+alive by a background service, so long jobs survive leaving the app.
 
-Suggested order (each step ends in a build the owner can install):
-1. **Background service.** A foreground service owns the
-   `TerminalSession`s; `MainActivity` binds to it and attaches the current
-   one. Sessions must survive leaving the app, rotation and the activity
-   being destroyed (then the `configChanges` workaround is no longer what
-   keeps the shell alive). Needs `FOREGROUND_SERVICE` +
-   `FOREGROUND_SERVICE_SPECIAL_USE` (API 34+ requires a type), a
-   persistent notification ("N terminals running", with an Exit action),
-   and `POST_NOTIFICATIONS` (ask on Android 13+). Optional wakelock comes
-   later with settings. The session client callbacks must not hold the
-   activity once it's gone.
-2. **Tab model in `core`, test-first:** open/close/select/move tabs, titles
-   (from the shell's OSC title, user rename overrides it), what to select
-   after closing, activity/bell flags on background tabs. Plain Kotlin;
-   the service holds one instance.
-3. **Tab strip UI:** a strip along the top with title, close and **+**;
-   scrolls sideways when full. Keyboard-first: hardware-keyboard shortcuts
-   (e.g. Ctrl+Shift+T new, Ctrl+Shift+W close, Ctrl+Tab /
-   Ctrl+Shift+Tab switch, Ctrl+Shift+1…9). Tapping tabs works too.
-4. **Activity dot and bell** on background tabs.
-5. **Restore open tabs** (titles, working directories) after the app is
-   killed. Store the list in a plain-text file (design rule), parsing in
-   `core`.
+**Scope:** README "Multiple terminals, in tabs". Out of scope here:
+- profiles: per-profile tab colours, the ⌄ profile menu, profile icons
+  (step 8). Give each tab a single default colour for now.
+- touch extras: swipe between tabs, drag to reorder, long-press menus.
+  Keyboard-first rule (AGENTS.md); reordering by keyboard shortcut is
+  enough.
+- the in-app keyboard (step 5). Until then, shortcuts come from a hardware
+  keyboard; tapping tabs and the **+** button must also work.
 
-#### Done when
-- open three tabs, run `top` in one, switch away and back: it's still running
-- leave the app for a few minutes, come back: all tabs are still there
-- rotating the phone or closing the activity doesn't lose any session
-- `exit` in a tab closes it; closing the last tab leaves a sensible state
-- background output shows an activity dot
+#### Where things stand (read the code first)
+- `app/.../MainActivity.kt` owns a single `TerminalView` and a single
+  `TerminalSession`, started by `startShell()` from
+  `prootLaunch(ProotPaths(…), fakeProc = writeFakeProc(…))`. It also
+  handles first-run install, system-bar/IME insets (padding on the root
+  `FrameLayout`, because `TerminalView` ignores its own padding) and the
+  crash reporter. `onDestroy()` kills the session, and `configChanges` in
+  the manifest is what currently keeps the shell alive on rotation.
+- `app/.../TerminalClients.kt`: `SessionClient` (holds the activity) and
+  `ViewClient` (tap → keyboard, pinch → font size, Enter restarts a finished
+  shell).
+- `core/`: `prootLaunch()` (already takes `workDir`, useful for restoring
+  tabs), `RootfsInstaller`, `writeFakeProc()`.
+
+#### Facts about the Termux libraries (v0.118.3, checked in their source)
+- **Create `TerminalSession`s on the main thread:** each one makes a
+  `Handler` on the current thread's `Looper` and delivers output and exit
+  events there.
+- **A session's process starts only on its first `updateSize()`**, which
+  `TerminalView.attachSession()` triggers once the view has a size. A tab
+  that's never attached never starts. For background tabs (e.g. restored
+  ones), call `session.updateSize(cols, rows, cellWidthPx, cellHeightPx)`
+  yourself with the current view's values, or start them lazily when first
+  selected.
+- **Switching tabs** = `terminalView.attachSession(other)`, then
+  `onScreenUpdated()`. Use one `TerminalView`, not one per tab.
+- `session.updateTerminalSessionClient(client)` swaps a session's client,
+  so the service can own the clients and forward to whichever activity is
+  attached, or to none.
+- **Titles:** OSC 0/2 reach `TerminalSessionClient.onTitleChanged()`, and
+  `session.title` gives the current title. Debian's `/root/.bashrc` doesn't
+  set one, so titles stay empty unless the shell sends them; fall back to
+  "Debian" / "Tab N". (Step 3's dotfiles can add a title-setting prompt.)
+- **No OSC 7** (working-directory reporting) in this emulator. To restore
+  each tab's folder, either read the shell's cwd from the host side (proot
+  is `session.pid`, bash is its child; `/proc/<pid>/cwd` would be the host
+  path, so strip the rootfs prefix: needs a check on the phone), or have
+  the shell write `$PWD` to a per-tab state file from `PROMPT_COMMAND`. If
+  it gets fiddly, restore tabs in `/root` and leave cwd restore as an open
+  item.
+- `onBell()` and `onTextChanged()` arrive per session: use them for the
+  bell icon and the activity dot on background tabs.
+- `ViewClient.onKeyDown(keyCode, event, session)` sees each key before the
+  terminal does. Return `true` to consume a shortcut.
+
+#### Suggested order (each step ends in a build the owner installs and checks)
+
+**2.1 Background service.**
+- `TerminalService` (foreground service) owns the sessions; `MainActivity`
+  binds to it and shows the current one. Start the service from the
+  activity while it's visible (Android 12+ forbids starting foreground
+  services from the background).
+- Manifest: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` and
+  `POST_NOTIFICATIONS` permissions; the service declares
+  `android:foregroundServiceType="specialUse"` with a
+  `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+  android:value="…"/>` explaining the use (API 34+ requires a type; the
+  types with time limits like `dataSync` don't fit a terminal). Ask for
+  the notification permission on Android 13+; the service must still work
+  if it's denied.
+- A persistent notification ("1 terminal running" / "N terminals running")
+  that opens the app, with an **Exit** action that kills all sessions,
+  stops the service and closes the activity.
+- The session client must not keep a destroyed activity alive: the service
+  holds the clients and forwards to the attached activity, if any.
+- `onDestroy()` of the activity no longer kills sessions. Back should leave
+  the app with sessions still running (`moveTaskToBack(true)`), like
+  Termux. Keep `configChanges` (avoids re-layout flicker), but the service
+  is now what keeps sessions alive.
+- Logic goes in `core` where it exists, e.g. the notification text
+  ("N terminals running") as a tested function. The service itself is
+  Android glue.
+
+**2.2 Tab model in `core`, test-first.**
+- A plain-Kotlin `Tabs` class, generic over the session type so `core`
+  stays Android-free (e.g. `Tabs<S>`):
+  - open (after the current tab), close, select, move left/right
+  - titles: shell title, with a user rename that overrides it until cleared
+  - which tab gets selected after a close (suggest: the one to the right,
+    else the left one)
+  - activity and bell flags, cleared when a tab is selected
+- **When a shell exits:** follow Windows Terminal's default ("graceful"):
+  close the tab if the exit code is 0, otherwise keep it open showing
+  `[Process completed (code N) - press Enter]`, where Enter restarts it.
+  This rule belongs in `core`, tested.
+- **Closing the last tab:** stop the service and finish the activity.
+  Reopening the app starts with one fresh tab.
+
+**2.3 Tab strip UI.**
+- A strip along the top of the terminal (inside the inset root, above the
+  `TerminalView`): each tab shows its title and a close ×, then a **+**.
+  It scrolls sideways when full and keeps the selected tab visible.
+- Plain Android views, no Compose (AGENTS.md). Highlight the current tab;
+  one default accent colour for now.
+- Keyboard shortcuts (hardware keyboard, handled in `ViewClient.onKeyDown`):
+
+  | Shortcut | Action |
+  |---|---|
+  | Ctrl+Shift+T | new tab |
+  | Ctrl+Shift+W | close tab |
+  | Ctrl+Tab / Ctrl+Shift+Tab | next / previous tab |
+  | Ctrl+Alt+1…9 | jump to tab N |
+  | Ctrl+Shift+PgUp / PgDn | move tab left / right |
+
+  Keep the shortcut → action mapping in `core` (tested), so the in-app
+  keyboard (step 5) and the customization step reuse it.
+
+**2.4 Activity dot and bell.** A dot on background tabs that printed
+output; a bell icon after `\a`. Driven by the flags in the `core` model.
+
+**2.5 Restore tabs after the app is killed.**
+- Save the tab list (order, user renames, selected tab, cwd if available)
+  whenever it changes; restore on a cold start.
+- This is app state, not a user setting, so keep it in app storage (e.g.
+  `filesDir/state/tabs`), but as readable plain text. Parse and serialize
+  in `core`, tested, and ignore broken files instead of crashing.
+- Restored tabs start fresh shells (old processes are gone).
+
+#### Done when (the owner checks these on the phone)
+- three tabs open; `top` runs in one; switch away and back: still running
+- leave the app for a few minutes (screen off too), come back: every tab
+  is still there and still running
+- rotating the phone, or pressing Back and reopening, loses no session
+- the notification shows the tab count; **Exit** really stops everything
+- `exit` in a tab closes it; `exit 1` leaves it open with the message, and
+  Enter restarts it; closing the last tab closes the app cleanly
+- a background tab that prints output shows the activity dot;
+  `sleep 3; printf '\a'` in a background tab shows the bell
+- after force-stopping the app (Android settings), reopening restores the
+  tabs and their names
+- every shortcut in the table works with a hardware keyboard, if the owner
+  has one (otherwise check by tapping)
+
+#### Working with the owner
+- Keep each sub-step small; it ends in a build the owner installs. Ask
+  before each commit and push (AGENTS.md); after pushing, run
+  `scripts/deliver.sh` so the installer opens on the phone, then list
+  concrete checks.
+- There's no logcat on the phone: show errors on screen. The crash
+  reporter in `MainActivity` stays; move it to an `Application` class if
+  the service needs it too.
+- Update this worklog (log entry + "Next") before finishing.
 
 ### Small open items
 - Step 1.4's interrupted-install check (swipe the app away while unpacking,
