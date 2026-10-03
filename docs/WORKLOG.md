@@ -8,20 +8,25 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
+- **Roadmap step 2 (*Tabs*) in progress:** 2.1 (background service) done
+  and confirmed on the phone; next is 2.2 (tab model in `core`).
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
   user's Debian.
-- **App:** one full-screen Termux `TerminalView`, one session, run through
-  proot (`prootLaunch()` from `core`). First launch unpacks the bundled
+- **App:** one full-screen Termux `TerminalView` showing one session, run
+  through proot (`prootLaunch()` from `core`). The session lives in
+  `TerminalService` (foreground service), so it survives Back, rotation and
+  leaving the app; its notification has an **Exit** action. First launch unpacks the bundled
   rootfs into `filesDir/debian` (~5 s, progress screen). Blocked `/proc`
   files get static stand-ins from `filesDir/fake-proc`. Crashes are saved
   and shown on the next launch. APK: 30 MB.
 - **Build:** GitHub Actions runs the TDD check and all tests, builds proot
   with the NDK (cached) and the rootfs from `debian:trixie` (arm64), then a
   debug APK. `scripts/deliver.sh` installs it on the phone.
-- **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt` and
-  `FakeProc.kt` (24 tests in all). `app/` is `MainActivity` +
+- **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
+  `FakeProc.kt` and `ServiceNotification.kt` (27 tests in all). `app/` is
+  `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
 ---
@@ -43,16 +48,27 @@ alive by a background service, so long jobs survive leaving the app.
   keyboard; tapping tabs and the **+** button must also work.
 
 #### Where things stand (read the code first)
-- `app/.../MainActivity.kt` owns a single `TerminalView` and a single
-  `TerminalSession`, started by `startShell()` from
-  `prootLaunch(ProotPaths(…), fakeProc = writeFakeProc(…))`. It also
-  handles first-run install, system-bar/IME insets (padding on the root
-  `FrameLayout`, because `TerminalView` ignores its own padding) and the
-  crash reporter. `onDestroy()` kills the session, and `configChanges` in
-  the manifest is what currently keeps the shell alive on rotation.
-- `app/.../TerminalClients.kt`: `SessionClient` (holds the activity) and
-  `ViewClient` (tap → keyboard, pinch → font size, Enter restarts a finished
-  shell).
+- `app/.../TerminalService.kt` owns the sessions in a plain
+  `mutableListOf<TerminalSession>()`: `currentSession()` (last one, or a
+  new one), `newSession()`, `restart(old)`, `exit()`. `startShell()` (moved
+  here from the activity) builds the proot command and must run on the main
+  thread. `showNotification()` (re)posts the foreground notification with
+  `runningTerminalsText(sessions.size)`; call it whenever the count
+  changes. `activity` is the attached `MainActivity` or null. 2.2 replaces
+  the list with `Tabs<TerminalSession>`.
+- `app/.../MainActivity.kt` starts and binds the service in
+  `connectService()` (after first-run install), shows
+  `service.currentSession()` in one `TerminalView`, and unbinds in
+  `onDestroy()` without killing anything. Back = `moveTaskToBack(true)`.
+  Also: first-run install screen, system-bar/IME insets (padding on the
+  root `FrameLayout`, because `TerminalView` ignores its own padding),
+  showing the last crash.
+- `app/.../TerminalApp.kt`: `Application` with the crash reporter
+  (`filesDir/last-crash.txt`).
+- `app/.../TerminalClients.kt`: `SessionClient` (owned by the service,
+  forwards screen updates to `service.activity` only for the session it
+  shows) and `ViewClient` (tap → keyboard, pinch → font size, Enter
+  restarts a finished shell via `activity.restartShell(session)`).
 - `core/`: `prootLaunch()` (already takes `workDir`, useful for restoring
   tabs), `RootfsInstaller`, `writeFakeProc()`.
 
@@ -89,31 +105,7 @@ alive by a background service, so long jobs survive leaving the app.
 
 #### Suggested order (each step ends in a build the owner installs and checks)
 
-**2.1 Background service.**
-- `TerminalService` (foreground service) owns the sessions; `MainActivity`
-  binds to it and shows the current one. Start the service from the
-  activity while it's visible (Android 12+ forbids starting foreground
-  services from the background).
-- Manifest: `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` and
-  `POST_NOTIFICATIONS` permissions; the service declares
-  `android:foregroundServiceType="specialUse"` with a
-  `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-  android:value="…"/>` explaining the use (API 34+ requires a type; the
-  types with time limits like `dataSync` don't fit a terminal). Ask for
-  the notification permission on Android 13+; the service must still work
-  if it's denied.
-- A persistent notification ("1 terminal running" / "N terminals running")
-  that opens the app, with an **Exit** action that kills all sessions,
-  stops the service and closes the activity.
-- The session client must not keep a destroyed activity alive: the service
-  holds the clients and forwards to the attached activity, if any.
-- `onDestroy()` of the activity no longer kills sessions. Back should leave
-  the app with sessions still running (`moveTaskToBack(true)`), like
-  Termux. Keep `configChanges` (avoids re-layout flicker), but the service
-  is now what keeps sessions alive.
-- Logic goes in `core` where it exists, e.g. the notification text
-  ("N terminals running") as a tested function. The service itself is
-  Android glue.
+**2.1 Background service.** ✅ Done (`8dbace9`), see the log.
 
 **2.2 Tab model in `core`, test-first.**
 - A plain-Kotlin `Tabs` class, generic over the session type so `core`
@@ -186,6 +178,9 @@ output; a bell icon after `\a`. Driven by the flags in the `core` model.
 - Update this worklog (log entry + "Next") before finishing.
 
 ### Small open items
+- No wakelock yet (README: "foreground service with an optional
+  wakelock"). The shell survived a few minutes with the screen off without
+  one; add a notification action for it (like Termux) if long jobs stall.
 - Step 1.4's interrupted-install check (swipe the app away while unpacking,
   reopen) hasn't been tried on the phone.
 - apt prints `debconf: unable to initialize frontend` warnings (no dialog
@@ -196,6 +191,39 @@ output; a bell icon after `\a`. Driven by the flags in the `core` model.
 ---
 
 ## Log
+
+### 2026-10-03 (7): step 2.1, background service
+
+**Done**
+- `core`: `runningTerminalsText(count)` for the notification, test-first
+  (3 tests).
+- `TerminalService`: foreground service (`specialUse`, with the subtype
+  property) that owns the sessions. Notification "N terminal(s) running",
+  low importance, opens the app; **Exit** kills all sessions, stops the
+  service and calls `finishAndRemoveTask()` on the attached activity.
+  Returns `START_NOT_STICKY`: a restarted service can't bring dead shells
+  back (2.5 restores tabs instead).
+- `MainActivity` starts the service with `startForegroundService()` while
+  visible, binds, and shows the service's session. `onDestroy()` only
+  unbinds. Back moves the task to the back (`OnBackInvokedDispatcher` on
+  API 33+, `onBackPressed()` below). Asks for `POST_NOTIFICATIONS` on API
+  33+; works without it.
+- `SessionClient` belongs to the service and forwards to the attached
+  activity, so sessions never hold a destroyed activity.
+- Crash reporter moved to `TerminalApp` (`Application`) so it covers the
+  service too. White `>_` notification icon (`ic_notification.xml`).
+
+**Owner confirmed on the phone:** notification permission prompt and
+"1 terminal running" with Exit; `htop` keeps running after Back and
+reopening; rotation keeps the session; shell alive after a few minutes
+with the screen off; Exit removes app and notification, reopening gives a
+fresh shell.
+
+**Notes**
+- `scripts/deliver.sh` once failed with `unexpected EOF` from the GitHub
+  API while polling (network hiccup, build was fine); rerunning it worked.
+
+**Commits:** `8dbace9`
 
 ### 2026-10-03 (6): step 1.5, Debian starts; step 1 done
 
