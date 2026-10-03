@@ -186,7 +186,15 @@ class MainActivity : Activity() {
     }
 
     fun restartShell(old: TerminalSession) {
-        service?.restart(old)?.let { terminalView.attachSession(it) }
+        service?.restart(old)
+    }
+
+    /** Shows the selected tab's session. The tab strip (step 2.3) will hook in here too. */
+    fun onTabsChanged() {
+        val session = service?.tabs?.selected?.session ?: return
+        if (::terminalView.isInitialized && terminalView.currentSession !== session) {
+            terminalView.attachSession(session)
+        }
     }
 
     fun onScreenUpdated(session: TerminalSession) {

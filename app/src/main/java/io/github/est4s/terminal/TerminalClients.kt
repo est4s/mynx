@@ -15,11 +15,17 @@ private const val TAG = "PocketTerminal"
 // to whichever activity is attached right now, if any.
 class SessionClient(private val service: TerminalService) : TerminalSessionClient {
     override fun onTextChanged(changedSession: TerminalSession) {
+        service.tabs.onOutput(changedSession)
         service.activity?.onScreenUpdated(changedSession)
     }
-    override fun onTitleChanged(changedSession: TerminalSession) {}
-    // The library prints "[Process completed - press Enter]"; ViewClient handles the Enter.
-    override fun onSessionFinished(finishedSession: TerminalSession) {}
+
+    override fun onTitleChanged(changedSession: TerminalSession) {
+        service.tabs.setShellTitle(changedSession, changedSession.title ?: "")
+    }
+
+    // The library prints "[Process completed (code N) - press Enter]" for tabs
+    // that stay open; ViewClient handles the Enter.
+    override fun onSessionFinished(finishedSession: TerminalSession) = service.onSessionFinished(finishedSession)
 
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
         service.getSystemService(ClipboardManager::class.java)
@@ -32,7 +38,7 @@ class SessionClient(private val service: TerminalService) : TerminalSessionClien
         session?.emulator?.paste(text)
     }
 
-    override fun onBell(session: TerminalSession) {}
+    override fun onBell(session: TerminalSession) = service.tabs.onBell(session)
     override fun onColorsChanged(session: TerminalSession) {
         service.activity?.onScreenUpdated(session)
     }
