@@ -9,6 +9,10 @@ menu, themes, a terminal-first in-app keyboard, multiple terminals, and
 **shareable profiles**, so you can send your whole setup to a friend and they
 can install it with one tap.
 
+It's also built for **AI coding agents** like Claude Code: the setup is
+documented for them and fully scriptable, so an agent can customize it for
+you.
+
 > **Status:** planning. Nothing is built yet; this README describes the
 > intended scope.
 
@@ -124,11 +128,46 @@ Commands available inside Debian:
 Each of these asks for Android permission the first time it's used, and you can
 turn any of them off per profile.
 
+### Built for AI coding agents
+CLI agents like Claude Code are first-class citizens. An agent running in a
+terminal tab should be able to understand and change your setup as easily as
+you can.
+
+**Setup docs for agents.** Every Debian environment ships with documentation
+written for agents, kept in sync with the app version and the active profile:
+- `AGENTS.md` and `CLAUDE.md` in your home folder, so Claude Code, Codex,
+  Gemini CLI and other agents pick them up automatically.
+- What the environment is (Debian under `proot` on Android) and its limits
+  (no `systemd`, Docker or root kernel features), so agents don't waste time
+  on things that can't work.
+- Where everything lives: profile, theme, keyboard layouts, launcher menu,
+  file manager settings, dotfiles.
+- The file formats, with examples, and what each setting does.
+- Every `pocket` command, including the Android ones (notifications, camera,
+  location, sensors, clipboard, share).
+- How to apply a change, check it and undo it.
+
+**An agent-friendly setup:**
+- **Plain-text config.** Everything you can change in the settings screens
+  is stored in readable, commented files that an agent can edit directly.
+- **A `pocket` command for everything.** Anything the app can do, a script
+  can do: `pocket theme set neon`, `pocket profile export`, `pocket keyboard
+  reload`, … with `--json` output for scripts and agents.
+- **Live reload.** Config changes apply without restarting the app.
+- **Checks before applying.** `pocket config check` validates edits and
+  explains mistakes, so a broken edit never breaks the app.
+- **Undo.** Config is snapshotted before each change; `pocket undo` rolls
+  back the last one.
+- **Agent notifications.** A phone notification when an agent finishes or
+  needs your input, so you can switch apps while it works.
+- **One-tap install** of popular agent CLIs (Claude Code, Codex, Gemini
+  CLI) through their official installers; you sign in with your own
+  account.
+
 ### Included extras
 - The default **Neon** profile comes with a synthwave theme and a few terminal
   games, all playable with the in-app keyboard.
-- Optional one-tap install of popular tools, such as Claude Code (installed
-  through its official installer; you sign in with your own account).
+- Optional one-tap install of popular tools and AI agent CLIs (see above).
 
 ---
 
@@ -164,11 +203,14 @@ Because Debian runs through `proot` rather than a virtual machine:
 4. **File manager:** phone-sized, keyboard-driven terminal file manager.
 5. **In-app keyboard:** terminal layout, shortcuts, game mode.
 6. **Customization:** theme, keyboard and menu editors.
-7. **Profiles:** multiple profiles, switching, export/import.
-8. **Android integration:** notifications, clipboard, share, storage,
+7. **Agent support:** `AGENTS.md`/`CLAUDE.md`, `pocket` CLI, config check
+   and undo, agent notifications. The agent docs are updated with every
+   later feature.
+8. **Profiles:** multiple profiles, switching, export/import.
+9. **Android integration:** notifications, clipboard, share, storage,
    location, camera, sensors.
-9. **Polish:** first-run experience, settings, icon, signed releases.
-10. **Later:** optional tap support in the file manager (settings toggle).
+10. **Polish:** first-run experience, settings, icon, signed releases.
+11. **Later:** optional tap support in the file manager (settings toggle).
 
 ---
 
