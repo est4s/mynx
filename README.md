@@ -59,6 +59,24 @@ phone keeps its usual one.
   voice input or other languages.
 - Layouts, key sizes, haptics and sounds are customizable.
 
+### File manager
+A built-in, touch-first file manager: a normal Android screen, not a
+terminal program, so it's easy to use with one thumb.
+- **Big, tappable list** with icons, sizes and dates; list or grid view.
+- **Breadcrumb path** at the top: tap any folder in the path to jump back.
+- **Browse both worlds:** your Debian home, the whole Debian filesystem and
+  the phone's storage (Downloads, Pictures, …), with quick-access bookmarks.
+- **Long-press to select**, then copy, move, rename, delete, zip/unzip from
+  a bottom action bar. Cut/copy and paste works across folders and tabs.
+- **Previews** for images, text and code; thumbnails for photos and videos.
+- **Built-in text editor** with syntax highlighting for quick edits to
+  config files and scripts.
+- **Open with** any Android app, or **share** files to other apps.
+- **Open terminal here:** opens a new tab in that folder. From any terminal,
+  `pocket files .` opens the file manager at the current folder.
+- **Search** by name, sort and filter, show/hide hidden files.
+- Opens as its own tab, next to your terminals.
+
 ### Customize everything
 - **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
   cursor style.
@@ -132,12 +150,13 @@ Because Debian runs through `proot` rather than a virtual machine:
 1. **Core:** app opens a terminal into the built-in Debian.
 2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
-4. **In-app keyboard:** terminal layout, shortcuts, game mode.
-5. **Customization:** theme, keyboard and menu editors.
-6. **Profiles:** multiple profiles, switching, export/import.
-7. **Android integration:** notifications, clipboard, share, storage,
+4. **File manager:** touch-first browser, previews, editor, open in terminal.
+5. **In-app keyboard:** terminal layout, shortcuts, game mode.
+6. **Customization:** theme, keyboard and menu editors.
+7. **Profiles:** multiple profiles, switching, export/import.
+8. **Android integration:** notifications, clipboard, share, storage,
    location, camera, sensors.
-8. **Polish:** first-run experience, settings, icon, signed releases.
+9. **Polish:** first-run experience, settings, icon, signed releases.
 
 ---
 
