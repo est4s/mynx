@@ -74,6 +74,21 @@ class Tabs<S>(private val onChange: () -> Unit = {}) {
     /** A null or blank [name] clears the rename, so the shell title shows again. */
     fun rename(session: S, name: String?) = update(session) { it.rename = name?.takeIf { n -> n.isNotBlank() } }
 
+    /** What a rename box should start with: the name the tab shows now. */
+    fun renameInput(session: S): String? = find(session)?.title
+
+    /**
+     * Applies what the user typed in a rename box. Blank goes back to the
+     * automatic title; leaving the shown title unchanged doesn't pin it, so
+     * the tab keeps following the shell.
+     */
+    fun applyRenameInput(session: S, input: String) {
+        val tab = find(session) ?: return
+        val name = input.trim()
+        if (tab.rename == null && name == tab.title) return
+        rename(session, name)
+    }
+
     /** Swaps in a fresh session (a restarted shell), keeping the tab as it is. */
     fun replaceSession(old: S, new: S) = update(old) { it.session = new }
 

@@ -19,6 +19,9 @@ sealed interface TabAction {
     /** Closes the selected tab and kills its shell. */
     data object Close : TabAction
 
+    /** Asks for a new name for the selected tab. */
+    data object Rename : TabAction
+
     /** Actions that only rearrange or select tabs, so the model can apply them itself. */
     sealed interface Navigate : TabAction {
         fun <S> applyTo(tabs: Tabs<S>)
@@ -45,7 +48,10 @@ sealed interface TabAction {
     }
 }
 
-/** Windows Terminal's default tab shortcuts. Null: the key goes to the terminal. */
+/**
+ * Windows Terminal's default tab shortcuts, plus Ctrl+Shift+R for rename
+ * (Windows Terminal has none). Null: the key goes to the terminal.
+ */
 fun tabShortcut(press: KeyPress): TabAction? {
     val (key, ctrl, shift, alt) = press
     if (!ctrl) return null
@@ -53,6 +59,7 @@ fun tabShortcut(press: KeyPress): TabAction? {
         shift && !alt -> when (key) {
             "T" -> TabAction.New
             "W" -> TabAction.Close
+            "R" -> TabAction.Rename
             "TAB" -> TabAction.Previous
             "PAGE_UP" -> TabAction.MoveLeft
             "PAGE_DOWN" -> TabAction.MoveRight

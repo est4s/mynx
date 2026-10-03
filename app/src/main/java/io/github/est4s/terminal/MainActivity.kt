@@ -18,8 +18,11 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowInsets
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -193,6 +196,42 @@ class MainActivity : Activity() {
             service?.tabs?.let { tabs -> tabs.select(tabs.tabs.indexOf(tab)) }
             terminalView.requestFocus()
         }
+        setOnLongClickListener {
+            showRename(tab.session)
+            true
+        }
+    }
+
+    private fun showRename(session: TerminalSession) {
+        val tabs = service?.tabs ?: return
+        val renamed = tabs.find(session)?.rename != null
+        val input = EditText(this).apply {
+            setText(tabs.renameInput(session))
+            setSingleLine(true)
+            selectAll()
+            imeOptions = EditorInfo.IME_ACTION_DONE
+        }
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Rename tab")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(8), dp(20), 0)
+                addView(input)
+            })
+            .setPositiveButton("Rename") { _, _ -> tabs.applyRenameInput(session, input.text.toString()) }
+            .setNegativeButton("Cancel", null)
+        // Only offered when there's a name to drop; an empty box does the same.
+        if (renamed) builder.setNeutralButton("Automatic") { _, _ -> tabs.rename(session, null) }
+        val dialog = builder.create()
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
+            tabs.applyRenameInput(session, input.text.toString())
+            dialog.dismiss()
+            true
+        }
+        dialog.setOnDismissListener { terminalView.requestFocus() }
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dialog.show()
+        input.requestFocus()
     }
 
     // Not focusable: tapping the strip must leave keyboard input on the terminal.
@@ -223,6 +262,7 @@ class MainActivity : Activity() {
         when (action) {
             TabAction.New -> service.newSession()
             TabAction.Close -> service.tabs.selected?.let { service.closeTab(it.session) }
+            TabAction.Rename -> service.tabs.selected?.let { showRename(it.session) }
             is TabAction.Navigate -> action.applyTo(service.tabs)
         }
         terminalView.requestFocus()

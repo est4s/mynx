@@ -170,6 +170,48 @@ class TabsTest {
     }
 
     @Test
+    fun `the rename box starts with the name the tab shows`() {
+        tabs.open("a")
+        assertEquals("Tab 1", tabs.renameInput("a"))
+        tabs.setShellTitle("a", "vim")
+        assertEquals("vim", tabs.renameInput("a"))
+        tabs.rename("a", "notes")
+        assertEquals("notes", tabs.renameInput("a"))
+    }
+
+    @Test
+    fun `saving the rename box renames the tab, trimmed`() {
+        tabs.open("a")
+
+        tabs.applyRenameInput("a", "  build  ")
+
+        assertEquals("build", tabs.selected?.rename)
+    }
+
+    @Test
+    fun `saving the rename box unchanged keeps following the shell title`() {
+        tabs.open("a")
+        tabs.setShellTitle("a", "vim")
+
+        tabs.applyRenameInput("a", "vim")
+        tabs.setShellTitle("a", "htop")
+
+        assertNull(tabs.selected?.rename)
+        assertEquals("htop", tabs.selected?.title)
+    }
+
+    @Test
+    fun `saving an empty rename box goes back to the automatic title`() {
+        tabs.open("a")
+        tabs.rename("a", "build")
+
+        tabs.applyRenameInput("a", "   ")
+
+        assertNull(tabs.selected?.rename)
+        assertEquals("Tab 1", tabs.selected?.title)
+    }
+
+    @Test
     fun `output and bell mark background tabs only`() {
         openAll("a", "b")
 

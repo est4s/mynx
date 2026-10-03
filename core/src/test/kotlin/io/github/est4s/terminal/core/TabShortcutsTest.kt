@@ -12,6 +12,12 @@ class TabShortcutsTest {
     }
 
     @Test
+    fun `ctrl shift R renames the tab`() {
+        assertEquals(TabAction.Rename, tabShortcut(KeyPress("R", ctrl = true, shift = true)))
+        assertNull(tabShortcut(KeyPress("R", ctrl = true)))
+    }
+
+    @Test
     fun `ctrl tab and ctrl shift tab switch tabs`() {
         assertEquals(TabAction.Next, tabShortcut(KeyPress("TAB", ctrl = true)))
         assertEquals(TabAction.Previous, tabShortcut(KeyPress("TAB", ctrl = true, shift = true)))
