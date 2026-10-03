@@ -120,6 +120,9 @@ See README "How it works". The details:
   steps customize it at build time (packages, dotfiles, launcher menu, games)
   with a Dockerfile and buildx/QEMU. Ship it compressed in the APK's assets
   and unpack it on first launch into the app's private storage.
+- **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
+  apps. The app probes them at each start and binds static stand-ins from
+  `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).
 - **Updates never overwrite the user's Debian.** The rootfs is unpacked once.
   App updates may only apply additive, versioned migrations. This is a hard
   rule: users' files and installed packages must survive every update.

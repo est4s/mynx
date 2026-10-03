@@ -8,70 +8,100 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **App:** a full-screen Termux `TerminalView` running Android's
-  `/system/bin/sh` (step 1.1, confirmed on the phone). Crashes are
-  saved and shown in a dialog on the next launch. proot ships as
-  `libproot.so` + `libproot-loader.so` and is on the shell's `PATH`. The
-  APK carries `assets/debian-rootfs.tar.xz`; the first launch unpacks it into
-  `filesDir/debian` with a progress screen (~5 s). APK: 30 MB.
+- **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
+  opening the app shows a `root@localhost` bash inside the built-in Debian
+  13 (trixie); `apt install` works; `htop` draws; app updates keep the
+  user's Debian.
+- **App:** one full-screen Termux `TerminalView`, one session, run through
+  proot (`prootLaunch()` from `core`). First launch unpacks the bundled
+  rootfs into `filesDir/debian` (~5 s, progress screen). Blocked `/proc`
+  files get static stand-ins from `filesDir/fake-proc`. Crashes are saved
+  and shown on the next launch. APK: 30 MB.
 - **Build:** GitHub Actions runs the TDD check and all tests, builds proot
-  with the NDK (cached), then builds a debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
-  phone.
-- **Code:** `core/` has the proot launch command (`ProotLaunch.kt`, 7
-  tests) and the rootfs installer (`RootfsInstaller.kt`, 13 tests), which
-  `app/` uses on first launch.
-- **Roadmap:** working on step 1, *Core*.
+  with the NDK (cached) and the rootfs from `debian:trixie` (arm64), then a
+  debug APK. `scripts/deliver.sh` installs it on the phone.
+- **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt` and
+  `FakeProc.kt` (24 tests in all). `app/` is `MainActivity` +
+  `TerminalClients.kt`.
 
 ---
 
 ## Next
 
-### Roadmap step 1: Core
+### Roadmap step 2: Tabs
 
-**Goal:** opening the app shows a terminal running `bash` inside the built-in
-Debian.
+**Goal:** several terminals in a Windows Terminal-style tab strip, kept
+alive by a background service. Scope: README "Multiple terminals, in tabs".
+Profiles (tab colours per profile, the ⌄ profile menu) come in step 8;
+swipe gestures are touch, so low priority (see AGENTS.md design rules).
 
-Suggested order (each step should end in a build the owner can install).
-Logic goes into `core` test-first; the Android and CI parts are spikes per
-[Spikes](../AGENTS.md#spikes). The proot command is already done:
-`core/.../ProotLaunch.kt`, built by TDD as the first example.
-
-1. ~~**Terminal view with a local shell.**~~ Done and confirmed on the
-   phone (log 2026-10-03 (2)).
-2. ~~**proot in the APK.**~~ Done and confirmed on the phone (log
-   2026-10-03 (3)).
-3. ~~**Debian rootfs in the APK.**~~ Done (log 2026-10-03 (4)). Nothing to
-   check on the phone until 1.4 unpacks it.
-4. ~~**First-run install.**~~ Done and confirmed on the phone (log
-   2026-10-03 (5)): unpacking takes ~5 s. The interrupted-install check
-   (swipe away mid-unpack, reopen) hasn't been tried yet.
-5. **Start Debian** with the command from `prootLaunch()` in `core`, which
-   builds roughly:
-   ```
-   libproot.so --kill-on-exit --link2symlink -0 \
-     -r <filesDir>/debian -w /root \
-     -b /dev -b /proc -b /sys -b /storage \
-     /usr/bin/env -i HOME=/root TERM=xterm-256color LANG=C.UTF-8 \
-       PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-       /bin/bash --login
-   ```
-   with `PROOT_LOADER` and `PROOT_TMP_DIR` (a folder in `cacheDir`) in the
-   environment. Android blocks some `/proc` files; if tools break, bind fake
-   ones like `proot-distro` does (`/proc/loadavg`, `/proc/stat`,
-   `/proc/uptime`, `/proc/version`, `/proc/vmstat`).
+Suggested order (each step ends in a build the owner can install):
+1. **Background service.** A foreground service owns the
+   `TerminalSession`s; `MainActivity` binds to it and attaches the current
+   one. Sessions must survive leaving the app, rotation and the activity
+   being destroyed (then the `configChanges` workaround is no longer what
+   keeps the shell alive). Needs `FOREGROUND_SERVICE` +
+   `FOREGROUND_SERVICE_SPECIAL_USE` (API 34+ requires a type), a
+   persistent notification ("N terminals running", with an Exit action),
+   and `POST_NOTIFICATIONS` (ask on Android 13+). Optional wakelock comes
+   later with settings. The session client callbacks must not hold the
+   activity once it's gone.
+2. **Tab model in `core`, test-first:** open/close/select/move tabs, titles
+   (from the shell's OSC title, user rename overrides it), what to select
+   after closing, activity/bell flags on background tabs. Plain Kotlin;
+   the service holds one instance.
+3. **Tab strip UI:** a strip along the top with title, close and **+**;
+   scrolls sideways when full. Keyboard-first: hardware-keyboard shortcuts
+   (e.g. Ctrl+Shift+T new, Ctrl+Shift+W close, Ctrl+Tab /
+   Ctrl+Shift+Tab switch, Ctrl+Shift+1…9). Tapping tabs works too.
+4. **Activity dot and bell** on background tabs.
+5. **Restore open tabs** (titles, working directories) after the app is
+   killed. Store the list in a plain-text file (design rule), parsing in
+   `core`.
 
 #### Done when
-- a fresh install shows a progress screen, then a `root@…` bash prompt
-- `apt update && apt install -y htop` works, and `htop` draws correctly
-- installing the next build as an update keeps installed packages and files
-- errors (failed unpack, proot crash) appear on screen with details, not as a
-  silent crash
+- open three tabs, run `top` in one, switch away and back: it's still running
+- leave the app for a few minutes, come back: all tabs are still there
+- rotating the phone or closing the activity doesn't lose any session
+- `exit` in a tab closes it; closing the last tab leaves a sensible state
+- background output shows an activity dot
 
-Then continue with roadmap step 2 (tabs and the background service).
+### Small open items
+- Step 1.4's interrupted-install check (swipe the app away while unpacking,
+  reopen) hasn't been tried on the phone.
+- apt prints `debconf: unable to initialize frontend` warnings (no dialog
+  program, no `Term::ReadLine`), harmless. Fix in step 3's rootfs
+  customization (e.g. install `dialog`, or set the debconf frontend).
+- htop's CPU bars are static (fake `/proc/stat`, as in proot-distro).
 
 ---
 
 ## Log
+
+### 2026-10-03 (6): step 1.5, Debian starts; step 1 done
+
+**Done**
+- The terminal runs `prootLaunch()`'s command (login bash in Debian, fake
+  root) instead of Android's `sh` (`0fdf4eb`).
+- `apt update` failed to resolve hosts: the app lacked
+  `android.permission.INTERNET`, so Android denied every socket (`52e497d`).
+- `htop` failed with `Cannot open /proc/stat: Permission denied`.
+  `writeFakeProc()` (core, test-first) writes static stand-ins for
+  `/proc/{loadavg,stat,uptime,version,vmstat}` into `filesDir/fake-proc`,
+  only for files the app can't read (probed at each start with a real
+  read), and `prootLaunch(fakeProc = …)` binds them over the originals.
+  On the owner's Android 16 all five are blocked (`9e5c713`).
+- A `workflow_dispatch` rebuild installed as an update kept `htop`.
+
+**Owner confirmed on the phone:** short opening screen, `apt install`
+works, `htop` draws, updates keep installed packages. All of step 1's
+"Done when" checks pass.
+
+**Decisions**
+- Fake `/proc` files live outside the user's Debian (app-managed, rewritten
+  each start), so nothing is written into the user's rootfs.
+
+**Commits:** `0fdf4eb`, `52e497d`, `9e5c713`
 
 ### 2026-10-03 (5): step 1.4, first-run install
 
