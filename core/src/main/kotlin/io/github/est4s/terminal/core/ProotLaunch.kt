@@ -21,7 +21,8 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * files Android blocks to stand-ins (see [writeFakeProc]). With [cwdFile]
  * (a Debian path), the shell writes its folder there after each prompt:
  * proot tracks the folder itself, so the host can't see it in /proc.
- * [openMenu] has the shell open the launcher menu first.
+ * [openMenu] has the shell open the launcher menu first. [keyBarFile] (a
+ * Debian path) is where programs report the key bar they want.
  */
 fun prootLaunch(
     paths: ProotPaths,
@@ -29,6 +30,7 @@ fun prootLaunch(
     fakeProc: Map<String, String> = emptyMap(),
     cwdFile: String? = null,
     openMenu: Boolean = false,
+    keyBarFile: String? = null,
 ): Launch {
     val argv = buildList {
         add(paths.proot)
@@ -45,6 +47,8 @@ fun prootLaunch(
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         // Root's .bashrc opens the launcher menu when this is set.
         if (openMenu) add("POCKET_MENU=1")
+        // The keybar command writes the bar to show here (a Debian path).
+        keyBarFile?.let { add("POCKET_KEYBAR_FILE=$it") }
         addAll(listOf("/bin/bash", "--login"))
     }
     val env = mapOf(

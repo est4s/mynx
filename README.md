@@ -64,33 +64,27 @@ phone keeps its usual one.
 - Layouts, key sizes, haptics and sounds are customizable.
 
 ### File manager
-A terminal file manager (`pocket files`) designed for a phone screen.
-Midnight Commander is powerful but built for wide desktop terminals; this
-one is made for a narrow portrait screen and thumbs.
-- **One pane, full width:** a single file list that fits about 40–60
-  columns, instead of two cramped side-by-side panels. Long names are
-  shortened in the middle so the extension stays visible.
-- **Path bar** at the top always shows where you are; Backspace goes back
-  up.
-- **Action bar** at the bottom with the common actions (copy, move, rename,
-  delete, new, search) as large labels. It changes with what's selected,
-  so there are no hidden shortcuts to memorise.
-- **Keyboard-driven:** arrows to move, Enter to open, Space to select,
-  using the arrow keys on the in-app keyboard.
-- **Tap support (later):** tap to open, long-press to select, swipe to
-  scroll. It will be off by default, with a toggle in settings.
-- **Multi-select** with a clear count, then copy/move/delete/zip in one go.
-  Copy and move ask for the destination with the same browser.
-- **Preview** text, code and images (as coloured block pixels) full-screen,
-  instead of in a cramped side panel.
-- **Quick places:** home, Debian root, phone storage (Downloads, Pictures,
-  …) and your own bookmarks.
-- **Open with:** edit in your terminal editor, open in an Android app, or
-  share to another app.
-- **Open terminal here** opens a new tab in the current folder;
-  `pocket files .` in any terminal opens the file manager there.
-- **Search** by name, sort, filter, show/hide hidden files.
-- Uses your profile's theme and colours.
+`files` opens [nnn](https://github.com/jarun/nnn), a fast one-pane
+terminal file manager that fits a narrow portrait screen, set up for the
+phone. Midnight Commander is still installed, but it's built for wide
+desktop terminals and a full keyboard.
+- **Detail mode** by default: sizes, dates and permissions in one list.
+- **Quick places** on `b`: home, Download, Pictures, DCIM and `/`, plus
+  your own bookmarks.
+- **Key bar:** while nnn runs, the bar above the keyboard shows its
+  actions as labelled buttons (Open, Back, Select, Copy, Move, Rename,
+  Delete, Search, Places, Quit), so there are no shortcuts to memorise.
+- Text files open in your terminal editor (nano by default).
+- Later: open other files in an Android app, share, and "open terminal
+  here" in a new tab; tap support (off by default, behind a setting).
+
+### Key bar
+A row of labelled buttons between the terminal and the keyboard, always
+visible. What it shows depends on what's running: the shell gets Esc,
+Tab, a sticky Ctrl, arrows, Files and Menu; nnn and the menu get their
+own actions. Any program can have one: `keybar NAME command` shows bar
+`NAME` while the command runs, and bars are plain-text files you can
+change or add. The in-app keyboard builds on it later.
 
 ### Customize everything
 - **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
@@ -218,7 +212,8 @@ Because Debian runs through `proot` rather than a virtual machine:
 1. **Core:** app opens a terminal into the built-in Debian.
 2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
-4. **File manager:** phone-sized, keyboard-driven terminal file manager.
+4. **File manager:** nnn set up for the phone, and the key bar above the
+   keyboard.
 5. **In-app keyboard:** terminal layout, shortcuts, game mode.
 6. **Customization:** theme, keyboard and menu editors.
 7. **Agent support:** `AGENTS.md`/`CLAUDE.md`, `pocket` CLI, config check

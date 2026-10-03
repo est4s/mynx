@@ -52,6 +52,8 @@ class TerminalService : Service() {
     // prootLaunch's cwdFile). Inside Debian's /tmp, so the shell can write it.
     private val cwdDir by lazy { File(rootfs, CWD_DIR) }
     private val cwdFiles = WeakHashMap<TerminalSession, File>()
+    // Each shell's `keybar` command writes the key bar to show here.
+    private val keyBarFiles = WeakHashMap<TerminalSession, File>()
     private var nextShellId = 1
     // Last folder known for each session: where it started, or what its shell
     // last reported. Restored tabs only start when first shown, so this keeps
@@ -102,12 +104,17 @@ class TerminalService : Service() {
     fun restart(old: TerminalSession) {
         tabs.replaceSession(old, startShell(cwdOf(old)))
         cwdFiles.remove(old)?.delete()
+        keyBarFiles.remove(old)?.delete()
     }
+
+    /** Where [session]'s programs report the key bar they want (may not exist yet). */
+    fun keyBarFileOf(session: TerminalSession): File? = keyBarFiles[session]
 
     fun closeTab(session: TerminalSession) {
         tabs.close(session)
         session.finishIfRunning()
         cwdFiles.remove(session)?.delete()
+        keyBarFiles.remove(session)?.delete()
         if (tabs.isEmpty) exit()
     }
 
@@ -167,7 +174,9 @@ class TerminalService : Service() {
     // created it, so this must run on the main thread.
     private fun startShell(cwd: String? = null, openMenu: Boolean = false): TerminalSession {
         val workDir = workDirFor(cwd)
-        val cwdName = "cwd-${nextShellId++}"
+        val shellId = nextShellId++
+        val cwdName = "cwd-$shellId"
+        val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
         val libDir = applicationInfo.nativeLibraryDir
         val launch = prootLaunch(ProotPaths(
@@ -175,7 +184,7 @@ class TerminalService : Service() {
             loader = "$libDir/libproot-loader.so",
             rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -188,6 +197,7 @@ class TerminalService : Service() {
         ).also {
             knownCwd[it] = workDir
             cwdFiles[it] = File(cwdDir, cwdName)
+            keyBarFiles[it] = File(cwdDir, keyBarFileName)
         }
     }
 

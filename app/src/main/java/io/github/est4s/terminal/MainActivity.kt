@@ -49,11 +49,14 @@ private const val ROOTFS_ASSET = "debian-rootfs.tar.xz"
 private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
 // Debian path, relative to the rootfs.
 private const val COLORS_FILE = "root/.config/pocket-terminal/colors.properties"
+private const val KEY_BARS_DIR = "root/.config/pocket-terminal/keybars"
 
 class MainActivity : Activity() {
     private lateinit var terminalView: TerminalView
     private lateinit var stripScroll: HorizontalScrollView
     private lateinit var stripRow: LinearLayout
+    private lateinit var keyBar: KeyBarView
+    private var shownKeyBarProblems = emptyList<String>()
     private var service: TerminalService? = null
     private var bound = false
     private val crashFile by lazy { TerminalApp.crashFile(application) }
@@ -103,7 +106,10 @@ class MainActivity : Activity() {
     // Picks up edits to the colours file when the user comes back to the app.
     override fun onStart() {
         super.onStart()
-        if (::terminalView.isInitialized) applyColors()
+        if (::terminalView.isInitialized) {
+            applyColors()
+            refreshKeyBar(force = true) // bar files may have been edited
+        }
     }
 
     // Folders change without tab changes, and leaving the app is the last
@@ -164,6 +170,7 @@ class MainActivity : Activity() {
             isHorizontalScrollBarEnabled = false
             addView(stripRow)
         }
+        keyBar = KeyBarView(this, terminalView, font, File(installer.rootfs, KEY_BARS_DIR))
         // Before attaching: a session's emulator copies the scheme when it starts.
         applyColors()
         // TerminalView ignores its own padding, so it sits inside the inset root.
@@ -172,11 +179,14 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(stripScroll, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(terminalView, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+            // Last, so it sits right above the keyboard (the root is padded by it).
+            addView(keyBar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
 
         terminalView.attachSession(session)
         terminalView.requestFocus()
         renderStrip()
+        refreshKeyBar(force = true)
     }
 
     // Rebuilt on every change; changes are rare (output only reports when a
@@ -279,7 +289,8 @@ class MainActivity : Activity() {
     /**
      * Loads the colours file from Debian (neon if there's none) and, if it
      * changed, applies it to every tab. Unchanged colours are left alone, so
-     * colours a program set with escape codes survive switching apps.
+     * colours a program set with escape codes survive switching apps. The
+     * views are always repainted: they may be new.
      */
     private fun applyColors() {
         val parsed = loadColorScheme(File(installer.rootfs, COLORS_FILE))
@@ -291,10 +302,24 @@ class MainActivity : Activity() {
                 .show()
         }
         shownColorProblems = parsed.problems
-        if (parsed.scheme == scheme) return
         val next = parsed.scheme
-        scheme = next
+        if (next != scheme) {
+            scheme = next
+            applyToTerminals(next)
+        }
 
+        // Like Termux: the library never paints default-background cells, so
+        // everything behind the terminal must be the scheme's background.
+        window.decorView.setBackgroundColor(next.background)
+        root.setBackgroundColor(next.background)
+        terminalView.setBackgroundColor(next.background)
+        stripScroll.setBackgroundColor(strip.background)
+        keyBar.colors = strip
+        renderStrip()
+        terminalView.onScreenUpdated()
+    }
+
+    private fun applyToTerminals(next: ColorScheme) {
         val library = TerminalColors.COLOR_SCHEME
         library.updateWith(Properties()) // back to the library's defaults
         next.palette.forEach { (index, color) -> library.mDefaultColors[index] = color }
@@ -307,15 +332,6 @@ class MainActivity : Activity() {
             library.setCursorColorForBackground()
         }
         service?.tabs?.tabs?.forEach { it.session.emulator?.mColors?.reset() }
-
-        // Like Termux: the library never paints default-background cells, so
-        // everything behind the terminal must be the scheme's background.
-        window.decorView.setBackgroundColor(next.background)
-        root.setBackgroundColor(next.background)
-        terminalView.setBackgroundColor(next.background)
-        stripScroll.setBackgroundColor(strip.background)
-        renderStrip()
-        terminalView.onScreenUpdated()
     }
 
     /** Runs a tab shortcut, from the keyboard or the strip. */
@@ -398,11 +414,32 @@ class MainActivity : Activity() {
         val session = service?.tabs?.selected?.session ?: return
         if (terminalView.currentSession !== session) terminalView.attachSession(session)
         renderStrip()
+        refreshKeyBar()
     }
 
     fun onScreenUpdated(session: TerminalSession) {
-        if (::terminalView.isInitialized && terminalView.currentSession === session) terminalView.onScreenUpdated()
+        if (::terminalView.isInitialized && terminalView.currentSession === session) {
+            terminalView.onScreenUpdated()
+            // A program starting or ending prints something, so this catches bar changes.
+            refreshKeyBar()
+        }
     }
+
+    /** Shows the bar the selected tab's program asked for; problems in its file show once. */
+    private fun refreshKeyBar(force: Boolean = false) {
+        val session = service?.tabs?.selected?.session ?: return
+        val loaded = keyBar.refresh(service?.keyBarFileOf(session), force) ?: return
+        if (loaded.problems.isNotEmpty() && loaded.problems != shownKeyBarProblems) {
+            AlertDialog.Builder(this)
+                .setTitle("Problems in a key bar file")
+                .setMessage(loaded.source + "\n\n" + loaded.problems.joinToString("\n"))
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        shownKeyBarProblems = loaded.problems
+    }
+
+    fun takeCtrlLatch() = ::keyBar.isInitialized && keyBar.takeCtrlLatch()
 
     fun showKeyboard() {
         terminalView.requestFocus()

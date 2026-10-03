@@ -121,8 +121,9 @@ See README "How it works". The details:
   Dockerfile adds packages, root's dotfiles (`rootfs/root/`), the
   launcher menu (`rootfs/bin/menu` → `/usr/local/bin/menu`), the games
   (`rootfs/games/` → `/opt/neon-games/`, commands `rogue`, `drive`,
-  `flap`) and the Neon colours file (from `core`'s resources, via the
-  `neon` build context). Ship it compressed in the APK's assets and unpack
+  `flap`), nnn with `files` and `keybar`, and from `core`'s resources (the
+  `core` build context) the Neon colours file and the built-in key bars
+  (`/usr/share/pocket-terminal/keybars/`, for users to copy). Ship it compressed in the APK's assets and unpack
   it on first launch into the app's private storage.
 - **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
   in CI by `scripts/fetch-font.sh` (release pinned by hash) into
@@ -220,7 +221,8 @@ does this automatically through `.claude/settings.json`.)
 - **`core/`**: plain Kotlin, no Android imports. Put **all logic** here:
   config parsing and checking, the profile format, export/import, undo
   snapshots, migrations, the proot command, rootfs unpacking, keyboard
-  layouts, file manager logic, and so on. Tests in `core/src/test/`
+  layouts and key bars, and so on. (The file manager is nnn, set up in
+  the rootfs.) Tests in `core/src/test/`
   (`kotlin.test` on JUnit 5).
 - **`app/`**: a thin Android layer that connects `core` to Android (views,
   services, permissions, USB, camera). Keep logic out of it. When Android

@@ -71,3 +71,31 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 - `/usr/local/bin/menu`, `files`, `keybar` and `/opt/neon-games` belong
   to the app and may be replaced by an app update; put your changes in
   your home folder.
+
+## Key bar files
+
+The built-in bars are in `/usr/share/pocket-terminal/keybars/` (`shell`,
+`nnn`, `menu`). To change one, copy it to
+`~/.config/pocket-terminal/keybars/` and edit the copy; a new
+`NAME.conf` there adds a bar for `keybar NAME …`. Leave the app and come
+back to apply. Format, one button per line:
+
+```
+# label = keys, run in order
+Open   = l
+Rename = Ctrl+R
+Files  = "files" Enter
+Ctrl   = Ctrl
+```
+
+- Key names (any case): Enter Esc Tab Space Backspace Delete Insert Up
+  Down Left Right Home End PgUp PgDn F1-F12.
+- Any single character is a key: `l`, `/`, `=`.
+- Modifiers: `Ctrl+R`, `Alt+Left`, `Ctrl+Alt+Delete`.
+- `"text"` is typed as is (`\"` for a quote).
+- `Ctrl` on its own is a sticky Ctrl for the next key typed.
+- Bad lines are skipped and shown in a dialog.
+
+To give your own program a bar: `keybar htop htop`, with buttons in
+`~/.config/pocket-terminal/keybars/htop.conf`. An alias in `~/.bashrc`
+makes it stick: `alias htop='keybar htop htop'`.

@@ -13,8 +13,9 @@ Newest entries first. Rules for keeping it up to date: see
   Debian), a customized Debian image (starship, eza, mc, nano, less,
   python3, the three games, no debconf warnings), the launcher menu on a
   fresh start, and agent docs in `/root`.
-- **Next: roadmap step 4 (*File manager*)**, to plan with the owner
-  first (open questions under "Next").
+- **Step 4 (*File manager*) in progress:** nnn as `files` plus a key
+  bar above the keyboard. 4.1 + 4.2 built, **waiting for the owner's
+  check (needs a data clear)**. See "Next".
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
   (with their folders and names) restored after Android kills the app.
@@ -39,9 +40,10 @@ Newest entries first. Rules for keeping it up to date: see
   debug APK. `scripts/deliver.sh` installs it on the phone.
 - **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
   `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt`, `TabShortcuts.kt`,
-  `TabState.kt`, `HostPath.kt` and `ColorScheme.kt` (84 tests in all).
-  `rootfs/` holds the Debian image (Dockerfile, menu, dotfiles, games);
-  `tests/shell/` has 29 bats tests. `app/` is
+  `TabState.kt`, `HostPath.kt`, `ColorScheme.kt` and `KeyBar.kt` (100
+  tests in all). `app/` also has `KeyBarView.kt`. `rootfs/` holds the
+  Debian image (Dockerfile, `bin/` menu/files/keybar, dotfiles, games);
+  `tests/shell/` has 40 bats tests. `app/` is
   `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
@@ -49,26 +51,42 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Roadmap step 4: File manager (plan with the owner first)
+### Roadmap step 4: File manager (nnn + key bar)
 
-**Goal (README "File manager"):** `pocket files`, a one-pane,
-keyboard-driven terminal file manager for a ~56-column portrait screen:
-path bar, action bar that changes with the selection, multi-select,
-copy/move with the same browser, full-screen preview, quick places, open
-with, open terminal here, search/sort/filter. Tap support is later.
+**Decided with the owner (2026-10-04):** no home-made file manager. The
+owner tried nnn and lf in the app and liked both, nnn a bit more (more
+info out of the box). What was missing: the shortcuts, so they're shown
+as a **key bar** above the keyboard, **always visible**, with labels
+that change with the running program. The README's File manager section
+was rewritten to match (plus a Key bar section).
 
-**Decide with the owner before coding:**
-- **Language and where the logic lives.** AGENTS.md says file manager
-  logic goes in Kotlin `core`, but `pocket files` runs inside Debian,
-  where there's no JVM. Options: Python curses in the rootfs (like the
-  games; pytest for the logic), or a native Android screen (logic in
-  `core`). Update AGENTS.md "Where code and tests go" with the answer.
-- What replaces `mc` in the menu's Files item, and when.
-- The `pocket` command: step 7 (agent support) owns the `pocket` CLI;
-  `pocket files` would be its first subcommand.
-- Which parts need the app (open with an Android app, share, open a new
-  tab here). Those need a channel from Debian to the app, which doesn't
-  exist yet.
+**4.1 nnn and `keybar` (rootfs). Built, in the same build as 4.2.**
+**4.2 Key bar (app). Built, not yet confirmed.** Owner clears the app's
+data, opens it, and checks:
+- the bar sits under the terminal, right above the keyboard, and stays
+  when the keyboard is hidden; neon colours; buttons scroll sideways if
+  they don't fit
+- the menu shows ↑ ↓ Select Back Quit, and they work
+- menu → Files opens nnn in detail mode; the bar changes to Open Back
+  Select Copy Move Rename Delete Search Places Quit; quitting nnn brings
+  back the menu's bar, leaving the menu the shell's (Esc Tab Ctrl ← ↓ ↑ →
+  Files Menu)
+- in nnn: select a file in Download (Places → d), go to another folder,
+  Copy pastes it there; Rename and Delete ask and work; Search filters
+- shell bar: Files and Menu open them; ↑ recalls history; Tab completes;
+  Ctrl lights up, then typing `c` interrupts `sleep 100`, and Ctrl goes
+  dark again
+- each tab keeps its own bar when switching tabs (nnn in one, shell in
+  the other)
+- typing on the system keyboard still works after pressing bar buttons
+- a bar file with a bad line shows a "Problems in a key bar file" dialog:
+  `mkdir -p ~/.config/pocket-terminal/keybars && printf 'Quit = q\noops\n'
+  > ~/.config/pocket-terminal/keybars/nnn.conf`, leave the app and come
+  back, run `files`: dialog, then a bar with only Quit. Delete the file.
+- opening a text file in nnn opens nano
+
+**Next after step 4:** roadmap step 5 (in-app keyboard), which builds on
+the key bar (`KeyBarView`, `core/KeyBar.kt`).
 
 **Where things stand:** step 3 left a customized rootfs
 (`rootfs/Dockerfile`), the menu (`rootfs/bin/menu`), root's dotfiles and
@@ -104,6 +122,53 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (16): step 4, nnn and the key bar
+
+**Done**
+- Owner compared the Debian-packaged file managers (nnn, lf, ranger,
+  vifm, broot; yazi/xplr not packaged) and tried nnn and lf in the app.
+  Decision: nnn, plus an always-visible key bar for its actions.
+- 4.1, rootfs (bats, `tests/shell/files.bats` + menu/bashrc/docs tests):
+  `files [dir]` = `keybar nnn nnn -de`, with `NNN_BMS` bookmarks (h home,
+  d Download, p Pictures, c DCIM, r /) unless the user set their own.
+  `keybar NAME cmd…` writes NAME to `$POCKET_KEYBAR_FILE` while cmd runs
+  and restores the previous content (EXIT trap; nests; passes the exit
+  code; just runs cmd outside the app). The menu's Files item runs
+  `files`; the `menu` function runs under `keybar menu`. `EDITOR` and
+  `VISUAL` are nano (nnn opens text files with it). nnn installed.
+- 4.2, `core` test-first (16 tests): `KeyBar.kt` parses bar files
+  (`label = keys`; named keys, single characters, `Ctrl+`/`Alt+`,
+  `"quoted text"`, `Ctrl` alone = sticky; bad lines reported).
+  `keyBarName()` validates the reported name (else `shell`).
+  `loadKeyBar()`: user `NAME.conf` beats the built-in, unknown → shell.
+  Built-ins (`shell`, `nnn`, `menu`) are core resources, also shipped to
+  `/usr/share/pocket-terminal/keybars/` to copy from.
+  `prootLaunch(keyBarFile)` sets `POCKET_KEYBAR_FILE`.
+- 4.2, app: `TerminalService` gives each shell
+  `/tmp/.pocket-terminal/keybar-N`. `KeyBarView` (under the terminal,
+  so above the keyboard) reloads when that file's timestamp changes,
+  checked on the visible tab's output, tab switches and `onStart`
+  (forced, to pick up edited bar files). Named keys go through
+  `TerminalView.handleKeyCode()` (right sequences in cursor-app mode),
+  characters through `inputCodePoint()`, text through
+  `session.write()`. Sticky Ctrl is `ViewClient.readControlKey()`.
+  Haptic tick on press. Problems in a bar file show in a dialog once.
+- `applyColors()` now always repaints the views and only skips the
+  library update when the scheme is unchanged: a new view (second
+  `showTerminal`) was left unpainted before.
+- Docs: README File manager + Key bar sections and roadmap item 4; home
+  `AGENTS.md` documents `files`, bookmarks, key bars and their format.
+
+**Decisions**
+- Bar changes travel through a per-tab file, not an escape code: the
+  library drops unknown OSC codes with no hook for the app.
+- Built-in bars live in the app (core resources), so app updates can
+  improve them without a rootfs migration; users override per bar.
+- Not yet: key repeat on held buttons (arrows), opening non-text files
+  in Android apps (needs a Debian → app channel).
+
+**Commits:** `4c11f36`, (pending)
 
 ### 2026-10-03 (15): step 3.4, agent docs in the home folder
 
