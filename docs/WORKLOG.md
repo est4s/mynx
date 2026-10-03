@@ -8,17 +8,20 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **Roadmap step 2 (*Tabs*) in progress:** 2.1 (background service) and
-  2.2 (tab model, exit rule) done and confirmed on the phone; next is 2.3
-  (tab strip UI and shortcuts).
+- **Roadmap step 2 (*Tabs*) in progress:** 2.1–2.4 (background service,
+  tab model, tab strip, shortcuts, activity/bell marks) done and confirmed
+  on the phone; next is 2.5 (restore tabs after the app is killed).
+  Hardware keyboard shortcuts are untested (owner has no keyboard), see
+  "Hardware keyboard checks".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
   user's Debian.
-- **App:** one full-screen Termux `TerminalView` showing one session, run
-  through proot (`prootLaunch()` from `core`). The session lives in
-  `TerminalService` (foreground service), so it survives Back, rotation and
-  leaving the app; its notification has an **Exit** action. First launch unpacks the bundled
+- **App:** a tab strip above one Termux `TerminalView` that shows the
+  selected tab's session, each run through proot (`prootLaunch()` from
+  `core`). Sessions live in `TerminalService` (foreground service), so they
+  survive Back, rotation and leaving the app; its notification shows the
+  tab count and has an **Exit** action. First launch unpacks the bundled
   rootfs into `filesDir/debian` (~5 s, progress screen). Blocked `/proc`
   files get static stand-ins from `filesDir/fake-proc`. Crashes are saved
   and shown on the next launch. APK: 30 MB.
@@ -26,8 +29,8 @@ Newest entries first. Rules for keeping it up to date: see
   with the NDK (cached) and the rootfs from `debian:trixie` (arm64), then a
   debug APK. `scripts/deliver.sh` installs it on the phone.
 - **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
-  `FakeProc.kt`, `ServiceNotification.kt` and `Tabs.kt` (48 tests in
-  all). `app/` is
+  `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt` and
+  `TabShortcuts.kt` (55 tests in all). `app/` is
   `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
@@ -67,9 +70,10 @@ alive by a background service, so long jobs survive leaving the app.
   `startShell()` builds the proot command and must run on the main thread.
 - `app/.../MainActivity.kt` starts and binds the service in
   `connectService()` (after first-run install), shows
-  `service.currentSession()` in one `TerminalView`;
-  `onTabsChanged()` attaches the selected tab's session (2.3 hooks the
-  strip in there). It unbinds in
+  `service.currentSession()` in one `TerminalView` under the tab strip
+  (`HorizontalScrollView` + `LinearLayout`, rebuilt by `renderStrip()`).
+  `onTabsChanged()` attaches the selected tab's session and redraws the
+  strip. `onTabAction()` runs a `TabAction` from the strip or a shortcut. It unbinds in
   `onDestroy()` without killing anything. Back = `moveTaskToBack(true)`.
   Also: first-run install screen, system-bar/IME insets (padding on the
   root `FrameLayout`, because `TerminalView` ignores its own padding),
@@ -79,7 +83,12 @@ alive by a background service, so long jobs survive leaving the app.
 - `app/.../TerminalClients.kt`: `SessionClient` (owned by the service,
   feeds output/title/bell into `service.tabs`, forwards screen updates to
   `service.activity` for the session it shows) and `ViewClient` (tap → keyboard, pinch → font size, Enter
-  restarts a finished shell via `activity.restartShell(session)`).
+  restarts a finished shell via `activity.restartShell(session)`, tab
+  shortcuts via `tabShortcut()`).
+- `core/.../TabShortcuts.kt`: `KeyPress` (key named like Android's keycode
+  minus `KEYCODE_`), `TabAction` (`New`, `Close`, and `Navigate` actions
+  that apply themselves to `Tabs`), `tabShortcut()` with exact-modifier
+  matching.
 - `core/`: `prootLaunch()` (already takes `workDir`, useful for restoring
   tabs), `RootfsInstaller`, `writeFakeProc()`.
 
@@ -121,33 +130,8 @@ alive by a background service, so long jobs survive leaving the app.
 **2.2 Tab model in `core`, test-first.** ✅ Done (`ed95a18`, `01cb1ac`), see
 the log.
 
-**2.3 Tab strip UI.**
-- A strip along the top of the terminal (inside the inset root, above the
-  `TerminalView`): each tab shows its title and a close ×, then a **+**.
-  It scrolls sideways when full and keeps the selected tab visible.
-- Plain Android views, no Compose (AGENTS.md). Highlight the current tab;
-  one default accent colour for now.
-- Keyboard shortcuts (hardware keyboard, handled in `ViewClient.onKeyDown`):
-
-  | Shortcut | Action |
-  |---|---|
-  | Ctrl+Shift+T | new tab |
-  | Ctrl+Shift+W | close tab |
-  | Ctrl+Tab / Ctrl+Shift+Tab | next / previous tab |
-  | Ctrl+Alt+1…9 | jump to tab N |
-  | Ctrl+Shift+PgUp / PgDn | move tab left / right |
-
-  Keep the shortcut → action mapping in `core` (tested), so the in-app
-  keyboard (step 5) and the customization step reuse it.
-- New-tab and close-tab go through `service.newSession()` /
-  `service.closeTab()`; the rest call the matching `service.tabs` method.
-  Closing a tab with a running shell just kills it for now (no
-  confirmation).
-- `Tab.number` and `Tab.title` are ready for the strip; rename UI isn't
-  in 2.3's scope (long-press menus are out), but `tabs.rename()` exists.
-
-**2.4 Activity dot and bell.** A dot on background tabs that printed
-output; a bell icon after `\a`. Driven by the flags in the `core` model.
+**2.3 Tab strip UI** and **2.4 Activity dot and bell.** ✅ Done (`3560f8a`),
+see the log. Shortcuts not tried with a hardware keyboard yet.
 
 **2.5 Restore tabs after the app is killed.**
 - Save the tab list (order, user renames, selected tab, cwd if available)
@@ -169,8 +153,8 @@ output; a bell icon after `\a`. Driven by the flags in the `core` model.
   `sleep 3; printf '\a'` in a background tab shows the bell
 - after force-stopping the app (Android settings), reopening restores the
   tabs and their names
-- every shortcut in the table works with a hardware keyboard, if the owner
-  has one (otherwise check by tapping)
+- every shortcut works with a hardware keyboard (deferred, see "Hardware
+  keyboard checks"; the tapping equivalents pass)
 
 #### Working with the owner
 - Keep each sub-step small; it ends in a build the owner installs. Ask
@@ -181,6 +165,21 @@ output; a bell icon after `\a`. Driven by the flags in the `core` model.
   reporter in `MainActivity` stays; move it to an `Application` class if
   the service needs it too.
 - Update this worklog (log entry + "Next") before finishing.
+
+### Hardware keyboard checks (later)
+The owner has no hardware keyboard, so these are untested. Run them when
+one is available (Bluetooth/USB keyboard), or with a soft keyboard that
+sends real Ctrl/Alt key events (e.g. Hacker's Keyboard), or once the
+in-app keyboard (step 5) can send these combos:
+- Ctrl+Shift+T opens a tab; Ctrl+Shift+W closes the selected one
+- Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous tab, wrapping round
+- Ctrl+Alt+1…9 jump to tab N (no-op past the last tab)
+- Ctrl+Shift+PgUp / PgDn move the selected tab left / right
+- holding a shortcut acts once (no row of new tabs)
+- Ctrl+T, Ctrl+W, Tab, Ctrl+Alt+0 still reach the shell (e.g. Ctrl+W
+  deletes a word in bash)
+- Android doesn't swallow Ctrl+Tab or Ctrl+Alt+digits before the app sees
+  them (if it does, pick other defaults in `tabShortcut()`)
 
 ### Small open items
 - No wakelock yet (README: "foreground service with an optional
@@ -196,6 +195,30 @@ output; a bell icon after `\a`. Driven by the flags in the `core` model.
 ---
 
 ## Log
+
+### 2026-10-03 (9): steps 2.3 and 2.4, tab strip, shortcuts, marks
+
+**Done**
+- `core`: `TabShortcuts.kt`, test-first (7 tests): Windows Terminal's
+  default tab shortcuts → `TabAction`, exact modifier match so other
+  combos reach the shell.
+- Tab strip above the terminal: title (max 160 dp, ellipsized) and × per
+  tab, then +; selected tab highlighted (purple background, pink text);
+  scrolls sideways and keeps the selected tab in view. Strip views aren't
+  focusable, so tapping them leaves input on the terminal.
+- Cyan ● (output) and 🔔 (bell) on background tabs, from the `Tabs` marks
+  (2.4, folded in since the model already had the flags).
+- `ViewClient.onKeyDown` runs tab shortcuts before the terminal sees the
+  key; key repeats are consumed but ignored.
+
+**Owner confirmed on the phone:** + opens and selects tabs; `top` keeps
+running across switches; ● and 🔔 appear on background tabs; closing a
+middle tab selects its right neighbour; closing the last tab closes the
+app; "Tab N" titles; typing still reaches the terminal after tapping the
+strip. Hardware keyboard shortcuts not tested (no keyboard), listed under
+"Hardware keyboard checks".
+
+**Commits:** `3560f8a`
 
 ### 2026-10-03 (8): step 2.2, tab model and exit rule
 
