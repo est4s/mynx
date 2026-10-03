@@ -60,22 +60,32 @@ phone keeps its usual one.
 - Layouts, key sizes, haptics and sounds are customizable.
 
 ### File manager
-A built-in, touch-first file manager: a normal Android screen, not a
-terminal program, so it's easy to use with one thumb.
-- **Big, tappable list** with icons, sizes and dates; list or grid view.
-- **Breadcrumb path** at the top: tap any folder in the path to jump back.
-- **Browse both worlds:** your Debian home, the whole Debian filesystem and
-  the phone's storage (Downloads, Pictures, …), with quick-access bookmarks.
-- **Long-press to select**, then copy, move, rename, delete, zip/unzip from
-  a bottom action bar. Cut/copy and paste works across folders and tabs.
-- **Previews** for images, text and code; thumbnails for photos and videos.
-- **Built-in text editor** with syntax highlighting for quick edits to
-  config files and scripts.
-- **Open with** any Android app, or **share** files to other apps.
-- **Open terminal here:** opens a new tab in that folder. From any terminal,
-  `pocket files .` opens the file manager at the current folder.
-- **Search** by name, sort and filter, show/hide hidden files.
-- Opens as its own tab, next to your terminals.
+A terminal file manager (`pocket files`) designed for a phone screen.
+Midnight Commander is powerful but built for wide desktop terminals; this
+one is made for a narrow portrait screen and thumbs.
+- **One pane, full width:** a single file list that fits about 40–60
+  columns, instead of two cramped side-by-side panels. Long names are
+  shortened in the middle so the extension stays visible.
+- **Path bar** at the top; tap a folder in it, or press Backspace, to go
+  back up.
+- **Action bar** at the bottom with the common actions (copy, move, rename,
+  delete, new, search) as large labels. It changes with what's selected,
+  so there are no hidden shortcuts to memorise.
+- **Touch and keyboard:** tap to open, tap again or long-press to select,
+  swipe to scroll. Everything also works with the arrows and the in-app
+  keyboard.
+- **Multi-select** with a clear count, then copy/move/delete/zip in one go.
+  Copy and move ask for the destination with the same browser.
+- **Preview** text, code and images (as coloured block pixels) full-screen,
+  instead of in a cramped side panel.
+- **Quick places:** home, Debian root, phone storage (Downloads, Pictures,
+  …) and your own bookmarks.
+- **Open with:** edit in your terminal editor, open in an Android app, or
+  share to another app.
+- **Open terminal here** opens a new tab in the current folder;
+  `pocket files .` in any terminal opens the file manager there.
+- **Search** by name, sort, filter, show/hide hidden files.
+- Uses your profile's theme and colours.
 
 ### Customize everything
 - **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
@@ -150,7 +160,7 @@ Because Debian runs through `proot` rather than a virtual machine:
 1. **Core:** app opens a terminal into the built-in Debian.
 2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
-4. **File manager:** touch-first browser, previews, editor, open in terminal.
+4. **File manager:** phone-sized terminal file manager with touch support.
 5. **In-app keyboard:** terminal layout, shortcuts, game mode.
 6. **Customization:** theme, keyboard and menu editors.
 7. **Profiles:** multiple profiles, switching, export/import.
