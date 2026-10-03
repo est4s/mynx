@@ -34,6 +34,8 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 | Prompt (starship) | `~/.config/starship.toml` |
 | Terminal colours | `~/.config/pocket-terminal/colors.properties` |
 | Launcher menu | `/usr/local/bin/menu` |
+| File manager (nnn) | `/usr/local/bin/files` |
+| Key bars above the keyboard | `~/.config/pocket-terminal/keybars/` |
 | Menu state (last choices, menu theme) | `~/.local/state/pocket-terminal/menu` |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games` |
 
@@ -51,9 +53,21 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
   starts fresh). Its Exit item closes the tab. Any executable file in
   `~/games` shows up under Games, named after the file:
   `ln -s /path/to/game ~/games/my-game` shows "My Game".
+- **File manager:** `files [folder]` runs nnn in detail mode (`?` lists
+  its keys). Quick places on `b`: `h` home, `d` Download, `p` Pictures,
+  `c` DCIM, `r` `/`; set `NNN_BMS` in `~/.bashrc` for your own (format
+  `key:path;key:path`). Text files open in `$EDITOR` (nano).
+- **Key bar:** a row of buttons above the keyboard, always visible. Which
+  bar shows depends on what's running: `keybar NAME command…`
+  (`/usr/local/bin/keybar`) shows bar NAME while the command runs, then
+  the previous one; with no command running it's the shell's bar.
+  `files` uses `nnn`, `menu` uses `menu`. The built-in bars are `shell`,
+  `nnn` and `menu`; a file `~/.config/pocket-terminal/keybars/NAME.conf`
+  replaces or adds one (format in "Key bar files" below).
 - **Prompt hook:** the app sets `PROMPT_COMMAND` so it can reopen each
   tab in its folder after Android closes the app. If you change the
   prompt setup in `~/.bashrc`, keep whatever `PROMPT_COMMAND` the shell
   started with (starship keeps it on its own).
-- `/usr/local/bin/menu` and `/opt/neon-games` belong to the app and may
-  be replaced by an app update; put your changes in your home folder.
+- `/usr/local/bin/menu`, `files`, `keybar` and `/opt/neon-games` belong
+  to the app and may be replaced by an app update; put your changes in
+  your home folder.

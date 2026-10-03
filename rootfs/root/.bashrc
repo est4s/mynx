@@ -4,6 +4,7 @@ case $- in *i*) ;; *) return ;; esac
 
 export LANG=C.UTF-8
 export PATH="$HOME/.local/bin:$PATH"
+export EDITOR=nano VISUAL=nano
 
 # eza: ls with Nerd Font icons.
 if command -v eza >/dev/null; then
@@ -32,7 +33,7 @@ fi
 # Launcher menu (/usr/local/bin/menu). Its Exit item returns 10: close
 # the tab. The app sets POCKET_MENU in the first tab of a fresh start.
 menu() {
-    command menu "$@"
+    keybar menu menu "$@"
     local rc=$?
     ((rc == 10)) && exit 0
     return $rc

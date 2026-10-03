@@ -62,12 +62,24 @@ stub() {
     [ "$output" = $'\e]0;~\aapp' ]
 }
 
+@test "nano is the editor" {
+    run in_shell 'echo "$EDITOR $VISUAL"'
+    [ "$output" = "nano nano" ]
+}
+
+@test "the menu runs with its key bar" {
+    stub keybar 'echo "keybar $*"'
+    run in_shell 'menu --no-boot'
+    [ "$output" = "keybar menu menu --no-boot" ]
+}
+
 @test "home's local bin comes first on PATH" {
     run in_shell 'echo "$PATH"'
     [ "${output%%:*}" = "$HOME/.local/bin" ]
 }
 
 @test "opens the menu with the splash when the app asks, once" {
+    stub keybar 'shift; exec "$@"'
     stub menu 'echo "menu $*"; echo "POCKET_MENU=$POCKET_MENU"'
     export POCKET_MENU=1
     run in_shell 'echo "after: [$POCKET_MENU]"'
@@ -83,6 +95,7 @@ stub() {
 }
 
 @test "Exit in the opening menu closes the shell" {
+    stub keybar 'shift; exec "$@"'
     stub menu 'exit 10'
     export POCKET_MENU=1
     run in_shell 'echo still here'
@@ -90,12 +103,14 @@ stub() {
 }
 
 @test "Exit in a menu opened later closes the shell too" {
+    stub keybar 'shift; exec "$@"'
     stub menu 'exit 10'
     run in_shell 'menu; echo still here'
     [ "$output" = "" ]
 }
 
 @test "leaving the menu for the shell keeps the shell" {
+    stub keybar 'shift; exec "$@"'
     stub menu 'echo "menu $*"; exit 0'
     run in_shell 'menu --no-boot; echo still here'
     [ "${lines[0]}" = "menu --no-boot" ]

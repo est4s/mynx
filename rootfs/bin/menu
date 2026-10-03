@@ -239,7 +239,7 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
 }
 
 act_none() { :; }
-act_files() { run mc "$HOME"; }
+act_files() { run files; }
 act_game() { run "$1"; }
 
 act_update() {

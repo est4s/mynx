@@ -25,6 +25,9 @@ ROOT="$BATS_TEST_DIRNAME/../../rootfs/root"
         "~/.local/state/pocket-terminal/menu" \
         "~/games" \
         "/usr/local/bin/menu" \
+        "/usr/local/bin/files" \
+        "/usr/local/bin/keybar" \
+        "NNN_BMS" \
         "/opt/neon-games"; do
         grep -qF "$path" "$ROOT/AGENTS.md" || { echo "not in AGENTS.md: $path"; false; }
     done

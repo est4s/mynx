@@ -7,17 +7,18 @@ FROM ${BASE}
 # debconf warnings. less and nano: the base image has no pager or editor.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        apt-utils dialog eza less mc nano python3 starship \
+        apt-utils dialog eza less mc nano nnn python3 starship \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin
 
 COPY root/ /root/
 COPY --from=neon neon.colors.properties /root/.config/pocket-terminal/colors.properties
 
-COPY bin/menu /usr/local/bin/menu
+# menu, files (nnn for the phone) and keybar.
+COPY bin/ /usr/local/bin/
 
 # The menu lists games by file name: neon-rogue.py → "Neon Rogue".
 COPY games/ /opt/neon-games/
-RUN chmod 755 /usr/local/bin/menu /opt/neon-games/*.py \
+RUN chmod 755 /usr/local/bin/menu /usr/local/bin/files /usr/local/bin/keybar /opt/neon-games/*.py \
  && ln -s /opt/neon-games/neon-rogue.py /usr/local/bin/rogue \
  && ln -s /opt/neon-games/neon-drive.py /usr/local/bin/drive \
  && ln -s /opt/neon-games/neon-flap.py /usr/local/bin/flap

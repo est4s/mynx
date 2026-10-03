@@ -1,0 +1,7 @@
+#!/bin/sh
+# files [DIR]: the file manager, nnn in detail mode, with its key bar in
+# the app. Quick places on b: h home, d Download, p Pictures, c DCIM,
+# r /. Set NNN_BMS (see `man nnn`) in ~/.bashrc for your own.
+: "${NNN_BMS:=h:~;d:/storage/emulated/0/Download;p:/storage/emulated/0/Pictures;c:/storage/emulated/0/DCIM;r:/}"
+export NNN_BMS
+exec keybar nnn nnn -de "$@"

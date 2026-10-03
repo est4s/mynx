@@ -92,9 +92,9 @@ keys() {
     [ "$status" -eq 10 ]
 }
 
-@test "Files opens mc at home" {
+@test "Files opens the file manager" {
     run keys 2
-    [[ $output == *"RUN: mc $HOME"* ]]
+    [[ $output == *"RUN: files"* ]]
 }
 
 @test "Games starts the chosen game" {
