@@ -164,6 +164,24 @@ written for agents, kept in sync with the app version and the active profile:
   CLI) through their official installers; you sign in with your own
   account.
 
+### Development boards *(later)*
+Flash and talk to boards like **Arduino** and **ESP32** over a USB-C OTG
+cable, using standard tools.
+- A **USB serial bridge** in the app connects to the board through Android's
+  USB API and gives Debian a normal serial port (`/dev/ttyUSB0`). This covers
+  CH340, CP210x, FTDI, ATmega16U2 and native-USB ESP32-S2/S3/C3 boards.
+- Standard tools work against that serial port: `arduino-cli`, PlatformIO,
+  `esptool`, `avrdude`, `picocom`. Toolchains (AVR, ESP32) run on arm64 inside
+  Debian.
+- Automatic reset into the bootloader (DTR/RTS) is passed through to the
+  board; holding BOOT works as a fallback.
+- **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's USB
+  drive.
+- **Raw USB** devices (STM32 DFU, …) for tools that support it via `libusb`.
+- **Serial monitor tab**, a "board connected" notification and a
+  `pocket usb` command; covered by the agent docs, so an agent can write,
+  build and flash firmware.
+
 ### Included extras
 - The default **Neon** profile comes with a synthwave theme and a few terminal
   games, all playable with the in-app keyboard.
@@ -210,7 +228,10 @@ Because Debian runs through `proot` rather than a virtual machine:
 9. **Android integration:** notifications, clipboard, share, storage,
    location, camera, sensors.
 10. **Polish:** first-run experience, settings, icon, signed releases.
-11. **Later:** optional tap support in the file manager (settings toggle).
+11. **Later:**
+    - optional tap support in the file manager (settings toggle)
+    - development boards: USB serial bridge, flashing Arduino/ESP32/UF2
+      boards, serial monitor tab
 
 ---
 
