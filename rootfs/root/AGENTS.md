@@ -21,8 +21,10 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 - **Packages:** `apt update` first (the package lists aren't shipped),
   then `apt install <name>`. Everything installed stays across app
   updates.
-- Phone storage is under `/storage`; most of it needs a storage
-  permission the app doesn't ask for yet.
+- **Phone storage** (Download, DCIM, Documents, …) is at
+  `/storage/emulated/0`.
+- Editors and pagers: `nano` and `less` are installed; `mc` has a file
+  manager and editor.
 
 ## The setup
 

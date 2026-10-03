@@ -29,3 +29,12 @@ ROOT="$BATS_TEST_DIRNAME/../../rootfs/root"
         grep -qF "$path" "$ROOT/AGENTS.md" || { echo "not in AGENTS.md: $path"; false; }
     done
 }
+
+@test "AGENTS.md says where phone storage is and which editors exist" {
+    grep -qF '`/storage/emulated/0`' "$ROOT/AGENTS.md"
+    grep -qF '`nano`' "$ROOT/AGENTS.md"
+    grep -qF '`less`' "$ROOT/AGENTS.md"
+    # The image must actually ship what the docs promise.
+    grep -Eq '^ +.*\bnano\b' "$BATS_TEST_DIRNAME/../../rootfs/Dockerfile"
+    grep -Eq '^ +.*\bless\b' "$BATS_TEST_DIRNAME/../../rootfs/Dockerfile"
+}

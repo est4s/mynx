@@ -4,10 +4,10 @@ ARG BASE=debian:trixie
 FROM ${BASE}
 
 # apt-utils and dialog: without them every apt install in the app prints
-# debconf warnings.
+# debconf warnings. less and nano: the base image has no pager or editor.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        apt-utils dialog eza mc python3 starship \
+        apt-utils dialog eza less mc nano python3 starship \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin
 
 COPY root/ /root/

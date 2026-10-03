@@ -256,11 +256,12 @@ in-app keyboard (step 5) can send these combos:
   user-facing paths are mentioned in `AGENTS.md`, so the docs can't
   silently fall behind. Repo AGENTS.md's design rule points at them.
 
-**Not verified:** "most of `/storage` needs a permission" is from
-Android's rules, not tried in the app; correct it if the owner finds
-otherwise.
+**Owner's first check:** `less` didn't exist (the base image has no pager
+or editor), so `less` and `nano` are now installed. `ls
+/storage/emulated/0` lists the phone's folders, so the docs' claim that
+storage needs a permission was wrong; replaced with the path.
 
-**Commits:** (pending)
+**Commits:** `4e53912`, (pending)
 
 ### 2026-10-03 (14): step 3.3, launcher menu
 
