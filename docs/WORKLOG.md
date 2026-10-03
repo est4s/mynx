@@ -14,8 +14,9 @@ Newest entries first. Rules for keeping it up to date: see
   Tabs can be renamed with a long-press (or Ctrl+Shift+R). Still
   untested: hardware keyboard shortcuts (owner has no keyboard, see
   "Hardware keyboard checks").
-- **Next: roadmap step 3 (*Default setup*)**, planned with the owner;
-  start with 3.1 (neon colours and font). See "Next".
+- **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
+  Font) is built, **waiting for the owner's check on the phone**; then
+  3.2 (customized rootfs). See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -34,7 +35,7 @@ Newest entries first. Rules for keeping it up to date: see
   debug APK. `scripts/deliver.sh` installs it on the phone.
 - **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
   `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt`, `TabShortcuts.kt`,
-  `TabState.kt` and `HostPath.kt` (73 tests in all). `app/` is
+  `TabState.kt`, `HostPath.kt` and `ColorScheme.kt` (82 tests in all). `app/` is
   `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
@@ -81,7 +82,25 @@ profiles (step 8), the in-app keyboard (step 5).
 
 #### Suggested order (each ends in a build the owner installs)
 
-**3.1 Neon colours and font (app side).**
+**3.1 Neon colours and font (app side). Built, not yet confirmed.**
+Owner checks on the phone (no need to clear data for this one):
+- terminal background is dark purple (`#14101f`), text off-white, cursor
+  pink; `for i in $(seq 0 15); do printf '\e[48;5;%sm  ' $i; done; echo`
+  shows the neon palette
+- the font is JetBrains Mono: `echo -e '\ue0b0 \uf07b \uf120'` shows
+  Nerd Font icons (powerline arrow, folder, terminal), not boxes
+- tab strip: same dark background, selected tab pink on `#241b35`, others
+  light grey, cyan activity dot
+- pinch zoom still works (font stays JetBrains Mono)
+- `mkdir -p ~/.config/pocket-terminal && echo background=#000000 >
+  ~/.config/pocket-terminal/colors.properties`, leave the app and come
+  back: background turns black in every tab, rest stays neon
+- add a line `oops` to that file, leave and come back: a "Problems in
+  colors.properties" dialog says `line 2: expected key=value`; it doesn't
+  come back on the next return unless the problems change
+- delete the file, leave and come back: neon again
+
+Original plan for 3.1:
 - `core`, test-first: parse the Termux `colors.properties` format into a
   colour scheme (`#rrggbb`, `background`, `foreground`, `cursor`,
   `color0`–`color255`); bad lines are reported, not fatal. The neon scheme
@@ -96,6 +115,10 @@ profiles (step 8), the in-app keyboard (step 5).
   and agents can edit it; reading it can wait for 3.2's rootfs if simpler.
 
 **3.2 Customized rootfs.**
+- Ship the neon theme file into Debian as
+  `/root/.config/pocket-terminal/colors.properties`: copy it from
+  `core/src/main/resources/io/github/est4s/terminal/core/neon.colors.properties`
+  (one source; its header comment is written for users).
 - Replace `docker export debian:trixie` with a Dockerfile built for arm64
   with buildx + QEMU in CI (AGENTS.md). Install the packages above, set
   `DEBIAN_FRONTEND`/debconf so apt stops warning, add the games
@@ -171,6 +194,47 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-03 (12): step 3.1, neon colours and font
+
+**Done**
+- `core`, test-first (9 tests): `ColorScheme.kt`. `parseColorScheme()`
+  reads Termux's `colors.properties` (`background`, `foreground`,
+  `cursor`, `color0`–`color255`, `#rrggbb`, `#`/`!` comments) on top of a
+  base scheme; bad lines are skipped and reported with line numbers.
+  `NEON` comes from the resource `neon.colors.properties` (the owner's
+  Termux file with a user-facing header). `loadColorScheme(file)` lays a
+  file over neon (neon alone if missing). `stripColors()` derives the tab
+  strip colours: background, `color0` selected, cursor accent, `color6`
+  mark, `color7` text.
+- App: `MainActivity.applyColors()` reads
+  `~/.config/pocket-terminal/colors.properties` from the user's Debian on
+  start and every time the app comes back to the front; only a changed
+  scheme is applied (writes `TerminalColors.COLOR_SCHEME`, resets each
+  tab's colours, recolours strip and background), so colours programs set
+  by escape codes survive app switches. Problems show in a dialog once.
+- Font: JetBrains Mono Nerd Font Mono for the terminal and the tab strip.
+  `scripts/fetch-font.sh` downloads Nerd Fonts v3.5.1's
+  `JetBrainsMono.tar.xz` (sha256-pinned) in CI and unpacks the TTF and
+  `OFL.txt` into `app/src/main/assets/fonts/` (gitignored). The owner's
+  Termux font is byte-identical to the release file (same sha256).
+  Builds without the font fall back to monospace.
+
+**Decisions**
+- Font downloaded in CI, not committed: same pattern as proot and the
+  rootfs; the hash pin keeps it reproducible. APK grows by ~1.2 MB
+  (2.6 MB TTF, compressed).
+- Reading the user's colours file now rather than waiting for 3.2: it
+  was small, and lets the owner try theme edits right away.
+- No new shell tests: `fetch-font.sh` is a build script verified by the
+  CI build, like `build-proot.sh`.
+
+**Not verified:** `app/` can't compile here; written against the
+library's published sources (v0.118.3). Risk to watch: `NEON` loads a
+Java resource from the `core` jar; if Android doesn't package it, the app
+crashes on start and the crash dialog will say so.
+
+**Commits:** (pending)
 
 ### 2026-10-03 (11): rename tabs
 

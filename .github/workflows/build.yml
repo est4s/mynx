@@ -75,6 +75,9 @@ jobs:
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets
 
+      - name: Add the terminal font
+        run: scripts/fetch-font.sh app/src/main/assets/fonts
+
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
 

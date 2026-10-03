@@ -120,6 +120,13 @@ See README "How it works". The details:
   steps customize it at build time (packages, dotfiles, launcher menu, games)
   with a Dockerfile and buildx/QEMU. Ship it compressed in the APK's assets
   and unpack it on first launch into the app's private storage.
+- **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
+  in CI by `scripts/fetch-font.sh` (release pinned by hash) into
+  `app/src/main/assets/fonts/` with its `OFL.txt`; never committed.
+- **Colours:** Termux's `colors.properties` format, parsed in `core`
+  (`ColorScheme.kt`). The built-in Neon theme is
+  `core/src/main/resources/.../neon.colors.properties`; a user's
+  `~/.config/pocket-terminal/colors.properties` in Debian is laid over it.
 - **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
   apps. The app probes them at each start and binds static stand-ins from
   `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).
@@ -140,6 +147,11 @@ See README "How it works". The details:
   `true` to consume it.
 - The library prints `[Process completed (code N) - press Enter]` itself.
 - No OSC 7 (working directory reporting). OSC 0/2 reach `onTitleChanged()`.
+- Default colours are one static array,
+  `TerminalColors.COLOR_SCHEME.mDefaultColors` (0-255 palette, then
+  `TextStyle.COLOR_INDEX_FOREGROUND/BACKGROUND/CURSOR`). Each emulator
+  copies it when it starts; `emulator.mColors.reset()` re-copies it.
+- `TerminalView.setTypeface()` needs `setTextSize()` called first.
 
 ### proot notes
 - **The host can't see a guest process's working directory:** proot

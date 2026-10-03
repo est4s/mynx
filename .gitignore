@@ -8,3 +8,5 @@ local.properties
 app/src/main/jniLibs/
 # Built in CI by scripts/build-rootfs.sh, never committed.
 app/src/main/assets/debian-rootfs.*
+# Downloaded in CI by scripts/fetch-font.sh, never committed.
+app/src/main/assets/fonts/

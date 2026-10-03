@@ -30,21 +30,25 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.window.OnBackInvokedDispatcher
+import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
+import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
+import io.github.est4s.terminal.core.ColorScheme
+import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
+import io.github.est4s.terminal.core.loadColorScheme
+import io.github.est4s.terminal.core.stripColors
+import java.io.File
+import java.util.Properties
 import kotlin.concurrent.thread
 
 private const val ROOTFS_ASSET = "debian-rootfs.tar.xz"
-
-// One accent for every tab until profiles bring per-profile colours (step 8).
-private val ACCENT = Color.parseColor("#FF2BD6")
-private val MARK = Color.parseColor("#2DE2E6")
-private val STRIP_BG = Color.parseColor("#0D0221")
-private val SELECTED_BG = Color.parseColor("#2A0B4D")
-private val DIM_TEXT = Color.parseColor("#9A8FB0")
+private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
+// Debian path, relative to the rootfs.
+private const val COLORS_FILE = "root/.config/pocket-terminal/colors.properties"
 
 class MainActivity : Activity() {
     private lateinit var terminalView: TerminalView
@@ -53,6 +57,13 @@ class MainActivity : Activity() {
     private var service: TerminalService? = null
     private var bound = false
     private val crashFile by lazy { TerminalApp.crashFile(application) }
+    // Only CI builds have the font; fall back so other builds still run.
+    private val font by lazy {
+        runCatching { Typeface.createFromAsset(assets, FONT_ASSET) }.getOrDefault(Typeface.MONOSPACE)
+    }
+    private var scheme: ColorScheme? = null
+    private val strip get() = (scheme ?: NEON).stripColors()
+    private var shownColorProblems = emptyList<String>()
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -81,12 +92,18 @@ class MainActivity : Activity() {
         leaveOnBack()
         askForNotifications()
 
-        root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        root = FrameLayout(this).apply { setBackgroundColor(NEON.background) }
         setContentView(root)
         applySystemInsets(root)
 
         if (installer.isInstalled) connectService() else installDebian()
         showLastCrash()
+    }
+
+    // Picks up edits to the colours file when the user comes back to the app.
+    override fun onStart() {
+        super.onStart()
+        if (::terminalView.isInitialized) applyColors()
     }
 
     // Folders change without tab changes, and leaving the app is the last
@@ -137,17 +154,18 @@ class MainActivity : Activity() {
     private fun showTerminal(session: TerminalSession) {
         terminalView = TerminalView(this, null).apply {
             setTerminalViewClient(ViewClient(this@MainActivity))
-            setBackgroundColor(Color.BLACK)
             isFocusable = true
             isFocusableInTouchMode = true
         }
         textSizePx = dp(12)
+        terminalView.setTypeface(font)
         stripRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         stripScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            setBackgroundColor(STRIP_BG)
             addView(stripRow)
         }
+        // Before attaching: a session's emulator copies the scheme when it starts.
+        applyColors()
         // TerminalView ignores its own padding, so it sits inside the inset root.
         root.removeAllViews()
         root.addView(LinearLayout(this).apply {
@@ -169,7 +187,7 @@ class MainActivity : Activity() {
         tabs.tabs.forEachIndexed { i, tab ->
             stripRow.addView(tabView(tab, selected = i == tabs.selectedIndex))
         }
-        stripRow.addView(stripText("+", ACCENT).apply {
+        stripRow.addView(stripText("+", strip.accent).apply {
             setPadding(dp(14), dp(8), dp(14), dp(8))
             setOnClickListener { onTabAction(TabAction.New) }
         })
@@ -180,15 +198,17 @@ class MainActivity : Activity() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(dp(10), 0, 0, 0)
-        if (selected) setBackgroundColor(SELECTED_BG)
+        val colors = strip
+        if (selected) setBackgroundColor(colors.selectedBackground)
         val marks = (if (tab.bell) "🔔" else "") + (if (tab.activity) "●" else "")
-        if (marks.isNotEmpty()) addView(stripText("$marks ", MARK))
-        addView(stripText(tab.title, if (selected) ACCENT else DIM_TEXT).apply {
+        if (marks.isNotEmpty()) addView(stripText("$marks ", colors.mark))
+        val color = if (selected) colors.accent else colors.text
+        addView(stripText(tab.title, color).apply {
             maxWidth = dp(160)
             setSingleLine(true)
             ellipsize = TextUtils.TruncateAt.END
         })
-        addView(stripText("×", if (selected) ACCENT else DIM_TEXT).apply {
+        addView(stripText("×", color).apply {
             setPadding(dp(10), dp(8), dp(10), dp(8))
             setOnClickListener { service?.closeTab(tab.session); terminalView.requestFocus() }
         })
@@ -237,7 +257,7 @@ class MainActivity : Activity() {
     // Not focusable: tapping the strip must leave keyboard input on the terminal.
     private fun stripText(text: String, color: Int) = TextView(this).apply {
         this.text = text
-        typeface = Typeface.MONOSPACE
+        typeface = font
         setTextColor(color)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         setPadding(0, dp(8), 0, dp(8))
@@ -254,6 +274,45 @@ class MainActivity : Activity() {
                 tab.right > right -> stripScroll.smoothScrollTo(tab.right - stripScroll.width, 0)
             }
         }
+    }
+
+    /**
+     * Loads the colours file from Debian (neon if there's none) and, if it
+     * changed, applies it to every tab. Unchanged colours are left alone, so
+     * colours a program set with escape codes survive switching apps.
+     */
+    private fun applyColors() {
+        val parsed = loadColorScheme(File(installer.rootfs, COLORS_FILE))
+        if (parsed.problems.isNotEmpty() && parsed.problems != shownColorProblems) {
+            AlertDialog.Builder(this)
+                .setTitle("Problems in colors.properties")
+                .setMessage("~/.config/pocket-terminal/colors.properties\n\n" + parsed.problems.joinToString("\n"))
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        shownColorProblems = parsed.problems
+        if (parsed.scheme == scheme) return
+        val next = parsed.scheme
+        scheme = next
+
+        val library = TerminalColors.COLOR_SCHEME
+        library.updateWith(Properties()) // back to the library's defaults
+        next.palette.forEach { (index, color) -> library.mDefaultColors[index] = color }
+        library.mDefaultColors[TextStyle.COLOR_INDEX_FOREGROUND] = next.foreground
+        library.mDefaultColors[TextStyle.COLOR_INDEX_BACKGROUND] = next.background
+        val cursor = next.cursor
+        if (cursor != null) {
+            library.mDefaultColors[TextStyle.COLOR_INDEX_CURSOR] = cursor
+        } else {
+            library.setCursorColorForBackground()
+        }
+        service?.tabs?.tabs?.forEach { it.session.emulator?.mColors?.reset() }
+
+        root.setBackgroundColor(next.background)
+        terminalView.setBackgroundColor(next.background)
+        stripScroll.setBackgroundColor(strip.background)
+        renderStrip()
+        terminalView.onScreenUpdated()
     }
 
     /** Runs a tab shortcut, from the keyboard or the strip. */
