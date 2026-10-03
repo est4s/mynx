@@ -65,7 +65,10 @@ EOF
     --cross-compile --cross-answers=cross-answers.txt >/dev/null
 make -j"$(nproc)" >/dev/null
 mkdir -p "$work/talloc/lib" "$work/talloc/include"
-"$AR" rcs "$work/talloc/lib/libtalloc.a" bin/default/talloc*.o
+# talloc's objects plus libreplace's, which has fallbacks for libc functions
+# Android lacks (e.g. memset_explicit before API 34).
+"$AR" rcs "$work/talloc/lib/libtalloc.a" bin/default/talloc*.o \
+    $(find bin/default/lib/replace -maxdepth 1 -name '*.o')
 cp talloc.h "$work/talloc/include/"
 
 echo "== proot $PROOT_TAG"
