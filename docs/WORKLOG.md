@@ -15,8 +15,8 @@ Newest entries first. Rules for keeping it up to date: see
   untested: hardware keyboard shortcuts (owner has no keyboard, see
   "Hardware keyboard checks").
 - **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
-  Font) is built, **waiting for the owner's check on the phone**; then
-  3.2 (customized rootfs). See "Next".
+  Font) is done and confirmed on the phone. **Next: 3.2 (customized
+  rootfs).** See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -82,8 +82,8 @@ profiles (step 8), the in-app keyboard (step 5).
 
 #### Suggested order (each ends in a build the owner installs)
 
-**3.1 Neon colours and font (app side). Built, not yet confirmed.**
-Owner checks on the phone (no need to clear data for this one):
+**3.1 Neon colours and font (app side). Done, owner confirmed.**
+Checks the owner ran (kept for regressions):
 - terminal background is dark purple (`#14101f`), text off-white, cursor
   pink; `for i in $(seq 0 15); do printf '\e[48;5;%sm  ' $i; done; printf '\e[0m\n'`
   shows the neon palette
@@ -242,7 +242,12 @@ the scheme background too, like Termux (the library never paints
 default-background cells). `scripts/deliver.sh` now waits for the run
 of HEAD: right after a push it had picked the previous run.
 
-**Commits:** `b39ecac`, `3339497`, and the cleanup after it
+**Owner confirmed on the phone:** neon palette, Nerd Font icons, strip
+colours, pinch zoom, a colours file in Debian recolours every tab on
+return, a bad line shows the problems dialog, deleting the file brings
+neon back.
+
+**Commits:** `b39ecac`, `3339497`, `e4e7ab6`
 
 ### 2026-10-03 (11): rename tabs
 
