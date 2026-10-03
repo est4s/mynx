@@ -13,8 +13,8 @@ Newest entries first. Rules for keeping it up to date: see
   (with their folders) restored after Android kills the app. Two things
   are untested: hardware keyboard shortcuts (owner has no keyboard, see
   "Hardware keyboard checks") and restoring renamed tabs (no rename UI yet).
-- **Next: roadmap step 3 (*Default setup*).** Needs a short planning
-  conversation with the owner first; see "Next".
+- **Next: roadmap step 3 (*Default setup*)**, planned with the owner;
+  start with 3.1 (neon colours and font). See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -47,19 +47,84 @@ Newest entries first. Rules for keeping it up to date: see
 a fresh install looks like. Out of scope: editors for any of it (step 6),
 profiles (step 8), the in-app keyboard (step 5).
 
-**Talk to the owner before planning in detail.** Open questions:
-- Which pieces of their current Termux setup to ship (see memory/README):
-  the neon colour scheme, JetBrainsMono Nerd Font, starship prompt, eza
-  aliases, the "Pocket Terminal" launcher menu (`~/bin/menu` in their
-  Termux, bash), games (Neon Rogue, Neon Drive, neonflap: these live in
-  the owner's Debian under `~/games/`, not in any repo yet; they'd need to
-  be copied into this repo, with the owner's OK).
-- Does the launcher menu open automatically in each new tab, or only on
-  the first one, or via a command?
-- Font licence: JetBrains Mono is OFL-1.1, fine to bundle; record it for
-  the About screen.
+#### Decisions (owner, 2026-10-03)
+- Ship all of the owner's Termux setup: **neon colours + JetBrains Mono
+  Nerd Font**, **starship prompt + eza aliases**, the **launcher menu**,
+  and the **games** (Neon Rogue, Neon Drive, neonflap).
+- The launcher menu opens **in the first tab of a fresh start only**; new
+  tabs and restored tabs go straight to a shell; `menu` opens it anytime.
+- **Existing installs:** the owner clears the app's data once to get the
+  new image (deletes their in-app Debian; they agreed). No migration code
+  in this step. Migrations come later, before real users.
 
-**Where things stand (read the code first)**
+#### Sources (on the phone, outside this repo)
+- Colours: Termux `~/.termux/colors.properties` (21 lines: background,
+  foreground, cursor, color0–15). Reachable from Debian at
+  `/data/data/com.termux/files/home/.termux/`.
+- Font: `~/.termux/font.ttf` there (JetBrainsMono Nerd Font Mono, 2.6 MB).
+  Prefer downloading the official release in CI or committing it with its
+  licence (OFL-1.1); check which file variant the owner's is.
+- Starship: Debian `/root/.config/starship.toml` (48 lines, neon palette).
+  eza aliases: Debian `/root/.bashrc` (ls/ll/la/tree).
+- Menu: Termux `~/bin/menu` (424 lines of bash, keyboard-only). It drives
+  Termux and `proot-distro` (shebang, `DEB=(proot-distro login …)`, Termux
+  rootfs paths, backup via proot-distro, Termux version in the status).
+  The port runs *inside* Debian: drop the Termux/Debian split (Terminal =
+  exit to the shell), drop or rework backup and update (update = `apt
+  update && apt upgrade`), keep themes, state file, boot splash, Games and
+  Files (mc).
+- Games: Debian `/root/games/{neonrogue,neondrive,neonflap}/*.py`, single
+  Python curses files. Copy into the repo (owner agreed).
+- Packages, all in Debian trixie: `starship` 1.22.1, `eza` 0.21.0,
+  `python3-minimal` 3.13 (curses needs `python3`, check), `mc`, `dialog`.
+
+#### Suggested order (each ends in a build the owner installs)
+
+**3.1 Neon colours and font (app side).**
+- `core`, test-first: parse the Termux `colors.properties` format into a
+  colour scheme (`#rrggbb`, `background`, `foreground`, `cursor`,
+  `color0`–`color255`); bad lines are reported, not fatal. The neon scheme
+  is the built-in default.
+- App: apply it to sessions (check the library's `TerminalColors` /
+  `TerminalColorScheme` API: Termux does
+  `TerminalColors.COLOR_SCHEME.updateWith(props)` then resets each
+  emulator's colours), use the font via `TerminalView.setTypeface()`, and
+  match the strip/background colours to the scheme.
+- Plain-text config rule: plan for the scheme to also be read from a file
+  in Debian (e.g. `~/.config/pocket-terminal/colors.properties`) so users
+  and agents can edit it; reading it can wait for 3.2's rootfs if simpler.
+
+**3.2 Customized rootfs.**
+- Replace `docker export debian:trixie` with a Dockerfile built for arm64
+  with buildx + QEMU in CI (AGENTS.md). Install the packages above, set
+  `DEBIAN_FRONTEND`/debconf so apt stops warning, add the games
+  (`/usr/local/games/` or `/opt/…`, with `rogue`, `drive`, `flap`
+  commands), root's dotfiles (`.bashrc` with starship init, eza aliases,
+  a title-setting prompt so tabs get names, `LANG`), `starship.toml`.
+- Check: `PROMPT_COMMAND` from the app must survive starship's init (tab
+  folder restore). Check the APK size; keep `xz -9`.
+- Bats tests for any shell scripts added (AGENTS.md: add the suite and CI
+  step with the first shell feature).
+
+**3.3 Launcher menu.**
+- Port `menu` into the rootfs (`/usr/local/bin/menu`). The app tells the
+  first shell of a fresh start to open it (e.g. an env var through
+  `prootLaunch`, tested in `core`); `.bashrc` runs `menu` when it's set.
+- bats tests for the menu's non-interactive parts (state file, items).
+
+**3.4 Agent docs in the home folder.** A first `/root/AGENTS.md` +
+`CLAUDE.md` describing the setup (design rule in AGENTS.md).
+
+#### Done when (the owner checks these on the phone, after clearing data)
+- the terminal uses the neon colours and the Nerd Font (icons in the
+  starship prompt render)
+- the first tab opens the menu; new tabs open a shell; `menu` works
+- Games → each game starts and returns to the menu
+- `ls`/`ll` use eza; prompt is starship; tabs show a title, not "Tab N"
+- `apt install` shows no debconf warnings
+- tab folder restore still works (force-stop test from step 2)
+
+#### Where things stand (read the code first)
 - `app/.../TerminalService.kt` owns `tabs: Tabs<TerminalSession>`, starts
   shells with `startShell(cwd)` (proot via `prootLaunch()`), saves tabs to
   `filesDir/state/tabs` (`saveTabs()`, on every change and on the
@@ -69,37 +134,10 @@ profiles (step 8), the in-app keyboard (step 5).
   starts. `exit()` deletes the state file.
 - `app/.../MainActivity.kt`: install screen, tab strip (`renderStrip()`),
   `onTabAction()`, insets, crash dialog. Colours are constants at the top
-  (`ACCENT`, `MARK`, …). The terminal font is the default monospace;
-  `TerminalView.setTypeface()` takes another. Terminal colours come from
-  the emulator's default palette (`TerminalColors`); the Termux libraries
-  read `colors.properties`-style values, check their API before choosing a
-  format.
+  (`ACCENT`, `MARK`, …). The terminal font is the default monospace.
 - `core/`: `ProotLaunch.kt` (argv/env incl. `cwdFile`), `RootfsInstaller`,
   `FakeProc`, `Tabs`, `TabShortcuts`, `TabState`, `HostPath`.
-- Rootfs: `scripts/build-rootfs.sh` exports plain `debian:trixie`. AGENTS.md
-  says customization happens at build time with a Dockerfile and
-  buildx/QEMU.
-
-**Things to keep in mind**
-- **Existing installs don't get a new rootfs** (hard rule: never overwrite
-  the user's Debian). Changes baked into the rootfs only reach fresh
-  installs; for the owner's phone either clear the app's data once (ask
-  first: it deletes their Debian) or ship an additive, versioned migration.
-  Decide which with the owner; migrations will be needed eventually anyway.
-- **Plain-text config rule:** theme/font/menu settings should be readable
-  files inside Debian (e.g. under `~/.config/`), even before step 6 adds
-  editors. Parsing goes in `core`, test-first.
-- **`PROMPT_COMMAND`:** tab folder restore depends on it. Dotfiles that set
-  `PROMPT_COMMAND` (starship's `init bash` does; check whether it keeps the
-  existing value) must keep ours, or restore silently falls back to the
-  start folder. Add a check to the step's "Done when".
-- **Tab titles:** Debian's root `.bashrc` sets no title, so tabs say "Tab
-  N". A title-setting prompt (OSC 0/2, e.g. `\u@\h: \w`) in the default
-  dotfiles fixes that.
-- Fix the `debconf: unable to initialize frontend` warnings in the
-  customized rootfs (open item below).
-- Ship agent docs in the home folder as features land (AGENTS.md design
-  rule), at least a first `AGENTS.md`/`CLAUDE.md` describing the setup.
+- Rootfs: `scripts/build-rootfs.sh` exports plain `debian:trixie`.
 
 ### Hardware keyboard checks (later)
 The owner has no hardware keyboard, so these are untested. Run them when
