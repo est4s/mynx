@@ -72,6 +72,9 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp build/proot/*.so app/src/main/jniLibs/arm64-v8a/
 
+      - name: Build Debian rootfs
+        run: scripts/build-rootfs.sh app/src/main/assets
+
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
 
@@ -80,6 +83,8 @@ jobs:
           name: pocket-terminal-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+          # The APK is mostly the xz rootfs; zipping it again gains nothing.
+          compression-level: 0
 
       - uses: actions/upload-artifact@v7
         if: failure()

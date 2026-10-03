@@ -44,6 +44,11 @@ android {
         jniLibs.useLegacyPackaging = true
     }
 
+    // The rootfs is already xz-compressed.
+    androidResources {
+        noCompress += "xz"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
