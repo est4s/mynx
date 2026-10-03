@@ -9,7 +9,7 @@ Newest entries first. Rules for keeping it up to date: see
 ## Current status
 
 - **App:** a full-screen Termux `TerminalView` running Android's
-  `/system/bin/sh` (step 1.1, waiting for on-device confirmation). Crashes are
+  `/system/bin/sh` (step 1.1, confirmed on the phone). Crashes are
   saved and shown in a dialog on the next launch.
 - **Build:** GitHub Actions runs the TDD check and all tests, then builds a
   debug APK on every push to `main`. `scripts/deliver.sh` installs it on the
@@ -32,13 +32,8 @@ Logic goes into `core` test-first; the Android and CI parts are spikes per
 [Spikes](../AGENTS.md#spikes). The proot command is already done:
 `core/.../ProotLaunch.kt`, built by TDD as the first example.
 
-1. ~~**Terminal view with a local shell.**~~ Code done, see log
-   2026-10-03 (2). **Owner checks on the phone:** tap shows the keyboard and
-   typing works; `ls -la /system/bin | head` renders; colours work
-   (`printf '\e[31mred \e[32mgreen \e[0m\n'`); pinch zooms the font;
-   rotating keeps the session; `exit` then Enter starts a new shell; the
-   terminal isn't hidden behind the status bar or the keyboard. Fix anything
-   reported before moving on.
+1. ~~**Terminal view with a local shell.**~~ Done and confirmed on the
+   phone (log 2026-10-03 (2)).
 2. **proot in the APK.** New CI job: clone `termux/proot` at a pinned commit,
    build `libproot.so` and `libproot-loader.so` for `arm64-v8a` with the NDK,
    cache the result and put them in `app/src/main/jniLibs/arm64-v8a/` before
@@ -108,9 +103,10 @@ Then continue with roadmap step 2 (tabs and the background service).
   so there was nothing to rebuild test-first. No tests added for it.
 
 **Owner confirmed on the phone:** keyboard, rendering, colours, pinch zoom,
-rotation and shell restart work. The first build drew under the status bar
-(fixed above; confirm the fix and that the keyboard doesn't cover the bottom
-rows).
+rotation and shell restart work. The first build drew under the status bar;
+fixed in `d7952ea` and confirmed (status bar and keyboard both clear).
+
+**Commits:** `40dc32a`, `d7952ea`
 
 ### 2026-10-03: scope, build pipeline, TDD
 
