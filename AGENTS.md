@@ -127,6 +127,33 @@ See README "How it works". The details:
   App updates may only apply additive, versioned migrations. This is a hard
   rule: users' files and installed packages must survive every update.
 
+### Termux library notes (v0.118.3, checked in their source)
+- **Create `TerminalSession`s on the main thread:** each makes a `Handler`
+  on the current thread's `Looper` and delivers output and exit events
+  there.
+- **A session's process starts on its first `updateSize()`**, which
+  `TerminalView.attachSession()` triggers once the view has a size. A
+  session that's never attached never starts (restored background tabs
+  start when first shown). `pid` is 0 before that and -1 after exit.
+- One `TerminalView` for all tabs: switch with `attachSession(other)`.
+- `ViewClient.onKeyDown()` sees each key before the terminal; return
+  `true` to consume it.
+- The library prints `[Process completed (code N) - press Enter]` itself.
+- No OSC 7 (working directory reporting). OSC 0/2 reach `onTitleChanged()`.
+
+### proot notes
+- **The host can't see a guest process's working directory:** proot
+  tracks it itself, so `/proc/<pid>/cwd` stays at the folder proot was
+  started in. Shells report their folder through `PROMPT_COMMAND` instead
+  (`prootLaunch(cwdFile = …)`).
+- App data paths come in two spellings (`/data/user/0/<app>` from
+  `filesDir`, `/data/data/<app>` from the kernel). Don't compare paths by
+  prefix across the two.
+- **On-device debugging without logcat:** write a trace file to
+  `getExternalFilesDir(null)`; the owner can `cat` it from the app's own
+  Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.
+  Remove it once the bug is fixed.
+
 ### Design rules from day one
 
 These come from the README scope and apply to every feature:

@@ -8,11 +8,13 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **Roadmap step 2 (*Tabs*) in progress:** 2.1–2.4 (background service,
-  tab model, tab strip, shortcuts, activity/bell marks) done and confirmed
-  on the phone; next is 2.5 (restore tabs after the app is killed).
-  Hardware keyboard shortcuts are untested (owner has no keyboard), see
-  "Hardware keyboard checks".
+- **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
+  strip, background service, activity/bell marks, exit rule, and tabs
+  (with their folders) restored after Android kills the app. Two things
+  are untested: hardware keyboard shortcuts (owner has no keyboard, see
+  "Hardware keyboard checks") and restoring renamed tabs (no rename UI yet).
+- **Next: roadmap step 3 (*Default setup*).** Needs a short planning
+  conversation with the owner first; see "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -21,7 +23,8 @@ Newest entries first. Rules for keeping it up to date: see
   selected tab's session, each run through proot (`prootLaunch()` from
   `core`). Sessions live in `TerminalService` (foreground service), so they
   survive Back, rotation and leaving the app; its notification shows the
-  tab count and has an **Exit** action. First launch unpacks the bundled
+  tab count and has an **Exit** action. Tabs are saved to
+  `filesDir/state/tabs` and restored on a cold start. First launch unpacks the bundled
   rootfs into `filesDir/debian` (~5 s, progress screen). Blocked `/proc`
   files get static stand-ins from `filesDir/fake-proc`. Crashes are saved
   and shown on the next launch. APK: 30 MB.
@@ -29,8 +32,8 @@ Newest entries first. Rules for keeping it up to date: see
   with the NDK (cached) and the rootfs from `debian:trixie` (arm64), then a
   debug APK. `scripts/deliver.sh` installs it on the phone.
 - **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
-  `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt` and
-  `TabShortcuts.kt` (55 tests in all). `app/` is
+  `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt`, `TabShortcuts.kt`,
+  `TabState.kt` and `HostPath.kt` (68 tests in all). `app/` is
   `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
@@ -38,133 +41,65 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Roadmap step 2: Tabs
+### Roadmap step 3: Default setup
 
-**Goal:** several terminals in a Windows Terminal-style tab strip, kept
-alive by a background service, so long jobs survive leaving the app.
+**Goal (README roadmap):** Neon theme, fonts, launcher menu, games: what
+a fresh install looks like. Out of scope: editors for any of it (step 6),
+profiles (step 8), the in-app keyboard (step 5).
 
-**Scope:** README "Multiple terminals, in tabs". Out of scope here:
-- profiles: per-profile tab colours, the ⌄ profile menu, profile icons
-  (step 8). Give each tab a single default colour for now.
-- touch extras: swipe between tabs, drag to reorder, long-press menus.
-  Keyboard-first rule (AGENTS.md); reordering by keyboard shortcut is
-  enough.
-- the in-app keyboard (step 5). Until then, shortcuts come from a hardware
-  keyboard; tapping tabs and the **+** button must also work.
+**Talk to the owner before planning in detail.** Open questions:
+- Which pieces of their current Termux setup to ship (see memory/README):
+  the neon colour scheme, JetBrainsMono Nerd Font, starship prompt, eza
+  aliases, the "Pocket Terminal" launcher menu (`~/bin/menu` in their
+  Termux, bash), games (Neon Rogue, Neon Drive, neonflap: these live in
+  the owner's Debian under `~/games/`, not in any repo yet; they'd need to
+  be copied into this repo, with the owner's OK).
+- Does the launcher menu open automatically in each new tab, or only on
+  the first one, or via a command?
+- Font licence: JetBrains Mono is OFL-1.1, fine to bundle; record it for
+  the About screen.
 
-#### Where things stand (read the code first)
-- `core/.../Tabs.kt`: `Tabs<S>(onChange)` with `open`, `close`, `select`,
-  `next`/`previous` (wrap), `moveLeft`/`moveRight` (stop at ends),
-  `setShellTitle`, `rename` (null/blank clears), `replaceSession`,
-  `onOutput`/`onBell` (mark background tabs only; cleared on select).
-  `Tab.title` = rename, else shell title, else "Tab N" (N = lowest free
-  number, fixed per tab). `closesOnExit(code)` = code 0.
-- `app/.../TerminalService.kt` owns `tabs: Tabs<TerminalSession>`:
-  `currentSession()` (selected, or opens one), `newSession()`,
-  `restart(old)`, `closeTab(session)` (last tab → `exit()`),
-  `onSessionFinished()` (applies `closesOnExit`), `exit()`. `killAll()`
-  swaps in a fresh `Tabs` before killing, so late exit events are ignored.
-  The `Tabs` change callback updates the notification (via `notify()`, not
-  `startForeground()`, which only runs from `onStartCommand` while the
-  activity is visible) and calls `activity?.onTabsChanged()`.
-  `startShell()` builds the proot command and must run on the main thread.
-- `app/.../MainActivity.kt` starts and binds the service in
-  `connectService()` (after first-run install), shows
-  `service.currentSession()` in one `TerminalView` under the tab strip
-  (`HorizontalScrollView` + `LinearLayout`, rebuilt by `renderStrip()`).
-  `onTabsChanged()` attaches the selected tab's session and redraws the
-  strip. `onTabAction()` runs a `TabAction` from the strip or a shortcut. It unbinds in
-  `onDestroy()` without killing anything. Back = `moveTaskToBack(true)`.
-  Also: first-run install screen, system-bar/IME insets (padding on the
-  root `FrameLayout`, because `TerminalView` ignores its own padding),
-  showing the last crash.
-- `app/.../TerminalApp.kt`: `Application` with the crash reporter
-  (`filesDir/last-crash.txt`).
-- `app/.../TerminalClients.kt`: `SessionClient` (owned by the service,
-  feeds output/title/bell into `service.tabs`, forwards screen updates to
-  `service.activity` for the session it shows) and `ViewClient` (tap → keyboard, pinch → font size, Enter
-  restarts a finished shell via `activity.restartShell(session)`, tab
-  shortcuts via `tabShortcut()`).
-- `core/.../TabShortcuts.kt`: `KeyPress` (key named like Android's keycode
-  minus `KEYCODE_`), `TabAction` (`New`, `Close`, and `Navigate` actions
-  that apply themselves to `Tabs`), `tabShortcut()` with exact-modifier
-  matching.
-- `core/`: `prootLaunch()` (already takes `workDir`, useful for restoring
-  tabs), `RootfsInstaller`, `writeFakeProc()`.
+**Where things stand (read the code first)**
+- `app/.../TerminalService.kt` owns `tabs: Tabs<TerminalSession>`, starts
+  shells with `startShell(cwd)` (proot via `prootLaunch()`), saves tabs to
+  `filesDir/state/tabs` (`saveTabs()`, on every change and on the
+  activity's `onStop`) and restores them in `currentSession()`. Each shell
+  gets `PROMPT_COMMAND` writing `$PWD` to `/tmp/.pocket-terminal/cwd-N`
+  (Debian path), read by `cwdOf()`; the dir is cleared when the service
+  starts. `exit()` deletes the state file.
+- `app/.../MainActivity.kt`: install screen, tab strip (`renderStrip()`),
+  `onTabAction()`, insets, crash dialog. Colours are constants at the top
+  (`ACCENT`, `MARK`, …). The terminal font is the default monospace;
+  `TerminalView.setTypeface()` takes another. Terminal colours come from
+  the emulator's default palette (`TerminalColors`); the Termux libraries
+  read `colors.properties`-style values, check their API before choosing a
+  format.
+- `core/`: `ProotLaunch.kt` (argv/env incl. `cwdFile`), `RootfsInstaller`,
+  `FakeProc`, `Tabs`, `TabShortcuts`, `TabState`, `HostPath`.
+- Rootfs: `scripts/build-rootfs.sh` exports plain `debian:trixie`. AGENTS.md
+  says customization happens at build time with a Dockerfile and
+  buildx/QEMU.
 
-#### Facts about the Termux libraries (v0.118.3, checked in their source)
-- **Create `TerminalSession`s on the main thread:** each one makes a
-  `Handler` on the current thread's `Looper` and delivers output and exit
-  events there.
-- **A session's process starts only on its first `updateSize()`**, which
-  `TerminalView.attachSession()` triggers once the view has a size. A tab
-  that's never attached never starts. For background tabs (e.g. restored
-  ones), call `session.updateSize(cols, rows, cellWidthPx, cellHeightPx)`
-  yourself with the current view's values, or start them lazily when first
-  selected.
-- **Switching tabs** = `terminalView.attachSession(other)`, then
-  `onScreenUpdated()`. Use one `TerminalView`, not one per tab.
-- `session.updateTerminalSessionClient(client)` swaps a session's client,
-  so the service can own the clients and forward to whichever activity is
-  attached, or to none.
-- **Titles:** OSC 0/2 reach `TerminalSessionClient.onTitleChanged()`, and
-  `session.title` gives the current title. Debian's `/root/.bashrc` doesn't
-  set one, so titles stay empty unless the shell sends them; fall back to
-  "Debian" / "Tab N". (Step 3's dotfiles can add a title-setting prompt.)
-- **No OSC 7** (working-directory reporting) in this emulator. To restore
-  each tab's folder, either read the shell's cwd from the host side (proot
-  is `session.pid`, bash is its child; `/proc/<pid>/cwd` would be the host
-  path, so strip the rootfs prefix: needs a check on the phone), or have
-  the shell write `$PWD` to a per-tab state file from `PROMPT_COMMAND`. If
-  it gets fiddly, restore tabs in `/root` and leave cwd restore as an open
-  item.
-- `onBell()` and `onTextChanged()` arrive per session: use them for the
-  bell icon and the activity dot on background tabs.
-- `ViewClient.onKeyDown(keyCode, event, session)` sees each key before the
-  terminal does. Return `true` to consume a shortcut.
-
-#### Suggested order (each step ends in a build the owner installs and checks)
-
-**2.1 Background service.** ✅ Done (`8dbace9`), see the log.
-
-**2.2 Tab model in `core`, test-first.** ✅ Done (`ed95a18`, `01cb1ac`), see
-the log.
-
-**2.3 Tab strip UI** and **2.4 Activity dot and bell.** ✅ Done (`3560f8a`),
-see the log. Shortcuts not tried with a hardware keyboard yet.
-
-**2.5 Restore tabs after the app is killed.**
-- Save the tab list (order, user renames, selected tab, cwd if available)
-  whenever it changes; restore on a cold start.
-- This is app state, not a user setting, so keep it in app storage (e.g.
-  `filesDir/state/tabs`), but as readable plain text. Parse and serialize
-  in `core`, tested, and ignore broken files instead of crashing.
-- Restored tabs start fresh shells (old processes are gone).
-
-#### Done when (the owner checks these on the phone)
-- three tabs open; `top` runs in one; switch away and back: still running
-- leave the app for a few minutes (screen off too), come back: every tab
-  is still there and still running
-- rotating the phone, or pressing Back and reopening, loses no session
-- the notification shows the tab count; **Exit** really stops everything
-- `exit` in a tab closes it; `exit 1` leaves it open with the message, and
-  Enter restarts it; closing the last tab closes the app cleanly
-- a background tab that prints output shows the activity dot;
-  `sleep 3; printf '\a'` in a background tab shows the bell
-- after force-stopping the app (Android settings), reopening restores the
-  tabs and their names
-- every shortcut works with a hardware keyboard (deferred, see "Hardware
-  keyboard checks"; the tapping equivalents pass)
-
-#### Working with the owner
-- Keep each sub-step small; it ends in a build the owner installs. Ask
-  before each commit and push (AGENTS.md); after pushing, run
-  `scripts/deliver.sh` so the installer opens on the phone, then list
-  concrete checks.
-- There's no logcat on the phone: show errors on screen. The crash
-  reporter in `MainActivity` stays; move it to an `Application` class if
-  the service needs it too.
-- Update this worklog (log entry + "Next") before finishing.
+**Things to keep in mind**
+- **Existing installs don't get a new rootfs** (hard rule: never overwrite
+  the user's Debian). Changes baked into the rootfs only reach fresh
+  installs; for the owner's phone either clear the app's data once (ask
+  first: it deletes their Debian) or ship an additive, versioned migration.
+  Decide which with the owner; migrations will be needed eventually anyway.
+- **Plain-text config rule:** theme/font/menu settings should be readable
+  files inside Debian (e.g. under `~/.config/`), even before step 6 adds
+  editors. Parsing goes in `core`, test-first.
+- **`PROMPT_COMMAND`:** tab folder restore depends on it. Dotfiles that set
+  `PROMPT_COMMAND` (starship's `init bash` does; check whether it keeps the
+  existing value) must keep ours, or restore silently falls back to the
+  start folder. Add a check to the step's "Done when".
+- **Tab titles:** Debian's root `.bashrc` sets no title, so tabs say "Tab
+  N". A title-setting prompt (OSC 0/2, e.g. `\u@\h: \w`) in the default
+  dotfiles fixes that.
+- Fix the `debconf: unable to initialize frontend` warnings in the
+  customized rootfs (open item below).
+- Ship agent docs in the home folder as features land (AGENTS.md design
+  rule), at least a first `AGENTS.md`/`CLAUDE.md` describing the setup.
 
 ### Hardware keyboard checks (later)
 The owner has no hardware keyboard, so these are untested. Run them when
@@ -195,6 +130,42 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-03 (10): step 2.5, restore tabs; step 2 done
+
+**Done**
+- `core`, test-first: `TabState.kt` (`SavedTabs`, plain-text
+  `serialize()` / `parseSavedTabs()`, `Tabs.snapshot()` /
+  `Tabs.restore()`), `HostPath.kt` (`hostPath()`), `prootLaunch(cwdFile)`.
+  Broken or unknown-version files are ignored (fresh start).
+- `TerminalService` saves `filesDir/state/tabs` on every tab change and
+  when the activity stops; a cold start restores order, renames, selected
+  tab and folders, with fresh shells. Restored background tabs start when
+  first shown; their folder is kept in `knownCwd` until then. A missing
+  folder falls back to `/root`. Exit and closing the last tab delete the
+  file. Enter-restart of a failed shell reuses its folder.
+
+**Gotcha: proot hides the shell's folder from the host.** The first
+version read `/proc/<shell pid>/cwd`: on the phone it always showed the
+app's files dir (the cwd proot itself was started in), whatever the
+shell `cd`'d to, because proot tracks the guest cwd itself. (It also
+spells app data `/data/data/…` where `filesDir` says `/data/user/0/…`.)
+Found with a temporary on-device trace written to the app's external
+files dir, readable from Debian under `/storage/emulated/0/Android/data/`
+(a handy debugging channel, since there's no logcat). Now each shell
+reports its folder: `PROMPT_COMMAND` writes `$PWD` to
+`/tmp/.pocket-terminal/cwd-N`, which the service reads.
+
+**Owner confirmed on the phone:** after force-stop, 3 tabs come back with
+the same tab selected and `pwd` = `/etc` and `/tmp/x` in the right tabs;
+a deleted folder opens in `/root` without errors; Exit then reopen gives
+one fresh tab; `PROMPT_COMMAND` shows the printf line, prompt otherwise
+unchanged.
+
+**Not tested:** restoring renamed tabs (no rename UI; covered by core
+tests). Hardware keyboard shortcuts (see "Hardware keyboard checks").
+
+**Commits:** `d860de5`, `3f18912`, `eaed2ae`
 
 ### 2026-10-03 (9): steps 2.3 and 2.4, tab strip, shortcuts, marks
 
