@@ -16,8 +16,9 @@ Newest entries first. Rules for keeping it up to date: see
   "Hardware keyboard checks").
 - **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
   Font) and 3.2 (customized rootfs: starship, eza, games, mc, no debconf
-  warnings) are done and confirmed on the phone. **Next: 3.3 (launcher
-  menu).** See "Next".
+  warnings) are done and confirmed on the phone. 3.3 (launcher menu) is
+  built, **waiting for the owner's check (needs a data clear)**; then
+  3.4 (agent docs in the home folder). See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -148,7 +149,23 @@ Original plan for 3.2:
 - Bats tests for any shell scripts added (AGENTS.md: add the suite and CI
   step with the first shell feature).
 
-**3.3 Launcher menu.**
+**3.3 Launcher menu. Built, not yet confirmed.** Owner clears the app's
+data, opens it, and checks:
+- the boot splash plays (glitching title, `[ OK ]` lines incl. `debian
+  13.x` and `games: 3 found`), then the menu; the tab is named `Menu`
+- status line: time · Debian 13.x · free space
+- 1–5, j/k and Enter work; Games lists Neon Drive, Neon Flap, Neon Rogue;
+  each starts and returns to the menu
+- Files opens `mc` in `~`; System → Update all runs apt and waits for a
+  key; System info shows Debian, kernel, memory, storage and size; Theme
+  cycles neon → amber → phosphor and is remembered by `menu`
+- Terminal (or q) drops to the shell; `menu` reopens it without the
+  splash; Exit closes the tab (and the app, if it was the last one)
+- `+` opens a tab with a plain shell, no menu
+- force-stop and reopen: tabs come back as shells, no menu; notification
+  Exit, then reopen: the menu again
+
+Original plan for 3.3:
 - Port `menu` into the rootfs (`/usr/local/bin/menu`). The app tells the
   first shell of a fresh start to open it (e.g. an env var through
   `prootLaunch`, tested in `core`); `.bashrc` runs `menu` when it's set.
@@ -214,6 +231,40 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-03 (14): step 3.3, launcher menu
+
+**Done**
+- `rootfs/bin/menu` → `/usr/local/bin/menu`: the owner's Termux menu,
+  ported to run inside Debian. Main: Terminal, Files (`mc ~`), Games,
+  System, Exit. System: Update all (`apt update && apt upgrade -y`),
+  System info, Theme (neon/amber/phosphor). State in
+  `~/.local/state/pocket-terminal/menu`. Games: executables in
+  `/opt/neon-games` and `~/games` (`MENU_GAME_DIRS` overrides), labelled
+  from file names, so the games are now installed as `neon-rogue.py`,
+  `neon-drive.py`, `neon-flap.py`. Sets the tab title to `Menu`.
+  Sourcing it only defines functions (for tests).
+- Dropped from the Termux version: the Termux/Debian split, Back up
+  Debian (used proot-distro), Edit menu (the menu is now a system file a
+  later migration may replace), uptime (the app's `/proc/uptime` is a
+  static fake), Termux/Android lines in the splash and System info
+  (`getprop` isn't reachable from Debian). Splash only with `--boot`.
+- Root's `.bashrc`: `menu` function (exit code 10 = Exit = close the
+  shell, so the tab); runs `menu --boot` once when `POCKET_MENU` is set,
+  then unsets it.
+- `core`, test-first: `prootLaunch(openMenu = true)` adds `POCKET_MENU=1`
+  (2 tests). `TerminalService` passes it only for the fresh-start tab
+  (no saved tabs), not for new, restored or restarted tabs.
+- Tests: 13 bats tests for the menu (`tests/shell/menu.bats`: items,
+  games, state, theme, dry-run key presses for q/Exit/Files/Games/
+  Update, splash), 5 more for the `.bashrc` hook. `check-tdd.sh` pairs
+  `rootfs/bin/` with `tests/shell/`.
+
+**Not ported, maybe later:** a "Claude Code" item (README: offer the
+official installer, don't bundle; belongs with AI agent support), a
+backup that works without proot-distro.
+
+**Commits:** (pending)
 
 ### 2026-10-03 (13): step 3.2, customized rootfs
 

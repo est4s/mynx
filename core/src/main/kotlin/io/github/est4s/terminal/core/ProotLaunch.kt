@@ -21,12 +21,14 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * files Android blocks to stand-ins (see [writeFakeProc]). With [cwdFile]
  * (a Debian path), the shell writes its folder there after each prompt:
  * proot tracks the folder itself, so the host can't see it in /proc.
+ * [openMenu] has the shell open the launcher menu first.
  */
 fun prootLaunch(
     paths: ProotPaths,
     workDir: String = "/root",
     fakeProc: Map<String, String> = emptyMap(),
     cwdFile: String? = null,
+    openMenu: Boolean = false,
 ): Launch {
     val argv = buildList {
         add(paths.proot)
@@ -41,6 +43,8 @@ fun prootLaunch(
         addAll(listOf("/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8", "PATH=$DEBIAN_PATH"))
         // Silent if the file can't be written (e.g. its folder was deleted).
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
+        // Root's .bashrc opens the launcher menu when this is set.
+        if (openMenu) add("POCKET_MENU=1")
         addAll(listOf("/bin/bash", "--login"))
     }
     val env = mapOf(

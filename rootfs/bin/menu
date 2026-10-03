@@ -1,0 +1,365 @@
+#!/usr/bin/env bash
+# Pocket Terminal launcher menu.
+# Keys: arrows / j k move, Enter / → pick, ← / Esc / q back, 1-9 jump.
+# Games: every executable in /opt/neon-games and ~/games shows up under
+#   Games, named after the file (neon-flap.py → "Neon Flap"). Add your own:
+#   ln -s /path/to/game ~/games/my-game
+# menu --boot plays the boot splash first (the app does this on a fresh start).
+# Exit closes the tab: the menu exits with 10 and ~/.bashrc exits the shell.
+# MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS
+# (colon-separated) overrides where games are found (both for testing).
+
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pocket-terminal
+STATE=$STATE_DIR/menu
+THEMES=(neon amber phosphor)
+IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
+export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
+ITEM_W=26                 # width of a menu row (" ▶ 1. " + 20-char label)
+
+# --- terminal --------------------------------------------------------------
+cursor_hide() { printf '\e[?25l'; }
+cursor_show() { printf '\e[?25h'; }
+clear_screen() { printf '\e[H\e[2J'; }
+flush_input() { local _; while IFS= read -rsn1 -t 0.01 _; do :; done; }
+term_cols() { # sets COLS to the terminal width (fallback 56, the phone portrait width)
+  local size
+  size=$(stty size 2>/dev/null </dev/tty) && COLS=${size#* } || COLS=56
+  [[ $COLS =~ ^[0-9]+$ ]] && ((COLS > 0)) || COLS=56
+}
+
+# --- state (last choice per menu, theme) -----------------------------------
+declare -A ST
+load_state() {
+  local k v
+  [[ -r $STATE ]] || return
+  while IFS='=' read -r k v; do [[ -n $k ]] && ST[$k]=$v; done <"$STATE"
+}
+save_state() {
+  local k
+  mkdir -p "$STATE_DIR" 2>/dev/null
+  { for k in "${!ST[@]}"; do printf '%s=%s\n' "$k" "${ST[$k]}"; done >"$STATE"; } 2>/dev/null
+}
+
+# --- themes ----------------------------------------------------------------
+set_theme() {
+  case $1 in
+    amber)
+      C_TITLE=$'\e[38;5;214m' C_ITEM=$'\e[38;5;222m' C_SUB=$'\e[38;5;172m'
+      C_DIM=$'\e[38;5;94m' C_SEL=$'\e[1;38;5;16;48;5;214m'
+      C_OK=$'\e[38;5;220m' C_BAD=$'\e[38;5;160m' ;;
+    phosphor)
+      C_TITLE=$'\e[38;5;46m' C_ITEM=$'\e[38;5;120m' C_SUB=$'\e[38;5;34m'
+      C_DIM=$'\e[38;5;28m' C_SEL=$'\e[1;38;5;16;48;5;46m'
+      C_OK=$'\e[38;5;46m' C_BAD=$'\e[38;5;196m' ;;
+    *) # neon
+      C_TITLE=$'\e[38;5;205m' C_ITEM=$'\e[38;5;51m' C_SUB=$'\e[38;5;141m'
+      C_DIM=$'\e[38;5;244m' C_SEL=$'\e[1;38;5;16;48;5;205m'
+      C_OK=$'\e[38;5;48m' C_BAD=$'\e[38;5;196m' ;;
+  esac
+  C_OFF=$'\e[0m'
+}
+
+# --- system facts ----------------------------------------------------------
+human_kb() { # human_kb <kB>: print as 12.4G / 512M
+  local kb=$1
+  if ((kb >= 1048576)); then
+    printf '%d.%dG' $((kb / 1048576)) $((kb % 1048576 * 10 / 1048576))
+  else
+    printf '%dM' $((kb / 1024))
+  fi
+}
+disk_kb() { # sets DISK_FREE and DISK_SIZE (kB) for the filesystem holding $HOME
+  local out size avail
+  out=$(df -Pk "$HOME" 2>/dev/null) || { DISK_FREE= DISK_SIZE=; return; }
+  read -r _ size _ avail _ <<<"${out##*$'\n'}"
+  DISK_FREE=$avail DISK_SIZE=$size
+}
+debian_version() { cat /etc/debian_version 2>/dev/null; }
+
+STATUS_MIN=
+update_status() { # refresh STATUS/STATUS_LEN once a minute
+  local now; printf -v now '%(%H:%M)T' -1
+  [[ $now == "$STATUS_MIN" ]] && return 1
+  STATUS_MIN=$now
+  local plain="$now · Debian $(debian_version)"
+  STATUS="$C_DIM$plain"
+  disk_kb
+  if [[ -n $DISK_FREE ]]; then
+    plain+=" · $(human_kb "$DISK_FREE") free"
+    STATUS+=" · $(human_kb "$DISK_FREE") free"
+  fi
+  STATUS+=$C_OFF
+  STATUS_LEN=${#plain}
+}
+
+# --- menus -----------------------------------------------------------------
+declare -A TITLE=([main]=Main [games]=Games [system]=System)
+
+game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
+  local name=${1##*/} label= w
+  for w in ${name//[-_.]/ }; do
+    [[ $w == py || $w == sh ]] && continue
+    label+="${label:+ }${w^}"
+  done
+  printf '%s' "${label:0:20}"
+}
+
+menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
+  # Actions: "menu:<name>" opens a submenu, "exit" drops to the shell,
+  # "quit_session" closes the tab (exit code 10, handled in ~/.bashrc),
+  # "fn" or "fn:arg" calls act_fn [arg].
+  ITEMS=() ACTS=()
+  case $1 in
+    main)
+      ITEMS=(Terminal Files Games System Exit)
+      ACTS=(exit files menu:games menu:system quit_session) ;;
+    games)
+      local dir f
+      for dir in "${GAME_DIRS[@]}"; do
+        for f in "$dir"/*; do
+          [[ -f $f && -x $f ]] || continue   # skips source folders and data files
+          ITEMS+=("$(game_label "$f")") ACTS+=("game:$f")
+        done
+      done
+      ((${#ITEMS[@]})) || { ITEMS=("(no games yet)"); ACTS=(none); } ;;
+    system)
+      ITEMS=("Update all" "System info" "Theme: ${ST[theme]:-neon}")
+      ACTS=(update info theme) ;;
+  esac
+}
+
+# --- screens ---------------------------------------------------------------
+center() { # center <color> <text>: print text centered in the terminal
+  center_len "${#2}" "$1$2$C_OFF"
+}
+center_len() { # center_len <visible-length> <string>: center a string with color codes in it
+  local pad=$(((COLS - $1) / 2)); ((pad < 0)) && pad=0
+  printf '%*s%s\n' $pad '' "$2"
+}
+TITLE_TEXT="▓▒░ P O C K E T  T E R M I N A L ░▒▓"
+
+draw() { # draw <menu> <selected-index> <breadcrumb>
+  local i n=${#ITEMS[@]} row
+  local pad=$(((COLS - ITEM_W) / 2)); ((pad < 0)) && pad=0
+  clear_screen; echo                          # row 1
+  center "$C_TITLE" "$TITLE_TEXT"             # row 2
+  center_len "$STATUS_LEN" "$STATUS"          # row 3
+  center "$C_SUB" "$3"                        # row 4
+  echo                                        # row 5
+  for ((i = 0; i < n; i++)); do               # rows 6..
+    if ((i == $2)); then
+      printf -v row ' ▶ %d. %-20s' $((i + 1)) "${ITEMS[i]}"
+      printf '%*s%s%s%s\n' $pad '' "$C_SEL" "$row" "$C_OFF"
+    else
+      printf -v row '   %d. %-20s' $((i + 1)) "${ITEMS[i]}"
+      printf '%*s%s%s%s\n' $pad '' "$C_ITEM" "$row" "$C_OFF"
+    fi
+  done
+  echo
+  if [[ $1 == main ]]; then
+    center "$C_DIM" "↑↓ move  ⏎ select  q shell"
+  else
+    center "$C_DIM" "↑↓ move  ⏎ select  ← back"
+  fi
+}
+
+page() { # page <heading>: clear and print a title + heading, ready for body lines
+  term_cols; clear_screen; echo
+  center "$C_TITLE" "$TITLE_TEXT"
+  center "$C_SUB" "$1"
+  echo
+}
+pause() {
+  printf '\n'; center "$C_DIM" "press any key to return"
+  IFS= read -rsn1 _; flush_input
+}
+message() { page "$1"; center "$C_ITEM" "$2"; pause; }
+confirm() { # confirm <question>: true if the user presses y
+  local k
+  page "Confirm"
+  center "$C_ITEM" "$1"; echo
+  center "$C_DIM" "y = yes   any other key = no"
+  IFS= read -rsn1 k; flush_input
+  [[ $k == [yY] ]]
+}
+
+# --- boot splash -----------------------------------------------------------
+boot_wait() { # boot_wait <seconds>: sleep, but return false if a key was pressed
+  local _
+  IFS= read -rsn1 -t "$1" _
+  (($? > 128))
+}
+boot() {
+  local t=$TITLE_TEXT glitch=$'#%&@$*!?/\\<>=+' f i g line n=0 games
+  cursor_hide; term_cols
+  local pad=$(((COLS - ${#t}) / 2)); ((pad < 0)) && pad=0
+  for f in 1 2 3 4 5 6 7; do                 # glitch the title, settling each frame
+    g=
+    for ((i = 0; i < ${#t}; i++)); do
+      if ((RANDOM % 8 < 8 - f)) && [[ ${t:i:1} != ' ' ]]; then
+        g+=${glitch:RANDOM % ${#glitch}:1}
+      else
+        g+=${t:i:1}
+      fi
+    done
+    printf '\e[H\e[2J\n%*s%s%s%s\n' $pad '' "$C_TITLE" "$g" "$C_OFF"
+    boot_wait 0.07 || return
+  done
+  printf '\e[H\e[2J\n'; center "$C_TITLE" "$t"; echo
+  menu_items games; [[ ${ACTS[0]} == none ]] || games=${#ITEMS[@]}
+  local debian; debian=$(debian_version)
+  local -a log=(
+    "OK|pocket terminal online"
+    "$([[ -n $debian ]] && echo OK || echo FAIL)|debian ${debian:-missing}"
+    "OK|games: ${games:-0} found"
+    "OK|theme: ${ST[theme]:-neon}"
+  )
+  pad=$(((COLS - 34) / 2)); ((pad < 0)) && pad=0
+  for line in "${log[@]}"; do
+    if [[ ${line%%|*} == OK ]]; then
+      printf '%*s%s[  OK  ]%s %s\n' $pad '' "$C_OK" "$C_OFF" "${line#*|}"
+    else
+      printf '%*s%s[ FAIL ]%s %s\n' $pad '' "$C_BAD" "$C_OFF" "${line#*|}"
+    fi
+    boot_wait 0.09 || return
+  done
+  printf '\n%*s%s>> jack in%s' $pad '' "$C_SUB" "$C_OFF"
+  boot_wait 0.35
+}
+
+# --- actions ---------------------------------------------------------------
+RAN=
+run() { # run <cmd...>: hand the terminal to a program, then come back to the menu
+  RAN=1
+  if [[ -n $MENU_DRYRUN ]]; then echo "RUN: $*"; return; fi
+  cursor_show; clear_screen
+  "$@"
+  flush_input
+}
+
+act_none() { :; }
+act_files() { run mc "$HOME"; }
+act_game() { run "$1"; }
+
+act_update() {
+  run bash -c 'apt update && apt upgrade -y'
+  pause
+}
+
+act_info() {
+  local pad lines k v total avail out
+  page "System info"
+  while read -r k v _; do
+    case $k in MemTotal:) total=$v ;; MemAvailable:) avail=$v ;; esac
+  done </proc/meminfo 2>/dev/null
+  disk_kb
+  lines=(
+    "debian|$(debian_version)"
+    "kernel|$(uname -r)"
+    "arch|$(uname -m)"
+  )
+  [[ -n $total ]] && lines+=("memory|$(human_kb "${avail:-0}") free of $(human_kb "$total")")
+  [[ -n $DISK_SIZE ]] && lines+=("storage|$(human_kb "$DISK_FREE") free of $(human_kb "$DISK_SIZE")")
+  pad=$(((COLS - 34) / 2)); ((pad < 0)) && pad=0
+  for out in "${lines[@]}"; do
+    [[ -n ${out#*|} ]] || continue
+    printf '%*s%s%-9s%s%s\n' $pad '' "$C_SUB" "${out%%|*}" "$C_ITEM" "${out#*|}$C_OFF"
+  done
+  # du over all of Debian takes a moment; -x keeps it out of /proc, /sys, /storage.
+  printf '%*s%s%-9s%s%s' $pad '' "$C_SUB" size "$C_DIM" "measuring...$C_OFF"
+  out=$(du -skx / 2>/dev/null | cut -f1)
+  printf '\r%*s%s%-9s%s%-14s%s\n' $pad '' "$C_SUB" size "$C_ITEM" "$(human_kb "${out:-0}")" "$C_OFF"
+  pause
+}
+
+act_theme() { # cycle to the next theme
+  local i cur=${ST[theme]:-neon}
+  for i in "${!THEMES[@]}"; do [[ ${THEMES[i]} == "$cur" ]] && break; done
+  ST[theme]=${THEMES[(i + 1) % ${#THEMES[@]}]}
+  set_theme "${ST[theme]}"; save_state
+  STATUS_MIN=   # status line has theme colors baked in
+}
+
+# --- input -----------------------------------------------------------------
+readkey() { # sets KEY to up/down/enter/back/quit/<digit>/tick/other
+  local k rest
+  IFS= read -rsn1 -t 1 k
+  case $? in 0) ;; 1) KEY=quit; return ;; *) KEY=tick; return ;; esac
+  if [[ $k == $'\e' ]]; then
+    IFS= read -rsn2 -t 0.05 rest
+    case $rest in
+      '[A' | OA) KEY=up ;;
+      '[B' | OB) KEY=down ;;
+      '[C' | OC) KEY=enter ;;
+      '[D' | OD) KEY=back ;;
+      '') KEY=back ;;
+      *) KEY=other ;;
+    esac
+    return
+  fi
+  case $k in
+    '' | ' ') KEY=enter ;;
+    k | w) KEY=up ;;
+    j | s) KEY=down ;;
+    h | $'\x7f') KEY=back ;;
+    q) KEY=quit ;;
+    [1-9]) KEY=$k ;;
+    *) KEY=other ;;
+  esac
+}
+
+# --- main loop -------------------------------------------------------------
+# Returns 0 to keep looping in the parent, 1 to leave the whole menu,
+# 2 to close the tab.
+show() { # show <menu> <breadcrumb>
+  local name=$1 crumb="$2 › ${TITLE[$1]}" sel=${ST[sel_$1]:-0} n drawn= act
+  [[ $name == main ]] && crumb=${TITLE[main]}
+  menu_items "$name"; n=${#ITEMS[@]}
+  ((sel < n)) || sel=0
+  while :; do
+    term_cols
+    update_status && drawn=
+    if [[ $drawn != "$sel:$COLS" ]]; then
+      menu_items "$name"; n=${#ITEMS[@]}
+      ((sel < n)) || sel=0
+      cursor_hide
+      draw "$name" "$sel" "$crumb"
+      drawn=$sel:$COLS
+    fi
+    readkey
+    case $KEY in
+      up) sel=$(((sel - 1 + n) % n)) ;;
+      down) sel=$(((sel + 1) % n)) ;;
+      back) [[ $name == main ]] || return 0 ;;
+      quit) [[ $name == main ]] && return 1 || return 0 ;;
+      [1-9]) ((KEY <= n)) && { sel=$((KEY - 1)); KEY=enter; } ;;
+    esac
+    [[ $KEY == enter ]] || continue
+    ST[sel_$name]=$sel; save_state
+    act=${ACTS[sel]}
+    case $act in
+      exit) return 1 ;;
+      quit_session) return 2 ;;
+      menu:*) show "${act#menu:}" "$crumb" || return ;;
+      *:*) "act_${act%%:*}" "${act#*:}" ;;
+      *) "act_$act" ;;
+    esac
+    [[ -n $MENU_DRYRUN && -n $RAN ]] && return 1
+    drawn= STATUS_MIN=   # redraw after returning from a submenu or program
+  done
+}
+
+# Sourced (tests): define the functions only.
+[[ ${BASH_SOURCE[0]} == "$0" ]] || { declare -A ST; set_theme neon; return 0; }
+
+load_state
+set_theme "${ST[theme]:-neon}"
+trap 'cursor_show; printf "\e[0m"' EXIT
+printf '\e]0;Menu\a'  # tab title
+
+[[ $1 == --boot ]] && boot
+show main ""
+rc=$?
+cursor_show; clear_screen
+((rc == 2)) && exit 10
+exit 0

@@ -28,3 +28,16 @@ if command -v starship >/dev/null; then
 else
     PROMPT_COMMAND="pocket_set_title${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 fi
+
+# Launcher menu (/usr/local/bin/menu). Its Exit item returns 10: close
+# the tab. The app sets POCKET_MENU in the first tab of a fresh start.
+menu() {
+    command menu "$@"
+    local rc=$?
+    ((rc == 10)) && exit 0
+    return $rc
+}
+if [[ -n ${POCKET_MENU-} ]]; then
+    unset POCKET_MENU
+    menu --boot
+fi

@@ -94,6 +94,19 @@ class ProotLaunchTest {
         assertTrue(prootLaunch(paths).argv.none { it.startsWith("PROMPT_COMMAND=") })
     }
 
+    @Test
+    fun `asks the shell to open the launcher menu`() {
+        val argv = prootLaunch(paths, openMenu = true).argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("POCKET_MENU=1" in shellEnv, shellEnv.toString())
+    }
+
+    @Test
+    fun `opens no menu unless asked`() {
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_MENU=") })
+    }
+
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]
 
     private fun List<String>.valuesAfter(flag: String) =

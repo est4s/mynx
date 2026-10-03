@@ -118,7 +118,8 @@ See README "How it works". The details:
 - **Debian:** an arm64 rootfs built in CI by `scripts/build-rootfs.sh`
   from `rootfs/Dockerfile` (buildx + QEMU, `--output type=tar`) on top of
   the official `debian:trixie` image, pinned to the digest it pulled. The
-  Dockerfile adds packages, root's dotfiles (`rootfs/root/`), the games
+  Dockerfile adds packages, root's dotfiles (`rootfs/root/`), the
+  launcher menu (`rootfs/bin/menu` → `/usr/local/bin/menu`), the games
   (`rootfs/games/` → `/opt/neon-games/`, commands `rogue`, `drive`,
   `flap`) and the Neon colours file (from `core`'s resources, via the
   `neon` build context). Ship it compressed in the APK's assets and unpack
@@ -222,7 +223,8 @@ does this automatically through `.claude/settings.json`.)
   services, permissions, USB, camera). Keep logic out of it. When Android
   code needs tests, add Robolectric tests in `app/src/test/`; they only run
   in CI.
-- **Shell code** (the `pocket` CLI, root's dotfiles in `rootfs/root/`):
+- **Shell code** (the `pocket` CLI, the menu in `rootfs/bin/`, root's
+  dotfiles in `rootfs/root/`):
   tests with `bats` in `tests/shell/`. CI runs real bats. **On the phone
   run `scripts/bats-lite.sh tests/shell/*.bats`**: real bats needs process
   substitution, which the dev Debian's `/dev/fd` breaks (see "proot

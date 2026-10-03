@@ -66,3 +66,38 @@ stub() {
     run in_shell 'echo "$PATH"'
     [ "${output%%:*}" = "$HOME/.local/bin" ]
 }
+
+@test "opens the menu with the splash when the app asks, once" {
+    stub menu 'echo "menu $*"; echo "POCKET_MENU=$POCKET_MENU"'
+    export POCKET_MENU=1
+    run in_shell 'echo "after: [$POCKET_MENU]"'
+    [ "${lines[0]}" = "menu --boot" ]
+    [ "${lines[1]}" = "POCKET_MENU=" ]
+    [ "${lines[2]}" = "after: []" ]
+}
+
+@test "no menu unless the app asks" {
+    stub menu 'echo menu'
+    run in_shell 'echo shell'
+    [ "$output" = shell ]
+}
+
+@test "Exit in the opening menu closes the shell" {
+    stub menu 'exit 10'
+    export POCKET_MENU=1
+    run in_shell 'echo still here'
+    [ "$output" = "" ]
+}
+
+@test "Exit in a menu opened later closes the shell too" {
+    stub menu 'exit 10'
+    run in_shell 'menu; echo still here'
+    [ "$output" = "" ]
+}
+
+@test "leaving the menu for the shell keeps the shell" {
+    stub menu 'echo "menu $*"; exit 0'
+    run in_shell 'menu --no-boot; echo still here'
+    [ "${lines[0]}" = "menu --no-boot" ]
+    [ "${lines[1]}" = "still here" ]
+}

@@ -84,11 +84,14 @@ class TerminalService : Service() {
         super.onDestroy()
     }
 
-    /** The session to show: the selected tab, else the saved tabs, else a new tab. */
+    /**
+     * The session to show: the selected tab, else the saved tabs, else a new
+     * tab. Only that last case, a fresh start, opens the launcher menu.
+     */
     fun currentSession(): TerminalSession {
         tabs.selected?.let { return it.session }
         val saved = runCatching { parseSavedTabs(stateFile.readText()) }.getOrNull()
-            ?: return newSession()
+            ?: return startShell(openMenu = true).also { tabs.open(it) }
         tabs.restore(saved) { cwd -> startShell(cwd) }
         return tabs.selected!!.session
     }
@@ -162,7 +165,7 @@ class TerminalService : Service() {
 
     // TerminalSession delivers its output on the Looper of the thread that
     // created it, so this must run on the main thread.
-    private fun startShell(cwd: String? = null): TerminalSession {
+    private fun startShell(cwd: String? = null, openMenu: Boolean = false): TerminalSession {
         val workDir = workDirFor(cwd)
         val cwdName = "cwd-${nextShellId++}"
         cwdDir.mkdirs()
@@ -172,7 +175,7 @@ class TerminalService : Service() {
             loader = "$libDir/libproot-loader.so",
             rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(

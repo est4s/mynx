@@ -13,8 +13,11 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
 COPY root/ /root/
 COPY --from=neon neon.colors.properties /root/.config/pocket-terminal/colors.properties
 
+COPY bin/menu /usr/local/bin/menu
+
+# The menu lists games by file name: neon-rogue.py → "Neon Rogue".
 COPY games/ /opt/neon-games/
-RUN chmod 755 /opt/neon-games/*.py \
- && ln -s /opt/neon-games/neonrogue.py /usr/local/bin/rogue \
- && ln -s /opt/neon-games/neondrive.py /usr/local/bin/drive \
- && ln -s /opt/neon-games/neonflap.py /usr/local/bin/flap
+RUN chmod 755 /usr/local/bin/menu /opt/neon-games/*.py \
+ && ln -s /opt/neon-games/neon-rogue.py /usr/local/bin/rogue \
+ && ln -s /opt/neon-games/neon-drive.py /usr/local/bin/drive \
+ && ln -s /opt/neon-games/neon-flap.py /usr/local/bin/flap
