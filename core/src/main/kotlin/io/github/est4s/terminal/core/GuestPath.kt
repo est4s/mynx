@@ -5,12 +5,19 @@ package io.github.est4s.terminal.core
  * path; proot shows the shell the Debian one. These map between the two.
  */
 
-/** The Debian path of [host], or null if it's outside Debian and every bind. */
-fun guestPath(host: String, rootfs: String): String? = when {
-    host == rootfs -> "/"
-    host.startsWith("$rootfs/") -> host.removePrefix(rootfs)
-    HOST_BINDS.any { host == it || host.startsWith("$it/") } -> host
-    else -> null
+/**
+ * The Debian path of [host], or null if it's outside Debian and every bind.
+ * [isRootfs] says whether a host folder is the rootfs; the same folder can
+ * be spelled several ways (/data/user/0/… and /data/data/…).
+ */
+fun guestPath(host: String, isRootfs: (String) -> Boolean): String? {
+    if (!host.startsWith("/")) return null
+    if (HOST_BINDS.any { host == it || host.startsWith("$it/") }) return host
+    val parts = host.split('/').filter { it.isNotEmpty() }
+    for (i in 1..parts.size) {
+        if (isRootfs("/" + parts.take(i).joinToString("/"))) return "/" + parts.drop(i).joinToString("/")
+    }
+    return null
 }
 
 /** Where the Debian path [guest] lives on the host, or null if it isn't absolute. */

@@ -19,6 +19,7 @@ import io.github.est4s.terminal.core.childPid
 import io.github.est4s.terminal.core.closesOnExit
 import io.github.est4s.terminal.core.guestPath
 import io.github.est4s.terminal.core.hostPath
+import io.github.est4s.terminal.core.parentPid
 import io.github.est4s.terminal.core.parseSavedTabs
 import io.github.est4s.terminal.core.restore
 import io.github.est4s.terminal.core.serialize
@@ -28,6 +29,7 @@ import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.WeakHashMap
 
 private const val CHANNEL_ID = "terminals"
@@ -49,7 +51,13 @@ class TerminalService : Service() {
         private set
     private var notifiedCount = -1
     private val stateFile by lazy { File(filesDir, "state/tabs") }
-    private val rootfs by lazy { RootfsInstaller(filesDir).rootfs.canonicalPath }
+    private val rootfs by lazy { RootfsInstaller(filesDir).rootfs.absolutePath }
+    private val isRootfs = { path: String ->
+        runCatching { Files.isSameFile(Paths.get(path), Paths.get(rootfs)) }.getOrDefault(false)
+    }
+    // TEMPORARY (step 2.5 debugging): how each folder lookup went, readable
+    // from Debian at /storage/emulated/0/Android/data/<app id>/files/cwd-debug.txt.
+    private val cwdTrace = StringBuilder()
     // Last folder known for each session: where it started, or where its shell
     // was when last asked. Restored tabs only start when first shown, so this
     // keeps their folder until then.
@@ -134,23 +142,34 @@ class TerminalService : Service() {
         runCatching {
             stateFile.parentFile!!.mkdirs()
             val tmp = File(stateFile.path + ".tmp")
+            cwdTrace.setLength(0)
+            cwdTrace.append("rootfs=$rootfs\n")
             tmp.writeText(tabs.snapshot(::cwdOf).serialize())
             tmp.renameTo(stateFile)
+            getExternalFilesDir(null)?.let { File(it, "cwd-debug.txt").writeText(cwdTrace.toString()) }
         }
     }
 
     // The shell is proot's child; its /proc cwd link is the host path.
     private fun cwdOf(session: TerminalSession): String? {
         // pid is 0 before a session starts (restored tabs not shown yet) and -1 after it exits.
-        if (session.pid <= 0) return knownCwd[session]
+        if (session.pid <= 0) {
+            cwdTrace.append("pid=${session.pid} known=${knownCwd[session]}\n")
+            return knownCwd[session]
+        }
         val current = runCatching {
             val stats = File("/proc").listFiles().orEmpty().mapNotNull { dir ->
                 val pid = dir.name.toIntOrNull() ?: return@mapNotNull null
                 runCatching { pid to File(dir, "stat").readText() }.getOrNull()
             }.toMap()
+            cwdTrace.append("pid=${session.pid} stats=${stats.size} children=")
+            cwdTrace.append(stats.filterValues { parentPid(it) == session.pid }.values.joinToString(" | ") { it.take(40) })
             val shell = childPid(session.pid, stats) ?: return@runCatching null
-            guestPath(Files.readSymbolicLink(File("/proc/$shell/cwd").toPath()).toString(), rootfs)
-        }.getOrNull()
+            val link = Files.readSymbolicLink(File("/proc/$shell/cwd").toPath()).toString()
+            cwdTrace.append(" shell=$shell link=$link")
+            guestPath(link, isRootfs)
+        }.onFailure { cwdTrace.append(" error=$it") }.getOrNull()
+        cwdTrace.append(" -> $current\n")
         if (current != null) knownCwd[session] = current
         return knownCwd[session]
     }
