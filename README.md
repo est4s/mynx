@@ -74,6 +74,13 @@ Commands available inside Debian:
 - clipboard copy/paste
 - share files or text to other apps, open URLs
 - access to phone storage (with permission)
+- **location:** GPS position, one-off or as a stream
+- **camera:** take photos from the front or back camera
+- **sensors:** read accelerometer, gyroscope, compass, light, proximity
+  and other sensors, one-off or as a stream
+
+Each of these asks for Android permission the first time it's used, and you can
+turn any of them off per profile.
 
 ### Included extras
 - The default **Neon** profile comes with a synthwave theme and a few terminal
@@ -115,7 +122,8 @@ Because Debian runs through `proot` rather than a virtual machine:
 4. **In-app keyboard:** terminal layout, shortcuts, game mode.
 5. **Customization:** theme, keyboard and menu editors.
 6. **Profiles:** multiple profiles, switching, export/import.
-7. **Android integration:** notifications, clipboard, share, storage.
+7. **Android integration:** notifications, clipboard, share, storage,
+   location, camera, sensors.
 8. **Polish:** first-run experience, settings, icon, signed releases.
 
 ---
