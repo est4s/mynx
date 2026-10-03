@@ -11,25 +11,31 @@ import com.termux.view.TerminalViewClient
 
 private const val TAG = "PocketTerminal"
 
-class SessionClient(private val activity: MainActivity) : TerminalSessionClient {
-    override fun onTextChanged(changedSession: TerminalSession) = activity.onScreenUpdated()
+// Owned by the service, so it never keeps a closed activity alive: it forwards
+// to whichever activity is attached right now, if any.
+class SessionClient(private val service: TerminalService) : TerminalSessionClient {
+    override fun onTextChanged(changedSession: TerminalSession) {
+        service.activity?.onScreenUpdated(changedSession)
+    }
     override fun onTitleChanged(changedSession: TerminalSession) {}
     // The library prints "[Process completed - press Enter]"; ViewClient handles the Enter.
     override fun onSessionFinished(finishedSession: TerminalSession) {}
 
     override fun onCopyTextToClipboard(session: TerminalSession, text: String) {
-        activity.getSystemService(ClipboardManager::class.java)
+        service.getSystemService(ClipboardManager::class.java)
             .setPrimaryClip(ClipData.newPlainText("terminal", text))
     }
 
     override fun onPasteTextFromClipboard(session: TerminalSession?) {
-        val clip = activity.getSystemService(ClipboardManager::class.java).primaryClip ?: return
-        val text = clip.getItemAt(0).coerceToText(activity).toString()
+        val clip = service.getSystemService(ClipboardManager::class.java).primaryClip ?: return
+        val text = clip.getItemAt(0).coerceToText(service).toString()
         session?.emulator?.paste(text)
     }
 
     override fun onBell(session: TerminalSession) {}
-    override fun onColorsChanged(session: TerminalSession) = activity.onScreenUpdated()
+    override fun onColorsChanged(session: TerminalSession) {
+        service.activity?.onScreenUpdated(session)
+    }
     override fun onTerminalCursorStateChange(state: Boolean) {}
     override fun getTerminalCursorStyle(): Int? = null
 
@@ -61,7 +67,7 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
 
     override fun onKeyDown(keyCode: Int, e: KeyEvent, session: TerminalSession): Boolean {
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
-            activity.restartShell()
+            activity.restartShell(session)
             return true
         }
         return false

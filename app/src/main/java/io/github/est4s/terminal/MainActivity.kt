@@ -2,10 +2,15 @@ package io.github.est4s.terminal
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ComponentName
+import android.content.Intent
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -19,22 +24,32 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.window.OnBackInvokedDispatcher
 import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
-import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
-import io.github.est4s.terminal.core.prootLaunch
-import io.github.est4s.terminal.core.writeFakeProc
-import java.io.File
 import kotlin.concurrent.thread
-import kotlin.system.exitProcess
 
 private const val ROOTFS_ASSET = "debian-rootfs.tar.xz"
 
 class MainActivity : Activity() {
     private lateinit var terminalView: TerminalView
-    private lateinit var session: TerminalSession
-    private val crashFile by lazy { File(filesDir, "last-crash.txt") }
+    private var service: TerminalService? = null
+    private var bound = false
+    private val crashFile by lazy { TerminalApp.crashFile(application) }
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            val s = (binder as TerminalService.LocalBinder).service
+            service = s
+            s.activity = this@MainActivity
+            showTerminal(s.currentSession())
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            service = null
+        }
+    }
 
     var textSizePx = 0
         set(value) {
@@ -47,22 +62,56 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        installCrashReporter()
+        leaveOnBack()
+        askForNotifications()
 
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         setContentView(root)
         applySystemInsets(root)
 
-        if (installer.isInstalled) showTerminal() else installDebian()
+        if (installer.isInstalled) connectService() else installDebian()
         showLastCrash()
     }
 
+    // Sessions live in the service and keep running after the activity is gone.
     override fun onDestroy() {
+        service?.let { if (it.activity === this) it.activity = null }
+        service = null
+        if (bound) unbindService(connection)
+        bound = false
         super.onDestroy()
-        if (::session.isInitialized) session.finishIfRunning()
     }
 
-    private fun showTerminal() {
+    // Started from the visible activity: Android 12+ forbids starting a
+    // foreground service from the background.
+    private fun connectService() {
+        val intent = Intent(this, TerminalService::class.java)
+        startForegroundService(intent)
+        bound = bindService(intent, connection, BIND_AUTO_CREATE)
+    }
+
+    // Like Termux, Back leaves the app without closing the terminals.
+    private fun leaveOnBack() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT) { moveTaskToBack(true) }
+        }
+    }
+
+    @Deprecated("Replaced by OnBackInvokedDispatcher on API 33+")
+    override fun onBackPressed() {
+        moveTaskToBack(true)
+    }
+
+    // Only for the "terminals running" notification; everything works without it.
+    private fun askForNotifications() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+    }
+
+    private fun showTerminal(session: TerminalSession) {
         terminalView = TerminalView(this, null).apply {
             setTerminalViewClient(ViewClient(this@MainActivity))
             setBackgroundColor(Color.BLACK)
@@ -74,7 +123,6 @@ class MainActivity : Activity() {
         root.removeAllViews()
         root.addView(terminalView)
 
-        session = startShell()
         terminalView.attachSession(session)
         terminalView.requestFocus()
     }
@@ -104,7 +152,7 @@ class MainActivity : Activity() {
                         }
                     }
                 }
-                runOnUiThread { showTerminal() }
+                runOnUiThread { connectService() }
             } catch (e: Exception) {
                 runOnUiThread { showInstallError(e) }
             }
@@ -137,32 +185,13 @@ class MainActivity : Activity() {
         setTextColor(Color.parseColor("#FF2BD6"))
     }
 
-    fun startShell(): TerminalSession {
-        val libDir = applicationInfo.nativeLibraryDir
-        val launch = prootLaunch(ProotPaths(
-            proot = "$libDir/libproot.so",
-            loader = "$libDir/libproot-loader.so",
-            rootfs = installer.rootfs.absolutePath,
-            tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
-            runCatching { File(path).inputStream().use { it.read() } }.isSuccess
-        })
-        return TerminalSession(
-            launch.argv.first(),
-            filesDir.absolutePath,
-            launch.argv.toTypedArray(),
-            launch.env.map { (k, v) -> "$k=$v" }.toTypedArray(),
-            2000,
-            SessionClient(this),
-        )
+    fun restartShell(old: TerminalSession) {
+        service?.restart(old)?.let { terminalView.attachSession(it) }
     }
 
-    fun restartShell() {
-        session = startShell()
-        terminalView.attachSession(session)
+    fun onScreenUpdated(session: TerminalSession) {
+        if (::terminalView.isInitialized && terminalView.currentSession === session) terminalView.onScreenUpdated()
     }
-
-    fun onScreenUpdated() = terminalView.onScreenUpdated()
 
     fun showKeyboard() {
         terminalView.requestFocus()
@@ -182,15 +211,6 @@ class MainActivity : Activity() {
                     insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
             }
             insets
-        }
-    }
-
-    // There's no logcat on the dev phone: save crashes and show them on next launch.
-    private fun installCrashReporter() {
-        val previous = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, e ->
-            runCatching { crashFile.writeText(e.stackTraceToString()) }
-            previous?.uncaughtException(thread, e) ?: exitProcess(1)
         }
     }
 
