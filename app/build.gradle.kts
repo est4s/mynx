@@ -2,6 +2,10 @@ plugins {
     id("com.android.application")
 }
 
+dependencies {
+    implementation(project(":core"))
+}
+
 android {
     // Neutral ID: the app's display name will change before release, the ID can't.
     namespace = "io.github.est4s.terminal"

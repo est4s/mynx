@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Enabled by scripts/setup.sh (git config core.hooksPath .githooks).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMRD)
+
+if ! scripts/check-tdd.sh <<<"$staged"; then
+    if [[ ${TDD_REFACTOR:-} == 1 ]]; then
+        echo "TDD_REFACTOR=1: allowed. Add the trailer 'TDD: refactor' to the commit message, or CI will fail."
+    else
+        cat <<'MSG'
+
+Write or update a failing test first, then the code (see AGENTS.md, "TDD").
+Pure refactor with behaviour unchanged and covered by existing tests?
+Commit with TDD_REFACTOR=1 and add the trailer 'TDD: refactor' to the message.
+MSG
+        exit 1
+    fi
+fi
+
+if grep -qE '\.(kt|kts)$|^gradle|^core/' <<<"$staged"; then
+    echo "Running core tests…"
+    ./gradlew :core:test -q || { echo "Tests fail: fix them before committing."; exit 1; }
+fi

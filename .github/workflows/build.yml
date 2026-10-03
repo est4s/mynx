@@ -13,6 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: TDD check (code changes come with test changes)
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event.before }}" = 0000000000000000000000000000000000000000 ]; then
+            range="${{ github.sha }}~1..${{ github.sha }}"
+          else
+            range="${{ github.event.before }}..${{ github.sha }}"
+          fi
+          failed=0
+          for c in $(git rev-list --no-merges "$range"); do
+            if git log -1 --format=%B "$c" | grep -q '^TDD: refactor$'; then continue; fi
+            if ! git diff-tree --no-commit-id --name-only -r "$c" | scripts/check-tdd.sh; then
+              echo "  in commit $(git log -1 --format='%h %s' "$c")"
+              failed=1
+            fi
+          done
+          exit $failed
 
       - uses: actions/setup-java@v6
         with:
@@ -20,14 +42,21 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "9.8.0"
+
+      - name: Test
+        run: ./gradlew --no-daemon test
 
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
+        run: ./gradlew --no-daemon assembleDebug
 
       - uses: actions/upload-artifact@v7
         with:
           name: pocket-terminal-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"

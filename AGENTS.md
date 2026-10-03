@@ -14,6 +14,8 @@ the relevant section in the same commit.
 - **Done:** app skeleton + CI. The app is a single screen that says "build
   pipeline works" and shows its version and build number. It installs and runs
   on the owner's phone.
+- **TDD setup done:** `core` module with tests, local test loop on the
+  phone, pre-commit hook and CI checks (see [TDD](#tdd-required)).
 - **Next:** roadmap step 1, *Core*. See [Next step](#next-step-roadmap-1-core).
 
 ## Naming
@@ -37,14 +39,14 @@ Android 16). The terminal is about 56 columns wide in portrait.
 
 Consequences:
 - **No local Android builds.** Google's `aapt2` only exists for x86-64, so
-  Gradle can't build here. All builds go through **GitHub Actions**. Don't try
-  to install the Android SDK locally.
+  the `app` module can't build here; APKs come from **GitHub Actions**. Don't
+  try to install the Android SDK locally. The plain-Kotlin `core` module
+  **does** build and test locally: that's where the TDD loop runs.
 - **No emulator, no `adb`** (yet). You can't see the screen or read logcat;
   the owner installs the build and reports back. Ask for specific observations
   ("what does the screen show after tapping X?") and make failures visible in
   the UI (show error text and stack traces on screen) rather than only in logs.
-- JDK 21 is installed locally (`keytool`, `javac`), which is enough for
-  signing tasks and small Java/Kotlin checks.
+- JDK 21 is installed locally, which `./gradlew :core:test` uses.
 - `gh` is logged in as `est4s` with the `workflow` scope.
 
 ### Build → install loop
@@ -70,7 +72,8 @@ Notes on why the script does what it does:
 | | |
 |---|---|
 | Android Gradle Plugin | 9.4.1, with **built-in Kotlin**: don't apply `org.jetbrains.kotlin.android` |
-| Gradle | 9.8.0, provided in CI by `gradle/actions/setup-gradle` (no wrapper checked in yet) |
+| Kotlin (`core`) | `org.jetbrains.kotlin.jvm` 2.4.20 |
+| Gradle | 9.8.0 through the wrapper (`./gradlew`), same on the phone and in CI |
 | JDK | 21 in CI; Java/Kotlin target 17 |
 | SDK | `compileSdk`/`targetSdk` 36, `minSdk` 26 |
 | Version code | `GITHUB_RUN_NUMBER`, so every CI build installs as an update |
@@ -144,7 +147,10 @@ These come from the README scope and apply to every feature:
 **Goal:** opening the app shows a terminal running `bash` inside the built-in
 Debian.
 
-Suggested order (each step should end in a build the owner can install):
+Suggested order (each step should end in a build the owner can install).
+Logic goes into `core` test-first; the Android and CI parts are spikes per
+[Spikes](#spikes). The proot command is already done:
+`core/.../ProotLaunch.kt`, built by TDD as the first example.
 
 1. **Terminal view with a local shell.** Add the terminal libraries, put a
    `TerminalView` on screen and start `/system/bin/sh` in a `TerminalSession`.
@@ -160,12 +166,14 @@ Suggested order (each step should end in a build the owner can install):
    Watch the APK size; the bare rootfs should be ~30 MB compressed.
 4. **First-run install.** Unpack the rootfs into `filesDir/debian/` with a
    progress screen. Use `org.apache.commons:commons-compress` +
-   `org.tukaani:xz`. Handle symlinks and file modes; convert hard links into
+   `org.tukaani:xz`. The unpacking logic belongs in `core`, test-first
+   (feed it small test archives). Handle symlinks and file modes; convert hard links into
    copies or symlinks (Android's storage doesn't allow them for apps). Write a
    marker file only after everything succeeds, so an interrupted install
    restarts cleanly. Then write `/etc/resolv.conf` (e.g. `1.1.1.1`, `8.8.8.8`;
    Android has none) and `/etc/hosts`.
-5. **Start Debian.** Run, roughly:
+5. **Start Debian** with the command from `prootLaunch()` in `core`, which
+   builds roughly:
    ```
    libproot.so --kill-on-exit --link2symlink -0 \
      -r <filesDir>/debian -w /root \
@@ -187,6 +195,71 @@ Suggested order (each step should end in a build the owner can install):
   silent crash
 
 Then continue with roadmap step 2 (tabs and the background service).
+
+---
+
+## TDD (required)
+
+This project is built test-first. **Every agent follows this workflow;** the
+hooks and CI enforce it.
+
+### First time in a clone
+Run `scripts/setup.sh`. It enables the git hooks in `.githooks/`. (Claude Code
+does this automatically through `.claude/settings.json`.)
+
+### The loop
+1. **Red:** write a test for the next small piece of behaviour. Run it and
+   **see it fail** for the right reason. Don't skip this: a test that never
+   failed proves nothing.
+2. **Green:** write the simplest code that makes it pass.
+3. **Refactor:** clean up with all tests green.
+4. Commit. Tests and the code they drive go in the **same commit**.
+
+**Bugs:** first write a test that reproduces the bug and fails, then fix it.
+
+### Where code and tests go
+- **`core/`**: plain Kotlin, no Android imports. Put **all logic** here:
+  config parsing and checking, the profile format, export/import, undo
+  snapshots, migrations, the proot command, rootfs unpacking, keyboard
+  layouts, file manager logic, and so on. Tests in `core/src/test/`
+  (`kotlin.test` on JUnit 5).
+- **`app/`**: a thin Android layer that connects `core` to Android (views,
+  services, permissions, USB, camera). Keep logic out of it. When Android
+  code needs tests, add Robolectric tests in `app/src/test/`; they only run
+  in CI.
+- **Shell code** (the `pocket` CLI, rootfs build scripts): tests with `bats`
+  in `tests/shell/`, runnable here in Debian. Add the suite and its CI step
+  with the first shell feature.
+
+When you add a tested source set, add its `source test` pair to
+`scripts/check-tdd.sh`.
+
+### Running tests
+- **On the phone:** `./gradlew :core:test`, about 15 s with a warm Gradle
+  daemon (the first run downloads dependencies and takes a few minutes).
+  Without an Android SDK, Gradle only configures `:core`; that's expected.
+- **In CI:** `./gradlew test` runs every suite before the APK is built. A
+  failing test means no APK.
+
+### What enforces it
+- **`.githooks/pre-commit`** blocks a commit that changes `core/src/main/`
+  without touching `core/src/test/`, and runs the core tests when Kotlin or
+  Gradle files change.
+- **CI** runs the same check on every pushed commit, then all tests.
+- **Pure refactors** (behaviour unchanged, covered by existing tests): commit
+  with `TDD_REFACTOR=1 git commit …` and add the line `TDD: refactor` to the
+  commit message. Use this honestly; it's for refactors only.
+- **Never** bypass the hook with `--no-verify`, and never delete or weaken a
+  test to make it pass. If a test is wrong, say so and fix the test in its own
+  commit, explaining why.
+
+### Spikes
+Some things are about finding out what Android allows (getting proot to run,
+the terminal rendering) and can't sensibly be test-driven up front. For those:
+spike on a separate branch, learn what works, then **throw the spike away**
+and rebuild it test-first on `main`, moving the logic into `core`. The
+on-device behaviour that can't be unit-tested gets an entry in the step's
+"Done when" checks.
 
 ---
 
