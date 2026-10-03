@@ -184,8 +184,11 @@ These come from the README scope and apply to every feature:
 - **A `pocket` command for everything** the settings UI can do, with `--json`
   output.
 - **Agent docs ship with the app.** Each Debian environment gets `AGENTS.md` /
-  `CLAUDE.md` in the home folder describing the setup. When you add a feature
-  that users can configure, update those docs in the same change.
+  `CLAUDE.md` in the home folder describing the setup
+  (`rootfs/root/AGENTS.md`, `CLAUDE.md`). When you add a feature that users
+  can configure, update those docs in the same change;
+  `tests/shell/home-docs.bats` fails if a file in `rootfs/root/` isn't
+  mentioned there.
 - **Don't bundle third-party agent CLIs** (Claude Code, Codex, …). Offer to
   install them with their official installers; users sign in with their own
   accounts.

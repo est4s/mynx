@@ -17,8 +17,9 @@ Newest entries first. Rules for keeping it up to date: see
 - **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
   Font) and 3.2 (customized rootfs: starship, eza, games, mc, no debconf
   warnings) and 3.3 (launcher menu) are done and confirmed on the phone.
-  **Next: 3.4 (agent docs in the home folder)**, the last part of step
-  3. See "Next".
+  3.4 (agent docs in the home folder) is built, **waiting for the
+  owner's check (needs a data clear)**; then step 3's final "Done when"
+  pass. See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -171,8 +172,15 @@ Original plan for 3.3:
   `prootLaunch`, tested in `core`); `.bashrc` runs `menu` when it's set.
 - bats tests for the menu's non-interactive parts (state file, items).
 
-**3.4 Agent docs in the home folder.** A first `/root/AGENTS.md` +
-`CLAUDE.md` describing the setup (design rule in AGENTS.md).
+**3.4 Agent docs in the home folder. Built, not yet confirmed.** Owner
+clears the app's data, opens it, and checks:
+- `ls ~` shows `AGENTS.md` and `CLAUDE.md`; `cat ~/CLAUDE.md` prints
+  `@AGENTS.md`; `less ~/AGENTS.md` reads well at phone width
+- (optional) an AI agent started in `~` picks it up, e.g. asks it "where
+  do I change the terminal colours?"
+
+Original plan for 3.4: a first `/root/AGENTS.md` + `CLAUDE.md` describing
+the setup (design rule in AGENTS.md).
 
 #### Done when (the owner checks these on the phone, after clearing data)
 - the terminal uses the neon colours and the Nerd Font (icons in the
@@ -231,6 +239,28 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-03 (15): step 3.4, agent docs in the home folder
+
+**Done**
+- `rootfs/root/AGENTS.md` (+ `CLAUDE.md` importing it), shipped as
+  `/root/AGENTS.md`: how this Debian runs (proot, fake root, no
+  systemd/sudo, static `/proc` files, network, apt, storage), and a table
+  of the setup's files (`.bashrc`, `starship.toml`, colours file, menu
+  and its state, games) with how to change each: colours format and
+  apply-on-return, tab titles via OSC 0, adding games in `~/games`,
+  keeping the app's `PROMPT_COMMAND`, app-owned paths that updates may
+  replace.
+- Test-first (3 bats tests, `tests/shell/home-docs.bats`): `CLAUDE.md`
+  imports `AGENTS.md`; every file in `rootfs/root/` and the other
+  user-facing paths are mentioned in `AGENTS.md`, so the docs can't
+  silently fall behind. Repo AGENTS.md's design rule points at them.
+
+**Not verified:** "most of `/storage` needs a permission" is from
+Android's rules, not tried in the app; correct it if the owner finds
+otherwise.
+
+**Commits:** (pending)
 
 ### 2026-10-03 (14): step 3.3, launcher menu
 
