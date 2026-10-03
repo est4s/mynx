@@ -85,7 +85,7 @@ profiles (step 8), the in-app keyboard (step 5).
 **3.1 Neon colours and font (app side). Built, not yet confirmed.**
 Owner checks on the phone (no need to clear data for this one):
 - terminal background is dark purple (`#14101f`), text off-white, cursor
-  pink; `for i in $(seq 0 15); do printf '\e[48;5;%sm  ' $i; done; echo`
+  pink; `for i in $(seq 0 15); do printf '\e[48;5;%sm  ' $i; done; printf '\e[0m\n'`
   shows the neon palette
 - the font is JetBrains Mono: `echo -e '\ue0b0 \uf07b \uf120'` shows
   Nerd Font icons (powerline arrow, folder, terminal), not boxes
@@ -234,7 +234,15 @@ library's published sources (v0.118.3). Risk to watch: `NEON` loads a
 Java resource from the `core` jar; if Android doesn't package it, the app
 crashes on start and the crash dialog will say so.
 
-**Commits:** `b39ecac`
+**False alarm, white background:** the first palette check command in
+the list left SGR background colour 15 (white) set, so typed text and a
+`clear` came out white. Not an app bug; the command now ends with
+`\e[0m`. On the way, the window behind the terminal is now painted in
+the scheme background too, like Termux (the library never paints
+default-background cells). `scripts/deliver.sh` now waits for the run
+of HEAD: right after a push it had picked the previous run.
+
+**Commits:** `b39ecac`, `3339497`, and the cleanup after it
 
 ### 2026-10-03 (11): rename tabs
 

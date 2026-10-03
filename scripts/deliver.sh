@@ -2,7 +2,7 @@
 # Download the latest CI build of the APK and hand it to Android's installer.
 # Runs in Debian under proot on the phone (see AGENTS.md, "Build → install loop").
 #
-#   scripts/deliver.sh            wait for the latest run on main, then install
+#   scripts/deliver.sh            wait for HEAD's run on main, then install
 #   scripts/deliver.sh <run-id>   use a specific run
 #   scripts/deliver.sh --no-open  copy and index only, don't open the installer
 set -euo pipefail
@@ -16,7 +16,18 @@ for arg in "$@"; do
 done
 
 cd "$(dirname "$0")/.."
-run=${run:-$(gh run list --branch main --workflow build.yml -L 1 --json databaseId -q '.[0].databaseId')}
+# The run for HEAD, not just the latest: right after a push, GitHub may not
+# have registered the new run yet, and the latest is the previous build.
+if [[ -z $run ]]; then
+    head=$(git rev-parse HEAD)
+    for _ in $(seq 30); do
+        run=$(gh run list --branch main --workflow build.yml --commit "$head" -L 1 \
+            --json databaseId -q '.[0].databaseId')
+        [[ -n $run ]] && break
+        sleep 2
+    done
+    [[ -n $run ]] || { echo "No build found for $(git rev-parse --short HEAD)."; exit 1; }
+fi
 
 echo "Waiting for run $run…"
 gh run watch "$run" --exit-status >/dev/null || {
