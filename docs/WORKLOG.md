@@ -8,8 +8,9 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **Roadmap step 2 (*Tabs*) in progress:** 2.1 (background service) done
-  and confirmed on the phone; next is 2.2 (tab model in `core`).
+- **Roadmap step 2 (*Tabs*) in progress:** 2.1 (background service) and
+  2.2 (tab model, exit rule) done and confirmed on the phone; next is 2.3
+  (tab strip UI and shortcuts).
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -25,7 +26,8 @@ Newest entries first. Rules for keeping it up to date: see
   with the NDK (cached) and the rootfs from `debian:trixie` (arm64), then a
   debug APK. `scripts/deliver.sh` installs it on the phone.
 - **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
-  `FakeProc.kt` and `ServiceNotification.kt` (27 tests in all). `app/` is
+  `FakeProc.kt`, `ServiceNotification.kt` and `Tabs.kt` (48 tests in
+  all). `app/` is
   `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
   `TerminalClients.kt`.
 
@@ -48,17 +50,26 @@ alive by a background service, so long jobs survive leaving the app.
   keyboard; tapping tabs and the **+** button must also work.
 
 #### Where things stand (read the code first)
-- `app/.../TerminalService.kt` owns the sessions in a plain
-  `mutableListOf<TerminalSession>()`: `currentSession()` (last one, or a
-  new one), `newSession()`, `restart(old)`, `exit()`. `startShell()` (moved
-  here from the activity) builds the proot command and must run on the main
-  thread. `showNotification()` (re)posts the foreground notification with
-  `runningTerminalsText(sessions.size)`; call it whenever the count
-  changes. `activity` is the attached `MainActivity` or null. 2.2 replaces
-  the list with `Tabs<TerminalSession>`.
+- `core/.../Tabs.kt`: `Tabs<S>(onChange)` with `open`, `close`, `select`,
+  `next`/`previous` (wrap), `moveLeft`/`moveRight` (stop at ends),
+  `setShellTitle`, `rename` (null/blank clears), `replaceSession`,
+  `onOutput`/`onBell` (mark background tabs only; cleared on select).
+  `Tab.title` = rename, else shell title, else "Tab N" (N = lowest free
+  number, fixed per tab). `closesOnExit(code)` = code 0.
+- `app/.../TerminalService.kt` owns `tabs: Tabs<TerminalSession>`:
+  `currentSession()` (selected, or opens one), `newSession()`,
+  `restart(old)`, `closeTab(session)` (last tab → `exit()`),
+  `onSessionFinished()` (applies `closesOnExit`), `exit()`. `killAll()`
+  swaps in a fresh `Tabs` before killing, so late exit events are ignored.
+  The `Tabs` change callback updates the notification (via `notify()`, not
+  `startForeground()`, which only runs from `onStartCommand` while the
+  activity is visible) and calls `activity?.onTabsChanged()`.
+  `startShell()` builds the proot command and must run on the main thread.
 - `app/.../MainActivity.kt` starts and binds the service in
   `connectService()` (after first-run install), shows
-  `service.currentSession()` in one `TerminalView`, and unbinds in
+  `service.currentSession()` in one `TerminalView`;
+  `onTabsChanged()` attaches the selected tab's session (2.3 hooks the
+  strip in there). It unbinds in
   `onDestroy()` without killing anything. Back = `moveTaskToBack(true)`.
   Also: first-run install screen, system-bar/IME insets (padding on the
   root `FrameLayout`, because `TerminalView` ignores its own padding),
@@ -66,8 +77,8 @@ alive by a background service, so long jobs survive leaving the app.
 - `app/.../TerminalApp.kt`: `Application` with the crash reporter
   (`filesDir/last-crash.txt`).
 - `app/.../TerminalClients.kt`: `SessionClient` (owned by the service,
-  forwards screen updates to `service.activity` only for the session it
-  shows) and `ViewClient` (tap → keyboard, pinch → font size, Enter
+  feeds output/title/bell into `service.tabs`, forwards screen updates to
+  `service.activity` for the session it shows) and `ViewClient` (tap → keyboard, pinch → font size, Enter
   restarts a finished shell via `activity.restartShell(session)`).
 - `core/`: `prootLaunch()` (already takes `workDir`, useful for restoring
   tabs), `RootfsInstaller`, `writeFakeProc()`.
@@ -107,20 +118,8 @@ alive by a background service, so long jobs survive leaving the app.
 
 **2.1 Background service.** ✅ Done (`8dbace9`), see the log.
 
-**2.2 Tab model in `core`, test-first.**
-- A plain-Kotlin `Tabs` class, generic over the session type so `core`
-  stays Android-free (e.g. `Tabs<S>`):
-  - open (after the current tab), close, select, move left/right
-  - titles: shell title, with a user rename that overrides it until cleared
-  - which tab gets selected after a close (suggest: the one to the right,
-    else the left one)
-  - activity and bell flags, cleared when a tab is selected
-- **When a shell exits:** follow Windows Terminal's default ("graceful"):
-  close the tab if the exit code is 0, otherwise keep it open showing
-  `[Process completed (code N) - press Enter]`, where Enter restarts it.
-  This rule belongs in `core`, tested.
-- **Closing the last tab:** stop the service and finish the activity.
-  Reopening the app starts with one fresh tab.
+**2.2 Tab model in `core`, test-first.** ✅ Done (`ed95a18`, `01cb1ac`), see
+the log.
 
 **2.3 Tab strip UI.**
 - A strip along the top of the terminal (inside the inset root, above the
@@ -140,6 +139,12 @@ alive by a background service, so long jobs survive leaving the app.
 
   Keep the shortcut → action mapping in `core` (tested), so the in-app
   keyboard (step 5) and the customization step reuse it.
+- New-tab and close-tab go through `service.newSession()` /
+  `service.closeTab()`; the rest call the matching `service.tabs` method.
+  Closing a tab with a running shell just kills it for now (no
+  confirmation).
+- `Tab.number` and `Tab.title` are ready for the strip; rename UI isn't
+  in 2.3's scope (long-press menus are out), but `tabs.rename()` exists.
 
 **2.4 Activity dot and bell.** A dot on background tabs that printed
 output; a bell icon after `\a`. Driven by the flags in the `core` model.
@@ -191,6 +196,34 @@ output; a bell icon after `\a`. Driven by the flags in the `core` model.
 ---
 
 ## Log
+
+### 2026-10-03 (8): step 2.2, tab model and exit rule
+
+**Done**
+- `core`: `Tabs<S>` and `closesOnExit()`, test-first (21 tests): open
+  after current, close selects right else left, wrap-around next/previous,
+  move left/right, shell title / rename / "Tab N" titles with stable
+  numbers, activity and bell marks for background tabs, change callback
+  (marks only report when they flip, since output arrives constantly).
+- `TerminalService` holds its sessions in `Tabs`. Exit code 0 closes the
+  tab; other codes (negative = signal) keep it open with the library's own
+  `[Process completed (code N) - press Enter]` (the library already prints
+  it, so the app adds nothing). Closing the last tab = `exit()`.
+- Notification updates use `NotificationManager.notify()`; only
+  `onStartCommand` calls `startForeground()`.
+
+**Notes**
+- First push failed to compile in CI: `var tabs = newTabs()` where the
+  lambda in `newTabs()` reads `tabs` is a recursive type inference error.
+  Fixed with explicit types (`01cb1ac`). `app/` can't compile on the
+  phone, so read Kotlin carefully for inference cycles like this.
+
+**Owner confirmed on the phone:** `exit` closes the app and the
+notification; `exit 1` stays open with the message and Enter restarts;
+killing a child shell changes nothing; notification Exit, Back and
+rotation still work.
+
+**Commits:** `ed95a18`, `01cb1ac`
 
 ### 2026-10-03 (7): step 2.1, background service
 
