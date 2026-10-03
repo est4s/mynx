@@ -66,14 +66,15 @@ one is made for a narrow portrait screen and thumbs.
 - **One pane, full width:** a single file list that fits about 40–60
   columns, instead of two cramped side-by-side panels. Long names are
   shortened in the middle so the extension stays visible.
-- **Path bar** at the top; tap a folder in it, or press Backspace, to go
-  back up.
+- **Path bar** at the top always shows where you are; Backspace goes back
+  up.
 - **Action bar** at the bottom with the common actions (copy, move, rename,
   delete, new, search) as large labels. It changes with what's selected,
   so there are no hidden shortcuts to memorise.
-- **Touch and keyboard:** tap to open, tap again or long-press to select,
-  swipe to scroll. Everything also works with the arrows and the in-app
-  keyboard.
+- **Keyboard-driven:** arrows to move, Enter to open, Space to select,
+  using the arrow keys on the in-app keyboard.
+- **Tap support (later):** tap to open, long-press to select, swipe to
+  scroll. It will be off by default, with a toggle in settings.
 - **Multi-select** with a clear count, then copy/move/delete/zip in one go.
   Copy and move ask for the destination with the same browser.
 - **Preview** text, code and images (as coloured block pixels) full-screen,
@@ -160,13 +161,14 @@ Because Debian runs through `proot` rather than a virtual machine:
 1. **Core:** app opens a terminal into the built-in Debian.
 2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
-4. **File manager:** phone-sized terminal file manager with touch support.
+4. **File manager:** phone-sized, keyboard-driven terminal file manager.
 5. **In-app keyboard:** terminal layout, shortcuts, game mode.
 6. **Customization:** theme, keyboard and menu editors.
 7. **Profiles:** multiple profiles, switching, export/import.
 8. **Android integration:** notifications, clipboard, share, storage,
    location, camera, sensors.
 9. **Polish:** first-run experience, settings, icon, signed releases.
+10. **Later:** optional tap support in the file manager (settings toggle).
 
 ---
 
