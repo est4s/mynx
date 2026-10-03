@@ -165,8 +165,8 @@ See README "How it works". The details:
   `filesDir`, `/data/data/<app>` from the kernel). Don't compare paths by
   prefix across the two.
 - **`/dev/fd` in the dev Debian (proot-distro) is a frozen copy of one
-  process's fd folder**, so `cat <(echo hi)` fails there. Whether the app's
-  Debian has the same problem is on the 3.2 check list.
+  process's fd folder**, so `cat <(echo hi)` fails there. The app's own
+  Debian is fine (checked on the phone in 3.2).
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the owner can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.

@@ -15,9 +15,9 @@ Newest entries first. Rules for keeping it up to date: see
   untested: hardware keyboard shortcuts (owner has no keyboard, see
   "Hardware keyboard checks").
 - **Step 3 (*Default setup*) in progress.** 3.1 (neon colours and Nerd
-  Font) is done and confirmed on the phone. 3.2 (customized rootfs) is
-  built, **waiting for the owner's check (needs a data clear)**; then 3.3
-  (launcher menu). See "Next".
+  Font) and 3.2 (customized rootfs: starship, eza, games, mc, no debconf
+  warnings) are done and confirmed on the phone. **Next: 3.3 (launcher
+  menu).** See "Next".
 - **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
   opening the app shows a `root@localhost` bash inside the built-in Debian
   13 (trixie); `apt install` works; `htop` draws; app updates keep the
@@ -115,9 +115,8 @@ Original plan for 3.1:
   in Debian (e.g. `~/.config/pocket-terminal/colors.properties`) so users
   and agents can edit it; reading it can wait for 3.2's rootfs if simpler.
 
-**3.2 Customized rootfs. Built, not yet confirmed.** Owner clears the
-app's data (Settings → Apps → Pocket Terminal → Storage → Clear storage),
-opens it, and checks:
+**3.2 Customized rootfs. Done, owner confirmed.** Checks the owner ran
+after clearing the app's data (kept for regressions):
 - prompt is starship: a Debian logo, `~` in cyan, pink `❯`; icons render
 - the tab is named `~`, and after `cd /etc` it's `etc`
 - `ls`, `ll`, `la`, `tree` show eza output with icons
@@ -131,7 +130,7 @@ opens it, and checks:
 - `cat <(echo ok)` prints `ok` (process substitution: broken in the dev
   Debian, see AGENTS.md "proot notes"; if broken here too, fix it in the
   proot binds)
-- APK size (was 33 MB)
+- APK size (50 MB after 3.2)
 
 Original plan for 3.2:
 - Ship the neon theme file into Debian as
@@ -252,7 +251,14 @@ Debian too; on the check list.
 - No QEMU-built image locally (no docker on the phone): the Dockerfile is
   verified by the CI build and the owner's checks.
 
-**Commits:** (pending)
+**Owner confirmed on the phone** (after clearing data): starship prompt
+with icons, folder-named tabs, eza aliases, all three games, no debconf
+warnings on `apt install`, Neon colours file in place, `mc`, tab folder
+restore after force-stop, and `cat <(echo ok)` works in the app's Debian
+(so the `/dev/fd` problem is only in the dev Debian). APK 50 MB (rootfs
+`.tar.xz` 45.6 MB, was 28.4).
+
+**Commits:** `de39952`
 
 ### 2026-10-03 (12): step 3.1, neon colours and font
 
