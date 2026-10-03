@@ -16,8 +16,11 @@ private val HOST_BINDS = listOf("/dev", "/proc", "/sys", "/storage")
 
 private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-/** Command that starts a login bash inside Debian. */
-fun prootLaunch(paths: ProotPaths, workDir: String = "/root"): Launch {
+/**
+ * Command that starts a login bash inside Debian. [fakeProc] maps `/proc`
+ * files Android blocks to stand-ins (see [writeFakeProc]).
+ */
+fun prootLaunch(paths: ProotPaths, workDir: String = "/root", fakeProc: Map<String, String> = emptyMap()): Launch {
     val argv = buildList {
         add(paths.proot)
         add("--kill-on-exit")
@@ -26,6 +29,7 @@ fun prootLaunch(paths: ProotPaths, workDir: String = "/root"): Launch {
         add("-r"); add(paths.rootfs)
         add("-w"); add(workDir)
         HOST_BINDS.forEach { add("-b"); add(it) }
+        fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
         // env -i: the shell must not inherit Android's environment (PATH, LD_*, ANDROID_*).
         addAll(listOf("/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8", "PATH=$DEBIAN_PATH"))
         addAll(listOf("/bin/bash", "--login"))

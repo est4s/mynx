@@ -24,6 +24,7 @@ import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.prootLaunch
+import io.github.est4s.terminal.core.writeFakeProc
 import java.io.File
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
@@ -143,7 +144,9 @@ class MainActivity : Activity() {
             loader = "$libDir/libproot-loader.so",
             rootfs = installer.rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ))
+        ), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+            runCatching { File(path).inputStream().use { it.read() } }.isSuccess
+        })
         return TerminalSession(
             launch.argv.first(),
             filesDir.absolutePath,

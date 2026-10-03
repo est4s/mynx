@@ -71,6 +71,13 @@ class ProotLaunchTest {
         assertEquals("/data/cache/proot", env["PROOT_TMP_DIR"])
     }
 
+    @Test
+    fun `binds fake files over proc files Android blocks`() {
+        val binds = prootLaunch(paths, fakeProc = mapOf("/proc/stat" to "/data/files/fake-proc/stat")).argv.valuesAfter("-b")
+
+        assertEquals(listOf("/dev", "/proc", "/sys", "/storage", "/data/files/fake-proc/stat:/proc/stat"), binds)
+    }
+
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]
 
     private fun List<String>.valuesAfter(flag: String) =
