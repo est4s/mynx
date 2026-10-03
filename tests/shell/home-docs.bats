@@ -42,3 +42,11 @@ ROOT="$BATS_TEST_DIRNAME/../../rootfs/root"
     grep -Eq '^ +.*\bnano\b' "$BATS_TEST_DIRNAME/../../rootfs/Dockerfile"
     grep -Eq '^ +.*\bless\b' "$BATS_TEST_DIRNAME/../../rootfs/Dockerfile"
 }
+
+@test "AGENTS.md names every built-in key bar" {
+    bars="$BATS_TEST_DIRNAME/../../core/src/main/resources/io/github/est4s/terminal/core/keybars"
+    for f in "$bars"/*.conf; do
+        name=$(basename "$f" .conf)
+        grep -qF "\`$name\`" "$ROOT/AGENTS.md" || { echo "bar not in AGENTS.md: $name"; false; }
+    done
+}

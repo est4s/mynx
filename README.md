@@ -72,15 +72,16 @@ desktop terminals and a full keyboard.
 - **Quick places** on `b`: home, Download, Pictures, DCIM and `/`, plus
   your own bookmarks.
 - **Key bar:** while nnn runs, the bar above the keyboard shows its
-  actions as labelled buttons (Open, Back, Select, Copy, Move, Rename,
-  Delete, Search, Places, Quit), so there are no shortcuts to memorise.
+  actions as labelled buttons (↑, ↓, Open, Back, Select, Search, Copy,
+  Move, Rename, Delete, Places, Quit), so there are no shortcuts to memorise.
 - Text files open in your terminal editor (nano by default).
 - Later: open other files in an Android app, share, and "open terminal
   here" in a new tab; tap support (off by default, behind a setting).
 
 ### Key bar
-A row of labelled buttons between the terminal and the keyboard, always
-visible. What it shows depends on what's running: the shell gets Esc,
+Two rows of labelled buttons between the terminal and the keyboard,
+always visible; if a bar has more buttons than fit, swipe sideways for
+the rest. What it shows depends on what's running: the shell gets Esc,
 Tab, a sticky Ctrl, arrows, Files and Menu; nnn and the menu get their
 own actions. Any program can have one: `keybar NAME command` shows bar
 `NAME` while the command runs, and bars are plain-text files you can

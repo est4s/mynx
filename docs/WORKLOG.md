@@ -61,8 +61,10 @@ that change with the running program. The README's File manager section
 was rewritten to match (plus a Key bar section).
 
 **4.1 nnn and `keybar` (rootfs). Built, in the same build as 4.2.**
-**4.2 Key bar (app). Built, not yet confirmed.** Owner clears the app's
-data, opens it, and checks:
+**4.2 Key bar (app). Owner's first check (2026-10-04): "looks pretty
+good"; asked for ↑ ↓ in nnn's bar and two rows instead of one sliding
+row, with pages to swipe when two rows aren't enough. Done in 4.3.**
+Checks from the first round:
 - the bar sits under the terminal, right above the keyboard, and stays
   when the keyboard is hidden; neon colours; buttons scroll sideways if
   they don't fit
@@ -84,6 +86,21 @@ data, opens it, and checks:
   > ~/.config/pocket-terminal/keybars/nnn.conf`, leave the app and come
   back, run `files`: dialog, then a bar with only Quit. Delete the file.
 - opening a text file in nnn opens nano
+
+**4.3 Two-row key bar with pages. Built, not yet confirmed** (app only,
+no data clear needed). Owner checks:
+- the bar is two rows: nnn `↑ ↓ Open Back Select Search` over `Copy Move
+  Rename Delete Places Quit`; shell `Esc Tab Ctrl Files Menu` over
+  `← ↓ ↑ →`; menu `↑ ↓ Select` over `Back Quit`
+- buttons in a row share the width evenly; the terminal keeps its size
+  when the bar changes (nnn ↔ shell)
+- ↑ ↓ move in nnn
+- pages: `mkdir -p ~/.config/pocket-terminal/keybars && for i in $(seq 1
+  20); do echo "K$i = \"$i\""; done > ~/.config/pocket-terminal/keybars/shell.conf`,
+  leave and come back: two rows of K-buttons, dots at the bottom, swipe
+  left/right switches pages, taps still type the numbers. Delete the
+  file afterwards.
+- rotate to landscape: more buttons per row
 
 **Next after step 4:** roadmap step 5 (in-app keyboard), which builds on
 the key bar (`KeyBarView`, `core/KeyBar.kt`).
@@ -167,8 +184,17 @@ in-app keyboard (step 5) can send these combos:
   improve them without a rootfs migration; users override per bar.
 - Not yet: key repeat on held buttons (arrows), opening non-text files
   in Android apps (needs a Debian → app channel).
+- 4.3 (owner's feedback): `keyBarPages()` in core, test-first (4
+  tests): always two rows (an empty second row keeps its height, so the
+  terminal never resizes), first half on top, extra buttons on more
+  pages. The app picks buttons per row from the widest label (min 44 dp)
+  and the bar's width; buttons in a row share the width. `KeyBarView` is
+  now a `FrameLayout` showing one page; a sideways swipe past the touch
+  slop switches pages (taps still reach buttons), dots drawn on the
+  bottom edge. nnn's bar gained ↑ ↓; built-in bars reordered so the
+  halves make sense as rows.
 
-**Commits:** `4c11f36`, (pending)
+**Commits:** `4c11f36`, `796502a`, (4.3 pending)
 
 ### 2026-10-03 (15): step 3.4, agent docs in the home folder
 

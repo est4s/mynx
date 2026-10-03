@@ -57,7 +57,8 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
   its keys). Quick places on `b`: `h` home, `d` Download, `p` Pictures,
   `c` DCIM, `r` `/`; set `NNN_BMS` in `~/.bashrc` for your own (format
   `key:path;key:path`). Text files open in `$EDITOR` (nano).
-- **Key bar:** a row of buttons above the keyboard, always visible. Which
+- **Key bar:** two rows of buttons above the keyboard, always visible
+  (more than fit go on pages: swipe sideways). Which
   bar shows depends on what's running: `keybar NAME command…`
   (`/usr/local/bin/keybar`) shows bar NAME while the command runs, then
   the previous one; with no command running it's the shell's bar.
@@ -78,7 +79,8 @@ The built-in bars are in `/usr/share/pocket-terminal/keybars/` (`shell`,
 `nnn`, `menu`). To change one, copy it to
 `~/.config/pocket-terminal/keybars/` and edit the copy; a new
 `NAME.conf` there adds a bar for `keybar NAME …`. Leave the app and come
-back to apply. Format, one button per line:
+back to apply. Buttons fill two rows in file order, the first half on
+top. Format, one button per line:
 
 ```
 # label = keys, run in order

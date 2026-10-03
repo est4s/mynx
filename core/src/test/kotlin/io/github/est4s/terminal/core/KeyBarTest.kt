@@ -136,9 +136,10 @@ class KeyBarTest {
             loaded.buttons.map { it.label }
         }
 
-        assertEquals(listOf("Esc", "Tab", "Ctrl", "←", "↓", "↑", "→", "Files", "Menu"), labels("shell"))
+        // Laid out in two rows, first half on top (see keyBarPages).
+        assertEquals(listOf("Esc", "Tab", "Ctrl", "Files", "Menu", "←", "↓", "↑", "→"), labels("shell"))
         assertEquals(
-            listOf("Open", "Back", "Select", "Copy", "Move", "Rename", "Delete", "Search", "Places", "Quit"),
+            listOf("↑", "↓", "Open", "Back", "Select", "Search", "Copy", "Move", "Rename", "Delete", "Places", "Quit"),
             labels("nnn"),
         )
         assertEquals(listOf("↑", "↓", "Select", "Back", "Quit"), labels("menu"))
@@ -170,6 +171,34 @@ class KeyBarTest {
 
         assertEquals(loadKeyBar("shell", dir).buttons, loaded.buttons)
         assertEquals(emptyList(), loaded.problems)
+    }
+
+    @Test
+    fun `buttons split into two rows, first half on top`() {
+        assertEquals(listOf(listOf(listOf(0, 1, 2), listOf(3, 4))), keyBarPages(count = 5, perRow = 6))
+        assertEquals(listOf(listOf(listOf(0, 1, 2, 3, 4, 5), listOf(6, 7, 8, 9, 10, 11))), keyBarPages(12, 6))
+    }
+
+    @Test
+    fun `a single button still gets two rows, the second empty`() {
+        assertEquals(listOf(listOf(listOf(0), emptyList())), keyBarPages(1, 6))
+    }
+
+    @Test
+    fun `buttons that don't fit in two rows go on more pages`() {
+        assertEquals(
+            listOf(
+                listOf(listOf(0, 1, 2), listOf(3, 4, 5)),
+                listOf(listOf(6, 7), listOf(8)),
+            ),
+            keyBarPages(count = 9, perRow = 3),
+        )
+    }
+
+    @Test
+    fun `no buttons, no pages, and at least one per row`() {
+        assertEquals(emptyList(), keyBarPages(0, 6))
+        assertEquals(listOf(listOf(listOf(0), listOf(1)), listOf(listOf(2), emptyList())), keyBarPages(3, 0))
     }
 
     @Test
