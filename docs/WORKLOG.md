@@ -11,7 +11,8 @@ Newest entries first. Rules for keeping it up to date: see
 - **Roadmap steps 1-7 are done** and confirmed on the owner's phone.
   Step 8 (*Profiles*) is planned but **parked** by the owner
   (2026-10-04): step 9 (*Android integration*) comes first and is
-  planned; see "Next".
+  planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
+  waiting/streaming requests); 9.2 (sharing) is next.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -72,19 +73,9 @@ README section "Android integration". Planned with the owner
 2026-10-04, ahead of the parked step 8. Build test-first, with an
 owner test after each part.
 
-**9.1 built, owner to check** (see the log, entry 27). After
-`scripts/deliver.sh` installs the build, on the phone:
-- `pocket vibrate` buzzes briefly; `pocket vibrate 1500` for longer;
-  `pocket vibrate 0` refuses. Does it also buzz with the app in the
-  background (`sleep 5; pocket vibrate`, then switch apps)?
-- `echo hello | pocket clipboard set`, then paste in another app:
-  `hello` and a line break. `pocket clipboard set "two words"` too.
-- Copy some text in another app, come back: `pocket clipboard get`
-  prints it. `sleep 5; pocket clipboard get`, switch apps quickly:
-  it says the app must be on screen.
-- `pocket set android-clipboard off`: both refuse; `pocket set
-  android-clipboard on` again. The Settings editor shows the setting.
-- Does Android show its own "copied" pop-up on `set`?
+**9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
+**Next: build 9.2 (sharing)** test-first, as described under
+"Parts" below, then give the owner a checklist like 9.1's.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -246,6 +237,25 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (28): 9.1 confirmed on the phone
+
+Tested build 52 (commit b9bb696) with the owner, the agent running the
+commands from the app's Debian:
+- `pocket vibrate`, `1500` and `--json vibrate 200` all buzz; `0` and
+  `6000` refuse with exit 2. A buzz started from a timer while the
+  owner was in another app worked too.
+- `clipboard set` (stdin with line breaks, and TEXT) works; pasting
+  elsewhere gives the text; Android shows its own "copied" pop-up.
+  `set` works from the background too.
+- `clipboard get` prints what another app copied (`Kragg`), keeps line
+  breaks, and from the background refuses with "the app must be on
+  screen…". (The first try printed the old clip because the copy in
+  the other app hadn't happened; pasting showed the same old text, so
+  it's not a bug.)
+- `android-clipboard off` blocks both, exit 2; `on` restores them.
+
+No code changes.
 
 ### 2026-10-04 (27): step 9.1, waiting and streaming requests; vibrate; clipboard
 
