@@ -9,8 +9,9 @@ Newest entries first. Rules for keeping it up to date: see
 ## Current status
 
 - **Roadmap steps 1-6 are done** and confirmed on the owner's phone.
-  **Step 7 (*Agent support*) is in progress:** 7.1 (notifications) is
-  built and waiting for the owner's check; see "Next".
+  **Step 7 (*Agent support*) is in progress:** 7.1 (notifications)
+  confirmed; 7.2 (agent installs) built and waiting for the owner's
+  check; see "Next".
 - **Step 6 (*Customization*), confirmed 2026-10-04:** every setting is a
   plain-text file in `~/.config/pocket-terminal/`, changed with the
   `pocket` CLI (`check`, `settings`/`get`/`set`/`reset`, `theme`,
@@ -66,34 +67,26 @@ changed later in the settings. Undo keeps **1 snapshot by default,
 configurable** by the user. Standing OK to commit and push at each
 checkpoint of step 7.
 
-**7.1 Notifications: built, owner to check.** On the phone:
-- `pocket notify "Hi" "from tab 1"` → a heads-up notification; tap it
-  in another tab or with the app in the background → that tab opens.
-- `sleep 5; pocket notify --if-away Hi` and switch tabs during the
-  sleep → shown; stay on the tab → `Not shown: that tab is on screen`.
-- A notification from a tab disappears when you switch to that tab.
-- `pocket edit` → Settings: `agent-notify` and `agent-notify-after`
-  (←→ steps 5 s); the hub item is now "Settings".
-- Hooks (`pocket hook claude`) can't be checked until 7.2 installs
-  Claude Code; the guide shows how to add them by hand.
+**7.1 Notifications: confirmed by the owner 2026-10-04.**
 
-**7.2 Installs (next):** `pocket install claude|codex|gemini` and a
-menu item. Show the official installer commands before running them,
-then ask "Also set up notifications for this agent? [y/N]". Hooks go
-into the agent's own config (Claude: `~/.claude/settings.json`,
-merged, never overwriting other hooks; Codex: `notify` in
-`~/.codex/config.toml`; Gemini CLI: its hooks in
-`~/.gemini/settings.json`, check the current format). A setting per
-agent turns the hooks on/off later (`pocket set agents.claude.notify
-on|off`, or similar), applied by adding/removing the hook entries.
-`pocket hook` needs `codex` and `gemini` handlers: Codex's `notify`
-program gets one JSON argument (`type: agent-turn-complete`, no turn
-length). Codex and Gemini CLI need Node.js (trixie has 20.x; check
-their minimum versions). Check whether Claude Code needs the
-`--messaging-socket-path` workaround under the app's proot (it did
-under proot-distro, see the owner's `claude()` wrapper). Then the
-step-6 agent test: in `~`, ask Claude Code to "make the theme gruvbox
-and the font bigger"; it should read the guide and use `pocket`.
+**7.2 Agent installs: built, owner to check.** On the phone:
+- Menu → **AI agents** → `1` (Claude Code): it lists the commands
+  (`apt-get … curl` first, since the old image has no curl), asks, runs
+  them, then asks about notifications (say `y`). Enter goes back.
+- Start `claude` in `~`, sign in. Watch for errors about messaging or
+  "user namespace" at start (proot-distro needed
+  `--messaging-socket-path`; unknown for the app's proot). If they
+  show, add a wrapper like the owner's `claude()` in the home
+  `.bashrc` docs or `/etc/profile.d`.
+- The step-6 agent test: ask Claude Code to "make the theme gruvbox and
+  the font bigger"; it should read the guide and use `pocket`.
+- Notifications: give it a task of 30 s+ and switch tabs or leave the
+  app → "Your turn (root)"; a permission prompt → a notification.
+- `pocket agent list`; `pocket edit` → Settings → "Claude Code
+  notifications" toggles; `pocket agent notify claude off` removes
+  only our entries from `~/.claude/settings.json`.
+- Optional: Codex and Gemini CLI the same way (Gemini installs Node.js
+  from apt, ~100 MB).
 
 **7.3 Undo:** snapshot `~/.config/pocket-terminal/` before each change
 (app requests in `PocketRequests.kt`, and the Python tools' own writes:
@@ -141,6 +134,45 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (23): 7.2, `pocket agent` installs AI agents
+
+**Done**
+- `pocket agent list | install [NAME] | notify NAME on|off`
+  (`tools/lib/pocket_terminal/agents.py`, unit-tested in
+  `tests/pocket/test_agents.py`). Install shows the official installer
+  commands, asks, runs each with `bash -o pipefail` (a failed `curl`
+  in `curl … | bash` must fail), then asks about notifications;
+  `--yes`, `--notify`/`--no-notify` for agents. Without a name it's a
+  numbered picker that pauses at the end (the menu's **AI agents**
+  item, `run pocket agent install`).
+- Installers (checked 2026-10-04): Claude Code
+  `curl -fsSL https://claude.ai/install.sh | bash`; Codex
+  `curl -fsSL https://chatgpt.com/codex/install.sh | sh` (a standalone
+  binary now, no Node); Gemini CLI `npm install -g @google/gemini-cli`
+  (engines `node >=20`; trixie has 20.19, so `apt-get install nodejs
+  npm` is enough). `curl ca-certificates` come first when curl is
+  missing, and are now in the image too.
+- Hooks: Claude Code (`~/.claude/settings.json`: UserPromptSubmit,
+  Stop, Notification), Codex (`~/.codex/hooks.json`, on by default
+  now: UserPromptSubmit, Stop, PermissionRequest), Gemini CLI
+  (`~/.gemini/settings.json`: BeforeAgent, AfterAgent, Notification).
+  All call `/opt/pocket-terminal/bin/pocket hook NAME` (full path:
+  agents may run hooks without the app's PATH).
+- The Settings editor lists "<Agent> notifications" rows (←→ toggles,
+  `r` turns off); "Reset all" leaves them alone.
+
+**Decisions**
+- Whether an agent notifies is stored only as the hook entries in the
+  agent's own config (no setting in `settings.conf` that could
+  disagree). Our entries are recognised by their command ending in
+  `pocket hook NAME`; removing them keeps everything else.
+- A config file that isn't valid JSON is refused, never rewritten.
+- Codex treats any stderr from a hook as "block" and Gemini CLI wants
+  JSON on stdout: `pocket hook` writes nothing to stderr, and `{}` for
+  Gemini.
+
+**Commits:** see git log (this entry's commit)
 
 ### 2026-10-04 (22): step 7 planned; 7.1, `pocket notify` and agent hooks
 

@@ -83,7 +83,10 @@ their own.
 | `pocket menu edit` | copy the built-in menu to `~/.config/pocket-terminal/menu.conf` to edit |
 | `pocket menu reset` | delete your menu file (back to the built-in one) |
 | `pocket notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
-| `pocket hook claude` | run by Claude Code's hooks (see "Agent notifications"); reads the hook's JSON on stdin |
+| `pocket agent list` | the AI agents: installed or not, notifications on or off |
+| `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
+| `pocket agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
+| `pocket hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
 | `pocket edit` | the settings editors, for people (full screen) |
 | `pocket version` | the version of the app's tools |
 | `pocket help` | all commands |
@@ -111,27 +114,35 @@ One `key = value` per line; `pocket settings` describes each.
 - `cursor-style`: `block`, `underline` or `bar`.
 - `cursor-blink`: `on` or `off`.
 - `agent-notify`: `on` (default) or `off`: phone notifications from AI
-  agents (see "Agent notifications").
+  agents (see "AI agents").
 - `agent-notify-after`: 0 to 3600 seconds (default 30). A finished
   agent turn only notifies if it took at least this long.
 
-### Agent notifications
+### AI agents
 
-`pocket hook claude` turns Claude Code's hook events into phone
-notifications: when a turn that took `agent-notify-after` seconds or
-more ends ("Your turn"), and whenever Claude needs permission or input.
-Nothing is shown while you're looking at that agent's tab, and tapping
-a notification opens it. It never fails, so it can't disturb the agent.
-To set it up by hand, add this to `~/.claude/settings.json` (merge it
-with any `hooks` already there):
+`pocket agent install NAME` (or the menu's **AI agents** item) installs
+an agent CLI with its own official installer, never a copy bundled with
+the app; the user signs in with their own account:
 
-```json
-{"hooks": {
-  "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "pocket hook claude"}]}],
-  "Stop": [{"hooks": [{"type": "command", "command": "pocket hook claude"}]}],
-  "Notification": [{"hooks": [{"type": "command", "command": "pocket hook claude"}]}]
-}}
-```
+| Name | Agent | Installer | Its hooks |
+|---|---|---|---|
+| `claude` | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` | `~/.claude/settings.json` |
+| `codex` | Codex | `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` | `~/.codex/hooks.json` |
+| `gemini` | Gemini CLI | `npm install -g @google/gemini-cli` (needs Node.js 20+: installs `nodejs npm` first) | `~/.gemini/settings.json` |
+
+`curl` is installed first if it's missing. Afterwards it asks whether
+to turn on the agent's notifications.
+
+**Notifications:** with them on, the agent's hooks run `pocket hook
+NAME`, which posts a phone notification when a turn that took
+`agent-notify-after` seconds or more ends ("Your turn"), and whenever
+the agent needs permission or input. Nothing is shown while you're
+looking at that agent's tab, and tapping a notification opens it. The
+hook never fails, so it can't disturb the agent. `pocket agent notify
+NAME on|off` (or the Settings editor) adds or removes the hook entries
+in the agent's config file and leaves everything else in it alone;
+that file is the only record of whether they're on. `agent-notify off`
+silences all agents at once.
 
 Your own scripts can notify too: `long-job && pocket notify "Done" "long-job finished"`.
 

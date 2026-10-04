@@ -348,19 +348,22 @@ class PocketTest(unittest.TestCase):
     # --- hook (agents' notification hooks) -----------------------------------
 
     def hook(self, event, env=None, **fields):
+        return self.hook_as("claude", event, env, **fields)
+
+    def hook_as(self, agent, event, env=None, **fields):
         data = {"hook_event_name": event, "session_id": "s1", "cwd": "/root/project", **fields}
         environ = {"TMPDIR": self.tmp.name, "POCKET_SHELL": "2", **(env or {})}
-        run = subprocess.run(["python3", POCKET, "hook", "claude"], input=json.dumps(data),
+        run = subprocess.run(["python3", POCKET, "hook", agent], input=json.dumps(data),
                              capture_output=True, text=True,
                              env={"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests,
                                   "HOME": self.home, "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1",
                                   **environ})
         return run
 
-    def turn_started(self, seconds_ago):
+    def turn_started(self, seconds_ago, agent="claude"):
         folder = os.path.join(self.tmp.name, "pocket-agent-turns")
         os.makedirs(folder, exist_ok=True)
-        self.write(os.path.join(folder, "claude-s1"), f"{time.time() - seconds_ago}\n")
+        self.write(os.path.join(folder, f"{agent}-s1"), f"{time.time() - seconds_ago}\n")
 
     def test_hook_records_when_a_turn_starts_without_asking_the_app(self):
         self.notify_app()
@@ -404,7 +407,112 @@ class PocketTest(unittest.TestCase):
     def test_hook_for_an_unknown_agent(self):
         run = self.pocket("hook", "skynet")
         self.assertEqual(run.returncode, 2)
-        self.assertIn("usage: pocket hook claude", run.stderr)
+        self.assertIn("usage: pocket hook claude|codex|gemini", run.stderr)
+
+    # --- agent -------------------------------------------------------------
+
+    def fake_commands(self, **scripts):
+        """Puts fake commands first on the PATH; returns that PATH."""
+        bin_dir = os.path.join(self.tmp.name, "bin")
+        for name, body in scripts.items():
+            self.write(os.path.join(bin_dir, name), "#!/bin/sh\n" + body + "\n", 0o755)
+        return bin_dir + ":" + os.environ["PATH"]
+
+    def agent(self, *args, stdin="", path=None):
+        environ = {"PATH": path or os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
+        return subprocess.run(["python3", POCKET, "agent", *args], input=stdin, capture_output=True,
+                              text=True, env=environ)
+
+    def claude_settings(self):
+        with open(os.path.join(self.home, ".claude", "settings.json")) as f:
+            return json.load(f)
+
+    def test_agent_list_says_what_is_installed_and_notifying(self):
+        path = self.fake_commands(claude="true")
+        self.agent("notify", "claude", "on")
+        run = self.agent("list", path=path)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines(), [
+            "claude  Claude Code  installed      notifications on",
+            "codex   Codex        not installed  notifications off",
+            "gemini  Gemini CLI   not installed  notifications off",
+        ])
+        answer = json.loads(self.agent("list", "--json", path=path).stdout)
+        self.assertEqual(answer["agents"][0],
+                         {"name": "claude", "title": "Claude Code", "installed": True, "notify": True,
+                          "config": "~/.claude/settings.json"})
+
+    def test_agent_notify_on_and_off_edits_the_agents_config(self):
+        self.write(os.path.join(self.home, ".claude", "settings.json"), '{"model": "opus"}\n')
+        run = self.agent("notify", "claude", "on")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Claude Code notifications: on (hooks in ~/.claude/settings.json)\n")
+        self.assertEqual(sorted(self.claude_settings()["hooks"]), ["Notification", "Stop", "UserPromptSubmit"])
+        self.assertEqual(self.agent("notify", "claude", "off").stdout, "Claude Code notifications: off\n")
+        self.assertEqual(self.claude_settings(), {"model": "opus"})
+
+    def test_agent_notify_leaves_a_broken_config_alone(self):
+        self.write(os.path.join(self.home, ".claude", "settings.json"), "{oops")
+        run = self.agent("notify", "claude", "on")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("~/.claude/settings.json", run.stderr)
+        with open(os.path.join(self.home, ".claude", "settings.json")) as f:
+            self.assertEqual(f.read(), "{oops")
+
+    def test_agent_install_shows_the_commands_and_asks_first(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "claude", stdin="n\n", path=path)
+        self.assertIn("curl -fsSL https://claude.ai/install.sh | bash", run.stdout)
+        self.assertNotIn("RAN-INSTALLER", run.stdout)
+        self.assertEqual(run.returncode, 1)
+
+    def test_agent_install_runs_the_installer_then_asks_about_notifications(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "claude", stdin="y\ny\n", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("RAN-INSTALLER", run.stdout)
+        self.assertIn("notifications", run.stdout)
+        self.assertIn("Stop", self.claude_settings()["hooks"])
+
+    def test_agent_install_without_questions(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "claude", "--yes", "--no-notify", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("RAN-INSTALLER", run.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".claude", "settings.json")))
+        self.agent("install", "claude", "--yes", "--notify", path=path)
+        self.assertIn("Stop", self.claude_settings()["hooks"])
+
+    def test_agent_install_stops_when_a_step_fails(self):
+        path = self.fake_commands(curl="exit 7")
+        run = self.agent("install", "claude", "--yes", "--notify", path=path)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("failed", run.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.home, ".claude", "settings.json")))
+
+    def test_agent_install_without_a_name_lets_you_pick(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", stdin="1\ny\nn\n\n", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("1) Claude Code", run.stdout)
+        self.assertIn("RAN-INSTALLER", run.stdout)
+
+    def test_agent_usage(self):
+        for args in [("frob",), ("install", "skynet"), ("notify", "claude"), ("notify", "claude", "loud")]:
+            run = self.agent(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("pocket agent", run.stderr)
+
+    def test_hook_for_codex_and_gemini(self):
+        self.notify_app()
+        self.hook_as("codex", "PermissionRequest", tool_name="Bash")
+        self.hook_as("gemini", "Notification", message="Allow write_file?")
+        self.turn_started(seconds_ago=50, agent="gemini")
+        run = self.hook_as("gemini", "AfterAgent")
+        self.assertEqual(run.stdout, "{}\n")  # Gemini CLI wants JSON on stdout
+        self.assertEqual([r[1:3] for r in self.app.requests], [
+            ["Codex", "Wants to run Bash"], ["Gemini CLI", "Allow write_file?"], ["Gemini CLI", "Your turn (project)"]])
 
 
 if __name__ == "__main__":

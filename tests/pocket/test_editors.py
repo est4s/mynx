@@ -126,6 +126,14 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(code, 0, screen)
         self.assertEqual([r for r in self.app.requests if r[0] == "set"], [["set", "agent-notify-after", "35"]])
 
+    def test_agent_notifications_toggle_in_the_settings(self):
+        self.start_app({"settings": SETTINGS})
+        # Below the 4 settings: Claude Code, Codex, Gemini CLI notifications.
+        code, screen = self.edit(["settings"], [DOWN] * 4 + [RIGHT, "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertIn("Claude Code notifications", screen)
+        self.assertIn("pocket hook claude", self.read(os.path.join(self.home, ".claude", "settings.json")))
+
     def test_a_refused_setting_is_shown(self):
         self.start_app({"settings": SETTINGS, "set": {"ok": False, "error": "font-size must be small"}})
         code, screen = self.edit(["settings"], [RIGHT, "q"])

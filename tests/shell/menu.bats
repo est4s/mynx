@@ -24,8 +24,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Games Settings System Exit" ]
-    [ "${ACTS[*]}" = "exit files menu:games settings menu:system quit_session" ]
+    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Exit" ]
+    [ "${ACTS[*]}" = "exit files menu:games settings cmd:pocket agent install menu:system quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -43,7 +43,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/pocket-terminal/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Games Settings System Exit" ]
+    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -127,7 +127,7 @@ keys() {
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 6
+    run keys 7
     [ "$status" -eq 10 ]
 }
 
@@ -145,6 +145,11 @@ keys() {
 @test "Settings opens the settings editor" {
     run keys 4
     [[ $output == *"RUN: pocket edit"* ]]
+}
+
+@test "AI agents offers to install one" {
+    run keys 5
+    [[ $output == *"RUN: bash -c pocket agent install"* ]]
 }
 
 @test "a run item runs its command in bash" {
@@ -169,7 +174,7 @@ keys() {
 }
 
 @test "Update all runs apt" {
-    run keys 51
+    run keys 61
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 

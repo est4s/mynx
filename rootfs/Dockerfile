@@ -5,9 +5,10 @@ FROM ${BASE}
 
 # apt-utils and dialog: without them every apt install in the app prints
 # debconf warnings. less and nano: the base image has no pager or editor.
+# curl: the AI agents' official installers (pocket agent install) need it.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        apt-utils dialog eza htop less mc nano nnn python3 starship \
+        apt-utils ca-certificates curl dialog eza htop less mc nano nnn python3 starship \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin
 
 COPY root/ /root/

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 
+from . import agents
 from .client import TOOLS, Failure, request, tools_version
 
 HELP = """\
@@ -23,7 +24,8 @@ Commands:
   menu       menu [show] | edit | reset: the launcher menu's items
   edit       edit [settings|theme|keybars|menu]: the settings editors
   notify     notify [--if-away] TITLE [TEXT]: a phone notification
-  hook       hook claude: run by an agent's hooks to notify you
+  agent      agent [list] | install [NAME] | notify NAME on|off: AI agents
+  hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
 
@@ -232,35 +234,36 @@ def notify_options(if_away):
     return ([f"shell={shell}"] if shell.isdigit() else []) + (["if-away"] if if_away else [])
 
 
-AGENTS = {"claude": "Claude Code"}
-
-
 def cmd_hook(args, as_json):
-    """Claude Code's hooks call this with the event as JSON on stdin.
+    """The agents' hooks call this with the event as JSON on stdin.
 
-    Never fails and prints nothing: Claude Code treats a Stop hook's exit
-    code 2 as "keep working", and shows other failures to the user.
+    Never fails and prints nothing (Gemini CLI: `{}`): Claude Code and
+    Codex treat exit code 2 (Codex: any stderr) from a Stop hook as
+    "keep working", and Gemini CLI wants JSON on stdout.
     """
-    if len(args) != 1 or args[0] not in AGENTS:
-        raise Usage("usage: pocket hook claude (reads the hook's JSON on stdin)")
+    if len(args) != 1 or args[0] not in agents.AGENTS:
+        raise Usage("usage: pocket hook claude|codex|gemini (reads the hook's JSON on stdin)")
+    agent = agents.AGENTS[args[0]]
     try:
-        agent_hook(args[0], json.load(sys.stdin))
+        agent_hook(agent, json.load(sys.stdin))
     except Exception:
         pass
+    if agent.name == "gemini":
+        print("{}")
     return 0
 
 
 def agent_hook(agent, event):
     session = "".join(c for c in str(event.get("session_id") or "default") if c.isalnum() or c in "-_")
     turns = os.path.join(tempfile.gettempdir(), "pocket-agent-turns")
-    started = os.path.join(turns, f"{agent}-{session}")
-    name = event.get("hook_event_name")
+    started = os.path.join(turns, f"{agent.name}-{session}")
+    kind = agent.events.get(event.get("hook_event_name"))
     options = notify_options(if_away=True) + ["agent"]
-    if name == "UserPromptSubmit":
+    if kind == "start":
         os.makedirs(turns, exist_ok=True)
         with open(started, "w") as f:
             f.write(f"{time.time()}\n")
-    elif name == "Stop":
+    elif kind == "stop":
         try:
             with open(started) as f:
                 took = int(time.time() - float(f.read()))
@@ -269,10 +272,108 @@ def agent_hook(agent, event):
         os.remove(started)
         folder = os.path.basename(str(event.get("cwd") or "").rstrip("/"))
         text = f"Your turn ({folder})" if folder else "Your turn"
-        request("notify", AGENTS[agent], text, *options, f"took={took}")
-    elif name == "Notification":
-        text = str(event.get("message") or "Needs your input").replace("\n", " ")
-        request("notify", AGENTS[agent], text, *options)
+        request("notify", agent.title, text, *options, f"took={took}")
+    elif kind == "attention":
+        if event.get("tool_name"):
+            text = f"Wants to run {event['tool_name']}"
+        else:
+            text = str(event.get("message") or "Needs your input").replace("\n", " ")
+        request("notify", agent.title, text, *options)
+
+
+AGENT_USAGE = "usage: pocket agent [list] | install [NAME] [--yes] [--notify|--no-notify] | notify NAME on|off"
+
+
+def cmd_agent(args, as_json):
+    sub = args[0] if args else "list"
+    if sub == "list" and len(args) <= 1:
+        found = [agents.status(a) for a in agents.AGENTS.values()]
+        lines = [f"{s['name']:<7} {s['title']:<12} {'installed' if s['installed'] else 'not installed':<14} "
+                 f"notifications {'on' if s['notify'] else 'off'}" for s in found]
+        out(as_json, {"ok": True, "agents": found}, "\n".join(lines))
+        return 0
+    if sub == "notify" and len(args) == 3 and args[1] in agents.AGENTS and args[2] in ("on", "off"):
+        agent = agents.AGENTS[args[1]]
+        agents.set_notify(agent, args[2] == "on")
+        where = f" (hooks in {agent.config})" if args[2] == "on" else ""
+        out(as_json, {"ok": True, "name": agent.name, "notify": args[2] == "on"},
+            f"{agent.title} notifications: {args[2]}{where}")
+        return 0
+    if sub == "install":
+        flags = {"--yes", "--notify", "--no-notify"}
+        names = [a for a in args[1:] if a not in flags]
+        if len(names) > 1 or (names and names[0] not in agents.AGENTS) or {"--notify", "--no-notify"} <= set(args):
+            raise Usage(AGENT_USAGE)
+        notify = True if "--notify" in args else False if "--no-notify" in args else None
+        if names:
+            return install_agent(agents.AGENTS[names[0]], "--yes" in args, notify)
+        return pick_and_install()
+    raise Usage(AGENT_USAGE)
+
+
+def ask(question):
+    """A yes/no answer from stdin; no answer (EOF) means no."""
+    print(question, end=" ", flush=True)
+    answer = sys.stdin.readline()
+    if not answer:
+        print()
+    return answer.strip().lower() in ("y", "yes")
+
+
+def node_major():
+    try:
+        run = subprocess.run(["node", "--version"], capture_output=True, text=True)
+        return int(run.stdout.strip().lstrip("v").split(".")[0])
+    except (OSError, ValueError):
+        return None
+
+
+def install_agent(agent, yes, notify):
+    steps = agents.install_steps(agent, curl=bool(shutil.which("curl")), node=node_major())
+    print(f"Installing {agent.title} with its official installer runs:\n")
+    for step in steps:
+        print(f"  {step}")
+    print()
+    if not yes and not ask("Run it? [y/N] (--yes skips this question)"):
+        print("Not installed.")
+        return 1
+    for step in steps:
+        sys.stdout.flush()
+        # pipefail: a failed download in "curl … | bash" must fail the step
+        code = subprocess.run(["bash", "-o", "pipefail", "-c", step]).returncode
+        if code != 0:
+            raise Failure(f"'{step}' failed (exit {code}); nothing else was run")
+    print()
+    if notify is None:
+        notify = ask(f"Also set up notifications for {agent.title} (when it finishes or needs you)? [y/N]")
+    if notify:
+        agents.set_notify(agent, True)
+        print(f"Notifications: on (pocket agent notify {agent.name} off turns them off)")
+    else:
+        print(f"Notifications: off (pocket agent notify {agent.name} on turns them on)")
+    print(f"\nStart it with: {agent.command}  (sign in with your own account)")
+    return 0
+
+
+def pick_and_install():
+    found = list(agents.AGENTS.values())
+    print("Install an AI agent:\n")
+    for i, agent in enumerate(found, 1):
+        status = "installed" if agents.status(agent)["installed"] else ""
+        print(f"  {i}) {agent.title:<12} {status}".rstrip())
+    print()
+    print(f"Number (1-{len(found)}, Enter to go back):", end=" ", flush=True)
+    choice = sys.stdin.readline().strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(found):
+        return 0
+    try:
+        code = install_agent(found[int(choice) - 1], yes=False, notify=None)
+    except Failure as e:
+        print(f"pocket: {e}", file=sys.stderr)
+        code = 2
+    print("\nPress Enter to go back.", end=" ", flush=True)
+    sys.stdin.readline()
+    return code
 
 
 def cmd_version(args, as_json):
@@ -289,7 +390,7 @@ def cmd_help(args, as_json):
 COMMANDS = {
     "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
-    "notify": cmd_notify, "hook": cmd_hook,
+    "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent,
     "version": cmd_version, "help": cmd_help,
 }
 

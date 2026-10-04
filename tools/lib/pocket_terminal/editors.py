@@ -13,6 +13,7 @@ import re
 import shutil
 from contextlib import contextmanager
 
+from . import agents
 from .client import TOOLS, Failure, request
 from .models import ItemsFile, set_color
 
@@ -250,17 +251,33 @@ def settings_editor(ui):
     sel = 0
     while True:
         settings = request("settings")["settings"]
-        width = max(len(s["key"]) for s in settings) + 2
-        rows = [f"{s['key']:<{width}}{s['value']}" for s in settings] + ["Reset all to defaults"]
-        crumb = settings[sel]["description"] if sel < len(settings) else "Every setting back to its default."
+        # Agent notifications live in each agent's own config, not settings.conf.
+        found = [agents.status(a) for a in agents.AGENTS.values()]
+        names = [s["key"] for s in settings] + [f"{a['title']} notifications" for a in found]
+        values = [s["value"] for s in settings] + ["on" if a["notify"] else "off" for a in found]
+        width = max(len(n) for n in names) + 2
+        rows = [f"{n:<{width}}{v}" for n, v in zip(names, values)] + ["Reset all to defaults"]
+        if sel < len(settings):
+            crumb = settings[sel]["description"]
+        elif sel < len(names):
+            a = found[sel - len(settings)]
+            crumb = f"Phone notifications when {a['title']} finishes or needs you (hooks in {a['config']})."
+        else:
+            crumb = "Every setting back to its default (agent notifications stay)."
         key, sel = ui.list("Settings", crumb, rows, sel, "←→ change  Enter: pick  r: reset  q: back",
                            "left right r")
         if key == "back":
             return
-        if sel == len(settings):
+        if sel == len(names):
             if key in ("enter", "r") and ui.confirm("Reset all settings to their defaults?"):
                 if attempt(ui, lambda: request("reset", "all")):
                     ui.status = "All settings back to their defaults"
+            continue
+        if sel >= len(settings):
+            a = found[sel - len(settings)]
+            on = False if key == "r" else not a["notify"]
+            if attempt(ui, lambda: agents.set_notify(agents.AGENTS[a["name"]], on) or True):
+                ui.status = f"{a['title']} notifications: {'on' if on else 'off'}"
             continue
         s = settings[sel]
         if key == "r":
