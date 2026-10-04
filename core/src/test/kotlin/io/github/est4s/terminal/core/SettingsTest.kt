@@ -2,6 +2,7 @@ package io.github.est4s.terminal.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SettingsTest {
@@ -59,7 +60,8 @@ class SettingsTest {
     @Test
     fun `every setting is described, with its default`() {
         assertEquals(
-            listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep"),
+            listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
+                "android-clipboard"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -73,8 +75,10 @@ class SettingsTest {
             mapOf(
                 "font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on",
                 "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
+                "android-clipboard" to "off",
             ),
-            Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3).values(),
+            Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
+                androidClipboard = false).values(),
         )
     }
 
@@ -146,5 +150,13 @@ class SettingsTest {
         val parsed = parseSettings("undo-keep = 0\nundo-keep = 21\n")
         assertEquals(0, parsed.settings.undoKeep)
         assertEquals(listOf("line 2: undo-keep must be a whole number from 0 to 20"), parsed.problems)
+    }
+
+    @Test
+    fun `clipboard access is on by default and can be turned off`() {
+        assertTrue(Settings().androidClipboard)
+        val parsed = parseSettings("android-clipboard = off\nandroid-clipboard = maybe\n")
+        assertFalse(parsed.settings.androidClipboard)
+        assertEquals(listOf("line 2: android-clipboard must be one of: on, off"), parsed.problems)
     }
 }

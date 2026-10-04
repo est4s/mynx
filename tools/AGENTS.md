@@ -85,6 +85,9 @@ their own.
 | `pocket notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
 | `pocket undo` | take back the last config change (`pocket undo --list` shows what it can take back) |
 | `pocket open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
+| `pocket vibrate [MS]` | vibrate the phone, 300 ms unless given (1 to 5000) |
+| `pocket clipboard get` | print the phone's clipboard (the app must be on screen) |
+| `pocket clipboard set [TEXT]` | copy TEXT to the phone's clipboard, or stdin when there's no TEXT |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -123,6 +126,8 @@ One `key = value` per line; `pocket settings` describes each.
   agent turn only notifies if it took at least this long.
 - `undo-keep`: 0 to 20 (default 1): how many changes `pocket undo` can
   take back. 0 turns undo off.
+- `android-clipboard`: `on` (default) or `off`: whether programs here
+  can read and change the phone's clipboard (see "The phone").
 
 ### Undo
 
@@ -170,6 +175,20 @@ Your own scripts can notify too: `long-job && pocket notify "Done" "long-job fin
 phone's browser, so an agent that opens a browser to sign in just works
 (the app must be on screen). Tapping a link shown in the terminal opens
 it too, even one spread over several rows.
+
+### The phone
+
+Commands for the phone itself (more are coming: sharing, location,
+sensors, camera):
+
+- `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
+- `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
+  breaks and all: `git log -1 | pocket clipboard set`.
+  `pocket clipboard get` prints it as it is, with no line break added
+  unless it goes to the terminal. Android only lets the app on screen
+  read the clipboard, so `get` fails while the app is in the
+  background; `set` works anyway. `android-clipboard off` blocks both.
+- `pocket notify` and `pocket open`: see "AI agents" above.
 
 ### Themes and colours
 

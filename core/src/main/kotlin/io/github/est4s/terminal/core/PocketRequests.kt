@@ -1,6 +1,7 @@
 package io.github.est4s.terminal.core
 
 import java.io.File
+import java.net.URLDecoder
 
 private val REQUEST_FILE = Regex("[A-Za-z0-9_-]{1,64}\\.req")
 
@@ -16,6 +17,10 @@ data class Notice(val title: String, val text: String, val shell: Int?, val ifAw
 
 private const val MAX_NOTICE_TITLE = 100
 private const val MAX_NOTICE_TEXT = 1000
+private const val DEFAULT_VIBRATE_MS = 300L
+private const val MAX_VIBRATE_MS = 5000L
+/** The longest text `pocket clipboard set` copies (Android's clipboard goes through Binder, which has a ~1 MB limit). */
+const val MAX_CLIPBOARD_TEXT = 200_000
 
 private class Refused(message: String) : Exception(message)
 
@@ -28,6 +33,12 @@ private class Refused(message: String) : Exception(message)
  * returned by [processPending]). [notify] shows a [Notice] and returns
  * null, or says why it didn't; [openUrl] likewise opens a web link,
  * and [installApk] opens Android's installer for an APK (a host file).
+ * [vibrate] and [setClipboard] work the same way; [readClipboard] gives
+ * the clipboard's text or fails with the reason.
+ *
+ * Requests in [later] are answered later, or stream (see [Later]).
+ * [sweep] cancels those whose `pocket` cancelled them or has gone
+ * ([alive] says whether a process still runs).
  */
 class PocketRequests(
     private val dir: File,
@@ -36,6 +47,11 @@ class PocketRequests(
     private val notify: (Notice) -> String? = { "notifications aren't available" },
     private val openUrl: (String) -> String? = { "links can't be opened here" },
     private val installApk: (File) -> String? = { "apps can't be installed here" },
+    private val vibrate: (Long) -> String? = { "vibration isn't available here" },
+    private val setClipboard: (String) -> String? = { "the clipboard isn't available here" },
+    private val readClipboard: () -> Result<String> = { Result.failure(Exception("the clipboard isn't available here")) },
+    private val later: Map<String, Later> = emptyMap(),
+    private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
 ) {
     private val config = File(home, CONFIG_DIR)
     private val settingsFile = File(config, "settings.conf")
@@ -43,6 +59,8 @@ class PocketRequests(
     private val themesDir = File(home, THEMES_DIR)
     private val keyBarsDir = File(config, "keybars")
     private val history = ConfigHistory(config, File(home, UNDO_DIR), now)
+
+    private val open = mutableSetOf<PendingReply>()
 
     private fun undoKeep() = loadSettings(settingsFile).settings.undoKeep
 
@@ -57,19 +75,49 @@ class PocketRequests(
         return pending.map { file ->
             val lines = runCatching { file.readText().lines().dropLastWhile { it.isEmpty() } }.getOrDefault(emptyList())
             val request = PocketRequest(lines.firstOrNull()?.trim().orEmpty(), lines.drop(1))
+            val id = file.name.removeSuffix(".req")
+            later[request.name]?.let { handler ->
+                startLater(id, request, handler)
+                file.delete()
+                return@map request
+            }
             val reply = try {
                 val change = changeName(request)
                 if (change != null) history.observe(HAND_EDITS, undoKeep())
                 answer(request).also { if (change != null) history.observe(change, undoKeep()) }
             } catch (e: Refused) {
-                """{"ok":false,"error":${json(e.message!!)}}"""
+                refusal(e.message!!)
             }
-            val id = file.name.removeSuffix(".req")
-            val tmp = File(dir, "$id.reply.tmp")
-            tmp.writeText(reply)
-            tmp.renameTo(File(dir, "$id.reply"))
+            writeReply(dir, id, reply)
             file.delete()
             request
+        }
+    }
+
+    private fun startLater(id: String, request: PocketRequest, handler: Later) {
+        val reply = PendingReply(dir, id) { synchronized(open) { open -= it } }
+        synchronized(open) { open += reply }
+        val wait = File(dir, "$id.wait.tmp")
+        wait.writeText(handler.seconds?.toString() ?: "stream")
+        wait.renameTo(File(dir, "$id.wait"))
+        try {
+            handler.start(request.args, reply)
+        } catch (e: Refused) {
+            reply.refuse(e.message!!)
+        }
+    }
+
+    /** Whether a [Later] request is still running: while one is, call [sweep] now and then. */
+    fun hasOpen(): Boolean = synchronized(open) { open.isNotEmpty() }
+
+    /** Cancels the [Later] requests that `pocket` cancelled (`ID.cancel`) or whose `pocket` has gone. */
+    fun sweep() {
+        for (reply in synchronized(open) { open.toList() }) {
+            val pid = pidOfRequest(reply.id)
+            when {
+                File(dir, "${reply.id}.cancel").exists() -> reply.cancel(listening = true)
+                pid != null && !alive(pid) -> reply.cancel(listening = false)
+            }
         }
     }
 
@@ -179,6 +227,32 @@ class PocketRequests(
                 installApk(apk)?.let { throw Refused(it) }
                 ok()
             }
+            "vibrate" -> {
+                val ms = args.getOrNull(0)?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    it.toLongOrNull()?.takeIf { ms -> ms in 1..MAX_VIBRATE_MS }
+                        ?: throw Refused("vibrate takes milliseconds from 1 to $MAX_VIBRATE_MS")
+                } ?: DEFAULT_VIBRATE_MS
+                vibrate(ms)?.let { throw Refused(it) }
+                ok()
+            }
+            "clipboard-get" -> {
+                clipboardAllowed()
+                ok("text" to json(readClipboard().getOrElse { throw Refused(it.message ?: "couldn't read the clipboard") }))
+            }
+            "clipboard-set" -> {
+                clipboardAllowed()
+                // Percent-encoded, so the text can hold line breaks.
+                val text = try {
+                    URLDecoder.decode(args.getOrNull(0).orEmpty(), "UTF-8")
+                } catch (e: IllegalArgumentException) {
+                    throw Refused("clipboard-set: badly encoded text")
+                }
+                if (text.length > MAX_CLIPBOARD_TEXT) {
+                    throw Refused("too long for the clipboard: ${text.length} characters (at most $MAX_CLIPBOARD_TEXT)")
+                }
+                setClipboard(text)?.let { throw Refused(it) }
+                ok()
+            }
             else -> throw Refused("unknown request '${request.name}'")
         }
     }
@@ -212,6 +286,12 @@ class PocketRequests(
         val text = args.getOrNull(1)?.trim().orEmpty()
         val reason = notify(Notice(title.cut(MAX_NOTICE_TITLE), text.cut(MAX_NOTICE_TEXT), shell, ifAway))
         return if (reason == null) ok("shown" to "true") else notShown(reason)
+    }
+
+    private fun clipboardAllowed() {
+        if (!loadSettings(settingsFile).settings.androidClipboard) {
+            throw Refused("clipboard access is off (pocket set android-clipboard on)")
+        }
     }
 
     private fun notShown(reason: String) = ok("shown" to "false", "reason" to json(reason))
@@ -313,7 +393,7 @@ private fun problemsJson(found: List<ConfigProblems>) = array(found.map {
     obj("file" to json(it.file), "problems" to array(it.problems.map(::json)))
 })
 
-private fun ok(vararg fields: Pair<String, String>) = obj("ok" to "true", *fields)
+internal fun ok(vararg fields: Pair<String, String>) = obj("ok" to "true", *fields)
 
 private fun obj(vararg fields: Pair<String, String>) =
     fields.joinToString(",", "{", "}") { (key, value) -> "${json(key)}:$value" }

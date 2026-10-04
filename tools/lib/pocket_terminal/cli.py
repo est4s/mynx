@@ -9,6 +9,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 
 from . import agents
 from .client import TOOLS, Failure, record, request, tools_version
@@ -30,6 +31,8 @@ Commands:
   notify     notify [--if-away] TITLE [TEXT]: a phone notification
   agent      agent [list] | install [NAME] | notify NAME on|off: AI agents
   open       open URL: open a link in the phone's browser
+  vibrate    vibrate [MS]: vibrate the phone (300 ms unless given)
+  clipboard  clipboard get | set [TEXT]: the phone's clipboard
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -223,6 +226,35 @@ def cmd_open(args, as_json):
     answer = request("open-url", args[0])
     out(as_json, answer, None)
     return 0
+
+
+def cmd_vibrate(args, as_json):
+    if len(args) > 1:
+        raise Usage("usage: pocket vibrate [MS]")
+    answer = request("vibrate", *args)
+    out(as_json, answer, None)
+    return 0
+
+
+def cmd_clipboard(args, as_json):
+    if args == ["get"]:
+        answer = request("clipboard-get")
+        if as_json:
+            out(as_json, answer, None)
+            return 0
+        text = answer["text"]
+        # A prompt right after the text would be hard to read.
+        if text and not text.endswith("\n") and sys.stdout.isatty():
+            text += "\n"
+        sys.stdout.write(text)
+        return 0
+    if args[:1] == ["set"]:
+        text = " ".join(args[1:]) if len(args) > 1 else sys.stdin.read()
+        # Percent-encoded: a request holds one value per line.
+        answer = request("clipboard-set", urllib.parse.quote(text, safe=""))
+        out(as_json, answer, f"Copied {len(text)} character{'' if len(text) == 1 else 's'}")
+        return 0
+    raise Usage("usage: pocket clipboard get | set [TEXT]")
 
 
 # Not in HELP: for installing builds of the app while developing it. Only
@@ -564,6 +596,7 @@ COMMANDS = {
     "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
+    "vibrate": cmd_vibrate, "clipboard": cmd_clipboard,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

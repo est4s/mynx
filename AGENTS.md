@@ -172,6 +172,16 @@ See README "How it works". The details:
   stays in `core`; `pocket` only sends, waits and prints. Requests
   `pocket` triggers apply quietly (no dialogs: `pocket` prints the
   problems).
+- **Requests answered later, and streams** (`core/.../LaterRequests.kt`,
+  for GPS fixes, permission dialogs, sensor readings): a request named
+  in `PocketRequests(later = …)` gets `ID.wait` at once (seconds to
+  wait, or `stream`) and a `PendingReply` that answers in `ID.reply`
+  when ready, appending stream readings to `ID.stream` (one JSON object
+  per line). `pocket` cancels with `ID.cancel` (Ctrl+C, closed pipe);
+  the service calls `sweep()` on that and every 2 s while requests are
+  open, which also stops those whose `pocket` process (the number
+  before `-` in the id) has gone. Values with line breaks (clipboard
+  text) are sent percent-encoded.
 - **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
   apps. The app probes them at each start and binds static stand-ins from
   `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).

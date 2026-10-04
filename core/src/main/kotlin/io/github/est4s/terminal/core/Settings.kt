@@ -13,6 +13,8 @@ data class Settings(
     val agentNotifyAfter: Int = 30,
     /** How many config changes `pocket undo` can take back. */
     val undoKeep: Int = 1,
+    /** Whether programs in Debian may read and change the phone's clipboard. */
+    val androidClipboard: Boolean = true,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -22,6 +24,7 @@ data class Settings(
         "agent-notify" to if (agentNotify) "on" else "off",
         "agent-notify-after" to agentNotifyAfter.toString(),
         "undo-keep" to undoKeep.toString(),
+        "android-clipboard" to if (androidClipboard) "on" else "off",
     )
 }
 
@@ -90,6 +93,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "1", null,
         { if (it.toIntOrNull() in 0..MAX_UNDO_KEEP) null else "undo-keep must be a whole number from 0 to $MAX_UNDO_KEEP" },
         { copy(undoKeep = it.toInt()) },
+    ),
+    SettingDef(
+        "android-clipboard", "Whether programs in Debian can read and change the phone's clipboard (pocket clipboard).",
+        "on", listOf("on", "off"),
+        oneOf("android-clipboard", listOf("on", "off")),
+        { copy(androidClipboard = it == "on") },
     ),
 )
 

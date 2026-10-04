@@ -3,6 +3,7 @@ sets it in every tab): ID.req holds the request name and one argument
 per line, the app answers in ID.reply as JSON. Both are renamed into
 place when complete.
 """
+import contextlib
 import json
 import os
 import time
@@ -14,34 +15,98 @@ class Failure(Exception):
     """Something to tell the user; `pocket` prints it and exits with 2."""
 
 
-def request(name, *args):
-    """Sends a request to the app and returns its answer (a dict)."""
+def request(name, *args, on_line=None):
+    """Sends a request to the app and returns its answer (a dict).
+
+    The app may answer later: it then writes ID.wait at once, with the
+    seconds to wait or "stream". A stream's readings arrive in ID.stream,
+    one JSON object per line, each handed to [on_line]; it runs until the
+    app answers, or until we stop (Ctrl+C, a closed pipe), which writes
+    ID.cancel so the app stops too.
+    """
     folder = os.environ.get("POCKET_REQUESTS")
     if not folder or not os.path.isdir(folder):
         raise Failure("pocket only works inside the app's terminal")
     if any("\n" in a for a in args):
         raise Failure("values can't contain line breaks")
     ident = f"{os.getpid()}-{time.time_ns()}"
-    req = os.path.join(folder, ident + ".req")
-    reply = os.path.join(folder, ident + ".reply")
-    with open(req + ".tmp", "w") as f:
+    base = os.path.join(folder, ident)
+    with open(base + ".req.tmp", "w") as f:
         f.write("".join(line + "\n" for line in (name, *args)))
-    os.rename(req + ".tmp", req)
-    deadline = time.monotonic() + float(os.environ.get("POCKET_TIMEOUT", "5"))
-    while not os.path.exists(reply):
-        if time.monotonic() > deadline:
-            try:
-                os.remove(req)
-            except FileNotFoundError:
-                pass  # answered just now; the reply is left behind
-            raise Failure("the app didn't answer (is it still running?)")
-        time.sleep(0.02)
-    with open(reply) as f:
-        answer = json.load(f)
-    os.remove(reply)
+    os.rename(base + ".req.tmp", base + ".req")
+    timeout = float(os.environ.get("POCKET_TIMEOUT", "5"))
+    deadline = time.monotonic() + timeout
+    waiting = False
+    stream = Lines(base + ".stream", on_line)
+    try:
+        while not os.path.exists(base + ".reply"):
+            if not waiting and os.path.exists(base + ".wait"):
+                waiting = True
+                wait = read(base + ".wait")
+                deadline = None if wait == "stream" else time.monotonic() + float(wait or 0) + timeout
+            stream.read()
+            if deadline is not None and time.monotonic() > deadline:
+                if waiting:
+                    touch(base + ".cancel")
+                raise Failure("the app didn't answer (is it still running?)")
+            time.sleep(0.02)
+        stream.read()
+        with open(base + ".reply") as f:
+            answer = json.load(f)
+    except Failure:
+        raise
+    except BaseException:
+        if waiting and not os.path.exists(base + ".reply"):
+            cancel(base)
+        raise
+    finally:
+        for suffix in (".req", ".wait", ".stream", ".reply", ".cancel"):
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(base + suffix)
     if not answer.get("ok"):
         raise Failure(answer.get("error", "the app refused the request"))
     return answer
+
+
+class Lines:
+    """Reads the complete lines added to a stream file since the last read."""
+
+    def __init__(self, path, on_line):
+        self.path, self.on_line = path, on_line
+        self.offset, self.partial = 0, b""
+
+    def read(self):
+        if self.on_line is None:
+            return
+        try:
+            with open(self.path, "rb") as f:
+                f.seek(self.offset)
+                data = f.read()
+        except FileNotFoundError:
+            return
+        self.offset += len(data)
+        *lines, self.partial = (self.partial + data).split(b"\n")
+        for line in lines:
+            if line.strip():
+                self.on_line(json.loads(line))
+
+
+def cancel(base):
+    """Asks the app to stop a stream, and gives it a moment to answer."""
+    touch(base + ".cancel")
+    deadline = time.monotonic() + 2
+    while not os.path.exists(base + ".reply") and time.monotonic() < deadline:
+        time.sleep(0.02)
+
+
+def read(path):
+    with open(path) as f:
+        return f.read().strip()
+
+
+def touch(path):
+    with contextlib.suppress(OSError):
+        open(path, "w").close()
 
 
 def record(reason):

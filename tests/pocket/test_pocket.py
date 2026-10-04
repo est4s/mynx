@@ -69,11 +69,12 @@ class PocketTest(unittest.TestCase):
         self.app = FakeApp(self.requests, replies)
         self.app.thread.start()
 
-    def pocket(self, *args, env=None, cwd=None):
+    def pocket(self, *args, env=None, cwd=None, input=None):
         environ = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
                    "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
         environ.update(env or {})
-        return subprocess.run(["python3", POCKET, *args], capture_output=True, text=True, env=environ, cwd=cwd)
+        return subprocess.run(["python3", POCKET, *args], capture_output=True, text=True, env=environ, cwd=cwd,
+                              input=input)
 
     # --- check -------------------------------------------------------------
 
@@ -646,6 +647,50 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(run.stdout, "Installer opened on the phone.\n")
         self.assertEqual(self.app.requests, [["install-apk", os.path.join(self.tmp.name, "app.apk")]])
+
+    # --- vibrate and clipboard --------------------------------------------
+
+    def test_vibrate_for_the_default_or_a_given_time(self):
+        self.start_app({"vibrate": {"ok": True}})
+        self.assertEqual(self.pocket("vibrate").returncode, 0)
+        run = self.pocket("vibrate", "50")
+        self.assertEqual((run.returncode, run.stdout), (0, ""))
+        self.assertEqual(self.app.requests, [["vibrate"], ["vibrate", "50"]])
+
+    def test_vibrate_takes_one_time_at_most(self):
+        self.assertIn("usage: pocket vibrate [MS]", self.pocket("vibrate", "1", "2").stderr)
+
+    def test_clipboard_get_prints_the_text_as_it_is(self):
+        self.start_app({"clipboard-get": {"ok": True, "text": "two\nlines"}})
+        run = self.pocket("clipboard", "get")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "two\nlines")
+        self.assertEqual(self.pocket("clipboard", "get", "--json").stdout, '{"ok": true, "text": "two\\nlines"}\n')
+
+    def test_clipboard_get_says_why_it_couldnt(self):
+        self.start_app({"clipboard-get": {"ok": False, "error": "the app must be on screen to read the clipboard"}})
+        run = self.pocket("clipboard", "get")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("the app must be on screen", run.stderr)
+
+    def test_clipboard_set_sends_the_words_encoded(self):
+        self.start_app({"clipboard-set": {"ok": True}})
+        run = self.pocket("clipboard", "set", "50%", "off", "+", "é")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Copied 11 characters\n")
+        self.assertEqual(self.app.requests, [["clipboard-set", "50%25%20off%20%2B%20%C3%A9"]])
+
+    def test_clipboard_set_reads_stdin_line_breaks_and_all(self):
+        self.start_app({"clipboard-set": {"ok": True}})
+        run = self.pocket("clipboard", "set", input="a\nb\r\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.app.requests, [["clipboard-set", "a%0Ab%0D%0A"]])
+
+    def test_clipboard_needs_get_or_set(self):
+        for args in [("clipboard",), ("clipboard", "paste"), ("clipboard", "get", "x")]:
+            run = self.pocket(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: pocket clipboard get | set [TEXT]", run.stderr)
 
     def test_install_apk_says_why_it_failed(self):
         self.start_app({"install-apk": {"ok": False, "error": "only debug builds can install apps"}})

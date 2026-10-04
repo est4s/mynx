@@ -5,6 +5,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -16,6 +18,9 @@ import android.os.FileObserver
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Notice
@@ -49,6 +54,8 @@ private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.pocket-terminal"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
+// How often to check whether waiting requests' `pocket`s have gone.
+private const val SWEEP_MS = 2000L
 // Requests after which the app applies the config files again.
 private val RELOADING_REQUESTS = setOf(
     "check", "set", "reset", "theme-set", "theme-reset", "preview-end", "keybar-edit", "keybar-reset", "undo",
@@ -82,7 +89,14 @@ class TerminalService : Service() {
     var toolsError: String? = null
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
-    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root"), notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk) }
+    private val requests by lazy {
+        PocketRequests(
+            requestDir, File(rootfs, "root"),
+            notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
+            vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
+        )
+    }
+    private val sweep = Runnable { sweepRequests() }
     // The POCKET_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -116,7 +130,10 @@ class TerminalService : Service() {
         requestDir.mkdirs()
         requestWatcher = object : FileObserver(requestDir.path, MOVED_TO or CLOSE_WRITE) {
             override fun onEvent(event: Int, path: String?) {
-                if (path?.endsWith(".req") == true) mainHandler.post { processRequests() }
+                when {
+                    path?.endsWith(".req") == true -> mainHandler.post { processRequests() }
+                    path?.endsWith(".cancel") == true -> mainHandler.post { sweepRequests() }
+                }
             }
         }.also { it.startWatching() }
     }
@@ -130,6 +147,18 @@ class TerminalService : Service() {
                 in RELOADING_REQUESTS -> activity?.reloadConfig(quiet = true)
             }
         }
+        scheduleSweep()
+    }
+
+    // Stops waiting requests that `pocket` cancelled or whose `pocket` has gone.
+    private fun sweepRequests() {
+        runCatching { requests.sweep() }
+        scheduleSweep()
+    }
+
+    private fun scheduleSweep() {
+        mainHandler.removeCallbacks(sweep)
+        if (requests.hasOpen()) mainHandler.postDelayed(sweep, SWEEP_MS)
     }
 
     /** The settings' cursor style, which every terminal reads when it (re)starts. */
@@ -164,6 +193,7 @@ class TerminalService : Service() {
 
     override fun onDestroy() {
         requestWatcher?.stopWatching()
+        mainHandler.removeCallbacks(sweep)
         killAll()
         super.onDestroy()
     }
@@ -311,6 +341,39 @@ class TerminalService : Service() {
         } catch (e: ActivityNotFoundException) {
             "no app on the phone opens links"
         }
+    }
+
+    // Answers `pocket vibrate`: null when it vibrated, else why not.
+    private fun vibrate(ms: Long): String? {
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            getSystemService(VibratorManager::class.java).defaultVibrator
+        } else {
+            getSystemService(Vibrator::class.java)
+        }
+        if (vibrator?.hasVibrator() != true) return "the phone has no vibrator"
+        vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+        return null
+    }
+
+    private val clipboard by lazy { getSystemService(ClipboardManager::class.java) }
+
+    // Answers `pocket clipboard set`: null when copied, else why not.
+    private fun setClipboard(text: String): String? = try {
+        clipboard.setPrimaryClip(ClipData.newPlainText("pocket clipboard", text))
+        null
+    } catch (e: RuntimeException) {
+        "couldn't copy to the clipboard: ${e.message ?: e.javaClass.simpleName}"
+    }
+
+    // Answers `pocket clipboard get`. Android only lets the app in front read
+    // the clipboard (it gives others nothing), so say that instead.
+    private fun readClipboard(): Result<String> {
+        if (activity?.onScreen != true) {
+            return Result.failure(Exception("the app must be on screen to read the clipboard (Android only lets the app in front read it)"))
+        }
+        val clip = clipboard.primaryClip
+        val text = if (clip == null || clip.itemCount == 0) "" else clip.getItemAt(0).coerceToText(this)?.toString().orEmpty()
+        return Result.success(text)
     }
 
     // Answers `pocket install-apk`: null when the installer opened, else why not.

@@ -56,10 +56,11 @@ Newest entries first. Rules for keeping it up to date: see
   `scripts/deliver.sh` installs it on the phone.
 - **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
   tools installers, tabs, key bars, colours/themes, settings, config
-  check, `pocket` requests, undo, links; 215 tests), `app/` (thin Android layer),
+  check, `pocket` requests, undo, links, waiting and streaming
+  requests; 239 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 100 unittest tests incl. editors driven in a pty),
-  `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (60 bats
+  the agent guide; 126 unittest tests incl. editors driven in a pty),
+  `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
   tests).
 
 
@@ -70,6 +71,20 @@ Newest entries first. Rules for keeping it up to date: see
 README section "Android integration". Planned with the owner
 2026-10-04, ahead of the parked step 8. Build test-first, with an
 owner test after each part.
+
+**9.1 built, owner to check** (see the log, entry 27). After
+`scripts/deliver.sh` installs the build, on the phone:
+- `pocket vibrate` buzzes briefly; `pocket vibrate 1500` for longer;
+  `pocket vibrate 0` refuses. Does it also buzz with the app in the
+  background (`sleep 5; pocket vibrate`, then switch apps)?
+- `echo hello | pocket clipboard set`, then paste in another app:
+  `hello` and a line break. `pocket clipboard set "two words"` too.
+- Copy some text in another app, come back: `pocket clipboard get`
+  prints it. `sleep 5; pocket clipboard get`, switch apps quickly:
+  it says the app must be on screen.
+- `pocket set android-clipboard off`: both refuse; `pocket set
+  android-clipboard on` again. The Settings editor shows the setting.
+- Does Android show its own "copied" pop-up on `set`?
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -110,8 +125,7 @@ owner test after each part.
 
 **Parts:**
 1. **9.1 Groundwork, vibration, clipboard:** waiting/streaming
-   requests in `core` and `client.py`; the permission flow;
-   `pocket vibrate [MS]`; `pocket clipboard get` and `pocket clipboard
+   requests in `core` and `client.py`; `pocket vibrate [MS]`; `pocket clipboard get` and `pocket clipboard
    set [TEXT]` (stdin when no TEXT). Android only lets the app on
    screen read the clipboard: `get` says so when it's not.
 2. **9.2 Sharing:** `pocket share FILE…` and `pocket share --text
@@ -120,7 +134,8 @@ owner test after each part.
    `ACTION_SEND`/`SEND_MULTIPLE` for any type; files go to `~/Shared`
    (`share-folder` setting), text to a `.txt` file there; a
    notification says where.
-3. **9.3 Location:** `pocket location` (one fix, with a timeout) and
+3. **9.3 Location:** the permission flow (moved here from 9.1: it's
+   the first part that needs a permission); `pocket location` (one fix, with a timeout) and
    `--stream [--interval S]`; `--coarse`. Fine/coarse permission; the
    service gains the `location` foreground-service type (and its
    Android 14 permission) for streams.
@@ -231,6 +246,44 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (27): step 9.1, waiting and streaming requests; vibrate; clipboard
+
+**Done**
+- **Waiting and streaming requests** (`core/.../LaterRequests.kt`,
+  `LaterRequestTest`): `PocketRequests(later = mapOf(NAME to
+  Later(seconds) { args, reply -> … }))`. The app writes `ID.wait` (the
+  seconds, or `stream`) at once; the handler answers through
+  `PendingReply` (`ok`, `refuse`, `line` for stream readings,
+  `onCancel`), from any thread, first answer wins. `sweep()` cancels
+  requests whose `pocket` wrote `ID.cancel` (it gets `{"ok":true}`) or
+  whose process is gone (pid from the id; everything of it is
+  deleted). The service sweeps on `.cancel` events and every 2 s while
+  any are open. No request uses it yet: location (9.3) and sensors
+  (9.4) will.
+- `client.request(..., on_line=)` follows `ID.wait` (waits that long
+  plus `POCKET_TIMEOUT`, or forever for a stream), hands each stream
+  line to `on_line`, and on Ctrl+C or any error mid-stream writes
+  `ID.cancel` and waits up to 2 s for the answer; it removes all of
+  the request's files at the end (`tests/pocket/test_client.py`).
+- `pocket vibrate [MS]` (300 ms default, 1-5000; `VIBRATE` permission,
+  no runtime prompt).
+- `pocket clipboard get` / `set [TEXT]` (stdin without TEXT). Text is
+  sent percent-encoded so line breaks survive; at most 200,000
+  characters (Binder limit). `get` refuses unless the app is on screen
+  (Android hands background apps nothing); `get` adds a line break only
+  for a terminal. New setting `android-clipboard` (on).
+- Guide: "The phone" section, the commands and the setting.
+
+**Decisions**
+- The permission flow moved from 9.1 to 9.3: nothing in 9.1 needs a
+  runtime permission, so it couldn't be tried on the phone yet.
+- Agent's choice: clipboard text percent-encoded in one request line
+  (URLDecoder in core), rather than a JSON parser or one line per text
+  line, which lost trailing empty lines and `\r`.
+
+**Not checked:** the app module can't build here; CI builds it. On the
+phone: see "Next".
 
 ### 2026-10-04 (26): `pocket install-apk` and 7.3 confirmed; step 7 done
 
