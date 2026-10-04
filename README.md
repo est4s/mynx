@@ -14,7 +14,7 @@ It's also built for **AI coding agents** like Claude Code: the setup is
 documented for them and fully scriptable, so an agent can customize it for
 you.
 
-> **Status:** in development, not released. Roadmap steps 1–6 work;
+> **Status:** in development, not released. Roadmap steps 1–7 work;
 > this README describes the intended scope.
 
 ---

@@ -8,11 +8,16 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **Roadmap steps 1-6 are done** and confirmed on the owner's phone.
-  **Step 7 (*Agent support*) is nearly done:** 7.1 (notifications) and
-  7.2 (agent installs) confirmed; 7.3 (undo), the AI agents submenu and
-  links that open in the browser are built and waiting for the owner's
-  check; see "Next".
+- **Roadmap steps 1-7 are done** and confirmed on the owner's phone.
+  Next is step 8 (*Profiles*), to plan with the owner; see "Next".
+- **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
+  notifications from agents' hooks (`pocket notify`, `pocket hook`),
+  `pocket agent` installs Claude Code, Codex and Gemini CLI with their
+  official installers and toggles their notifications, the AI agents
+  submenu, the `agent` key bar, undo for config changes (`pocket undo`,
+  `undo-keep`), and links that open in the phone's browser (`pocket
+  open`, `xdg-open` as `BROWSER`, tappable links). Debug builds install
+  new builds from the app's Debian (`pocket install-apk`).
 - **Step 6 (*Customization*), confirmed 2026-10-04:** every setting is a
   plain-text file in `~/.config/pocket-terminal/`, changed with the
   `pocket` CLI (`check`, `settings`/`get`/`set`/`reset`, `theme`,
@@ -58,82 +63,14 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### First: install the build with `pocket install-apk`
+### Roadmap step 8: Profiles
 
-The owner now develops inside the app's own Debian (no Termux), so
-`scripts/deliver.sh` opens the installer through the app (see the log,
-2026-10-04 (25)). On the phone, after the push that adds it:
-- Run `scripts/deliver.sh`. The installed build doesn't know the request
-  yet, so it says to open `Download/pocket-terminal-build.apk` from the
-  Files app: do that once. Does the Files app show the file?
-- Then `scripts/deliver.sh` again (or `pocket install-apk
-  /storage/emulated/0/Download/pocket-terminal-build.apk`) with the app
-  on screen: Android asks to allow installing apps the first time (the
-  request opens that setting); after allowing, run it again and the
-  installer opens. Tap **Install**: the app restarts as the new build.
-- If the installer says "There was a problem parsing the package" or
-  similar, report the exact text: `ApkProvider` then needs a fix.
-
-### Roadmap step 7: Agent support
-
-**Owner's decisions (2026-10-04):** order **7.1 notifications → 7.2
-installs → 7.3 undo**, with an owner test after each. Agents in the
-order **Claude Code, Codex, Gemini CLI**. Installing an agent **asks**
-whether to set up its notification hooks, and that choice can be
-changed later in the settings. Undo keeps **1 snapshot by default,
-configurable** by the user. Standing OK to commit and push at each
-checkpoint of step 7.
-
-**7.1 Notifications: confirmed by the owner 2026-10-04.**
-
-**7.2 Agent installs: confirmed by the owner 2026-10-04** (Claude Code
-installed, signed in, notifications and the gruvbox test worked; no
-proot messaging problem reported). The owner found signing in hard
-because links couldn't be opened, which led to the links work below.
-
-**Confirmed by the owner 2026-10-04:** the Claude Code download shows
-its size while the installer is silent; the AI agents menu reacts at
-once; agents get the `agent` key bar (Esc, Ctrl+C, Mode, Tab, Newline,
-/, arrows) and the menu bar comes back after.
-Also confirmed: `claude` typed in the shell shows the agent bar; Codex
-installs from the menu and starts after getting procps.
-
-**7.3 Undo, AI agents submenu, links: built, owner to check.** On the
-phone:
-- `pocket theme set nord`, then `pocket undo` → back to the old theme;
-  `pocket undo` again → "Nothing to undo" (keeps 1).
-- `pocket set undo-keep 3`, make three changes, `pocket undo --list`
-  names them; three `pocket undo`s take them back in order.
-- Break `~/.config/pocket-terminal/settings.conf` by hand (e.g.
-  `font-size = huge`) and run `pocket undo` without `pocket check`:
-  the file comes back.
-- `pocket edit` → "Undo last change" asks, then undoes.
-- Menu → AI agents: Claude Code starts it; "Codex (install)" offers to
-  install, then to start it.
-- Installing Claude Code shows `Downloading Claude Code: N MB` growing
-  instead of a silent minute (its installer downloads ~200 MB quietly);
-  the line clears before "Setting up Claude Code...".
-- Menu → AI agents: ↑/↓ react at once (the list is read once, not on
-  every key).
-- An agent started from the menu (or `pocket agent start`) gets the
-  `agent` key bar: Esc, Ctrl+C, Mode (Shift+Tab: Claude Code's permission
-  modes), Tab, Newline (Ctrl+J: a new line in the prompt), /, arrows.
-  Leaving the agent brings the menu bar back.
-- `claude` typed in a **new tab's** shell also shows the agent bar (the
-  app's profile loads `/opt/pocket-terminal/shell.bash`); leaving it
-  brings the shell bar back. Not installed: `codex` says how to install.
-- Codex failed to start ("failed to invoke ps"): the image had no
-  `ps`. Now the image has procps, installing Codex gets it first, and
-  starting an installed Codex from the menu offers to install it. On
-  the phone: Menu → AI agents → Codex → it asks to install procps → `y`
-  → Codex starts.
-- Links: `echo https://example.com`, tap the link → the browser opens.
-  `pocket open https://example.com` too. In `claude`, `/login` should
-  open the browser by itself (`BROWSER` → `xdg-open`); if not, tapping
-  the printed link should (it may wrap over rows).
-
-**After 7.3 is confirmed:** step 7 is done. Next is roadmap step 8
-(*Profiles*): plan it with the owner first.
+Step 7 is done (see the log, entries 22-26). Step 8 is next: README
+roadmap, "multiple profiles, switching, export/import", and the README
+section "Profiles: share your setup". **Plan it with the owner first**
+(what a profile holds, where it lives, the export format, how
+switching interacts with undo), then build it test-first with an owner
+test after each part, as in step 7.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `pocket theme set` for a dark and a light theme (strip
@@ -173,6 +110,38 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (26): `pocket install-apk` and 7.3 confirmed; step 7 done
+
+**Done**
+- The owner installed build 51 (HEAD `1bec701`) through `pocket
+  install-apk`: installing from the app's own Debian works. The tools
+  in `/opt/pocket-terminal` match `tools/`.
+- At the owner's request the agent ran the 7.3 checks itself in the
+  app's Debian (config and menu state backed up first, restored after);
+  all passed:
+  - `pocket theme set nord` → `pocket undo` brings Neon back; a second
+    undo says "Nothing to undo" (exit 1).
+  - `undo-keep 3`, then font size, theme and cursor changes: `--list`
+    names all three; three undos take them back newest first.
+  - `font-size = huge` added by hand, no `pocket check`: `pocket undo`
+    restores the file byte for byte ("edits by hand").
+  - `pocket edit` driven in a pty: "Undo last change" asks "Undo
+    'theme set nord'?", `y` undoes it, the status line says so.
+  - `menu` with `MENU_DRYRUN=1` in a pty: AI agents lists Claude Code,
+    Codex and "Gemini CLI (install)"; Enter on Claude Code runs `pocket
+    agent start claude`; ↓ redraws in 0.1-0.2 s, no keys lost at 20 ms
+    apart. (The menu opens on the last choice, from
+    `~/.local/state/pocket-terminal/menu`.)
+  - `pocket agent start gemini` shows the installer commands and asks;
+    `n` → "Not installed.", exit 1, so the menu pauses on the message.
+  - `pocket open` and `xdg-open` with https links succeed; `file://`
+    and non-URLs are refused (exit 2).
+- The owner confirmed on screen: `pocket open` opened the browser, and
+  tapping links in the terminal works.
+- **Step 7 is done.** README status updated to steps 1-7.
+
+No code changes.
 
 ### 2026-10-04 (25): dev setup in the app's own Debian; `pocket install-apk`
 
