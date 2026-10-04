@@ -75,6 +75,11 @@ installed, signed in, notifications and the gruvbox test worked; no
 proot messaging problem reported). The owner found signing in hard
 because links couldn't be opened, which led to the links work below.
 
+**Confirmed by the owner 2026-10-04:** the Claude Code download shows
+its size while the installer is silent; the AI agents menu reacts at
+once; agents get the `agent` key bar (Esc, Ctrl+C, Mode, Tab, Newline,
+/, arrows) and the menu bar comes back after.
+
 **7.3 Undo, AI agents submenu, links: built, owner to check.** On the
 phone:
 - `pocket theme set nord`, then `pocket undo` → back to the old theme;
