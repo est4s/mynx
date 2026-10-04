@@ -50,6 +50,7 @@ private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
 // Debian path, relative to the rootfs.
 private const val COLORS_FILE = "root/.config/pocket-terminal/colors.properties"
 private const val KEY_BARS_DIR = "root/.config/pocket-terminal/keybars"
+private const val KEY_BAR_POLL_MS = 250L
 
 class MainActivity : Activity() {
     private lateinit var terminalView: TerminalView
@@ -57,6 +58,15 @@ class MainActivity : Activity() {
     private lateinit var stripRow: LinearLayout
     private lateinit var keyBar: KeyBarView
     private var shownKeyBarProblems = emptyList<String>()
+    // Output triggers a bar check, but a program that starts quietly (e.g.
+    // waiting for input) prints nothing after `keybar` switched the bar.
+    // So also check while visible: one stat of a tiny file.
+    private val keyBarPoll = object : Runnable {
+        override fun run() {
+            if (::keyBar.isInitialized) refreshKeyBar()
+            root.postDelayed(this, KEY_BAR_POLL_MS)
+        }
+    }
     private var service: TerminalService? = null
     private var bound = false
     private val crashFile by lazy { TerminalApp.crashFile(application) }
@@ -110,11 +120,13 @@ class MainActivity : Activity() {
             applyColors()
             refreshKeyBar(force = true) // bar files may have been edited
         }
+        root.post(keyBarPoll)
     }
 
     // Folders change without tab changes, and leaving the app is the last
     // chance to save before Android may kill it.
     override fun onStop() {
+        root.removeCallbacks(keyBarPoll)
         service?.saveTabs()
         super.onStop()
     }

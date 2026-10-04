@@ -191,6 +191,13 @@ in-app keyboard (step 5) can send these combos:
 the generic-bar check's `printf … > ~/games/test-game` failed. The image
 now creates it (empty).
 
+**Bug found by the owner:** the test game (`read -r x`) kept the menu's
+bar until a tab switch. The bar was only rechecked on output, and a
+program that starts quietly prints nothing after `keybar` writes the
+file. Fix: `MainActivity` also polls the bar file every 250 ms while
+visible (one stat; stopped in `onStop`). Not unit-testable (Android
+glue); covered by the owner's generic-bar check.
+
 **Commits:** `414cc03`, (pending)
 
 ### 2026-10-04 (16): step 4, nnn and the key bar
