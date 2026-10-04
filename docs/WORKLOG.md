@@ -18,10 +18,12 @@ Newest entries first. Rules for keeping it up to date: see
   always-visible two-row key bar above the keyboard that follows the
   running program (`keybar NAME cmd`), with pages to swipe and
   user-editable bar files.
-- **Step 5 rethought by the owner (2026-10-04): no in-app keyboard.**
-  Instead: key bars for games, bars any program or game can bring, and
-  hold-to-repeat. Built, **waiting for the owner's check (needs a data
-  clear)**. See "Next".
+- **Roadmap step 5 (*Game and program key bars*) is done** and
+  confirmed on the phone. The owner dropped the in-app keyboard
+  (2026-10-04): game bars (Rogue, Drive, Flap, generic `game`), `play`,
+  `keybar NAME,FALLBACK`, bars any program can bring, hold-to-repeat.
+- **Next: roadmap step 6 (*Customization*)**, to plan with the owner.
+  See "Next".
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
   (with their folders and names) restored after Android kills the app.
@@ -108,33 +110,30 @@ perfectly").** Checks the owner ran:
   file afterwards.
 - rotate to landscape: more buttons per row
 
-### Roadmap step 5: Game and program key bars
+### Roadmap step 6: Customization (plan with the owner first)
 
-**Decided by the owner (2026-10-04):** the key bar is good enough to
-replace the planned in-app keyboard. Step 5 is now: a key bar for games,
-bars that new programs and games can bring themselves, and press-and-
-hold arrows that repeat. README updated (Key bar section, roadmap,
-intro; the In-app keyboard section is gone).
+**Goal (README "Customize everything", roadmap 6):** theme, key bar and
+menu editors. Themes: colour schemes, fonts, font size, cursor style.
+Key bars: edit built-ins or add bars. Launcher menu: edit, reorder or
+turn off items.
 
-**Built, not yet confirmed.** Owner clears the app's data, opens it,
-and checks:
-- `rogue`: the bar shows `← ↓ ↑ → Wait Explore` over `Potion Scroll
-  Bomb Stairs Info Quit`; swipe left for `Help Continue New` / `Scores
-  Rest`; title screen: New/Continue work; holding an arrow walks
-  repeatedly, and stops when released; Quit (Q) saves and the shell's
-  bar comes back
-- `drive`: `← Brake Nitro →` over `Pause Again Quit`; holding ← / →
-  steers continuously; Brake holds; Again restarts after a crash
-- `flap`: `Flap` over `Quit`; each tap flaps
-- the menu's Games start the same bars
-- holding ↑ / ↓ in nnn and in the menu scrolls repeatedly; holding ← in
-  the shell moves the cursor along the line
-- a game with no bar of its own gets the generic bar: `printf
-  '#!/bin/sh\nread -r x\n' > ~/games/test-game && chmod +x
-  ~/games/test-game`, menu → Games → Test Game: `← ↓ ↑ → Space Enter` /
-  `Esc y n q`; Enter ends it. Then `rm ~/games/test-game`.
-- swiping pages while holding nothing still works; a swipe that starts
-  on an arrow doesn't leave it repeating
+**Where things stand:** everything is already plain-text config except
+the menu (its items are hard-coded in `rootfs/bin/menu`) and the font,
+font size and cursor style (not configurable yet). Colours:
+`~/.config/pocket-terminal/colors.properties` (`core/ColorScheme.kt`).
+Key bars: `~/.config/pocket-terminal/keybars/` (`core/KeyBar.kt`).
+
+**Decide with the owner:** editors as terminal programs (TUI in Debian,
+like the menu) or Android screens; which settings come first (e.g. a
+menu config file, theme presets to pick from, font size that persists
+— pinch zoom is lost on restart today); whether `pocket` (README's CLI,
+roadmap 7) starts here as the way editors apply changes.
+
+Step 5's checks (kept for regressions): `rogue`/`drive`/`flap` bars and
+pages; holding arrows repeats in games, nnn, menu and shell; generic
+`game` bar for games without their own (`play`, menu Games); a quiet
+program still switches the bar (polling); a swipe that starts on an
+arrow doesn't leave it repeating.
 
 ### Hardware keyboard checks (later)
 The owner has no hardware keyboard, so these are untested. Run them when
@@ -198,7 +197,11 @@ file. Fix: `MainActivity` also polls the bar file every 250 ms while
 visible (one stat; stopped in `onStop`). Not unit-testable (Android
 glue); covered by the owner's generic-bar check.
 
-**Commits:** `414cc03`, (pending)
+**Owner confirmed on the phone:** game bars and pages, hold-to-repeat
+in games/nnn/menu/shell, the generic bar (after the polling fix),
+swipes. **Step 5 done.**
+
+**Commits:** `414cc03`, `89ed8cd`, `496f5bb`
 
 ### 2026-10-04 (16): step 4, nnn and the key bar
 
