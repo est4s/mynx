@@ -79,6 +79,8 @@ because links couldn't be opened, which led to the links work below.
 its size while the installer is silent; the AI agents menu reacts at
 once; agents get the `agent` key bar (Esc, Ctrl+C, Mode, Tab, Newline,
 /, arrows) and the menu bar comes back after.
+Also confirmed: `claude` typed in the shell shows the agent bar; Codex
+installs from the menu and starts after getting procps.
 
 **7.3 Undo, AI agents submenu, links: built, owner to check.** On the
 phone:
