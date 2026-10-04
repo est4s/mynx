@@ -9,7 +9,9 @@ Newest entries first. Rules for keeping it up to date: see
 ## Current status
 
 - **Roadmap steps 1-7 are done** and confirmed on the owner's phone.
-  Next is step 8 (*Profiles*), to plan with the owner; see "Next".
+  Step 8 (*Profiles*) is planned but **parked** by the owner
+  (2026-10-04): step 9 (*Android integration*) comes first and is
+  planned; see "Next".
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -63,14 +65,133 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Roadmap step 8: Profiles
+### Roadmap step 9: Android integration
 
-Step 7 is done (see the log, entries 22-26). Step 8 is next: README
-roadmap, "multiple profiles, switching, export/import", and the README
-section "Profiles: share your setup". **Plan it with the owner first**
-(what a profile holds, where it lives, the export format, how
-switching interacts with undo), then build it test-first with an owner
-test after each part, as in step 7.
+README section "Android integration". Planned with the owner
+2026-10-04, ahead of the parked step 8. Build test-first, with an
+owner test after each part.
+
+**Owner's decisions (2026-10-04):**
+- **Camera: both ways.** `pocket camera FILE` opens the phone's camera
+  app to frame the shot (no camera permission needed); `--quick
+  front|back` snaps straight to the file with no screen, for scripts
+  and agents (camera permission, app on screen).
+- **Location: "while using the app" only**, never background location.
+  A stream started with the app on screen keeps running in the
+  background through the service.
+- **Sharing both ways:** `pocket share` sends files or text to other
+  apps, and the app is a target in Android's share sheet (files land
+  in `~/Shared`).
+- **Order:** 9.1 groundwork + vibration + clipboard, 9.2 sharing,
+  9.3 location, 9.4 sensors, 9.5 camera.
+
+**Design (agent's proposal, change it if the owner objects):**
+- **Waiting and streaming requests.** Today a request is answered at
+  once and `pocket` gives up after 5 s. New: the app may answer later
+  (a GPS fix, a permission dialog, the camera app), and the client
+  waits as long as that request allows. A stream request gets lines
+  appended to `ID.stream` until `pocket` writes `ID.cancel` (on Ctrl+C
+  or exit) or its process is gone (pid sent in the request). Answering
+  must never block the main thread.
+- **Permissions** are asked through the activity the first time a
+  command needs one. With the app off screen, the request fails saying
+  "open the app" (later maybe a "tap to allow" notification).
+- **On/off per feature:** settings `android-clipboard`,
+  `android-share`, `android-location`, `android-sensors`,
+  `android-camera` (`on` by default; the Android permission is still
+  the real gate), shown in `pocket settings` and the Settings editor.
+  Per profile once step 8 exists.
+- **Output:** plain text by default, `--json` like every command;
+  streams print one line per reading (one JSON object per line with
+  `--json`).
+- Logic (argument checks, output formats, stream bookkeeping) goes in
+  `core`, tested; `app` only calls Android. Each part updates
+  `tools/AGENTS.md` (`home-docs.bats` requires every command in it).
+
+**Parts:**
+1. **9.1 Groundwork, vibration, clipboard:** waiting/streaming
+   requests in `core` and `client.py`; the permission flow;
+   `pocket vibrate [MS]`; `pocket clipboard get` and `pocket clipboard
+   set [TEXT]` (stdin when no TEXT). Android only lets the app on
+   screen read the clipboard: `get` says so when it's not.
+2. **9.2 Sharing:** `pocket share FILE…` and `pocket share --text
+   TEXT` open Android's share sheet (through a provider like
+   `ApkProvider`, serving just the shared files). Share-sheet target:
+   `ACTION_SEND`/`SEND_MULTIPLE` for any type; files go to `~/Shared`
+   (`share-folder` setting), text to a `.txt` file there; a
+   notification says where.
+3. **9.3 Location:** `pocket location` (one fix, with a timeout) and
+   `--stream [--interval S]`; `--coarse`. Fine/coarse permission; the
+   service gains the `location` foreground-service type (and its
+   Android 14 permission) for streams.
+4. **9.4 Sensors:** `pocket sensor list`, `pocket sensor NAME` (one
+   reading) and `--stream [--rate HZ]` (up to 200 Hz, so no special
+   permission). Names like `accelerometer`, `gyroscope`, `light`.
+5. **9.5 Camera:** `pocket camera FILE` (`ACTION_IMAGE_CAPTURE`, the
+   photo copied into Debian) and `--quick front|back` (Camera2, camera
+   permission).
+
+Vibration needs no permission. Notifications and opening links were
+done in step 7; phone storage is already at `/storage/emulated/0`.
+
+### Parked: roadmap step 8, Profiles
+
+**Parked by the owner 2026-10-04** ("not such an important feature to
+work on yet"): step 9 comes first. The plan below stands for when it's
+picked up again.
+
+README roadmap: "multiple profiles, switching, export/import"; README
+section "Profiles: share your setup". Planned with the owner
+2026-10-04. Build test-first, with an owner test after each part, as
+in step 7.
+
+**Owner's decisions (2026-10-04):**
+- **All profiles share the one Debian** in step 8. A separate Debian
+  per profile and full backup/restore of an environment come in a
+  later step.
+- **A profile per tab**, plus an **app-wide default profile**: new
+  tabs and a fresh start use it; **⌄** next to **+** opens a tab in
+  any profile.
+- **Export is one plain-text file**: manifest, package list, setup
+  script and config files inline, readable before import. Fonts are
+  referenced (apt package or URL), never embedded.
+- **Dotfiles: a shell snippet per profile** (aliases, prompt, env),
+  sourced by `~/.bashrc` in that profile's tabs. The user's own
+  dotfiles stay theirs.
+
+**Design (agent's proposal, change it if the owner objects):**
+- A profile is `~/.config/pocket-terminal/profiles/NAME/`, with the
+  same layout as the config folder (`settings.conf`,
+  `colors.properties`, `keybars/`, `menu.conf`) plus `profile.conf`
+  (label, tab colour, icon), `packages` (apt names), `setup.sh` and
+  `bashrc`. A profile only holds what it changes: its files lie over
+  the top-level config (per file; `settings.conf` per key), so the
+  existing config is the `default` profile and current installs keep
+  working unchanged.
+- `default-profile = NAME` in the top-level `settings.conf`.
+- Each saved tab records its profile (`profile = NAME` in
+  `filesDir/state/tabs`). The tab's shell gets `POCKET_PROFILE`;
+  `pocket` commands act on that profile unless given `--profile NAME`
+  (`--profile default` for the top level).
+- Undo and `pocket check` cover the profile folders too.
+
+**Parts:**
+1. **8.1 Model and commands:** layering in `core` (tested);
+   `pocket profile list/show/new/copy/rename/delete/default`, `--json`;
+   `--profile` on the config commands; `pocket check` per profile.
+2. **8.2 Profiles in the app:** tabs remember their profile and use
+   its theme, font and key bars; the strip shows its colour; **⌄**
+   opens a tab in a chosen profile; `POCKET_PROFILE` in the shell.
+3. **8.3 Recipe:** `packages`, `setup.sh`, `bashrc` snippet (sourced
+   via `/opt/pocket-terminal/shell.bash`); `pocket profile apply NAME`
+   installs the packages and runs the script after showing them and
+   asking.
+4. **8.4 Export/import:** `pocket profile export NAME [FILE]` writes
+   the text file; `pocket profile import FILE` shows everything it
+   will write, install and run, asks, then adds the profile (applying
+   it is a separate yes). Name clashes ask for a new name.
+5. **8.5 Editors and docs:** a Profiles editor in `pocket edit`, a
+   menu item, the agent guide (`tools/AGENTS.md`) and README.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `pocket theme set` for a dark and a light theme (strip
