@@ -22,11 +22,12 @@ Newest entries first. Rules for keeping it up to date: see
   confirmed on the phone. The owner dropped the in-app keyboard
   (2026-10-04): game bars (Rogue, Drive, Flap, generic `game`), `play`,
   `keybar NAME,FALLBACK`, bars any program can bring, hold-to-repeat.
-- **Roadmap step 6 (*Customization*) is in progress.** Planned with the
-  owner: editors are terminal programs, built on a small `pocket` CLI
-  so AI agents can change every setting. 6.1 (the app's tools at
-  `/opt/pocket-terminal`, `pocket check`) is built, waiting for the
-  owner's check. See "Next".
+- **Roadmap step 6 (*Customization*) is built, waiting for the owner's
+  check.** Editors are terminal programs (`pocket edit`), built on the
+  `pocket` CLI so AI agents can change every setting. 6.1 (the app's
+  tools at `/opt/pocket-terminal`, `pocket check`) is confirmed on the
+  phone; 6.2-6.6 were built in one go at the owner's request. See
+  "Next" for the checks.
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
   (with their folders and names) restored after Android kills the app.
@@ -120,51 +121,68 @@ perfectly").** Checks the owner ran:
 now, as the way the editors apply changes. Goal: AI coding CLIs can work
 on every setting, so people can customize their setup by asking.
 
-**Plan** (each step: test-first, then the owner checks on the phone):
-- **6.1 The app's tools and `pocket check`. Built, owner to check.**
-  `tools/` → `/opt/pocket-terminal`, replaced on every app update (so
-  `pocket` and the editors reach the owner's existing Debian without
-  clearing data); `pocket check` applies config right away and lists
-  problems; `pocket version`, `help`, `--json`.
-- **6.2 Settings file:** `~/.config/pocket-terminal/settings.conf`
-  (`key = value`, commented): `font-size` (pinch zoom saves it; lost on
-  restart today), cursor style and blink (check what terminal-emulator
-  v0.118.3 supports first), a user font (`font.ttf`). `pocket get`,
-  `pocket set KEY VALUE`, `pocket settings` (list with descriptions).
-- **6.3 Themes:** presets in `/opt/pocket-terminal/themes/` (neon,
-  amber, phosphor, a few well-known ones). `pocket theme list|show|set`;
-  `set` writes the preset into `colors.properties` (one file, easy for
-  agents; undo comes in step 7). Theme editor (curses): pick a preset
-  with a live preview in the app, tweak colours. Make the menu's own
-  theme follow it.
-- **6.4 Key bar editor:** list bars (built-in/user), copy a built-in to
-  edit, add/remove/reorder buttons, test keys; `pocket keybar
-  list|show|edit|reset`.
-- **6.5 Menu config:** move the menu's items out of `rootfs/bin/menu`
-  into a menu file (user's copy in `~/.config/pocket-terminal/`), an
-  editor to add/hide/reorder items, `pocket menu …`. The menu itself is
-  in the rootfs today, so this moves it to the tools too (it then
-  updates with the app).
-- **6.6 Settings hub and docs:** menu → System → Settings opens
-  `pocket edit` (theme, font, key bars, menu). Move the agent guide to
-  `/opt/pocket-terminal/` so it updates with the app, leaving a short
-  `~/AGENTS.md` that points to it (the current home docs only reach
-  fresh installs).
+**What was built** (details in the log, 2026-10-04 (19)):
+- **6.1** the app's tools, mounted at `/opt/pocket-terminal`, replaced
+  on every app update; `pocket check`. **Confirmed on the phone.**
+- **6.2** `settings.conf` (font-size, font, cursor-style, cursor-blink),
+  `pocket settings|get|set`, pinch zoom saves `font-size`.
+- **6.3** ten built-in themes, user themes, `pocket theme
+  list|show|set`; theme editor with live preview and a colour editor.
+- **6.4** `pocket keybar list|show|edit|reset`; key bar editor.
+- **6.5** the app's commands (menu, files, keybar, play, games' commands)
+  moved from the image into the tools; menu items from `menu.conf`
+  (`run COMMAND` items), `pocket menu show|edit|reset`, menu editor;
+  the menu follows the terminal theme.
+- **6.6** `pocket edit` hub (the menu's Settings item); the agent guide
+  moved to `/opt/pocket-terminal/AGENTS.md`, `~/AGENTS.md` points to it.
 
-**6.1 checks for the owner** (after installing, without clearing data):
-- `pocket version` prints a number; `pocket help` lists the commands;
-  `which pocket` is `/opt/pocket-terminal/bin/pocket`
-- `pocket check` says "No problems in ~/.config/pocket-terminal"
-- live apply: `sed -i 's/^background=.*/background=#200020/'
-  ~/.config/pocket-terminal/colors.properties && pocket check` turns the
-  background purple at once, no leaving the app. Put it back:
-  `background=#14101f` (or delete the file for Neon).
-- problems: `printf 'Quit = q\noops\n' >
-  ~/.config/pocket-terminal/keybars/shell.conf && pocket check` lists
-  `line 2: …` under that file, exits 1 (`echo $?`), and **no dialog**
-  pops up. `pocket check --json` prints the same as JSON. Delete the
-  file and `pocket check` again: the shell bar is back.
-- no dialog about "Couldn't update the app's tools"
+**Checks for the owner** (install over the old app, don't clear data):
+
+*Before the checks* (once, because this Debian predates the changes):
+`cp /opt/pocket-terminal/home/AGENTS.md /opt/pocket-terminal/home/CLAUDE.md ~/`
+replaces the old home docs with pointers to the new guide.
+
+1. **Menu:** close all tabs and reopen the app (or run `menu`). Items:
+   Terminal, Files, Games, Settings, System, Exit; colours look right
+   with Neon. System has Update all and System info (no Theme item).
+2. **Settings hub:** menu → Settings opens "Settings" with Theme, Font
+   & cursor, Key bars, Launcher menu, Check config; the key bar shows
+   ↑ ↓ ← → Open Back / Save Add Del Move↑ Move↓ Reset. Back leaves.
+3. **Theme:** Settings → Theme. Moving with ↑↓ previews each theme on the
+   whole screen (terminal, tab strip, key bar) at once; Open keeps one
+   (the `*` moves); Back on a theme you didn't pick returns to the kept
+   one. Try `amber` and `solarized-light`. The menu's colours follow.
+4. **Colours:** Theme → Edit colours…: rows with colour swatches; change
+   `background` to `#200020` (Open, delete, type, Enter): preview at
+   once; Save keeps it; Back without saving asks "Discard…?".
+5. **Font & cursor:** → on font-size grows the text at once (← shrinks);
+   cursor-style → underline / bar changes the cursor; cursor-blink → on
+   blinks. Leave and reopen the app: all kept. Pinch zoom, then
+   `pocket get font-size`: the new size.
+6. **Key bars:** Settings → Key bars → shell: the shell bar's buttons.
+   Add one (Add, label `Top`, keys `"htop" Enter`), Save, Back twice,
+   Back: the shell bar has Top. Key bars → shell → Reset (r) → y: back to
+   the built-in bar.
+7. **Launcher menu editor:** Settings → Launcher menu: move Settings to
+   the top (Move↑), add `Top` with action "run a command…" `htop`, Save,
+   leave: `menu` shows the new order and Top runs htop.
+   `pocket menu reset` puts it back.
+8. **Commands an agent would use:** `pocket settings`, `pocket theme
+   list`, `pocket theme set nord`, `pocket set cursor-style bar`,
+   `pocket keybar list`, `pocket menu show`, `pocket check` (and each
+   with `--json`). All apply at once, no dialogs.
+9. **Guide:** `cat /opt/pocket-terminal/AGENTS.md | less` reads well on
+   the phone; start an agent (e.g. Claude Code) in `~` and ask it to
+   "make the theme gruvbox and the font bigger": it should use
+   `pocket`.
+10. **Regressions:** `files` (nnn bar), `rogue` (game bar), tabs, the
+    boot splash says `theme: …`.
+
+**Known gaps / for later:** undo for config changes (`pocket undo`,
+roadmap 7); fonts other than the built-in one lack Nerd Font icons;
+`pocket edit` isn't usable with a screen reader (keyboard-only, like
+the menu); no light-theme tuning of the tab strip (selected tab uses
+colour 0).
 
 Step 5's checks (kept for regressions): `rogue`/`drive`/`flap` bars and
 pages; holding arrows repeats in games, nnn, menu and shell; generic
@@ -199,6 +217,57 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (19): step 6.2-6.6 built in one go
+
+**Owner confirmed 6.1** on the phone (after the PATH fix): `pocket
+version`, `pocket check`, live colours, problems listed with no dialog.
+Owner asked for the rest of step 6 in one go, tested at the end; I
+pushed in pieces and watched CI myself.
+
+**Done**
+- `core`, test-first: `Settings.kt` (parse, `setSetting()` keeping the
+  file's other lines, `SETTINGS` descriptions); `Themes.kt` (ten themes
+  as resources, `BUILT_IN_THEMES`, `# theme: NAME` marker);
+  `BUILT_IN_KEY_BARS`; `PocketRequests` takes arguments (one per line)
+  and answers `settings`, `set`, `themes`, `theme-show`, `theme-set`,
+  `preview-colors`, `preview-end`, `keybars`, `keybar-show`,
+  `keybar-edit`, `keybar-reset`; `checkConfig` covers settings (and a
+  missing font file) and user themes. New built-in bar `pocket-edit`.
+- App: applies settings (font size in dp, font file, cursor style via
+  `getTerminalCursorStyle()`, blinking), pinch zoom saves `font-size`,
+  `preview-colors` shows unsaved colours; the cursor blinker follows
+  `onEmulatorSet` and programs hiding the cursor.
+- Tools: the app's commands moved from `rootfs/bin` to `tools/bin`
+  (first on the PATH now); `pocket` became `tools/lib/pocket_terminal`
+  (client, cli, models, editors); `menu.conf` with `run COMMAND` items,
+  `menu --check`, Settings item, menu colours from the theme; editors
+  (curses) for theme/colours, font & cursor, key bars, menu.
+- Tests: core (settings, themes, requests), `tests/pocket` (CLI 26,
+  models 8, editors 10 driven through a pty), shell (menu.conf,
+  `--check`, docs: guide covers every pocket command, bar and theme).
+- Docs: agent guide moved to `tools/AGENTS.md`; home files point to it;
+  repo AGENTS.md (architecture, Termux cursor notes, tests), README.
+
+**Decisions**
+- **`pocket theme set` writes the theme into `colors.properties`**
+  (marked `# theme: NAME`) rather than a separate theme setting: one
+  file to read and edit, no layering to explain. The image no longer
+  ships a colours file (no file = Neon).
+- **The menu's own themes are gone:** it uses the 16 basic colours, so
+  every terminal theme recolours it (amber and phosphor became terminal
+  themes).
+- **The menu checks its own file** (`menu --check`); the app checks the
+  files it reads; `pocket check` merges both. One parser per format.
+- **Built-in bars and themes ship in the tools** (`/opt/pocket-terminal`)
+  instead of the image's `/usr/share/pocket-terminal`, so they're
+  current.
+- **Editors work on a copy until Save** (key bars, menu, colours);
+  settings and themes apply on each change, as people expect from a
+  settings screen.
+
+**Commits:** `dd64628`, `373544e`, `0d5719a`, and the cursor blinker and
+work log commit after them.
 
 ### 2026-10-04 (18): step 6 planned; 6.1, the app's tools and `pocket`
 

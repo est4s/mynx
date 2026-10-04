@@ -88,6 +88,7 @@ class MainActivity : Activity() {
     private var shownColorProblems = emptyList<String>()
     private var shownSettingsProblems = emptyList<String>()
     private var fontSize = 0 // dp
+    private var visible = false
     private var appliedFont: String? = null
 
     private val connection = object : ServiceConnection {
@@ -141,6 +142,7 @@ class MainActivity : Activity() {
     // Picks up edits to the colours file when the user comes back to the app.
     override fun onStart() {
         super.onStart()
+        visible = true
         if (::terminalView.isInitialized) {
             applyColors()
             refreshKeyBar(force = true) // bar files may have been edited
@@ -153,7 +155,8 @@ class MainActivity : Activity() {
     // chance to save before Android may kill it.
     override fun onStop() {
         root.removeCallbacks(keyBarPoll)
-        if (::terminalView.isInitialized) terminalView.setTerminalCursorBlinkerState(false, true)
+        visible = false
+        setCursorBlinking(false)
         service?.saveTabs()
         super.onStop()
     }
@@ -225,7 +228,6 @@ class MainActivity : Activity() {
         })
 
         terminalView.attachSession(session)
-        terminalView.setTerminalCursorBlinkerState(true, true)
         terminalView.requestFocus()
         renderStrip()
         refreshKeyBar(force = true)
@@ -502,7 +504,7 @@ class MainActivity : Activity() {
         }
         service?.setCursorStyle(settings.cursorStyle)
         terminalView.setTerminalCursorBlinkerRate(if (settings.cursorBlink) CURSOR_BLINK_MS else 0)
-        terminalView.setTerminalCursorBlinkerState(true, true)
+        setCursorBlinking(true)
         terminalView.onScreenUpdated()
         if (!quiet && problems.isNotEmpty() && problems != shownSettingsProblems) {
             AlertDialog.Builder(this)
@@ -526,6 +528,11 @@ class MainActivity : Activity() {
                 .show()
         }
         shownKeyBarProblems = loaded.problems
+    }
+
+    /** Starts the cursor blinking (if the settings want it) or stops it; never while hidden. */
+    fun setCursorBlinking(on: Boolean) {
+        if (::terminalView.isInitialized) terminalView.setTerminalCursorBlinkerState(on && visible, true)
     }
 
     fun takeCtrlLatch() = ::keyBar.isInitialized && keyBar.takeCtrlLatch()

@@ -44,7 +44,10 @@ class SessionClient(private val service: TerminalService) : TerminalSessionClien
     override fun onColorsChanged(session: TerminalSession) {
         service.activity?.onScreenUpdated(session)
     }
-    override fun onTerminalCursorStateChange(state: Boolean) {}
+    // A program hid or showed the cursor: a hidden cursor mustn't blink.
+    override fun onTerminalCursorStateChange(state: Boolean) {
+        service.activity?.setCursorBlinking(state)
+    }
     override fun getTerminalCursorStyle(): Int? = service.cursorStyle
 
     override fun logError(tag: String?, message: String?) { Log.e(tag ?: TAG, message ?: "") }
@@ -95,7 +98,8 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
     override fun readShiftKey() = false
     override fun readFnKey() = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
-    override fun onEmulatorSet() {}
+    // A new emulator (first attach, or after a resize) needs the blinker started again.
+    override fun onEmulatorSet() = activity.setCursorBlinking(true)
 
     override fun logError(tag: String?, message: String?) { Log.e(tag ?: TAG, message ?: "") }
     override fun logWarn(tag: String?, message: String?) { Log.w(tag ?: TAG, message ?: "") }
