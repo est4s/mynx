@@ -187,7 +187,11 @@ in-app keyboard (step 5) can send these combos:
   `play`, fallbacks, `Repeat`, and how programs (or agents setting one
   up) bring their own bar.
 
-**Commits:** (pending)
+**Owner's check found:** `~/games` didn't exist in a fresh install, so
+the generic-bar check's `printf … > ~/games/test-game` failed. The image
+now creates it (empty).
+
+**Commits:** `414cc03`, (pending)
 
 ### 2026-10-04 (16): step 4, nnn and the key bar
 

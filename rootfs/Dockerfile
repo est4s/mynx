@@ -22,4 +22,6 @@ COPY bin/ /usr/local/bin/
 
 # The menu lists games by file name: neon-rogue.py → "Neon Rogue".
 COPY games/ /opt/neon-games/
-RUN chmod 755 /usr/local/bin/* /opt/neon-games/*.py
+# ~/games: the menu lists the user's own games from here (empty at first).
+RUN chmod 755 /usr/local/bin/* /opt/neon-games/*.py \
+ && mkdir -p /root/games
