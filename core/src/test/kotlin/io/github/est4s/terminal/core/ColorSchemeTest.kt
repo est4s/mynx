@@ -139,4 +139,29 @@ class ColorSchemeTest {
         assertEquals(base.foreground, strip.mark)
         assertEquals(base.foreground, strip.text)
     }
+
+    @Test
+    fun `tab strip and key bar stay readable in every built-in theme`() {
+        for (name in BUILT_IN_THEMES) {
+            val strip = parseColorScheme(builtInThemeText(name)!!, NEON).scheme.stripColors()
+            assertTrue(contrast(strip.text, strip.background) >= 4.5, "$name: text")
+            assertTrue(contrast(strip.accent, strip.background) >= 3.0, "$name: accent")
+            assertTrue(contrast(strip.accent, strip.selectedBackground) >= 3.0, "$name: accent on the selected tab")
+            assertTrue(contrast(strip.mark, strip.background) >= 3.0, "$name: marks")
+        }
+    }
+
+    @Test
+    fun `a light theme's pale colour 7 isn't used for text`() {
+        val light = base.copy(background = 0xfffdf6e3.toInt(), foreground = 0xff073642.toInt(),
+            palette = mapOf(7 to 0xffeee8d5.toInt(), 0 to 0xff073642.toInt()))
+
+        assertEquals(light.foreground, light.stripColors().text)
+    }
+
+    @Test
+    fun `contrast is the WCAG ratio`() {
+        assertEquals(21.0, contrast(0xff000000.toInt(), 0xffffffff.toInt()), 0.01)
+        assertEquals(1.0, contrast(0xff777777.toInt(), 0xff777777.toInt()), 0.01)
+    }
 }

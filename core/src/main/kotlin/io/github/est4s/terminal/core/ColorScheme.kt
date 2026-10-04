@@ -64,13 +64,49 @@ fun parseColorScheme(text: String, base: ColorScheme): ParsedColorScheme {
 fun loadColorScheme(file: File): ParsedColorScheme =
     if (file.isFile) parseColorScheme(file.readText(), NEON) else ParsedColorScheme(NEON, emptyList())
 
-fun ColorScheme.stripColors() = StripColors(
-    background = background,
-    selectedBackground = palette[0] ?: background,
-    accent = cursor ?: foreground,
-    mark = palette[6] ?: foreground,
-    text = palette[7] ?: foreground,
-)
+/**
+ * Colours for the tab strip and key bar. The theme's own picks (colour 7
+ * for text, colour 0 for the selected tab, the cursor colour as accent)
+ * when they're readable; light themes often need others.
+ */
+fun ColorScheme.stripColors(): StripColors {
+    val text = readable(background, 4.5, palette[7], foreground, palette[0], palette[8])
+    // Colour 0 is dark: right for a dark theme's selected tab, not a light one's.
+    val selected = palette[0]?.takeIf { contrast(it, background) < 3.0 } ?: blend(background, foreground, 0.12)
+    val accent = listOfNotNull(cursor, foreground, palette[5], palette[4])
+        .firstOrNull { contrast(it, background) >= 3.0 && contrast(it, selected) >= 3.0 } ?: text
+    val mark = readable(background, 3.0, palette[6], foreground)
+    return StripColors(background, if (palette[0] == null) background else selected, accent, mark, text)
+}
+
+/** The first of [candidates] with at least [ratio] contrast on [background], else the best one. */
+private fun readable(background: Int, ratio: Double, vararg candidates: Int?): Int {
+    val colors = candidates.filterNotNull()
+    return colors.firstOrNull { contrast(it, background) >= ratio } ?: colors.maxBy { contrast(it, background) }
+}
+
+/** WCAG contrast ratio of two colours, from 1 (same) to 21 (black on white). */
+fun contrast(a: Int, b: Int): Double {
+    val (light, dark) = listOf(luminance(a), luminance(b)).sortedDescending()
+    return (light + 0.05) / (dark + 0.05)
+}
+
+private fun luminance(color: Int): Double {
+    fun channel(shift: Int): Double {
+        val c = (color shr shift and 0xff) / 255.0
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0)
+}
+
+private fun blend(from: Int, to: Int, amount: Double): Int {
+    fun channel(shift: Int): Int {
+        val a = from shr shift and 0xff
+        val b = to shr shift and 0xff
+        return (a + (b - a) * amount).toInt() shl shift
+    }
+    return (0xff000000.toInt()) or channel(16) or channel(8) or channel(0)
+}
 
 private fun parseHexColor(value: String): Int? =
     if (HEX_COLOR.matches(value)) (0xff000000 or value.substring(1).toLong(16)).toInt() else null
