@@ -39,7 +39,9 @@ gh run watch "$run" --exit-status >/dev/null || {
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 gh run download "$run" -D "$tmp"
-apk=/storage/emulated/0/Download/pocket-terminal-debug.apk
+# Not the name Termux used: Android won't let this app overwrite
+# another app's file in Download.
+apk=/storage/emulated/0/Download/pocket-terminal-build.apk
 cp "$tmp"/*/*.apk "$apk"
 echo "Copied to $apk"
 

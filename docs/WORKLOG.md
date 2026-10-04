@@ -64,10 +64,10 @@ The owner now develops inside the app's own Debian (no Termux), so
 `scripts/deliver.sh` opens the installer through the app (see the log,
 2026-10-04 (25)). On the phone, after the push that adds it:
 - Run `scripts/deliver.sh`. The installed build doesn't know the request
-  yet, so it says to open `Download/pocket-terminal-debug.apk` from the
+  yet, so it says to open `Download/pocket-terminal-build.apk` from the
   Files app: do that once. Does the Files app show the file?
 - Then `scripts/deliver.sh` again (or `pocket install-apk
-  /storage/emulated/0/Download/pocket-terminal-debug.apk`) with the app
+  /storage/emulated/0/Download/pocket-terminal-build.apk`) with the app
   on screen: Android asks to allow installing apps the first time (the
   request opens that setting); after allowing, run it again and the
   installer opens. Tap **Install**: the app restarts as the new build.
