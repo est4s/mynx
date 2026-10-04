@@ -118,6 +118,13 @@ fun setSetting(text: String?, key: String, value: String): Result<String> = runC
     lines.joinToString("\n", postfix = "\n")
 }
 
+/** [text] (the settings file) without [key]'s lines, so it's back to its default. */
+fun unsetSetting(text: String, key: String): Result<String> = runCatching {
+    if (key !in SETTINGS_BY_KEY) error("unknown setting '$key' (pocket settings lists them)")
+    text.lines().dropLastWhile { it.isEmpty() }.filterNot { isLineFor(it, key) }
+        .joinToString("\n", postfix = "\n")
+}
+
 private fun isLineFor(line: String, key: String): Boolean {
     val trimmed = line.trim()
     return !trimmed.startsWith("#") && '=' in trimmed && trimmed.substringBefore('=').trim() == key

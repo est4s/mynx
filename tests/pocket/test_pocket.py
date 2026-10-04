@@ -201,6 +201,13 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(run.returncode, 2)
         self.assertIn("usage: pocket set KEY VALUE", run.stderr)
 
+    def test_reset_one_setting_or_all(self):
+        self.start_app({"reset": lambda k: {"ok": True, "key": k, "value": "12"} if k != "all" else {"ok": True, "key": "all"}})
+        self.assertEqual(self.pocket("reset", "font-size").stdout, "font-size = 12 (default)\n")
+        self.assertEqual(self.pocket("reset", "all").stdout, "All settings back to their defaults\n")
+        self.assertEqual(self.app.requests, [["reset", "font-size"], ["reset", "all"]])
+        self.assertIn("usage: pocket reset KEY|all", self.pocket("reset").stderr)
+
     # --- themes ------------------------------------------------------------
 
     THEMES = {"ok": True, "current": "nord", "themes": [
@@ -219,6 +226,10 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(self.pocket("theme", "set", "nord").stdout, "Theme: nord\n")
         self.assertEqual(self.pocket("theme", "show", "nord").stdout, "background=#000000\n")
         self.assertEqual(self.app.requests, [["theme-set", "nord"], ["theme-show", "nord"]])
+
+    def test_theme_reset(self):
+        self.start_app({"theme-reset": {"ok": True, "name": "neon"}})
+        self.assertEqual(self.pocket("theme", "reset").stdout, "Theme: neon (the default)\n")
 
     def test_theme_unknown_subcommand(self):
         run = self.pocket("theme", "paint")

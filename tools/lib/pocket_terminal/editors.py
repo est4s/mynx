@@ -250,13 +250,22 @@ def settings_editor(ui):
     while True:
         settings = request("settings")["settings"]
         width = max(len(s["key"]) for s in settings) + 2
-        rows = [f"{s['key']:<{width}}{s['value']}" for s in settings]
-        current = settings[min(sel, len(settings) - 1)]
-        crumb = current["description"]
-        key, sel = ui.list("Font & cursor", crumb, rows, sel, "←→ change  Enter: pick  q: back", "left right")
+        rows = [f"{s['key']:<{width}}{s['value']}" for s in settings] + ["Reset all to defaults"]
+        crumb = settings[sel]["description"] if sel < len(settings) else "Every setting back to its default."
+        key, sel = ui.list("Font & cursor", crumb, rows, sel, "←→ change  Enter: pick  r: reset  q: back",
+                           "left right r")
         if key == "back":
             return
+        if sel == len(settings):
+            if key in ("enter", "r") and ui.confirm("Reset font & cursor to the defaults?"):
+                if attempt(ui, lambda: request("reset", "all")):
+                    ui.status = "All settings back to their defaults"
+            continue
         s = settings[sel]
+        if key == "r":
+            if attempt(ui, lambda: request("reset", s["key"])):
+                ui.status = f"{s['key']} = {s['default']} (default)"
+            continue
         value = None
         if s["choices"]:
             step = -1 if key == "left" else 1
@@ -311,7 +320,14 @@ def theme_editor(ui):
     while True:
         rows = [("* " if n == current else "  ") + n for n in names] + ["  Edit colours…"]
         key, sel = ui.list("Theme", "Moving previews a theme; Enter keeps it.", rows, sel,
-                           "↑↓ preview  Enter: use  q: back", "up down k j")
+                           "↑↓ preview  Enter: use  r: reset  q: back", "up down k j r")
+        if key == "r":
+            if ui.confirm("Back to the default theme? Colour changes are lost."):
+                answer = attempt(ui, lambda: request("theme-reset"))
+                if answer:
+                    current = shown = previewing = answer["name"]
+                    ui.status = f"Theme: {current} (the default)"
+            continue
         if key in ("up", "k", "down", "j"):
             sel = (sel + (-1 if key in ("up", "k") else 1)) % len(rows)
             if sel < len(names):
@@ -349,7 +365,7 @@ def colours_editor(ui):
         rows = [(f"{k:<12}{values.get(k, '(Neon)')}", int(k[5:]) if k.startswith("color") else None)
                 for k in COLOR_KEYS]
         key, sel = ui.list("Colours", "~/.config/pocket-terminal/colors.properties", rows, sel,
-                           "Enter: change  s: save  q: back", "s")
+                           "Enter: change  r: theme's colour  s: save", "s r")
         if key == "back":
             if draft != saved and not ui.confirm("Discard unsaved colours?"):
                 continue
@@ -365,6 +381,15 @@ def colours_editor(ui):
             ui.status = "Saved" if problems is not None else ui.status
             continue
         name = COLOR_KEYS[sel]
+        if key == "r":
+            theme = re.match(r"#\s*theme:\s*(\S+)", draft)
+            original = attempt(ui, lambda: request("theme-show", theme.group(1) if theme else "neon")["text"])
+            value = dict(re.findall(r"^\s*([a-z0-9]+)\s*=\s*(\S+)", original or "", re.M)).get(name)
+            if value:
+                draft = set_color(draft, name, value)
+                attempt(ui, lambda: request("preview-colors", *draft.splitlines()))
+                ui.status = "Not saved yet: s saves"
+            continue
         value = ui.prompt(name, "A colour as #rrggbb", values.get(name, ""))
         if value is None:
             continue
@@ -422,7 +447,12 @@ def bar_editor(ui, name):
     def keys_for(current):
         return ui.prompt("Keys", 'e.g. q   Ctrl+R   Up   "text" Enter   (see ~/AGENTS.md)', current)
 
-    items_editor(ui, f"Key bar: {name}", text, keys_for, save)
+    def reset(ui):
+        if not ui.confirm(f"Put the built-in {name} bar back?"):
+            return False
+        return attempt(ui, lambda: request("keybar-reset", name)) is not None
+
+    items_editor(ui, f"Key bar: {name}", text, keys_for, save, reset)
 
 
 # --- launcher menu ---------------------------------------------------------------------
@@ -469,7 +499,7 @@ def items_editor(ui, title, text, value_for, save, reset=None):
     f = ItemsFile(text)
     saved = f.render()
     sel = 0
-    hint = "Enter: edit  a: add  d: del  K J: move  s: save"
+    hint = "Enter edit a add d del K J move s save" + (" r reset" if reset else "")
     while True:
         width = max((len(i.label) for i in f.items), default=0) + 2
         rows = [f"{i.label:<{width}}{i.value}" for i in f.items] or ["(empty: a adds one)"]

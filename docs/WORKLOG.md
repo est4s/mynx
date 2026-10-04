@@ -178,6 +178,14 @@ replaces the old home docs with pointers to the new guide.
 10. **Regressions:** `files` (nnn bar), `rogue` (game bar), tabs, the
     boot splash says `theme: …`.
 
+**Round 2 checks** (after the light-theme, htop and reset fixes):
+`pocket theme set solarized-light`: tab names and key bar labels
+readable, the selected tab a light tint; a menu item `run nosuch` says
+"nosuch: command not found" and waits; `r` in Font & cursor resets the
+selected setting, the last row resets all; `r` in Theme → default
+(Neon); `r` in the colour editor → that colour from the theme; `r`
+inside an edited key bar → built-in back.
+
 **Known gaps / for later:** undo for config changes (`pocket undo`,
 roadmap 7); fonts other than the built-in one lack Nerd Font icons;
 `pocket edit` isn't usable with a screen reader (keyboard-only, like
@@ -217,6 +225,30 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (20): owner's first round on step 6
+
+**Owner found:** (1) with solarized-light the key bar's labels were
+white on a light background; (2) a menu item running `htop` said
+nothing useful: htop isn't installed; (3) wanted "reset to default" in
+every settings editor. Claude Code not installed yet, so the agent test
+waits.
+
+**Done**
+- `stripColors()` picks colours by WCAG contrast: the theme's own picks
+  when readable (Neon unchanged), else the foreground or another basic
+  colour; a light theme's selected tab is a tint of the background. A
+  test checks every built-in theme (text 4.5:1, accent and marks 3:1).
+- `htop` is in the image (existing Debians: `apt install htop`); a
+  `run` item that fails now says "NAME: command not found" or "failed
+  (exit N)" and waits for a key instead of flashing back.
+- Resets: requests `reset KEY|all` (`unsetSetting()` removes the line,
+  so later default changes apply) and `theme-reset` (deletes the
+  colours file); `pocket reset KEY|all`, `pocket theme reset`. Editors:
+  `r` resets the selected setting, a "Reset all to defaults" row, `r`
+  in the theme list (default theme), in the colour editor (that colour
+  from the theme the file was set from), in a key bar (built-in back)
+  and in the menu editor (as before).
 
 ### 2026-10-04 (19): step 6.2-6.6 built in one go
 

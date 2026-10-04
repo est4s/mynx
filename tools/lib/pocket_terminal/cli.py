@@ -15,7 +15,8 @@ Commands:
   settings   list the settings: font size, font, cursor
   get        get KEY: one setting's value
   set        set KEY VALUE: change a setting (applies at once)
-  theme      theme [list] | show NAME | set NAME: colour themes
+  reset      reset KEY|all: settings back to their defaults
+  theme      theme [list] | show NAME | set NAME | reset: colour themes
   keybar     keybar [list] | show NAME | edit NAME | reset NAME
   menu       menu [show] | edit | reset: the launcher menu's items
   edit       edit [settings|theme|keybars|menu]: the settings editors
@@ -102,6 +103,17 @@ def cmd_set(args, as_json):
     return 0
 
 
+def cmd_reset(args, as_json):
+    if len(args) != 1:
+        raise Usage("usage: pocket reset KEY|all")
+    answer = request("reset", args[0])
+    if args[0] == "all":
+        out(as_json, answer, "All settings back to their defaults")
+    else:
+        out(as_json, answer, f"{answer['key']} = {answer['value']} (default)")
+    return 0
+
+
 def cmd_theme(args, as_json):
     sub = args[0] if args else "list"
     if sub == "list" and len(args) <= 1:
@@ -124,7 +136,11 @@ def cmd_theme(args, as_json):
         answer = request("theme-set", args[1])
         out(as_json, answer, f"Theme: {answer['name']}")
         return 0
-    raise Usage("usage: pocket theme [list] | show NAME | set NAME")
+    if sub == "reset" and len(args) == 1:
+        answer = request("theme-reset")
+        out(as_json, answer, f"Theme: {answer['name']} (the default)")
+        return 0
+    raise Usage("usage: pocket theme [list] | show NAME | set NAME | reset")
 
 
 def cmd_keybar(args, as_json):
@@ -205,7 +221,7 @@ def cmd_help(args, as_json):
 
 
 COMMANDS = {
-    "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set,
+    "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "version": cmd_version, "help": cmd_help,
 }

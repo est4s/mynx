@@ -60,6 +60,25 @@ class PocketRequests(private val dir: File, private val home: File) {
                 writeAtomically(settingsFile, text)
                 ok("key" to json(key), "value" to json(value))
             }
+            "reset" -> {
+                need(1)
+                val key = args[0]
+                if (key == "all") {
+                    settingsFile.delete()
+                    ok("key" to json("all"))
+                } else {
+                    val def = SETTINGS.firstOrNull { it.key == key }
+                        ?: throw Refused("unknown setting '$key' (pocket settings lists them)")
+                    if (settingsFile.isFile) {
+                        writeAtomically(settingsFile, unsetSetting(settingsFile.readText(), key).getOrThrow())
+                    }
+                    ok("key" to json(key), "value" to json(def.default))
+                }
+            }
+            "theme-reset" -> {
+                colorsFile.delete()
+                ok("name" to json(BUILT_IN_THEMES.first()))
+            }
             "themes" -> themes()
             "theme-show" -> {
                 need(1)

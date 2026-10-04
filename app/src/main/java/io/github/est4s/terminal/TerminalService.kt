@@ -43,7 +43,9 @@ private const val CWD_DIR = "/tmp/.pocket-terminal"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
 // Requests after which the app applies the config files again.
-private val RELOADING_REQUESTS = setOf("check", "set", "theme-set", "preview-end", "keybar-edit", "keybar-reset")
+private val RELOADING_REQUESTS = setOf(
+    "check", "set", "reset", "theme-set", "theme-reset", "preview-end", "keybar-edit", "keybar-reset",
+)
 
 /**
  * Owns the terminal sessions and keeps them running while the app is in the

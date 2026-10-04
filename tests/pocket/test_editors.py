@@ -126,6 +126,13 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(code, 0, screen)
         self.assertIn("font-size must be small", screen)
 
+    def test_settings_reset_one_or_all(self):
+        self.start_app({"settings": SETTINGS, "reset": lambda k: {"ok": True, "key": k, "value": "x"}})
+        # r on font-size; then the last row, "Reset all to defaults", and confirm.
+        code, screen = self.edit(["settings"], ["r", UP, ENTER, "y", "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertEqual([r for r in self.app.requests if r[0] == "reset"], [["reset", "font-size"], ["reset", "all"]])
+
     # --- theme -------------------------------------------------------------
 
     def test_theme_previews_while_moving_and_sets_on_enter(self):
@@ -152,6 +159,23 @@ class EditorTest(unittest.TestCase):
         self.assertIn("background=#123456", self.read(os.path.join(self.config, "colors.properties")))
         self.assertIn(["preview-colors"], [r[:1] for r in self.app.requests])
         self.assertIn(["check"], self.app.requests)
+
+    def test_theme_reset_goes_back_to_the_default(self):
+        self.start_app({**THEME_REPLIES, "theme-reset": {"ok": True, "name": "neon"}})
+        code, screen = self.edit(["theme"], ["r", "y", "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertIn(["theme-reset"], self.app.requests)
+
+    def test_colour_reset_takes_the_themes_colour(self):
+        self.write_colors("# theme: nord\nbackground=#000000\n")
+        self.start_app(THEME_REPLIES)
+        code, screen = self.edit(["theme"], [UP, ENTER, "r", "s", "q", "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertIn("background=#2e3440", self.read(os.path.join(self.config, "colors.properties")))
+
+    def write_colors(self, text):
+        with open(os.path.join(self.config, "colors.properties"), "w") as f:
+            f.write(text)
 
     # --- key bars ----------------------------------------------------------
 
@@ -184,6 +208,16 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(code, 0, screen)
         self.assertIn("Discard", screen)
         self.assertNotIn("keybar-edit", [r[0] for r in self.app.requests])
+
+    def test_key_bar_editor_can_reset_an_edited_bar(self):
+        self.start_app({
+            "keybars": {"ok": True, "keybars": [{"name": "nnn", "builtIn": True, "file": "~/x/nnn.conf"}]},
+            "keybar-show": {"ok": True, "name": "nnn", "file": "~/x/nnn.conf", "text": "Open = l\n"},
+            "keybar-reset": {"ok": True},
+        })
+        code, screen = self.edit(["keybars"], [ENTER, "r", "y", "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertIn(["keybar-reset", "nnn"], self.app.requests)
 
     # --- menu --------------------------------------------------------------
 

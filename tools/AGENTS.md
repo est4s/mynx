@@ -32,7 +32,7 @@ and applies them. See "Changing settings" below.
 - **Phone storage** (Download, DCIM, Documents, …) is at
   `/storage/emulated/0`.
 - Editors and pagers: `nano` and `less` are installed; `mc` has a file
-  manager and editor.
+  manager and editor; `htop` shows processes.
 
 ## The setup
 
@@ -70,9 +70,11 @@ their own.
 | `pocket settings` | list the settings with values, defaults and descriptions |
 | `pocket get KEY` | one setting's value |
 | `pocket set KEY VALUE` | change a setting, e.g. `pocket set font-size 14` |
+| `pocket reset KEY` | a setting back to its default; `pocket reset all` for all of them |
 | `pocket theme list` | the themes (`*` marks the one in use) |
 | `pocket theme set NAME` | switch theme, e.g. `pocket theme set nord` |
 | `pocket theme show NAME` | a theme's colours file |
+| `pocket theme reset` | back to the default theme (deletes the colours file) |
 | `pocket keybar list` | key bars: built-in, edited (your copy) or yours |
 | `pocket keybar show NAME` | the bar file in use |
 | `pocket keybar edit NAME` | copy a built-in bar (or start a new one) in `~/.config/pocket-terminal/keybars/` to edit |
@@ -89,7 +91,8 @@ their own.
 
 `pocket edit` (also the menu's Settings item) opens editors for people:
 theme (moving through the list previews each theme live), font &
-cursor, key bars, the launcher menu, and a config check. Don't run it
+cursor, key bars, the launcher menu, and a config check. In each, `r`
+puts things back to the default. Don't run it
 yourself: it's interactive. Use the commands above.
 
 ### Settings (`settings.conf`)

@@ -150,6 +150,24 @@ class PocketRequestsTest {
         assertTrue("settings.conf" in ask("check") && "font-size must be" in ask("check"))
     }
 
+    @Test
+    fun `reset puts one setting back to its default, keeping the others`() {
+        config("settings.conf", "# mine\nfont-size = 16\ncursor-style = bar\n")
+
+        assertEquals("""{"ok":true,"key":"font-size","value":"12"}""", ask("reset", "font-size"))
+        assertEquals("# mine\ncursor-style = bar\n", File(home, "$CONFIG_DIR/settings.conf").readText())
+        assertEquals("""{"ok":false,"error":"unknown setting 'colour' (pocket settings lists them)"}""", ask("reset", "colour"))
+    }
+
+    @Test
+    fun `reset all puts every setting back`() {
+        config("settings.conf", "font-size = 16\n")
+
+        assertEquals("""{"ok":true,"key":"all"}""", ask("reset", "all"))
+        assertFalse(File(home, "$CONFIG_DIR/settings.conf").exists())
+        assertEquals("""{"ok":true,"key":"all"}""", ask("reset", "all"))
+    }
+
     // --- themes ------------------------------------------------------------
 
     @Test
@@ -211,6 +229,15 @@ class PocketRequestsTest {
         config("themes/mine.colors.properties", "oops\n")
 
         assertTrue("themes/mine.colors.properties" in ask("check"))
+    }
+
+    @Test
+    fun `theme-reset goes back to the default theme`() {
+        ask("theme-set", "nord")
+
+        assertEquals("""{"ok":true,"name":"neon"}""", ask("theme-reset"))
+        assertFalse(File(home, "$CONFIG_DIR/colors.properties").exists())
+        assertTrue(ask("themes").startsWith("""{"ok":true,"current":"neon","""))
     }
 
     // --- key bars ----------------------------------------------------------
