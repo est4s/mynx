@@ -416,10 +416,11 @@ class PocketTest(unittest.TestCase):
         bin_dir = os.path.join(self.tmp.name, "bin")
         for name, body in scripts.items():
             self.write(os.path.join(bin_dir, name), "#!/bin/sh\n" + body + "\n", 0o755)
-        return bin_dir + ":" + os.environ["PATH"]
+        # Not the real PATH: the machine running the tests may have the real agents.
+        return bin_dir + ":/usr/bin:/bin"
 
     def agent(self, *args, stdin="", path=None):
-        environ = {"PATH": path or os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
+        environ = {"PATH": path or "/usr/bin:/bin", "POCKET_REQUESTS": self.requests, "HOME": self.home,
                    "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
         return subprocess.run(["python3", POCKET, "agent", *args], input=stdin, capture_output=True,
                               text=True, env=environ)
@@ -498,8 +499,42 @@ class PocketTest(unittest.TestCase):
         self.assertIn("1) Claude Code", run.stdout)
         self.assertIn("RAN-INSTALLER", run.stdout)
 
+    def test_agent_list_for_scripts(self):
+        path = self.fake_commands(claude="true")
+        self.assertEqual(self.agent("list", "--tsv", path=path).stdout,
+                         "claude\tClaude Code\tinstalled\ncodex\tCodex\t\ngemini\tGemini CLI\t\n")
+
+    def test_agent_start_runs_an_installed_agent(self):
+        path = self.fake_commands(claude='echo "CLAUDE STARTED $*"')
+        run = self.agent("start", "claude", path=path)
+        self.assertEqual((run.returncode, run.stdout), (0, "CLAUDE STARTED \n"))
+
+    def test_agent_start_offers_to_install_a_missing_agent_then_starts_it(self):
+        local_bin = os.path.join(self.home, ".local", "bin")
+        installer = (f'mkdir -p {local_bin}; printf "#!/bin/sh\\necho CLAUDE STARTED\\n" >{local_bin}/claude; '
+                     f'chmod +x {local_bin}/claude')
+        path = self.fake_commands(curl=f"echo '{installer}'")
+        run = self.agent("start", "claude", stdin="y\nn\n\n", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("Claude Code isn't installed yet.", run.stdout)
+        self.assertIn("Start Claude Code now? [Y/n]", run.stdout)
+        self.assertTrue(run.stdout.endswith("CLAUDE STARTED\n"), run.stdout)
+
+    def test_agent_start_when_you_decline_the_install(self):
+        path = self.fake_commands(curl="echo true")
+        run = self.agent("start", "claude", stdin="n\n", path=path)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("Not installed.", run.stdout)
+
+    def test_agent_start_without_a_name_lets_you_pick(self):
+        path = self.fake_commands(codex='echo "CODEX STARTED"')
+        run = self.agent("start", stdin="2\n", path=path)
+        self.assertIn("2) Codex", run.stdout)
+        self.assertTrue(run.stdout.endswith("CODEX STARTED\n"), run.stdout)
+
     def test_agent_usage(self):
-        for args in [("frob",), ("install", "skynet"), ("notify", "claude"), ("notify", "claude", "loud")]:
+        for args in [("frob",), ("install", "skynet"), ("notify", "claude"), ("notify", "claude", "loud"),
+                     ("start", "skynet")]:
             run = self.agent(*args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("pocket agent", run.stderr)
@@ -513,6 +548,55 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(run.stdout, "{}\n")  # Gemini CLI wants JSON on stdout
         self.assertEqual([r[1:3] for r in self.app.requests], [
             ["Codex", "Wants to run Bash"], ["Gemini CLI", "Allow write_file?"], ["Gemini CLI", "Your turn (project)"]])
+
+    # --- undo --------------------------------------------------------------
+
+    def test_undo_says_what_it_took_back(self):
+        self.start_app({"undo": {"ok": True, "undone": "set font-size 16"}})
+        run = self.pocket("undo")
+        self.assertEqual((run.returncode, run.stdout), (0, "Undid: set font-size 16\n"))
+        self.assertEqual(self.app.requests, [["undo"]])
+
+    def test_undo_with_nothing_to_undo(self):
+        self.start_app({"undo": {"ok": True, "undone": None}})
+        run = self.pocket("undo")
+        self.assertEqual((run.returncode, run.stdout), (1, "Nothing to undo\n"))
+
+    def test_undo_list(self):
+        noon = time.mktime((2026, 10, 4, 12, 5, 0, 0, 0, -1)) * 1000
+        self.start_app({"undo-list": {"ok": True, "keep": 3, "steps": [
+            {"reason": "theme set nord", "time": noon}, {"reason": "edits by hand", "time": noon}]}})
+        run = self.pocket("undo", "--list")
+        self.assertEqual(run.stdout.splitlines(), [
+            "1. theme set nord  (12:05)", "2. edits by hand  (12:05)", "pocket undo takes back 1. (keeps 3: undo-keep)"])
+
+    def test_undo_list_when_empty(self):
+        self.start_app({"undo-list": {"ok": True, "keep": 1, "steps": []}})
+        self.assertEqual(self.pocket("undo", "--list").stdout, "Nothing to undo (keeps 1: undo-keep)\n")
+
+    def test_menu_edit_and_reset_are_recorded_for_undo(self):
+        self.start_app({"check": {"ok": True, "problems": []}})
+        self.write(os.path.join(self.tools, "menu.conf"), "Terminal = shell\n")
+        self.pocket("menu", "edit")
+        self.pocket("menu", "reset")
+        self.assertEqual(self.app.requests, [["check", "menu edit"], ["check", "menu reset"]])
+
+    # --- open --------------------------------------------------------------
+
+    def test_open_hands_a_link_to_the_app(self):
+        self.start_app({"open-url": {"ok": True}})
+        run = self.pocket("open", "https://claude.ai/login")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.app.requests, [["open-url", "https://claude.ai/login"]])
+
+    def test_open_says_why_it_failed(self):
+        self.start_app({"open-url": {"ok": False, "error": "only http and https links open: x"}})
+        run = self.pocket("open", "x")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("only http and https", run.stderr)
+
+    def test_open_needs_one_link(self):
+        self.assertIn("usage: pocket open URL", self.pocket("open").stderr)
 
 
 if __name__ == "__main__":

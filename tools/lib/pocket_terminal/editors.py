@@ -14,14 +14,14 @@ import shutil
 from contextlib import contextmanager
 
 from . import agents
-from .client import TOOLS, Failure, request
+from .client import TOOLS, Failure, record, request
 from .models import ItemsFile, set_color
 
 KEY_BAR = "pocket-edit"
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 COLOR_KEYS = ["background", "foreground", "cursor"] + [f"color{i}" for i in range(16)]
 MENU_ACTIONS = ["shell", "files", "games", "settings", "system", "exit"]
-NUMBER_STEPS = {"font-size": 1, "agent-notify-after": 5}  # ←→ change these by this much
+NUMBER_STEPS = {"font-size": 1, "agent-notify-after": 5, "undo-keep": 1}  # ←→ change these by this much
 FONT_DIRS = ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts", "~/.local/share/fonts",
              "~/.config/pocket-terminal/fonts"]
 
@@ -225,7 +225,7 @@ def attempt(ui, action):
 
 def hub(ui):
     items = [("Theme", theme_editor), ("Settings", settings_editor), ("Key bars", keybars_editor),
-             ("Launcher menu", menu_editor), ("Check config", check_screen)]
+             ("Launcher menu", menu_editor), ("Check config", check_screen), ("Undo last change", undo_screen)]
     sel = 0
     while True:
         key, sel = ui.list("Settings", "Everything here is also a pocket command.",
@@ -233,6 +233,17 @@ def hub(ui):
         if key == "back":
             return
         attempt(ui, lambda: items[sel][1](ui))
+
+
+def undo_screen(ui):
+    steps = request("undo-list")["steps"]
+    if not steps:
+        ui.message("Undo", ["Nothing to undo."])
+        return
+    if ui.confirm(f"Undo '{steps[0]['reason']}'?"):
+        answer = attempt(ui, lambda: request("undo"))
+        if answer and answer["undone"]:
+            ui.status = f"Undid: {answer['undone']}"
 
 
 def check_screen(ui):
@@ -395,7 +406,7 @@ def colours_editor(ui):
             with open(path, "w") as f:
                 f.write(draft)
             saved = draft
-            problems = attempt(ui, lambda: request("check"))
+            problems = attempt(ui, lambda: request("check", "colours edited"))
             ui.status = "Saved" if problems is not None else ui.status
             continue
         name = COLOR_KEYS[sel]
@@ -460,7 +471,8 @@ def bar_editor(ui, name):
         with open(path, "w") as f:
             f.write(rendered)
         mine = f"~/.config/pocket-terminal/keybars/{name}.conf"
-        return [p for f in request("check")["problems"] if f["file"] == mine for p in f["problems"]]
+        return [p for f in request("check", f"key bar {name} edited")["problems"] if f["file"] == mine
+                for p in f["problems"]]
 
     def keys_for(current):
         return ui.prompt("Keys", 'e.g. q   Ctrl+R   Up   "text" Enter   (see ~/AGENTS.md)', current)
@@ -485,6 +497,7 @@ def menu_editor(ui):
         os.makedirs(os.path.dirname(mine), exist_ok=True)
         with open(mine, "w") as f:
             f.write(rendered)
+        record("menu edited")
         return [p for f in menu_problems() for p in f["problems"]]
 
     def action_for(current):
@@ -505,6 +518,7 @@ def reset_menu(ui):
     from .cli import user_menu
     if ui.confirm("Put the built-in menu back?"):
         os.remove(user_menu())
+        record("menu reset")
         return True
     return False
 

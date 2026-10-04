@@ -11,6 +11,8 @@ data class Settings(
     val agentNotify: Boolean = true,
     /** Seconds an agent's turn must take before its end notifies. */
     val agentNotifyAfter: Int = 30,
+    /** How many config changes `pocket undo` can take back. */
+    val undoKeep: Int = 1,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -19,6 +21,7 @@ data class Settings(
         "cursor-blink" to if (cursorBlink) "on" else "off",
         "agent-notify" to if (agentNotify) "on" else "off",
         "agent-notify-after" to agentNotifyAfter.toString(),
+        "undo-keep" to undoKeep.toString(),
     )
 }
 
@@ -37,6 +40,7 @@ data class SettingDef(
 const val MIN_FONT_SIZE = 6
 const val MAX_FONT_SIZE = 40
 const val MAX_AGENT_NOTIFY_AFTER = 3600
+const val MAX_UNDO_KEEP = 20
 
 private fun oneOf(key: String, choices: List<String>): (String) -> String? =
     { if (it in choices) null else "$key must be one of: ${choices.joinToString(", ")}" }
@@ -80,6 +84,12 @@ val SETTINGS: List<SettingDef> = listOf(
             else "agent-notify-after must be a whole number of seconds from 0 to $MAX_AGENT_NOTIFY_AFTER"
         },
         { copy(agentNotifyAfter = it.toInt()) },
+    ),
+    SettingDef(
+        "undo-keep", "How many config changes pocket undo can take back (0-$MAX_UNDO_KEEP; 0 turns undo off).",
+        "1", null,
+        { if (it.toIntOrNull() in 0..MAX_UNDO_KEEP) null else "undo-keep must be a whole number from 0 to $MAX_UNDO_KEEP" },
+        { copy(undoKeep = it.toInt()) },
     ),
 )
 

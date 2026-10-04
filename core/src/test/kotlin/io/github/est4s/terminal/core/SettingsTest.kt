@@ -59,7 +59,7 @@ class SettingsTest {
     @Test
     fun `every setting is described, with its default`() {
         assertEquals(
-            listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after"),
+            listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -72,9 +72,9 @@ class SettingsTest {
         assertEquals(
             mapOf(
                 "font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on",
-                "agent-notify" to "off", "agent-notify-after" to "45",
+                "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
             ),
-            Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45).values(),
+            Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3).values(),
         )
     }
 
@@ -138,5 +138,13 @@ class SettingsTest {
             ),
             parsed.problems,
         )
+    }
+
+    @Test
+    fun `undo keeps one step by default, up to 20`() {
+        assertEquals(1, Settings().undoKeep)
+        val parsed = parseSettings("undo-keep = 0\nundo-keep = 21\n")
+        assertEquals(0, parsed.settings.undoKeep)
+        assertEquals(listOf("line 2: undo-keep must be a whole number from 0 to 20"), parsed.problems)
     }
 }

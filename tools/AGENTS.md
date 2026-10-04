@@ -83,7 +83,10 @@ their own.
 | `pocket menu edit` | copy the built-in menu to `~/.config/pocket-terminal/menu.conf` to edit |
 | `pocket menu reset` | delete your menu file (back to the built-in one) |
 | `pocket notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
-| `pocket agent list` | the AI agents: installed or not, notifications on or off |
+| `pocket undo` | take back the last config change (`pocket undo --list` shows what it can take back) |
+| `pocket open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
+| `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
+| `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
 | `pocket agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
 | `pocket hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
@@ -96,9 +99,10 @@ their own.
 
 `pocket edit` (also the menu's Settings item) opens editors for people:
 theme (moving through the list previews each theme live), settings
-(font, cursor, agent notifications), key bars, the launcher menu, and a config check. In each, `r`
-puts things back to the default. Don't run it
-yourself: it's interactive. Use the commands above.
+(font, cursor, agent notifications, undo), key bars, the launcher menu,
+a config check and "Undo last change". In each, `r` puts things back
+to the default. Don't run it yourself: it's interactive. Use the
+commands above.
 
 ### Settings (`settings.conf`)
 
@@ -117,11 +121,27 @@ One `key = value` per line; `pocket settings` describes each.
   agents (see "AI agents").
 - `agent-notify-after`: 0 to 3600 seconds (default 30). A finished
   agent turn only notifies if it took at least this long.
+- `undo-keep`: 0 to 20 (default 1): how many changes `pocket undo` can
+  take back. 0 turns undo off.
+
+### Undo
+
+Every change to `~/.config/pocket-terminal/` is recorded so `pocket
+undo` can take it back, however it was made: `pocket` commands, the
+settings editors, the app (pinching the font size), or by hand. Edits by
+hand are recorded at the next `pocket check`, app start or `pocket
+undo`, so a file you broke by hand can be undone even if you never
+checked it. `pocket undo` takes back one change at a time, newest first,
+as far back as `undo-keep` allows; `pocket undo --list` names them.
+Fonts in `fonts/` and files over 256 KB aren't recorded. The copies live
+in `~/.local/state/pocket-terminal/undo/`.
 
 ### AI agents
 
-`pocket agent install NAME` (or the menu's **AI agents** item) installs
-an agent CLI with its own official installer, never a copy bundled with
+The menu's **AI agents** item lists them: picking an installed one
+starts it, picking one marked "(install)" offers to install it first
+(`pocket agent start NAME` does the same). `pocket agent install NAME`
+installs an agent CLI with its own official installer, never a copy bundled with
 the app; the user signs in with their own account:
 
 | Name | Agent | Installer | Its hooks |
@@ -145,6 +165,11 @@ that file is the only record of whether they're on. `agent-notify off`
 silences all agents at once.
 
 Your own scripts can notify too: `long-job && pocket notify "Done" "long-job finished"`.
+
+**Signing in:** `BROWSER` points at `xdg-open`, which opens links in the
+phone's browser, so an agent that opens a browser to sign in just works
+(the app must be on screen). Tapping a link shown in the terminal opens
+it too, even one spread over several rows.
 
 ### Themes and colours
 
@@ -180,6 +205,7 @@ line, in order; labels up to 20 characters. Actions:
 | `files` | the file manager |
 | `games` | the Games menu |
 | `settings` | the settings editors (`pocket edit`) |
+| `agents` | AI agents: start one, or install it (`pocket agent start`) |
 | `system` | Update all, System info |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |

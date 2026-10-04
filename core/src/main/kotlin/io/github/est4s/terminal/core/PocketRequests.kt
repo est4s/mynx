@@ -26,18 +26,28 @@ private class Refused(message: String) : Exception(message)
  * JSON, also renamed into place, and the request is removed. [home] is
  * root's home in Debian. The app applies what changed (see the names
  * returned by [processPending]). [notify] shows a [Notice] and returns
- * null, or says why it didn't.
+ * null, or says why it didn't; [openUrl] likewise opens a web link.
  */
 class PocketRequests(
     private val dir: File,
     private val home: File,
+    now: () -> Long = System::currentTimeMillis,
     private val notify: (Notice) -> String? = { "notifications aren't available" },
+    private val openUrl: (String) -> String? = { "links can't be opened here" },
 ) {
     private val config = File(home, CONFIG_DIR)
     private val settingsFile = File(config, "settings.conf")
     private val colorsFile = File(config, "colors.properties")
     private val themesDir = File(home, THEMES_DIR)
     private val keyBarsDir = File(config, "keybars")
+    private val history = ConfigHistory(config, File(home, UNDO_DIR), now)
+
+    private fun undoKeep() = loadSettings(settingsFile).settings.undoKeep
+
+    /** Call when the app starts: edits made while it was closed become an undo step. */
+    fun start() {
+        runCatching { history.observe(HAND_EDITS, undoKeep()) }
+    }
 
     /** Answers every waiting request; returns those handled, in order. */
     fun processPending(): List<PocketRequest> {
@@ -46,7 +56,9 @@ class PocketRequests(
             val lines = runCatching { file.readText().lines().dropLastWhile { it.isEmpty() } }.getOrDefault(emptyList())
             val request = PocketRequest(lines.firstOrNull()?.trim().orEmpty(), lines.drop(1))
             val reply = try {
-                answer(request)
+                val change = changeName(request)
+                if (change != null) history.observe(HAND_EDITS, undoKeep())
+                answer(request).also { if (change != null) history.observe(change, undoKeep()) }
             } catch (e: Refused) {
                 """{"ok":false,"error":${json(e.message!!)}}"""
             }
@@ -65,7 +77,16 @@ class PocketRequests(
             if (args.size < count) throw Refused("${request.name} needs $count argument${if (count > 1) "s" else ""}")
         }
         return when (request.name) {
-            "check" -> ok("problems" to problemsJson(checkConfig(home)))
+            "check" -> {
+                history.observe(args.firstOrNull()?.takeIf { it.isNotBlank() } ?: HAND_EDITS, undoKeep())
+                ok("problems" to problemsJson(checkConfig(home)))
+            }
+            "undo" -> ok("undone" to (history.undo(undoKeep())?.let(::json) ?: "null"))
+            "undo-list" -> {
+                history.observe(HAND_EDITS, undoKeep())
+                val steps = history.steps().map { obj("reason" to json(it.reason), "time" to it.time.toString()) }
+                ok("keep" to undoKeep().toString(), "steps" to array(steps))
+            }
             "settings" -> settings()
             "set" -> {
                 need(2)
@@ -137,6 +158,13 @@ class PocketRequests(
                 ok()
             }
             "notify" -> notify(args)
+            "open-url" -> {
+                need(1)
+                val url = args[0].trim()
+                if (!isWebLink(url)) throw Refused("only http and https links open: $url")
+                openUrl(url)?.let { throw Refused(it) }
+                ok()
+            }
             else -> throw Refused("unknown request '${request.name}'")
         }
     }
@@ -175,6 +203,16 @@ class PocketRequests(
     private fun notShown(reason: String) = ok("shown" to "false", "reason" to json(reason))
 
     private fun String.cut(max: Int) = if (length <= max) this else take(max - 1) + "…"
+
+    // The name of the change a request makes, for `pocket undo`; null if it changes nothing.
+    private fun changeName(request: PocketRequest): String? {
+        val args = request.args.joinToString(" ")
+        return when (request.name) {
+            "set", "reset" -> "${request.name} $args"
+            "theme-set", "theme-reset", "keybar-edit", "keybar-reset" -> "${request.name.replace('-', ' ')} $args".trim()
+            else -> null
+        }
+    }
 
     private fun settings(): String {
         val parsed = loadSettings(settingsFile)
@@ -241,6 +279,9 @@ class PocketRequests(
         if (!tmp.renameTo(file)) throw Refused("couldn't write ${debianPath(file)}")
     }
 }
+
+private const val HAND_EDITS = "edits by hand"
+private const val UNDO_DIR = ".local/state/pocket-terminal/undo"
 
 private const val NEW_KEY_BAR = """# A key bar: one button per line, "label = keys". Buttons fill two
 # rows in this order, the first half on top. Format: see ~/AGENTS.md.

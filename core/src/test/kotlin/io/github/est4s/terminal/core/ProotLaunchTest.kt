@@ -139,6 +139,14 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `programs open links with the app's xdg-open`() {
+        val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("BROWSER=/opt/pocket-terminal/bin/xdg-open" in shellEnv, shellEnv.toString())
+    }
+
+    @Test
     fun `tells programs which tab they run in`() {
         val argv = prootLaunch(paths, shellId = 7).argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

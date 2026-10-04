@@ -69,7 +69,7 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
         return 1f
     }
 
-    override fun onSingleTapUp(e: MotionEvent) = activity.showKeyboard()
+    override fun onSingleTapUp(e: MotionEvent) = activity.onTap(e)
     override fun shouldBackButtonBeMappedToEscape() = false
     override fun shouldEnforceCharBasedInput() = false
     override fun shouldUseCtrlSpaceWorkaround() = false

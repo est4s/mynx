@@ -63,7 +63,7 @@ theme_name() { # the theme the colours file was set from (see pocket theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, games, settings, system, exit or run COMMAND"
+MENU_ACTIONS="shell, files, games, settings, agents, system, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -87,6 +87,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       files) action=files ;;
       games) action=menu:games ;;
       settings) action=settings ;;
+      agents) action=menu:agents ;;
       system) action=menu:system ;;
       exit) action=quit_session ;;
       run) PROBLEMS+=("line $n: run needs a command"); continue ;;
@@ -142,7 +143,7 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [games]=Games [system]=System)
+declare -A TITLE=([main]=Main [games]=Games [agents]="AI agents" [system]=System)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
   local name=${1##*/} label= w
@@ -167,8 +168,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         read_menu_file "$file"
         ((${#ITEMS[@]})) && return
       done
-      ITEMS=(Terminal Files Games Settings System Exit)
-      ACTS=(exit files menu:games settings menu:system quit_session) ;;
+      ITEMS=(Terminal Files Games Settings "AI agents" System Exit)
+      ACTS=(exit files menu:games settings menu:agents menu:system quit_session) ;;
     games)
       local dir f
       for dir in "${GAME_DIRS[@]}"; do
@@ -178,6 +179,15 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         done
       done
       ((${#ITEMS[@]})) || { ITEMS=("(no games yet)"); ACTS=(none); } ;;
+    agents)
+      local list name title installed
+      list=$(pocket agent list --tsv 2>/dev/null) || list=
+      while IFS=$'\t' read -r name title installed; do
+        [[ -n $name ]] || continue
+        [[ -n $installed ]] || title+=" (install)"
+        ITEMS+=("$title") ACTS+=("agent:$name")
+      done <<<"$list"
+      ((${#ITEMS[@]})) || { ITEMS=("(pocket isn't working)"); ACTS=(none); } ;;
     system)
       ITEMS=("Update all" "System info")
       ACTS=(update info) ;;
@@ -312,6 +322,9 @@ act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   pause
 }
 act_game() { run play "$1"; }
+act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
+  run pocket agent start "$1" || pause
+}
 
 act_update() {
   run bash -c 'apt update && apt upgrade -y'

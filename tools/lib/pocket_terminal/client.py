@@ -44,6 +44,16 @@ def request(name, *args):
     return answer
 
 
+def record(reason):
+    """Tells the app the config changed (for `pocket undo`, which names
+    the change [reason]) and applies it. Changes made with no app
+    answering still count; the app sees them at its next start."""
+    try:
+        return request("check", reason)
+    except Failure:
+        return None
+
+
 def tools_version():
     try:
         with open(os.path.join(TOOLS, ".version")) as f:

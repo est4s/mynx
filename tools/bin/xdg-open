@@ -1,0 +1,6 @@
+#!/bin/sh
+# xdg-open URL: open a link in the phone's browser. Programs that sign
+# in through a browser (AI agents) call this, or $BROWSER, which the app
+# points here.
+[ $# -ge 1 ] || { echo "usage: xdg-open URL" >&2; exit 1; }
+exec pocket open "$1"

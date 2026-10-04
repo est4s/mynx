@@ -9,8 +9,9 @@ Newest entries first. Rules for keeping it up to date: see
 ## Current status
 
 - **Roadmap steps 1-6 are done** and confirmed on the owner's phone.
-  **Step 7 (*Agent support*) is in progress:** 7.1 (notifications)
-  confirmed; 7.2 (agent installs) built and waiting for the owner's
+  **Step 7 (*Agent support*) is nearly done:** 7.1 (notifications) and
+  7.2 (agent installs) confirmed; 7.3 (undo), the AI agents submenu and
+  links that open in the browser are built and waiting for the owner's
   check; see "Next".
 - **Step 6 (*Customization*), confirmed 2026-10-04:** every setting is a
   plain-text file in `~/.config/pocket-terminal/`, changed with the
@@ -48,10 +49,10 @@ Newest entries first. Rules for keeping it up to date: see
   `scripts/deliver.sh` installs it on the phone.
 - **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
   tools installers, tabs, key bars, colours/themes, settings, config
-  check, `pocket` requests; 176 tests), `app/` (thin Android layer),
+  check, `pocket` requests, undo, links; 215 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 62 unittest tests incl. editors driven in a pty),
-  `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (55 bats
+  the agent guide; 100 unittest tests incl. editors driven in a pty),
+  `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (60 bats
   tests).
 
 
@@ -69,32 +70,30 @@ checkpoint of step 7.
 
 **7.1 Notifications: confirmed by the owner 2026-10-04.**
 
-**7.2 Agent installs: built, owner to check.** On the phone:
-- Menu → **AI agents** → `1` (Claude Code): it lists the commands
-  (`apt-get … curl` first, since the old image has no curl), asks, runs
-  them, then asks about notifications (say `y`). Enter goes back.
-- Start `claude` in `~`, sign in. Watch for errors about messaging or
-  "user namespace" at start (proot-distro needed
-  `--messaging-socket-path`; unknown for the app's proot). If they
-  show, add a wrapper like the owner's `claude()` in the home
-  `.bashrc` docs or `/etc/profile.d`.
-- The step-6 agent test: ask Claude Code to "make the theme gruvbox and
-  the font bigger"; it should read the guide and use `pocket`.
-- Notifications: give it a task of 30 s+ and switch tabs or leave the
-  app → "Your turn (root)"; a permission prompt → a notification.
-- `pocket agent list`; `pocket edit` → Settings → "Claude Code
-  notifications" toggles; `pocket agent notify claude off` removes
-  only our entries from `~/.claude/settings.json`.
-- Optional: Codex and Gemini CLI the same way (Gemini installs Node.js
-  from apt, ~100 MB).
+**7.2 Agent installs: confirmed by the owner 2026-10-04** (Claude Code
+installed, signed in, notifications and the gruvbox test worked; no
+proot messaging problem reported). The owner found signing in hard
+because links couldn't be opened, which led to the links work below.
 
-**7.3 Undo:** snapshot `~/.config/pocket-terminal/` before each change
-(app requests in `PocketRequests.kt`, and the Python tools' own writes:
-`pocket menu edit|reset`, the editors' saves), keep `undo.keep`
-snapshots (default 1), `pocket undo` and `pocket undo --list`. Hand
-edits: `pocket check` saves the last good config when it finds no
-problems, so `pocket undo` recovers from a broken hand edit. Logic in
-`core` (or `models.py`), test first.
+**7.3 Undo, AI agents submenu, links: built, owner to check.** On the
+phone:
+- `pocket theme set nord`, then `pocket undo` → back to the old theme;
+  `pocket undo` again → "Nothing to undo" (keeps 1).
+- `pocket set undo-keep 3`, make three changes, `pocket undo --list`
+  names them; three `pocket undo`s take them back in order.
+- Break `~/.config/pocket-terminal/settings.conf` by hand (e.g.
+  `font-size = huge`) and run `pocket undo` without `pocket check`:
+  the file comes back.
+- `pocket edit` → "Undo last change" asks, then undoes.
+- Menu → AI agents: Claude Code starts it; "Codex (install)" offers to
+  install, then to start it.
+- Links: `echo https://example.com`, tap the link → the browser opens.
+  `pocket open https://example.com` too. In `claude`, `/login` should
+  open the browser by itself (`BROWSER` → `xdg-open`); if not, tapping
+  the printed link should (it may wrap over rows).
+
+**After 7.3 is confirmed:** step 7 is done. Next is roadmap step 8
+(*Profiles*): plan it with the owner first.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `pocket theme set` for a dark and a light theme (strip
@@ -134,6 +133,40 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (24): 7.3 undo; AI agents submenu; links open
+
+**Done**
+- Undo (`core/.../ConfigHistory.kt`): the app keeps the config folder as
+  it last saw it in `~/.local/state/pocket-terminal/undo/last/`; each
+  time it looks (before and after a changing request, at `check`, at
+  app start, at `undo`) a difference becomes an undo step named after
+  the change. So requests, editors (`check` now takes the change's
+  name: "colours edited", "key bar X edited", "menu edited"), `pocket
+  menu edit|reset` and hand edits are all undoable, in one mechanism.
+  Setting `undo-keep` (default 1, 0-20). `pocket undo [--list]`, and
+  "Undo last change" in `pocket edit`. Skips `fonts/`, files over 256
+  KB and `*.tmp`.
+- AI agents: the menu's `agents` action is a submenu from `pocket agent
+  list --tsv` ("Codex (install)" when missing); `pocket agent start
+  [NAME]` runs an installed agent (exec, so the menu comes back when it
+  exits) or offers to install it, then to start it.
+- Links: `pocket open URL` (`open-url` request; http/https only) and
+  `tools/bin/xdg-open`; each shell gets `BROWSER=/opt/pocket-terminal/bin/xdg-open`.
+  Tapping the terminal opens the link under the tap (`linkAt` in
+  `core/.../Links.kt`, which follows links over rows the terminal
+  wrapped or a program broke at the edge), else shows the keyboard as
+  before. Links only open while the app is on screen (Android blocks
+  starting activities from the background).
+
+**Decisions**
+- Undo has no redo; undo itself isn't recorded as a step.
+- The owner's request (2026-10-04): picking an installed agent in the
+  menu starts it, a missing one asks to install it.
+- Python tests use a PATH of `/usr/bin:/bin` plus fakes when agents are
+  involved: the dev phone has the real `claude` on its PATH.
+
+**Commits:** see git log (this entry's commit)
 
 ### 2026-10-04 (23): 7.2, `pocket agent` installs AI agents
 

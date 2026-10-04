@@ -14,6 +14,7 @@ import android.os.IBinder
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -29,6 +30,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
 import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
@@ -42,6 +44,7 @@ import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
 import io.github.est4s.terminal.core.hostPath
+import io.github.est4s.terminal.core.linkAt
 import io.github.est4s.terminal.core.loadColorScheme
 import io.github.est4s.terminal.core.loadSettings
 import io.github.est4s.terminal.core.setSetting
@@ -58,6 +61,7 @@ private const val KEY_BARS_DIR = "root/.config/pocket-terminal/keybars"
 private const val SETTINGS_FILE = "root/.config/pocket-terminal/settings.conf"
 private const val CURSOR_BLINK_MS = 500
 private const val KEY_BAR_POLL_MS = 250L
+private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
 
 class MainActivity : Activity() {
     private lateinit var terminalView: TerminalView
@@ -560,6 +564,29 @@ class MainActivity : Activity() {
     }
 
     fun takeCtrlLatch() = ::keyBar.isInitialized && keyBar.takeCtrlLatch()
+
+    /** A tap on a link opens it; anywhere else brings up the keyboard. */
+    fun onTap(e: MotionEvent) {
+        val url = runCatching { linkUnder(e) }.getOrNull()
+        if (url == null) {
+            showKeyboard()
+            return
+        }
+        service?.openLink(url)?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+    }
+
+    // Rows around the tap, so a link spread over several rows is found whole.
+    private fun linkUnder(e: MotionEvent): String? {
+        val emulator = terminalView.mEmulator ?: return null
+        val (col, row) = terminalView.getColumnAndRow(e, true)
+        val screen = emulator.screen
+        val from = maxOf(row - LINK_ROWS, -screen.activeTranscriptRows)
+        val to = minOf(row + LINK_ROWS, emulator.mRows - 1)
+        if (row !in from..to) return null
+        val rows = (from..to).map { screen.getSelectedText(0, it, emulator.mColumns - 1, it) }
+        val wraps = (from..to).map { screen.getLineWrap(it) }
+        return linkAt(rows, wraps, row - from, col, emulator.mColumns)
+    }
 
     fun showKeyboard() {
         terminalView.requestFocus()

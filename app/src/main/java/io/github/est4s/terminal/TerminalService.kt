@@ -5,9 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.FileObserver
@@ -49,7 +51,7 @@ private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
 // Requests after which the app applies the config files again.
 private val RELOADING_REQUESTS = setOf(
-    "check", "set", "reset", "theme-set", "theme-reset", "preview-end", "keybar-edit", "keybar-reset",
+    "check", "set", "reset", "theme-set", "theme-reset", "preview-end", "keybar-edit", "keybar-reset", "undo",
 )
 
 /**
@@ -80,7 +82,7 @@ class TerminalService : Service() {
     var toolsError: String? = null
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
-    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root"), ::showNotice) }
+    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root"), notify = ::showNotice, openUrl = ::openLink) }
     // The POCKET_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -96,6 +98,7 @@ class TerminalService : Service() {
         // Reports from a previous run would belong to the wrong shells.
         cwdDir.deleteRecursively()
         updateTools()
+        requests.start()
         watchRequests()
     }
 
@@ -296,6 +299,18 @@ class TerminalService : Service() {
         if (activity?.onScreen != true) return
         val id = tabs.selected?.session?.let { shellIds[it] } ?: return
         getSystemService(NotificationManager::class.java).cancel(NOTICE_ID_BASE + id)
+    }
+
+    /** Opens a web link in the phone's browser: null if it did, else why not. */
+    fun openLink(url: String): String? {
+        val shown = activity?.takeIf { it.onScreen }
+            ?: return "the app must be on screen to open links (the link: $url)"
+        return try {
+            shown.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            null
+        } catch (e: ActivityNotFoundException) {
+            "no app on the phone opens links"
+        }
     }
 
     // Answers `pocket notify`: null when shown, else why not.

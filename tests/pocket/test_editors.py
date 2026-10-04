@@ -98,6 +98,16 @@ class EditorTest(unittest.TestCase):
         for item in ["Theme", "Settings", "Key bars", "Launcher menu"]:
             self.assertIn(item, screen)
 
+    def test_the_hub_can_undo_the_last_change(self):
+        self.start_app({
+            "undo-list": {"ok": True, "keep": 1, "steps": [{"reason": "theme set nord", "time": 0}]},
+            "undo": {"ok": True, "undone": "theme set nord"},
+        })
+        code, screen = self.edit([], [UP, ENTER, "y", "q", "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertIn("theme set nord", screen)
+        self.assertIn(["undo"], self.app.requests)
+
     def test_shows_its_own_key_bar_while_open(self):
         seen = []
 
@@ -172,7 +182,7 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(code, 0, screen)
         self.assertIn("background=#123456", self.read(os.path.join(self.config, "colors.properties")))
         self.assertIn(["preview-colors"], [r[:1] for r in self.app.requests])
-        self.assertIn(["check"], self.app.requests)
+        self.assertIn(["check", "colours edited"], self.app.requests)
 
     def test_theme_reset_goes_back_to_the_default(self):
         self.start_app({**THEME_REPLIES, "theme-reset": {"ok": True, "name": "neon"}})
@@ -212,6 +222,7 @@ class EditorTest(unittest.TestCase):
         code, screen = self.edit(["keybars"], [ENTER, DOWN, "K", "a", *"Top", ENTER, "g", ENTER, "s", "q", "q"])
         self.assertEqual(code, 0, screen)
         self.assertEqual(self.read(mine), "Quit = q\nTop  = g\n# built-in\nOpen = l\n")
+        self.assertIn(["check", "key bar nnn edited"], self.app.requests)
 
     def test_unsaved_changes_are_kept_only_if_asked(self):
         self.start_app({
@@ -236,6 +247,7 @@ class EditorTest(unittest.TestCase):
     # --- menu --------------------------------------------------------------
 
     def test_menu_editor_saves_the_users_menu_and_checks_it(self):
+        self.start_app({"check": {"ok": True, "problems": []}})
         with open(os.path.join(self.tools, "menu.conf"), "w") as f:
             f.write("Terminal = shell\nFiles = files\n")
         menu = os.path.join(self.tools, "bin", "menu")
@@ -247,6 +259,7 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(code, 0, screen)
         self.assertEqual(self.read(os.path.join(self.config, "menu.conf")), "Files = files\nTop   = run htop\n")
         self.assertTrue(os.path.exists(os.path.join(self.home, "checked")))
+        self.assertIn(["check", "menu edited"], self.app.requests)
 
 
 SETTINGS = {"ok": True, "problems": [], "settings": [

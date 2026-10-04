@@ -8,7 +8,7 @@ import tempfile
 import time
 
 from . import agents
-from .client import TOOLS, Failure, request, tools_version
+from .client import TOOLS, Failure, record, request, tools_version
 
 HELP = """\
 usage: pocket COMMAND [ARGS] [--json]
@@ -22,9 +22,11 @@ Commands:
   theme      theme [list] | show NAME | set NAME | reset: colour themes
   keybar     keybar [list] | show NAME | edit NAME | reset NAME
   menu       menu [show] | edit | reset: the launcher menu's items
+  undo       undo [--list]: take back the last config change
   edit       edit [settings|theme|keybars|menu]: the settings editors
   notify     notify [--if-away] TITLE [TEXT]: a phone notification
   agent      agent [list] | install [NAME] | notify NAME on|off: AI agents
+  open       open URL: open a link in the phone's browser
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -197,6 +199,7 @@ def cmd_menu(args, as_json):
         if not os.path.isfile(user_menu()):
             os.makedirs(config_dir(), exist_ok=True)
             shutil.copyfile(built_in, user_menu())
+            record("menu edit")
         out(as_json, {"ok": True, "file": "~/.config/pocket-terminal/menu.conf"},
             "Edit ~/.config/pocket-terminal/menu.conf, then run pocket check.\n"
             "(pocket edit menu is an editor for it.)")
@@ -205,9 +208,37 @@ def cmd_menu(args, as_json):
         if not os.path.isfile(user_menu()):
             raise Failure("the menu is already the built-in menu")
         os.remove(user_menu())
+        record("menu reset")
         out(as_json, {"ok": True}, "Menu: back to the built-in one")
         return 0
     raise Usage("usage: pocket menu [show] | edit | reset")
+
+
+def cmd_open(args, as_json):
+    if len(args) != 1:
+        raise Usage("usage: pocket open URL")
+    answer = request("open-url", args[0])
+    out(as_json, answer, None)
+    return 0
+
+
+def cmd_undo(args, as_json):
+    if args == ["--list"]:
+        answer = request("undo-list")
+        keeps = f"keeps {answer['keep']}: undo-keep"
+        lines = [f"{i}. {s['reason']}  ({time.strftime('%H:%M', time.localtime(s['time'] / 1000))})"
+                 for i, s in enumerate(answer["steps"], 1)]
+        text = "\n".join(lines + [f"pocket undo takes back 1. ({keeps})"]) if lines else f"Nothing to undo ({keeps})"
+        out(as_json, answer, text)
+        return 0
+    if args:
+        raise Usage("usage: pocket undo [--list]")
+    answer = request("undo")
+    if answer["undone"] is None:
+        out(as_json, answer, "Nothing to undo")
+        return 1
+    out(as_json, answer, f"Undid: {answer['undone']}")
+    return 0
 
 
 def cmd_edit(args, as_json):
@@ -281,11 +312,21 @@ def agent_hook(agent, event):
         request("notify", agent.title, text, *options)
 
 
-AGENT_USAGE = "usage: pocket agent [list] | install [NAME] [--yes] [--notify|--no-notify] | notify NAME on|off"
+AGENT_USAGE = ("usage: pocket agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify]"
+               " | notify NAME on|off")
 
 
 def cmd_agent(args, as_json):
     sub = args[0] if args else "list"
+    if sub == "list" and args[1:] == ["--tsv"]:
+        for s in (agents.status(a) for a in agents.AGENTS.values()):
+            print(f"{s['name']}\t{s['title']}\t{'installed' if s['installed'] else ''}")
+        return 0
+    if sub == "start" and len(args) <= 2:
+        if len(args) == 1:
+            return pick_agent("Start an AI agent:", start_agent)
+        if args[1] in agents.AGENTS:
+            return start_agent(agents.AGENTS[args[1]])
     if sub == "list" and len(args) <= 1:
         found = [agents.status(a) for a in agents.AGENTS.values()]
         lines = [f"{s['name']:<7} {s['title']:<12} {'installed' if s['installed'] else 'not installed':<14} "
@@ -328,7 +369,30 @@ def node_major():
         return None
 
 
-def install_agent(agent, yes, notify):
+def agent_binary(agent):
+    found = shutil.which(agent.command)
+    local = os.path.expanduser(f"~/.local/bin/{agent.command}")
+    return found or (local if os.access(local, os.X_OK) else None)
+
+
+def start_agent(agent):
+    """Runs [agent] in this terminal; offers to install it first if it's missing."""
+    if not agent_binary(agent):
+        print(f"{agent.title} isn't installed yet.\n")
+        code = install_agent(agent, yes=False, notify=None, then="")
+        if code != 0:
+            return code
+        print(f"Start {agent.title} now? [Y/n]", end=" ", flush=True)
+        if sys.stdin.readline().strip().lower() in ("n", "no"):
+            return 0
+    binary = agent_binary(agent)
+    if not binary:
+        raise Failure(f"can't find {agent.command} after installing it; open a new tab and run {agent.command}")
+    sys.stdout.flush()
+    os.execv(binary, [agent.command])
+
+
+def install_agent(agent, yes, notify, then=None):
     steps = agents.install_steps(agent, curl=bool(shutil.which("curl")), node=node_major())
     print(f"Installing {agent.title} with its official installer runs:\n")
     for step in steps:
@@ -351,13 +415,14 @@ def install_agent(agent, yes, notify):
         print(f"Notifications: on (pocket agent notify {agent.name} off turns them off)")
     else:
         print(f"Notifications: off (pocket agent notify {agent.name} on turns them on)")
-    print(f"\nStart it with: {agent.command}  (sign in with your own account)")
+    print(then if then is not None else f"\nStart it with: {agent.command}  (sign in with your own account)")
     return 0
 
 
-def pick_and_install():
+def pick_agent(heading, action):
+    """A numbered list of the agents; runs [action] on the one picked."""
     found = list(agents.AGENTS.values())
-    print("Install an AI agent:\n")
+    print(f"{heading}\n")
     for i, agent in enumerate(found, 1):
         status = "installed" if agents.status(agent)["installed"] else ""
         print(f"  {i}) {agent.title:<12} {status}".rstrip())
@@ -366,14 +431,20 @@ def pick_and_install():
     choice = sys.stdin.readline().strip()
     if not choice.isdigit() or not 1 <= int(choice) <= len(found):
         return 0
-    try:
-        code = install_agent(found[int(choice) - 1], yes=False, notify=None)
-    except Failure as e:
-        print(f"pocket: {e}", file=sys.stderr)
-        code = 2
-    print("\nPress Enter to go back.", end=" ", flush=True)
-    sys.stdin.readline()
-    return code
+    return action(found[int(choice) - 1])
+
+
+def pick_and_install():
+    def install(agent):
+        try:
+            code = install_agent(agent, yes=False, notify=None)
+        except Failure as e:
+            print(f"pocket: {e}", file=sys.stderr)
+            code = 2
+        print("\nPress Enter to go back.", end=" ", flush=True)
+        sys.stdin.readline()
+        return code
+    return pick_agent("Install an AI agent:", install)
 
 
 def cmd_version(args, as_json):
@@ -390,7 +461,7 @@ def cmd_help(args, as_json):
 COMMANDS = {
     "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
-    "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent,
+    "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "version": cmd_version, "help": cmd_help,
 }
 

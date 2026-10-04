@@ -25,7 +25,7 @@ keys() {
     source "$MENU"
     menu_items main
     [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Exit" ]
-    [ "${ACTS[*]}" = "exit files menu:games settings cmd:pocket agent install menu:system quit_session" ]
+    [ "${ACTS[*]}" = "exit files menu:games settings menu:agents menu:system quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -51,7 +51,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, games, settings, system, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, games, settings, agents, system, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -147,9 +147,34 @@ keys() {
     [[ $output == *"RUN: pocket edit"* ]]
 }
 
-@test "AI agents offers to install one" {
-    run keys 5
-    [[ $output == *"RUN: bash -c pocket agent install"* ]]
+fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/sh\n[ "$*" = "agent list --tsv" ] && printf "claude\\tClaude Code\\tinstalled\\ncodex\\tCodex\\t\\n"\n' \
+        >"$BATS_TEST_TMPDIR/bin/pocket"
+    chmod +x "$BATS_TEST_TMPDIR/bin/pocket"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "AI agents lists the agents, marking those to install" {
+    fake_pocket
+    source "$MENU"
+    menu_items agents
+    [ "${ITEMS[0]}" = "Claude Code" ]
+    [ "${ITEMS[1]}" = "Codex (install)" ]
+    [ "${ACTS[*]}" = "agent:claude agent:codex" ]
+}
+
+@test "picking an agent starts it (or offers to install it)" {
+    fake_pocket
+    run keys 52
+    [[ $output == *"RUN: pocket agent start codex"* ]]
+}
+
+@test "AI agents without a working pocket says so" {
+    export PATH="$BATS_TEST_TMPDIR/empty:/usr/bin:/bin"
+    source "$MENU"
+    menu_items agents
+    [ "${ACTS[*]}" = none ]
 }
 
 @test "a run item runs its command in bash" {

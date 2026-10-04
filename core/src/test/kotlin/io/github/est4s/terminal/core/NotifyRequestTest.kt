@@ -12,10 +12,10 @@ class NotifyRequestTest {
     private val home = File(base, "root").apply { mkdirs() }
     private val posted = mutableListOf<Notice>()
     private var refusal: String? = null
-    private val requests = PocketRequests(dir, home) { notice ->
+    private val requests = PocketRequests(dir, home, notify = { notice ->
         posted += notice
         refusal
-    }
+    })
 
     @AfterTest
     fun cleanup() {
@@ -102,6 +102,29 @@ class NotifyRequestTest {
         File(dir, "q.req").writeText("notify\nHi\n")
         plain.processPending()
         assertEquals("""{"ok":true,"shown":false,"reason":"notifications aren't available"}""", File(dir, "q.reply").readText())
+    }
+
+    @Test
+    fun `opens web links in the phone's browser`() {
+        val opened = mutableListOf<String>()
+        val app = PocketRequests(dir, home, openUrl = { opened += it; null })
+        File(dir, "q.req").writeText("open-url\nhttps://claude.ai/login\n")
+        app.processPending()
+        assertEquals("""{"ok":true}""", File(dir, "q.reply").readText())
+        assertEquals(listOf("https://claude.ai/login"), opened)
+
+        File(dir, "q.req").writeText("open-url\nfile:///etc/passwd\n")
+        app.processPending()
+        assertEquals("""{"ok":false,"error":"only http and https links open: file:///etc/passwd"}""", File(dir, "q.reply").readText())
+        assertEquals(1, opened.size)
+    }
+
+    @Test
+    fun `says why a link didn't open`() {
+        val app = PocketRequests(dir, home, openUrl = { "no browser" })
+        File(dir, "q.req").writeText("open-url\nhttps://x.io\n")
+        app.processPending()
+        assertEquals("""{"ok":false,"error":"no browser"}""", File(dir, "q.reply").readText())
     }
 
     private fun config(text: String) =
