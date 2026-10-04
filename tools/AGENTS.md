@@ -227,8 +227,11 @@ the editors use `pocket-edit`.
 
 Built-in bars: `shell`, `nnn`, `menu`, `pocket-edit`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, and
-`agent` for AI agents started with `pocket agent start` (an agent's own
-bar, e.g. `claude`, wins when it exists).
+`agent` for AI agents (`claude`, `codex` and `gemini` typed in the shell,
+or started with `pocket agent start`; an agent's own bar, e.g. `claude`,
+wins when it exists). Typing them by name works through bash functions
+from `/opt/pocket-terminal/shell.bash`; `unset -f claude` in `~/.bashrc`
+turns that off.
 A file `~/.config/pocket-terminal/keybars/NAME.conf` replaces or adds
 one. To change a built-in bar: `pocket keybar edit NAME`, edit the copy,
 `pocket check`. Buttons fill two rows in file order, the first half on

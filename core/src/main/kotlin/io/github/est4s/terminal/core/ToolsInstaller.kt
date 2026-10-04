@@ -39,11 +39,16 @@ class ToolsInstaller(baseDir: File) {
 // app passed in, and then sources /etc/profile.d.
 private val TOOLS_PROFILE = """
     |# Written by the app at every start: puts its tools (pocket, menu,
-    |# the editors) first on the PATH. Changes here are overwritten.
+    |# the editors) first on the PATH and loads their bash setup. Changes
+    |# here are overwritten.
     |case ":${'$'}PATH:" in
     |    *:$TOOLS_MOUNT/bin:*) ;;
     |    *) PATH="$TOOLS_MOUNT/bin:${'$'}PATH" ;;
     |esac
+    |# The tools' setup for bash (e.g. agents under their key bar).
+    |if [ -n "${'$'}{BASH_VERSION-}" ] && [ -r $TOOLS_MOUNT/shell.bash ]; then
+    |    . $TOOLS_MOUNT/shell.bash
+    |fi
     |""".trimMargin()
 
 /**

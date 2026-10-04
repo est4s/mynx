@@ -100,8 +100,10 @@ phone:
 - An agent started from the menu (or `pocket agent start`) gets the
   `agent` key bar: Esc, Ctrl+C, Mode (Shift+Tab: Claude Code's permission
   modes), Tab, Newline (Ctrl+J: a new line in the prompt), /, arrows.
-  Leaving the agent brings the menu bar back. `claude` typed in the
-  shell still shows the shell bar (only `pocket agent start` switches).
+  Leaving the agent brings the menu bar back.
+- `claude` typed in a **new tab's** shell also shows the agent bar (the
+  app's profile loads `/opt/pocket-terminal/shell.bash`); leaving it
+  brings the shell bar back. Not installed: `codex` says how to install.
 - Links: `echo https://example.com`, tap the link → the browser opens.
   `pocket open https://example.com` too. In `claude`, `/login` should
   open the browser by itself (`BROWSER` → `xdg-open`); if not, tapping

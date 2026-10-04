@@ -90,6 +90,18 @@ class ToolsInstallerTest {
     }
 
     @Test
+    fun `loads the tools' bash setup in bash only`() {
+        val rootfs = File(base, "debian").apply { mkdirs() }
+
+        writeToolsProfile(rootfs)
+
+        val text = File(rootfs, "etc/profile.d/pocket-terminal.sh").readText()
+        assertTrue("""if [ -n "${'$'}{BASH_VERSION-}" ] && [ -r /opt/pocket-terminal/shell.bash ]; then
+            |    . /opt/pocket-terminal/shell.bash
+            |fi""".trimMargin() in text, text)
+    }
+
+    @Test
     fun `rewrites the profile script only when it changed`() {
         val rootfs = File(base, "debian").apply { mkdirs() }
         writeToolsProfile(rootfs)
