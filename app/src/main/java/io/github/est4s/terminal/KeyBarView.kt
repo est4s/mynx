@@ -21,11 +21,14 @@ import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.LoadedKeyBar
 import io.github.est4s.terminal.core.StripColors
-import io.github.est4s.terminal.core.keyBarName
+import io.github.est4s.terminal.core.keyBarNames
 import io.github.est4s.terminal.core.keyBarPages
 import io.github.est4s.terminal.core.loadKeyBar
 import java.io.File
 import kotlin.math.abs
+
+private const val REPEAT_DELAY_MS = 400L
+private const val REPEAT_MS = 50L
 
 private val KEY_CODES: Map<String, Int> = mapOf(
     "Enter" to KeyEvent.KEYCODE_ENTER,
@@ -69,6 +72,15 @@ class KeyBarView(
     private var downX = 0f
     private var swiping = false
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // The button being held down, sent again every REPEAT_MS after REPEAT_DELAY_MS.
+    private var held: KeyButton? = null
+    private val repeater = object : Runnable {
+        override fun run() {
+            val button = held ?: return
+            press(button)
+            postDelayed(this, REPEAT_MS)
+        }
+    }
 
     var colors: StripColors? = null
         set(value) {
@@ -91,8 +103,8 @@ class KeyBarView(
         val stamp = Triple(reportFile?.path, reportFile?.lastModified() ?: 0L, reportFile?.length() ?: 0L)
         if (!force && stamp == loadedFrom) return null
         loadedFrom = stamp
-        val name = keyBarName(runCatching { reportFile?.readText() }.getOrNull())
-        val loaded = loadKeyBar(name, userDir)
+        val names = keyBarNames(runCatching { reportFile?.readText() }.getOrNull())
+        val loaded = loadKeyBar(names, userDir)
         if (loaded == bar) return null
         bar = loaded
         ctrlLatched = false
@@ -125,6 +137,8 @@ class KeyBarView(
     }
 
     private fun render() {
+        // The held button's view is about to go, and its release with it.
+        stopRepeat()
         val colors = colors ?: return
         val buttons = bar?.buttons ?: emptyList()
         removeAllViews()
@@ -157,10 +171,45 @@ class KeyBarView(
         setSingleLine(true)
         setPadding(dp(2), dp(9), dp(2), dp(9))
         isFocusable = false
-        if (button != null) setOnClickListener {
-            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            press(button)
+        when {
+            button == null -> {}
+            button.repeat -> setOnTouchListener { view, e -> holdToRepeat(view, e, button) }
+            else -> setOnClickListener {
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                press(button)
+            }
         }
+    }
+
+    // Repeating buttons send on touch, not release (games need it), then
+    // again while held. A swipe for pages cancels the touch, and the repeat.
+    @Suppress("ClickableViewAccessibility")
+    private fun holdToRepeat(view: android.view.View, e: MotionEvent, button: KeyButton): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                view.isPressed = true
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                press(button)
+                held = button
+                removeCallbacks(repeater)
+                postDelayed(repeater, REPEAT_DELAY_MS)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                view.isPressed = false
+                stopRepeat()
+            }
+        }
+        return true
+    }
+
+    private fun stopRepeat() {
+        held = null
+        removeCallbacks(repeater)
+    }
+
+    override fun onDetachedFromWindow() {
+        stopRepeat()
+        super.onDetachedFromWindow()
     }
 
     // Page dots, drawn over the bottom edge so they take no space.

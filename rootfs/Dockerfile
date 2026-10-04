@@ -16,12 +16,10 @@ COPY --from=core neon.colors.properties /root/.config/pocket-terminal/colors.pro
 # The app's built-in key bars, to copy from (the app reads its own copy).
 COPY --from=core keybars/ /usr/share/pocket-terminal/keybars/
 
-# menu, files (nnn for the phone) and keybar.
+# menu, files (nnn for the phone), keybar, play and the game commands
+# (rogue, drive, flap).
 COPY bin/ /usr/local/bin/
 
 # The menu lists games by file name: neon-rogue.py → "Neon Rogue".
 COPY games/ /opt/neon-games/
-RUN chmod 755 /usr/local/bin/menu /usr/local/bin/files /usr/local/bin/keybar /opt/neon-games/*.py \
- && ln -s /opt/neon-games/neon-rogue.py /usr/local/bin/rogue \
- && ln -s /opt/neon-games/neon-drive.py /usr/local/bin/drive \
- && ln -s /opt/neon-games/neon-flap.py /usr/local/bin/flap
+RUN chmod 755 /usr/local/bin/* /opt/neon-games/*.py

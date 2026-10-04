@@ -1,0 +1,13 @@
+#!/bin/sh
+# play GAME [ARGS...]: run a game with its key bar in the app: the bar
+# named after the game's file (neon-rogue.py → neon-rogue), else the
+# generic `game` bar. Give a game its own bar with
+# ~/.config/pocket-terminal/keybars/NAME.conf.
+game=${1:?usage: play GAME [ARGS...]}
+shift
+case $game in
+    */*) path=$game ;;
+    *) path=$(command -v -- "$game") || { echo "play: $game: not found" >&2; exit 127; } ;;
+esac
+name=${path##*/}
+exec keybar "${name%.*},game" "$path" "$@"

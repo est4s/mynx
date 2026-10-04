@@ -119,13 +119,53 @@ class KeyBarTest {
     }
 
     @Test
-    fun `the reported bar name falls back to the shell's`() {
-        assertEquals("nnn", keyBarName("nnn\n"))
-        assertEquals("my-tool_2", keyBarName("my-tool_2"))
-        assertEquals("shell", keyBarName(""))
-        assertEquals("shell", keyBarName(null))
-        assertEquals("shell", keyBarName("../../etc/passwd"))
-        assertEquals("shell", keyBarName("two words"))
+    fun `the reported bar names fall back to the shell's`() {
+        assertEquals(listOf("nnn"), keyBarNames("nnn\n"))
+        assertEquals(listOf("my-tool_2"), keyBarNames("my-tool_2"))
+        assertEquals(listOf("shell"), keyBarNames(""))
+        assertEquals(listOf("shell"), keyBarNames(null))
+        assertEquals(listOf("shell"), keyBarNames("../../etc/passwd"))
+        assertEquals(listOf("shell"), keyBarNames("two words"))
+    }
+
+    @Test
+    fun `a report can list fallbacks, and bad names are dropped`() {
+        assertEquals(listOf("my-game", "game"), keyBarNames("my-game,game"))
+        assertEquals(listOf("game"), keyBarNames("../x, game"))
+    }
+
+    @Test
+    fun `the first bar that exists wins`() {
+        File(dir, "mine.conf").writeText("A = a\n")
+
+        assertEquals("mine", loadKeyBar(listOf("nope", "mine", "game"), dir).name)
+        assertEquals("game", loadKeyBar(listOf("nope", "game"), dir).name)
+        assertEquals("shell", loadKeyBar(listOf("nope", "nada"), dir).name)
+    }
+
+    @Test
+    fun `arrows, paging and deleting keys repeat when held`() {
+        val parsed = parseKeyBar(
+            listOf("Up", "Down", "Left", "Right", "PgUp", "PgDn", "Backspace", "Delete")
+                .joinToString("\n") { "$it = $it" }
+        )
+
+        assertTrue(parsed.buttons.all { it.repeat })
+    }
+
+    @Test
+    fun `other buttons repeat only when asked`() {
+        val parsed = parseKeyBar("Open = l\nBrake = Down Repeat\nFire = repeat Space\nTwo = Up Up\nGo = \"go\" Enter")
+
+        assertEquals(emptyList(), parsed.problems)
+        assertEquals(listOf(false, true, true, false, false), parsed.buttons.map { it.repeat })
+        assertEquals(listOf(Key("Down")), parsed.buttons[1].strokes)
+        assertEquals(listOf(Key("Space")), parsed.buttons[2].strokes)
+    }
+
+    @Test
+    fun `Repeat alone is not a key`() {
+        assertEquals(listOf("line 1: no keys"), parseKeyBar("X = Repeat").problems)
     }
 
     @Test
@@ -143,6 +183,23 @@ class KeyBarTest {
             labels("nnn"),
         )
         assertEquals(listOf("↑", "↓", "Select", "Back", "Quit"), labels("menu"))
+        assertEquals(
+            listOf("←", "↓", "↑", "→", "Wait", "Explore", "Potion", "Scroll", "Bomb", "Stairs", "Info", "Quit",
+                "Help", "Continue", "New", "Scores", "Rest"),
+            labels("neon-rogue"),
+        )
+        assertEquals(listOf("←", "Brake", "Nitro", "→", "Pause", "Again", "Quit"), labels("neon-drive"))
+        assertEquals(listOf("Flap", "Quit"), labels("neon-flap"))
+        assertEquals(listOf("←", "↓", "↑", "→", "Space", "Enter", "Esc", "y", "n", "q"), labels("game"))
+    }
+
+    @Test
+    fun `game bars repeat the keys you hold to move`() {
+        fun repeating(name: String) = loadKeyBar(name, dir).buttons.filter { it.repeat }.map { it.label }
+
+        assertEquals(listOf("←", "↓", "↑", "→"), repeating("neon-rogue"))
+        assertEquals(listOf("←", "Brake", "Nitro", "→"), repeating("neon-drive"))
+        assertEquals(emptyList(), repeating("neon-flap"))
     }
 
     @Test

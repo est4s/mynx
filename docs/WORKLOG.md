@@ -18,8 +18,10 @@ Newest entries first. Rules for keeping it up to date: see
   always-visible two-row key bar above the keyboard that follows the
   running program (`keybar NAME cmd`), with pages to swipe and
   user-editable bar files.
-- **Next: roadmap step 5 (*In-app keyboard*)**, to plan with the owner;
-  it builds on the key bar. See "Next".
+- **Step 5 rethought by the owner (2026-10-04): no in-app keyboard.**
+  Instead: key bars for games, bars any program or game can bring, and
+  hold-to-repeat. Built, **waiting for the owner's check (needs a data
+  clear)**. See "Next".
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
   (with their folders and names) restored after Android kills the app.
@@ -106,32 +108,33 @@ perfectly").** Checks the owner ran:
   file afterwards.
 - rotate to landscape: more buttons per row
 
-### Roadmap step 5: In-app keyboard (plan with the owner first)
+### Roadmap step 5: Game and program key bars
 
-**Goal (README "In-app keyboard"):** a terminal keyboard drawn by the
-app: terminal layout with Ctrl/Alt/Esc/Tab/arrows, shortcuts, a game
-mode (D-pad and buttons with real press and release), one key to switch
-to the system keyboard, customizable layouts/sizes/haptics/sounds.
+**Decided by the owner (2026-10-04):** the key bar is good enough to
+replace the planned in-app keyboard. Step 5 is now: a key bar for games,
+bars that new programs and games can bring themselves, and press-and-
+hold arrows that repeat. README updated (Key bar section, roadmap,
+intro; the In-app keyboard section is gone).
 
-**Builds on step 4's key bar:** `core/KeyBar.kt` (key names, strokes,
-sticky Ctrl, bar files, `keyBarPages`), `app/KeyBarView.kt` (sending
-keys through `TerminalView.handleKeyCode()` / `inputCodePoint()`), and
-the per-tab `keybar` channel. Reuse its key model for layouts.
-
-**Decide with the owner:** whether the key bar becomes the keyboard's
-top row or stays separate; layout file format (likely an extension of
-the bar files); what game mode needs from the terminal (key release
-events don't exist in a terminal: games get repeated presses, so "hold"
-means auto-repeat unless a program opts in); default layout; how the
-switch to the system keyboard works. Also on the list from step 4: key
-repeat when holding a bar button.
-
-**Where things stand:** step 3 left a customized rootfs
-(`rootfs/Dockerfile`), the menu (`rootfs/bin/menu`), root's dotfiles and
-agent docs (`rootfs/root/`), with bats tests in `tests/shell/` (on the
-phone: `scripts/bats-lite.sh`). Existing installs only get rootfs
-changes after clearing data: there are still no migrations (planned
-before real users).
+**Built, not yet confirmed.** Owner clears the app's data, opens it,
+and checks:
+- `rogue`: the bar shows `← ↓ ↑ → Wait Explore` over `Potion Scroll
+  Bomb Stairs Info Quit`; swipe left for `Help Continue New` / `Scores
+  Rest`; title screen: New/Continue work; holding an arrow walks
+  repeatedly, and stops when released; Quit (Q) saves and the shell's
+  bar comes back
+- `drive`: `← Brake Nitro →` over `Pause Again Quit`; holding ← / →
+  steers continuously; Brake holds; Again restarts after a crash
+- `flap`: `Flap` over `Quit`; each tap flaps
+- the menu's Games start the same bars
+- holding ↑ / ↓ in nnn and in the menu scrolls repeatedly; holding ← in
+  the shell moves the cursor along the line
+- a game with no bar of its own gets the generic bar: `printf
+  '#!/bin/sh\nread -r x\n' > ~/games/test-game && chmod +x
+  ~/games/test-game`, menu → Games → Test Game: `← ↓ ↑ → Space Enter` /
+  `Esc y n q`; Enter ends it. Then `rm ~/games/test-game`.
+- swiping pages while holding nothing still works; a swipe that starts
+  on an arrow doesn't leave it repeating
 
 ### Hardware keyboard checks (later)
 The owner has no hardware keyboard, so these are untested. Run them when
@@ -160,6 +163,31 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (17): step 5 rethought: game and program key bars
+
+**Done**
+- `core`, test-first (10 more tests): `KeyButton.repeat`. Arrows,
+  PgUp/PgDn, Backspace and Delete repeat on their own; any button with
+  `Repeat` on its line opts in (`Repeat` alone is "no keys").
+  `keyBarNames()` replaces `keyBarName()`: a report can list fallbacks
+  (`my-game,game`), invalid names dropped. `loadKeyBar(names)` takes the
+  first that exists (user file, then built-in), else the shell's.
+- Built-in bars for `neon-rogue` (17 buttons, 2 pages), `neon-drive`,
+  `neon-flap` and a generic `game` bar. Nitro (↑) repeats too, like a
+  held ↑ key (first test expectation said otherwise; the test was wrong).
+- Debian (bats, `tests/shell/play.bats`): `play GAME` runs a game under
+  `keybar <file name>,game`; `rogue`, `drive`, `flap` are scripts calling
+  `play` (were symlinks); the menu's Games run `play`.
+- App: `KeyBarView` repeats held buttons (send on touch, then every
+  50 ms after 400 ms); a rebuild of the bar or a page swipe (touch
+  cancel) stops the repeat, so a button can't keep repeating with no
+  release coming.
+- Docs: README rewritten around key bars; home `AGENTS.md` explains
+  `play`, fallbacks, `Repeat`, and how programs (or agents setting one
+  up) bring their own bar.
+
+**Commits:** (pending)
 
 ### 2026-10-04 (16): step 4, nnn and the key bar
 

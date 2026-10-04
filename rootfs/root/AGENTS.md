@@ -37,7 +37,7 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 | File manager (nnn) | `/usr/local/bin/files` |
 | Key bars above the keyboard | `~/.config/pocket-terminal/keybars/` |
 | Menu state (last choices, menu theme) | `~/.local/state/pocket-terminal/menu` |
-| Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games` |
+| Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
 
 - **Terminal colours:** one `key=#rrggbb` per line: `background`,
   `foreground`, `cursor`, `color0` to `color255`. Keys left out keep the
@@ -52,31 +52,39 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 - **Menu:** `menu` opens it (the app opens it in the first tab when it
   starts fresh). Its Exit item closes the tab. Any executable file in
   `~/games` shows up under Games, named after the file:
-  `ln -s /path/to/game ~/games/my-game` shows "My Game".
+  `ln -s /path/to/game ~/games/my-game` shows "My Game". The menu starts
+  games with `play`.
 - **File manager:** `files [folder]` runs nnn in detail mode (`?` lists
   its keys). Quick places on `b`: `h` home, `d` Download, `p` Pictures,
   `c` DCIM, `r` `/`; set `NNN_BMS` in `~/.bashrc` for your own (format
   `key:path;key:path`). Text files open in `$EDITOR` (nano).
 - **Key bar:** two rows of buttons above the keyboard, always visible
-  (more than fit go on pages: swipe sideways). Which
-  bar shows depends on what's running: `keybar NAME command…`
-  (`/usr/local/bin/keybar`) shows bar NAME while the command runs, then
-  the previous one; with no command running it's the shell's bar.
-  `files` uses `nnn`, `menu` uses `menu`. The built-in bars are `shell`,
-  `nnn` and `menu`; a file `~/.config/pocket-terminal/keybars/NAME.conf`
-  replaces or adds one (format in "Key bar files" below).
+  (more than fit go on pages: swipe sideways). Holding an arrow (or
+  any button marked `Repeat`) repeats it. Which bar shows depends on
+  what's running: `keybar NAME[,FALLBACK…] command…`
+  (`/usr/local/bin/keybar`) shows the first of those bars that exists
+  while the command runs, then the previous one; with no command
+  running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`.
+  Built-in bars: `shell`, `nnn`, `menu`, the games' `neon-rogue`,
+  `neon-drive`, `neon-flap`, and `game` for any other game. A file
+  `~/.config/pocket-terminal/keybars/NAME.conf` replaces or adds one
+  (format in "Key bar files" below).
+- **Games and key bars:** `play GAME [args]` (`/usr/local/bin/play`) runs
+  a game with the bar named after its file (`my-game.py` → `my-game`),
+  else the generic `game` bar. `rogue`, `drive` and `flap` use it.
 - **Prompt hook:** the app sets `PROMPT_COMMAND` so it can reopen each
   tab in its folder after Android closes the app. If you change the
   prompt setup in `~/.bashrc`, keep whatever `PROMPT_COMMAND` the shell
   started with (starship keeps it on its own).
-- `/usr/local/bin/menu`, `files`, `keybar` and `/opt/neon-games` belong
+- `/usr/local/bin/menu`, `files`, `keybar`, `play`, the game commands
+  and `/opt/neon-games` belong
   to the app and may be replaced by an app update; put your changes in
   your home folder.
 
 ## Key bar files
 
-The built-in bars are in `/usr/share/pocket-terminal/keybars/` (`shell`,
-`nnn`, `menu`). To change one, copy it to
+The built-in bars are in `/usr/share/pocket-terminal/keybars/`. To
+change one, copy it to
 `~/.config/pocket-terminal/keybars/` and edit the copy; a new
 `NAME.conf` there adds a bar for `keybar NAME …`. Leave the app and come
 back to apply. Buttons fill two rows in file order, the first half on
@@ -96,8 +104,15 @@ Ctrl   = Ctrl
 - Modifiers: `Ctrl+R`, `Alt+Left`, `Ctrl+Alt+Delete`.
 - `"text"` is typed as is (`\"` for a quote).
 - `Ctrl` on its own is a sticky Ctrl for the next key typed.
+- `Repeat` anywhere on the line: the button repeats while held. Arrows,
+  PgUp/PgDn, Backspace and Delete repeat anyway. Repeating buttons send
+  as soon as they're touched; others on release.
 - Bad lines are skipped and shown in a dialog.
 
-To give your own program a bar: `keybar htop htop`, with buttons in
-`~/.config/pocket-terminal/keybars/htop.conf`. An alias in `~/.bashrc`
-makes it stick: `alias htop='keybar htop htop'`.
+**Giving a program or game its own bar** (also what an installer or an
+agent setting up a program should do): write
+`~/.config/pocket-terminal/keybars/NAME.conf`, then run it under that
+bar: `keybar NAME program`, or `play my-game` for a game (bar named
+after the file). An alias in `~/.bashrc` makes it stick:
+`alias htop='keybar htop htop'`. Fallbacks: `keybar my-tool,game …`
+shows the generic game bar until `my-tool.conf` exists.

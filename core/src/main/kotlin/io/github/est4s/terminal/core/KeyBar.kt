@@ -12,7 +12,8 @@ sealed interface KeyStroke {
     data object CtrlLatch : KeyStroke
 }
 
-data class KeyButton(val label: String, val strokes: List<KeyStroke>)
+/** [repeat]: sends again and again while held. */
+data class KeyButton(val label: String, val strokes: List<KeyStroke>, val repeat: Boolean = false)
 
 data class ParsedKeyBar(val buttons: List<KeyButton>, val problems: List<String>)
 
@@ -27,6 +28,9 @@ val KEY_NAMES: List<String> =
         "Home", "End", "PgUp", "PgDn") + (1..12).map { "F$it" }
 
 private val KEY_NAMES_BY_LOWER = KEY_NAMES.associateBy { it.lowercase() }
+
+// Held, these repeat without being asked to, like on a hardware keyboard.
+private val REPEATING_KEYS = setOf("Up", "Down", "Left", "Right", "PgUp", "PgDn", "Backspace", "Delete")
 private val BAR_NAME = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
 
 /**
@@ -51,10 +55,15 @@ private fun parseButton(line: String): Result<KeyButton> = runCatching {
     if ('=' !in line) throw BadLine("expected label = keys")
     val label = line.substringBefore('=').trim()
     if (label.isEmpty()) throw BadLine("no label")
-    val strokes = tokenize(line.substringAfter('=')).map(::parseStroke)
+    val tokens = tokenize(line.substringAfter('='))
+    val repeatAsked = tokens.any { it is Token.Word && it.word.equals("Repeat", ignoreCase = true) }
+    val strokes = tokens
+        .filterNot { it is Token.Word && it.word.equals("Repeat", ignoreCase = true) }
+        .map(::parseStroke)
     if (strokes.isEmpty()) throw BadLine("no keys")
     if (KeyStroke.CtrlLatch in strokes && strokes.size > 1) throw BadLine("Ctrl on its own must be the only key")
-    KeyButton(label, strokes)
+    val repeatsAnyway = (strokes.singleOrNull() as? KeyStroke.Key)?.key in REPEATING_KEYS
+    KeyButton(label, strokes, repeat = repeatAsked || repeatsAnyway)
 }
 
 private sealed interface Token {
@@ -112,9 +121,14 @@ private fun parseStroke(token: Token): KeyStroke {
     return KeyStroke.Key(key, ctrl, alt)
 }
 
-/** The bar a tab's program asked for (see the `keybar` command); the shell's if none or invalid. */
-fun keyBarName(reported: String?): String =
-    reported?.trim()?.takeIf { BAR_NAME.matches(it) } ?: SHELL_KEY_BAR
+/**
+ * The bars a tab's program asked for, best first (see the `keybar`
+ * command: `name,fallback,…`). Invalid names are dropped; the shell's bar
+ * if nothing is left.
+ */
+fun keyBarNames(reported: String?): List<String> =
+    reported.orEmpty().split(',').map { it.trim() }.filter { BAR_NAME.matches(it) }
+        .ifEmpty { listOf(SHELL_KEY_BAR) }
 
 /** A built-in bar's file, as shipped with the app. */
 fun builtInKeyBarText(name: String): String? =
@@ -123,21 +137,25 @@ fun builtInKeyBarText(name: String): String? =
 private object KeyBarResources
 
 /**
- * The bar [name]: the user's `NAME.conf` in [userDir] if there is one,
- * else the built-in, else the shell's bar.
+ * The first of [names] that exists, as the user's `NAME.conf` in
+ * [userDir] or a built-in (the user's wins); else the shell's bar.
  */
-fun loadKeyBar(name: String, userDir: File): LoadedKeyBar {
-    val userFile = File(userDir, "$name.conf").takeIf { BAR_NAME.matches(name) && it.isFile }
-    if (userFile != null) {
-        val parsed = parseKeyBar(userFile.readText())
-        return LoadedKeyBar(name, parsed.buttons, parsed.problems, userFile.path)
+fun loadKeyBar(names: List<String>, userDir: File): LoadedKeyBar {
+    for (name in names + SHELL_KEY_BAR) {
+        if (!BAR_NAME.matches(name)) continue
+        val userFile = File(userDir, "$name.conf")
+        if (userFile.isFile) {
+            val parsed = parseKeyBar(userFile.readText())
+            return LoadedKeyBar(name, parsed.buttons, parsed.problems, userFile.path)
+        }
+        val builtIn = builtInKeyBarText(name) ?: continue
+        val parsed = parseKeyBar(builtIn)
+        return LoadedKeyBar(name, parsed.buttons, parsed.problems, "built-in $name")
     }
-    val builtIn = builtInKeyBarText(name)
-        ?: return if (name == SHELL_KEY_BAR) LoadedKeyBar(name, emptyList(), emptyList(), "none")
-        else loadKeyBar(SHELL_KEY_BAR, userDir)
-    val parsed = parseKeyBar(builtIn)
-    return LoadedKeyBar(name, parsed.buttons, parsed.problems, "built-in $name")
+    return LoadedKeyBar(SHELL_KEY_BAR, emptyList(), emptyList(), "none")
 }
+
+fun loadKeyBar(name: String, userDir: File): LoadedKeyBar = loadKeyBar(listOf(name), userDir)
 
 /**
  * Lays out [count] buttons as pages of two rows of indexes, at most

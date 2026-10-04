@@ -100,7 +100,7 @@ keys() {
 @test "Games starts the chosen game" {
     game "$BATS_TEST_TMPDIR/games/neon-rogue.py"
     run keys 31
-    [[ $output == *"RUN: $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
+    [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
 @test "Update all runs apt" {

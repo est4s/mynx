@@ -5,7 +5,8 @@ app, open it, and you're at a real Debian shell, with no root, no Termux and
 no setup scripts to paste.
 
 On top of that it ships a ready-to-use, fully customizable setup: a launcher
-menu, themes, a terminal-first in-app keyboard, multiple terminals, and
+menu, themes, a key bar above the keyboard that follows what's running,
+multiple terminals, and
 **shareable profiles**, so you can send your whole setup to a friend and they
 can install it with one tap.
 
@@ -13,8 +14,8 @@ It's also built for **AI coding agents** like Claude Code: the setup is
 documented for them and fully scriptable, so an agent can customize it for
 you.
 
-> **Status:** planning. Nothing is built yet; this README describes the
-> intended scope.
+> **Status:** in development, not released. Roadmap steps 1–4 work;
+> this README describes the intended scope.
 
 ---
 
@@ -50,19 +51,6 @@ Terminals open in **browser-style tabs**, laid out like Windows Terminal:
   wakelock), so long jobs survive switching apps. Open tabs are restored when
   you reopen the app.
 
-### In-app keyboard
-A keyboard drawn inside the app. It's not a system keyboard, so the rest of the
-phone keeps its usual one.
-- **Terminal layout:** Esc, Ctrl, Alt, Tab, arrows and symbols like
-  `| ~ / - _ $` always within reach.
-- **Shortcut keys:** one tap to send a command or key combo (`git status`,
-  Ctrl+C, …).
-- **Game mode:** D-pad and action buttons with real press and release, for
-  terminal games that need hold-to-move.
-- **Switch to the system keyboard** with one key whenever you want swipe typing,
-  voice input or other languages.
-- Layouts, key sizes, haptics and sounds are customizable.
-
 ### File manager
 `files` opens [nnn](https://github.com/jarun/nnn), a fast one-pane
 terminal file manager that fits a narrow portrait screen, set up for the
@@ -80,23 +68,32 @@ desktop terminals and a full keyboard.
 
 ### Key bar
 Two rows of labelled buttons between the terminal and the keyboard,
-always visible; if a bar has more buttons than fit, swipe sideways for
-the rest. What it shows depends on what's running: the shell gets Esc,
-Tab, a sticky Ctrl, arrows, Files and Menu; nnn and the menu get their
-own actions. Any program can have one: `keybar NAME command` shows bar
-`NAME` while the command runs, and bars are plain-text files you can
-change or add. The in-app keyboard builds on it later.
+always visible, so the phone's own keyboard is all you need for typing
+(swipe, voice, any language).
+- **Follows what's running:** the shell gets Esc, Tab, a sticky Ctrl,
+  arrows, Files and Menu; the file manager and the menu get their own
+  actions.
+- **Games:** each game gets its own controls (Neon Rogue: arrows, Wait,
+  Explore, Potion, …; Neon Drive: steer, Brake, Nitro), and any other
+  game a generic D-pad bar.
+- **Hold to repeat:** arrows (and any button marked to) repeat while
+  held, and send as soon as they're touched.
+- **Pages:** if a bar has more buttons than fit, swipe sideways for the
+  rest.
+- **Any program or game can bring its own:** bars are plain-text files;
+  `keybar NAME command` shows bar `NAME` while the command runs, and
+  `play game` runs a game with the bar named after it.
 
 ### Customize everything
 - **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
   cursor style.
-- **Keyboard:** edit layouts and shortcut keys, or create your own.
+- **Key bars:** edit the built-in bars or add your own, for any program.
 - **Launcher menu:** a "Pocket Terminal" start menu (Terminal, Files, Games,
   System, …) that you can edit, reorder or turn off.
 - **Shell:** your own dotfiles, prompt, aliases and packages.
 
 ### Profiles: share your setup
-A **profile** is a complete setup: theme, font, keyboard layouts, launcher
+A **profile** is a complete setup: theme, font, key bars, launcher
 menu, dotfiles, package list and setup scripts.
 - **Several profiles** on one phone (for example "Neon", "Minimal",
   "Python dev"), with fast switching between them.
@@ -135,7 +132,7 @@ written for agents, kept in sync with the app version and the active profile:
 - What the environment is (Debian under `proot` on Android) and its limits
   (no `systemd`, Docker or root kernel features), so agents don't waste time
   on things that can't work.
-- Where everything lives: profile, theme, keyboard layouts, launcher menu,
+- Where everything lives: profile, theme, key bars, launcher menu,
   file manager settings, dotfiles.
 - The file formats, with examples, and what each setting does.
 - Every `pocket` command, including the Android ones (notifications, camera,
@@ -146,7 +143,7 @@ written for agents, kept in sync with the app version and the active profile:
 - **Plain-text config.** Everything you can change in the settings screens
   is stored in readable, commented files that an agent can edit directly.
 - **A `pocket` command for everything.** Anything the app can do, a script
-  can do: `pocket theme set neon`, `pocket profile export`, `pocket keyboard
+  can do: `pocket theme set neon`, `pocket profile export`, `pocket keybar
   reload`, … with `--json` output for scripts and agents.
 - **Live reload.** Config changes apply without restarting the app.
 - **Checks before applying.** `pocket config check` validates edits and
@@ -179,7 +176,7 @@ cable, using standard tools.
 
 ### Included extras
 - The default **Neon** profile comes with a synthwave theme and a few terminal
-  games, all playable with the in-app keyboard.
+  games, each with its own key bar.
 - Optional one-tap install of popular tools and AI agent CLIs (see above).
 
 ---
@@ -215,8 +212,9 @@ Because Debian runs through `proot` rather than a virtual machine:
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
 4. **File manager:** nnn set up for the phone, and the key bar above the
    keyboard.
-5. **In-app keyboard:** terminal layout, shortcuts, game mode.
-6. **Customization:** theme, keyboard and menu editors.
+5. **Game and program key bars:** game controls, hold to repeat, bars for
+   any program or game (replaces the in-app keyboard).
+6. **Customization:** theme, key bar and menu editors.
 7. **Agent support:** `AGENTS.md`/`CLAUDE.md`, `pocket` CLI, config check
    and undo, agent notifications. The agent docs are updated with every
    later feature.
