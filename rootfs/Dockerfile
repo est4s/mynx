@@ -7,7 +7,7 @@ FROM ${BASE}
 # debconf warnings. less and nano: the base image has no pager or editor.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        apt-utils dialog eza less mc nano nnn python3 starship \
+        apt-utils dialog eza htop less mc nano nnn python3 starship \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin
 
 COPY root/ /root/

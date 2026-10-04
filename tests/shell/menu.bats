@@ -154,6 +154,20 @@ keys() {
     [[ $output == *"RUN: bash -c htop -d 10"* ]]
 }
 
+@test "a run item that fails says so and waits, instead of flashing back" {
+    source "$MENU"
+    run() { return 127; }
+    pause() { echo PAUSED; }
+    output=$(act_cmd "htop -d 10")
+    [[ $output == *"htop: command not found"* ]]
+    [[ $output == *PAUSED* ]]
+    run() { return 3; }
+    output=$(act_cmd "false")
+    [[ $output == *"failed (exit 3)"* ]]
+    run() { return 0; }
+    [ -z "$(act_cmd true)" ]
+}
+
 @test "Update all runs apt" {
     run keys 51
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]

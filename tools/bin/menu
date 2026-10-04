@@ -290,13 +290,27 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
   if [[ -n $MENU_DRYRUN ]]; then echo "RUN: $*"; return; fi
   cursor_show; clear_screen
   "$@"
+  local rc=$?
   flush_input
+  return $rc
 }
 
 act_none() { :; }
 act_files() { run files; }
 act_settings() { run pocket edit; }
-act_cmd() { run bash -c "$1"; }
+act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
+  run bash -c "$1"
+  local rc=$?
+  ((rc == 0)) && return
+  echo
+  if ((rc == 127)); then
+    center "$C_BAD" "${1%% *}: command not found"
+    center "$C_DIM" "(apt install it, or fix the menu item)"
+  else
+    center "$C_BAD" "'$1' failed (exit $rc)"
+  fi
+  pause
+}
 act_game() { run play "$1"; }
 
 act_update() {
