@@ -14,7 +14,7 @@ private val HEX_COLOR = Regex("#[0-9a-fA-F]{6}")
 
 /** The built-in theme, in the same format users edit (also shipped into Debian). */
 val NEON_COLORS_PROPERTIES: String =
-    ColorScheme::class.java.getResource("neon.colors.properties")!!.readText()
+    ColorScheme::class.java.getResource("themes/neon.colors.properties")!!.readText()
 
 val NEON: ColorScheme = parseColorScheme(
     NEON_COLORS_PROPERTIES,

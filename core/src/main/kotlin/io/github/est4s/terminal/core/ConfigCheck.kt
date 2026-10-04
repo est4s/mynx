@@ -23,6 +23,18 @@ fun checkConfig(home: File): List<ConfigProblems> {
     val colors = File(config, "colors.properties")
     if (colors.isFile) report(colors, parseColorScheme(colors.readText(), NEON).problems)
 
+    val settings = File(config, "settings.conf")
+    if (settings.isFile) {
+        val parsed = parseSettings(settings.readText())
+        val font = parsed.settings.font
+        val fontMissing = font != "default" &&
+            hostPath(font, home.parentFile.path)?.let { File(it).isFile } != true
+        report(settings, parsed.problems + if (fontMissing) listOf("font: no such file $font") else emptyList())
+    }
+
+    val themes = File(home, THEMES_DIR).listFiles { f -> f.isFile && f.name.endsWith(THEME_SUFFIX) }.orEmpty()
+    for (theme in themes.sortedBy { it.name }) report(theme, parseColorScheme(theme.readText(), NEON).problems)
+
     val bars = File(config, "keybars").listFiles { f -> f.isFile && f.name.endsWith(".conf") }.orEmpty()
     for (bar in bars.sortedBy { it.name }) {
         if (!isKeyBarName(bar.name.removeSuffix(".conf"))) {

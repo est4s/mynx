@@ -1,6 +1,6 @@
 # The Debian that ships in the APK. Built for arm64 by scripts/build-rootfs.sh,
 # which passes the base image digest and the `core` build context (core's
-# resources: the Neon colours and the built-in key bars).
+# resources: the built-in key bars).
 ARG BASE=debian:trixie
 FROM ${BASE}
 
@@ -12,7 +12,6 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin
 
 COPY root/ /root/
-COPY --from=core neon.colors.properties /root/.config/pocket-terminal/colors.properties
 # The app's built-in key bars, to copy from (the app reads its own copy).
 COPY --from=core keybars/ /usr/share/pocket-terminal/keybars/
 

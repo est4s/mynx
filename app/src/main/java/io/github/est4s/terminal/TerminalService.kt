@@ -14,11 +14,14 @@ import android.os.FileObserver
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.PocketRequests
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.ToolsInstaller
+import io.github.est4s.terminal.core.parseColorScheme
 import io.github.est4s.terminal.core.Tabs
 import io.github.est4s.terminal.core.closesOnExit
 import io.github.est4s.terminal.core.hostPath
@@ -39,6 +42,8 @@ private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.pocket-terminal"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
+// Requests after which the app applies the config files again.
+private val RELOADING_REQUESTS = setOf("check", "set", "theme-set", "preview-end", "keybar-edit", "keybar-reset")
 
 /**
  * Owns the terminal sessions and keeps them running while the app is in the
@@ -104,10 +109,30 @@ class TerminalService : Service() {
         }.also { it.startWatching() }
     }
 
-    /** Answers waiting `pocket` requests; a check also applies the config. */
+    /** Answers waiting `pocket` requests, then applies what they changed. */
     fun processRequests() {
         val handled = runCatching { requests.processPending() }.getOrDefault(emptyList())
-        if ("check" in handled) activity?.reloadConfig(quiet = true)
+        for (request in handled) {
+            when (request.name) {
+                "preview-colors" -> activity?.previewColors(parseColorScheme(request.args.joinToString("\n"), NEON).scheme)
+                in RELOADING_REQUESTS -> activity?.reloadConfig(quiet = true)
+            }
+        }
+    }
+
+    /** The settings' cursor style, which every terminal reads when it (re)starts. */
+    var cursorStyle: Int? = null
+        private set
+
+    fun setCursorStyle(style: String) {
+        val next = when (style) {
+            "underline" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_UNDERLINE
+            "bar" -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BAR
+            else -> TerminalEmulator.TERMINAL_CURSOR_STYLE_BLOCK
+        }
+        if (next == cursorStyle) return
+        cursorStyle = next
+        tabs.tabs.forEach { it.session.emulator?.setCursorStyle() }
     }
 
     /** The activity showing the sessions, if any. Sessions must never hold it otherwise. */

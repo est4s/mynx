@@ -35,11 +35,16 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.ColorScheme
+import io.github.est4s.terminal.core.MAX_FONT_SIZE
+import io.github.est4s.terminal.core.MIN_FONT_SIZE
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
+import io.github.est4s.terminal.core.hostPath
 import io.github.est4s.terminal.core.loadColorScheme
+import io.github.est4s.terminal.core.loadSettings
+import io.github.est4s.terminal.core.setSetting
 import io.github.est4s.terminal.core.stripColors
 import java.io.File
 import java.util.Properties
@@ -50,6 +55,8 @@ private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
 // Debian path, relative to the rootfs.
 private const val COLORS_FILE = "root/.config/pocket-terminal/colors.properties"
 private const val KEY_BARS_DIR = "root/.config/pocket-terminal/keybars"
+private const val SETTINGS_FILE = "root/.config/pocket-terminal/settings.conf"
+private const val CURSOR_BLINK_MS = 500
 private const val KEY_BAR_POLL_MS = 250L
 
 class MainActivity : Activity() {
@@ -79,6 +86,9 @@ class MainActivity : Activity() {
     private var scheme: ColorScheme? = null
     private val strip get() = (scheme ?: NEON).stripColors()
     private var shownColorProblems = emptyList<String>()
+    private var shownSettingsProblems = emptyList<String>()
+    private var fontSize = 0 // dp
+    private var appliedFont: String? = null
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -94,11 +104,23 @@ class MainActivity : Activity() {
         }
     }
 
-    var textSizePx = 0
-        set(value) {
-            field = value.coerceIn(dp(6), dp(40))
-            terminalView.setTextSize(field)
+    private fun setFontSize(size: Int) {
+        if (size == fontSize) return
+        fontSize = size
+        terminalView.setTextSize(dp(size))
+    }
+
+    /** Pinch to zoom: one step bigger or smaller, saved as the `font-size` setting. */
+    fun zoom(step: Int) {
+        val size = (fontSize + step).coerceIn(MIN_FONT_SIZE, MAX_FONT_SIZE)
+        if (size == fontSize) return
+        setFontSize(size)
+        val file = File(installer.rootfs, SETTINGS_FILE)
+        runCatching {
+            file.parentFile!!.mkdirs()
+            file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "font-size", size.toString()).getOrThrow())
         }
+    }
 
     private lateinit var root: FrameLayout
     private val installer by lazy { RootfsInstaller(filesDir) }
@@ -122,6 +144,7 @@ class MainActivity : Activity() {
         if (::terminalView.isInitialized) {
             applyColors()
             refreshKeyBar(force = true) // bar files may have been edited
+            applySettings()
         }
         root.post(keyBarPoll)
     }
@@ -130,6 +153,7 @@ class MainActivity : Activity() {
     // chance to save before Android may kill it.
     override fun onStop() {
         root.removeCallbacks(keyBarPoll)
+        if (::terminalView.isInitialized) terminalView.setTerminalCursorBlinkerState(false, true)
         service?.saveTabs()
         super.onStop()
     }
@@ -178,8 +202,10 @@ class MainActivity : Activity() {
             isFocusable = true
             isFocusableInTouchMode = true
         }
-        textSizePx = dp(12)
-        terminalView.setTypeface(font)
+        // Before attaching: the size decides the first rows and columns.
+        appliedFont = null
+        fontSize = 0
+        applySettings()
         stripRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         stripScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -199,6 +225,7 @@ class MainActivity : Activity() {
         })
 
         terminalView.attachSession(session)
+        terminalView.setTerminalCursorBlinkerState(true, true)
         terminalView.requestFocus()
         renderStrip()
         refreshKeyBar(force = true)
@@ -317,7 +344,15 @@ class MainActivity : Activity() {
                 .show()
         }
         shownColorProblems = parsed.problems
-        val next = parsed.scheme
+        showScheme(parsed.scheme)
+    }
+
+    /** Shows colours that aren't saved (the theme editor's preview) until the next reload. */
+    fun previewColors(preview: ColorScheme) {
+        if (::terminalView.isInitialized) showScheme(preview)
+    }
+
+    private fun showScheme(next: ColorScheme) {
         if (next != scheme) {
             scheme = next
             applyToTerminals(next)
@@ -448,6 +483,35 @@ class MainActivity : Activity() {
         if (!::terminalView.isInitialized) return
         applyColors(quiet)
         refreshKeyBar(force = true, quiet = quiet)
+        applySettings(quiet)
+    }
+
+    /** Font, font size and cursor from the settings file; bad lines keep their defaults. */
+    private fun applySettings(quiet: Boolean = false) {
+        val parsed = loadSettings(File(installer.rootfs, SETTINGS_FILE))
+        val settings = parsed.settings
+        val problems = parsed.problems.toMutableList()
+        setFontSize(settings.fontSize)
+        if (settings.font != appliedFont) {
+            val custom = if (settings.font == "default") null else
+                hostPath(settings.font, installer.rootfs.absolutePath)?.let { File(it) }?.takeIf { it.isFile }
+                    ?.let { runCatching { Typeface.createFromFile(it) }.getOrNull() }
+            if (settings.font != "default" && custom == null) problems += "font: can't load ${settings.font}"
+            terminalView.setTypeface(custom ?: font)
+            appliedFont = settings.font
+        }
+        service?.setCursorStyle(settings.cursorStyle)
+        terminalView.setTerminalCursorBlinkerRate(if (settings.cursorBlink) CURSOR_BLINK_MS else 0)
+        terminalView.setTerminalCursorBlinkerState(true, true)
+        terminalView.onScreenUpdated()
+        if (!quiet && problems.isNotEmpty() && problems != shownSettingsProblems) {
+            AlertDialog.Builder(this)
+                .setTitle("Problems in settings.conf")
+                .setMessage("~/.config/pocket-terminal/settings.conf\n\n" + problems.joinToString("\n"))
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        shownSettingsProblems = problems
     }
 
     /** Shows the bar the selected tab's program asked for; problems in its file show once. */

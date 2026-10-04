@@ -7,12 +7,13 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ConfigCheckTest {
-    private val home = createTempDirectory("home").toFile()
+    private val rootfs = createTempDirectory("rootfs").toFile()
+    private val home = File(rootfs, "root")
     private val config = File(home, ".config/pocket-terminal").apply { mkdirs() }
 
     @AfterTest
     fun cleanup() {
-        home.deleteRecursively()
+        rootfs.deleteRecursively()
     }
 
     @Test
@@ -67,6 +68,19 @@ class ConfigCheckTest {
         write("keybars/notes.txt", "anything")
         write("keybars/nnn.conf~", "editor backup")
 
+        assertEquals(emptyList(), checkConfig(home))
+    }
+
+    @Test
+    fun `a font that isn't there is a problem`() {
+        File(config, "settings.conf").writeText("font = /usr/share/fonts/Hack.ttf\n")
+
+        assertEquals(
+            listOf(ConfigProblems("~/.config/pocket-terminal/settings.conf", listOf("font: no such file /usr/share/fonts/Hack.ttf"))),
+            checkConfig(home),
+        )
+        File(home.parentFile, "usr/share/fonts").mkdirs()
+        File(home.parentFile, "usr/share/fonts/Hack.ttf").writeText("")
         assertEquals(emptyList(), checkConfig(home))
     }
 

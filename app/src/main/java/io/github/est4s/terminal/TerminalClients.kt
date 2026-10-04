@@ -45,7 +45,7 @@ class SessionClient(private val service: TerminalService) : TerminalSessionClien
         service.activity?.onScreenUpdated(session)
     }
     override fun onTerminalCursorStateChange(state: Boolean) {}
-    override fun getTerminalCursorStyle(): Int? = null
+    override fun getTerminalCursorStyle(): Int? = service.cursorStyle
 
     override fun logError(tag: String?, message: String?) { Log.e(tag ?: TAG, message ?: "") }
     override fun logWarn(tag: String?, message: String?) { Log.w(tag ?: TAG, message ?: "") }
@@ -62,7 +62,7 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
     // Pinch to zoom: change the font size once the gesture is big enough.
     override fun onScale(scale: Float): Float {
         if (scale in 0.9f..1.1f) return scale
-        activity.textSizePx += if (scale > 1f) 2 else -2
+        activity.zoom(if (scale > 1f) 1 else -1)
         return 1f
     }
 
