@@ -7,7 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
 
-from pocket_terminal.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,  # noqa: E402
+from pocket_terminal.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,
+                                    missing_steps,  # noqa: E402
                                     remove_hooks)
 from pocket_terminal.client import Failure  # noqa: E402
 
@@ -89,6 +90,22 @@ class InstallStepsTest(unittest.TestCase):
     def test_gets_curl_first_when_missing(self):
         self.assertEqual(install_steps(AGENTS["claude"], curl=False, node=None)[0],
                          "apt-get update && apt-get install -y curl ca-certificates")
+
+    def test_codex_needs_ps(self):
+        # Codex runs ps to keep track of its background server.
+        self.assertEqual(install_steps(AGENTS["codex"], curl=True, node=None, ps=False),
+                         ["apt-get update && apt-get install -y procps",
+                          "curl -fsSL https://chatgpt.com/codex/install.sh | sh"])
+        self.assertEqual(install_steps(AGENTS["codex"], curl=False, node=None, ps=False)[0],
+                         "apt-get update && apt-get install -y curl ca-certificates procps")
+        self.assertEqual(install_steps(AGENTS["claude"], curl=True, node=None, ps=False),
+                         ["curl -fsSL https://claude.ai/install.sh | bash"])
+
+    def test_what_an_installed_agent_still_needs(self):
+        self.assertEqual(missing_steps(AGENTS["codex"], ps=False),
+                         ["apt-get update && apt-get install -y procps"])
+        self.assertEqual(missing_steps(AGENTS["codex"], ps=True), [])
+        self.assertEqual(missing_steps(AGENTS["claude"], ps=False), [])
 
     def test_gets_node_for_gemini_when_missing_or_too_old(self):
         for node in [None, 18]:

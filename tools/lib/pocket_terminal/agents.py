@@ -13,7 +13,9 @@ from .client import TOOLS, Failure
 
 # events: the agent's hook event -> what it means for `pocket hook`
 # downloads: where its installer downloads silently (None: it shows progress)
-Agent = namedtuple("Agent", "name title command config events installer downloads", defaults=[None])
+# needs: commands it runs that a fresh Debian may lack -> their package
+Agent = namedtuple("Agent", "name title command config events installer downloads needs",
+                   defaults=[None, {}])
 
 AGENTS = {
     "claude": Agent("claude", "Claude Code", "claude", "~/.claude/settings.json",
@@ -21,23 +23,41 @@ AGENTS = {
                     "curl -fsSL https://claude.ai/install.sh | bash", "~/.claude/downloads"),
     "codex": Agent("codex", "Codex", "codex", "~/.codex/hooks.json",
                    {"UserPromptSubmit": "start", "Stop": "stop", "PermissionRequest": "attention"},
-                   "curl -fsSL https://chatgpt.com/codex/install.sh | sh"),
+                   "curl -fsSL https://chatgpt.com/codex/install.sh | sh", None,
+                   {"ps": "procps"}),  # to track its background server
     "gemini": Agent("gemini", "Gemini CLI", "gemini", "~/.gemini/settings.json",
                     {"BeforeAgent": "start", "AfterAgent": "stop", "Notification": "attention"},
                     "npm install -g @google/gemini-cli"),
 }
 
-GET_CURL = "apt-get update && apt-get install -y curl ca-certificates"
 GET_NODE = "apt-get update && apt-get install -y nodejs npm"
 MIN_NODE = 20  # Gemini CLI's minimum
 
 
-def install_steps(agent, curl, node):
-    """Shell commands that install [agent]. [curl]: whether curl is there;
-    [node]: Node.js's major version, or None."""
+def apt_install(packages):
+    return [f"apt-get update && apt-get install -y {' '.join(packages)}"] if packages else []
+
+
+def needed_packages(agent, ps):
+    """Packages for the commands in [agent].needs that are missing ([ps]:
+    whether ps is there; the only one so far)."""
+    have = {"ps": ps}
+    return [package for command, package in agent.needs.items() if not have.get(command, True)]
+
+
+def missing_steps(agent, ps):
+    """Shell commands that get what an installed [agent] still needs."""
+    return apt_install(needed_packages(agent, ps))
+
+
+def install_steps(agent, curl, node, ps=True):
+    """Shell commands that install [agent]. [curl], [ps]: whether those
+    commands are there; [node]: Node.js's major version, or None."""
     if agent.installer.startswith("npm "):
-        return ([] if node is not None and node >= MIN_NODE else [GET_NODE]) + [agent.installer]
-    return ([] if curl else [GET_CURL]) + [agent.installer]
+        node_steps = [] if node is not None and node >= MIN_NODE else [GET_NODE]
+        return node_steps + missing_steps(agent, ps) + [agent.installer]
+    packages = ([] if curl else ["curl", "ca-certificates"]) + needed_packages(agent, ps)
+    return apt_install(packages) + [agent.installer]
 
 
 def download_progress(title, before, size, showing):

@@ -104,6 +104,11 @@ phone:
 - `claude` typed in a **new tab's** shell also shows the agent bar (the
   app's profile loads `/opt/pocket-terminal/shell.bash`); leaving it
   brings the shell bar back. Not installed: `codex` says how to install.
+- Codex failed to start ("failed to invoke ps"): the image had no
+  `ps`. Now the image has procps, installing Codex gets it first, and
+  starting an installed Codex from the menu offers to install it. On
+  the phone: Menu → AI agents → Codex → it asks to install procps → `y`
+  → Codex starts.
 - Links: `echo https://example.com`, tap the link → the browser opens.
   `pocket open https://example.com` too. In `claude`, `/login` should
   open the browser by itself (`BROWSER` → `xdg-open`); if not, tapping

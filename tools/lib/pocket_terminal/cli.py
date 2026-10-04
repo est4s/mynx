@@ -391,6 +391,7 @@ def start_agent(agent):
     binary = agent_binary(agent)
     if not binary:
         raise Failure(f"can't find {agent.command} after installing it; open a new tab and run {agent.command}")
+    get_what_it_needs(agent)
     sys.stdout.flush()
     bar_file = os.environ.get("POCKET_KEYBAR_FILE")
     if not bar_file:
@@ -460,8 +461,30 @@ def watch_download(agent, every=0.5):
         thread.join()
 
 
+def get_what_it_needs(agent):
+    """Offers to install what an installed [agent] needs but is missing
+    (e.g. ps for Codex, on Debians from before the image had it)."""
+    steps = agents.missing_steps(agent, ps=bool(shutil.which("ps")))
+    if not steps:
+        return
+    missing = [c for c in agent.needs if not shutil.which(c)]
+    print(f"{agent.title} needs {', '.join(missing)}, which isn't installed. Installing it runs:\n")
+    for step in steps:
+        print(f"  {step}")
+    print()
+    if not ask("Run it? [y/N]"):
+        return
+    for step in steps:
+        sys.stdout.flush()
+        code = subprocess.run(["bash", "-o", "pipefail", "-c", step]).returncode
+        if code != 0:
+            raise Failure(f"'{step}' failed (exit {code})")
+    print()
+
+
 def install_agent(agent, yes, notify, then=None):
-    steps = agents.install_steps(agent, curl=bool(shutil.which("curl")), node=node_major())
+    steps = agents.install_steps(agent, curl=bool(shutil.which("curl")), node=node_major(),
+                                 ps=bool(shutil.which("ps")))
     print(f"Installing {agent.title} with its official installer runs:\n")
     for step in steps:
         print(f"  {step}")

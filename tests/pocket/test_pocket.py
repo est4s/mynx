@@ -4,6 +4,7 @@ Run: python3 -m unittest discover -s tests/pocket
 """
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -541,6 +542,23 @@ class PocketTest(unittest.TestCase):
         self.assertIn("Claude Code isn't installed yet.", run.stdout)
         self.assertIn("Start Claude Code now? [Y/n]", run.stdout)
         self.assertTrue(run.stdout.endswith("CLAUDE STARTED\n"), run.stdout)
+
+    def without_ps(self, path):
+        """[path] with bash and python3, but no ps."""
+        tools = os.path.join(self.tmp.name, "no-ps")
+        os.makedirs(tools, exist_ok=True)
+        for name in ("bash", "python3", "sh"):
+            os.symlink(shutil.which(name), os.path.join(tools, name))
+        return path.split(":")[0] + ":" + tools
+
+    def test_agent_start_offers_what_an_installed_agent_still_needs(self):
+        path = self.without_ps(self.fake_commands(codex='echo "CODEX STARTED"',
+                                                  **{"apt-get": 'echo "APT $*"'}))
+        run = self.agent("start", "codex", stdin="y\n", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("Codex needs ps, which isn't installed", run.stdout)
+        self.assertIn("APT install -y procps", run.stdout)
+        self.assertTrue(run.stdout.endswith("CODEX STARTED\n"), run.stdout)
 
     def test_agent_start_when_you_decline_the_install(self):
         path = self.fake_commands(curl="echo true")
