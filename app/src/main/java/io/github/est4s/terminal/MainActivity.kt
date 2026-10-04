@@ -64,6 +64,8 @@ class MainActivity : Activity() {
     private val keyBarPoll = object : Runnable {
         override fun run() {
             if (::keyBar.isInitialized) refreshKeyBar()
+            // In case a file event was missed: a list of a nearly empty folder.
+            service?.processRequests()
             root.postDelayed(this, KEY_BAR_POLL_MS)
         }
     }
@@ -84,6 +86,7 @@ class MainActivity : Activity() {
             service = s
             s.activity = this@MainActivity
             showTerminal(s.currentSession())
+            s.toolsError?.let { showToolsError(it) }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
@@ -304,9 +307,9 @@ class MainActivity : Activity() {
      * colours a program set with escape codes survive switching apps. The
      * views are always repainted: they may be new.
      */
-    private fun applyColors() {
+    private fun applyColors(quiet: Boolean = false) {
         val parsed = loadColorScheme(File(installer.rootfs, COLORS_FILE))
-        if (parsed.problems.isNotEmpty() && parsed.problems != shownColorProblems) {
+        if (!quiet && parsed.problems.isNotEmpty() && parsed.problems != shownColorProblems) {
             AlertDialog.Builder(this)
                 .setTitle("Problems in colors.properties")
                 .setMessage("~/.config/pocket-terminal/colors.properties\n\n" + parsed.problems.joinToString("\n"))
@@ -437,11 +440,21 @@ class MainActivity : Activity() {
         }
     }
 
+    /**
+     * Applies the config files now: `pocket check` asked. [quiet]: `pocket`
+     * reports the problems itself, so no dialogs pop up over the terminal.
+     */
+    fun reloadConfig(quiet: Boolean) {
+        if (!::terminalView.isInitialized) return
+        applyColors(quiet)
+        refreshKeyBar(force = true, quiet = quiet)
+    }
+
     /** Shows the bar the selected tab's program asked for; problems in its file show once. */
-    private fun refreshKeyBar(force: Boolean = false) {
+    private fun refreshKeyBar(force: Boolean = false, quiet: Boolean = false) {
         val session = service?.tabs?.selected?.session ?: return
         val loaded = keyBar.refresh(service?.keyBarFileOf(session), force) ?: return
-        if (loaded.problems.isNotEmpty() && loaded.problems != shownKeyBarProblems) {
+        if (!quiet && loaded.problems.isNotEmpty() && loaded.problems != shownKeyBarProblems) {
             AlertDialog.Builder(this)
                 .setTitle("Problems in a key bar file")
                 .setMessage(loaded.source + "\n\n" + loaded.problems.joinToString("\n"))
@@ -472,6 +485,15 @@ class MainActivity : Activity() {
             }
             insets
         }
+    }
+
+    // The terminal works without the tools; only `pocket` and the editors are missing.
+    private fun showToolsError(trace: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Couldn't update the app's tools")
+            .setMessage("pocket and the editors may be missing or old.\n\n$trace")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun showLastCrash() {

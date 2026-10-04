@@ -51,6 +51,9 @@ jobs:
           sudo apt-get install -y -qq bats >/dev/null
           bats tests/shell
 
+      - name: pocket tests
+        run: python3 -m unittest discover -s tests/pocket -v
+
       # proot is built from source with the NDK and cached; the binaries are
       # never committed. The cache key changes with the script (which pins the
       # versions) and the runner's NDK.
@@ -86,6 +89,9 @@ jobs:
 
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets
+
+      - name: Add the app's tools (pocket, editors, themes)
+        run: scripts/pack-tools.sh app/src/main/assets
 
       - name: Add the terminal font
         run: scripts/fetch-font.sh app/src/main/assets/fonts

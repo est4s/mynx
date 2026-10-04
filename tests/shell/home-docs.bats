@@ -50,3 +50,13 @@ ROOT="$BATS_TEST_DIRNAME/../../rootfs/root"
         grep -qF "\`$name\`" "$ROOT/AGENTS.md" || { echo "bar not in AGENTS.md: $name"; false; }
     done
 }
+
+@test "AGENTS.md documents pocket and every pocket command" {
+    pocket="$BATS_TEST_DIRNAME/../../tools/bin/pocket"
+    grep -qF "/opt/pocket-terminal" "$ROOT/AGENTS.md"
+    commands=$(python3 "$pocket" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
+    [ -n "$commands" ]
+    for name in $commands; do
+        grep -qF "pocket $name" "$ROOT/AGENTS.md" || { echo "not in AGENTS.md: pocket $name"; false; }
+    done
+}

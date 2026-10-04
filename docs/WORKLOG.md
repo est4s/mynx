@@ -22,8 +22,11 @@ Newest entries first. Rules for keeping it up to date: see
   confirmed on the phone. The owner dropped the in-app keyboard
   (2026-10-04): game bars (Rogue, Drive, Flap, generic `game`), `play`,
   `keybar NAME,FALLBACK`, bars any program can bring, hold-to-repeat.
-- **Next: roadmap step 6 (*Customization*)**, to plan with the owner.
-  See "Next".
+- **Roadmap step 6 (*Customization*) is in progress.** Planned with the
+  owner: editors are terminal programs, built on a small `pocket` CLI
+  so AI agents can change every setting. 6.1 (the app's tools at
+  `/opt/pocket-terminal`, `pocket check`) is built, waiting for the
+  owner's check. See "Next".
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
   (with their folders and names) restored after Android kills the app.
@@ -110,24 +113,58 @@ perfectly").** Checks the owner ran:
   file afterwards.
 - rotate to landscape: more buttons per row
 
-### Roadmap step 6: Customization (plan with the owner first)
+### Roadmap step 6: Customization
 
-**Goal (README "Customize everything", roadmap 6):** theme, key bar and
-menu editors. Themes: colour schemes, fonts, font size, cursor style.
-Key bars: edit built-ins or add bars. Launcher menu: edit, reorder or
-turn off items.
+**Decided with the owner (2026-10-04):** settings editors are
+**terminal programs** (like the menu), and a small `pocket` CLI starts
+now, as the way the editors apply changes. Goal: AI coding CLIs can work
+on every setting, so people can customize their setup by asking.
 
-**Where things stand:** everything is already plain-text config except
-the menu (its items are hard-coded in `rootfs/bin/menu`) and the font,
-font size and cursor style (not configurable yet). Colours:
-`~/.config/pocket-terminal/colors.properties` (`core/ColorScheme.kt`).
-Key bars: `~/.config/pocket-terminal/keybars/` (`core/KeyBar.kt`).
+**Plan** (each step: test-first, then the owner checks on the phone):
+- **6.1 The app's tools and `pocket check`. Built, owner to check.**
+  `tools/` → `/opt/pocket-terminal`, replaced on every app update (so
+  `pocket` and the editors reach the owner's existing Debian without
+  clearing data); `pocket check` applies config right away and lists
+  problems; `pocket version`, `help`, `--json`.
+- **6.2 Settings file:** `~/.config/pocket-terminal/settings.conf`
+  (`key = value`, commented): `font-size` (pinch zoom saves it; lost on
+  restart today), cursor style and blink (check what terminal-emulator
+  v0.118.3 supports first), a user font (`font.ttf`). `pocket get`,
+  `pocket set KEY VALUE`, `pocket settings` (list with descriptions).
+- **6.3 Themes:** presets in `/opt/pocket-terminal/themes/` (neon,
+  amber, phosphor, a few well-known ones). `pocket theme list|show|set`;
+  `set` writes the preset into `colors.properties` (one file, easy for
+  agents; undo comes in step 7). Theme editor (curses): pick a preset
+  with a live preview in the app, tweak colours. Make the menu's own
+  theme follow it.
+- **6.4 Key bar editor:** list bars (built-in/user), copy a built-in to
+  edit, add/remove/reorder buttons, test keys; `pocket keybar
+  list|show|edit|reset`.
+- **6.5 Menu config:** move the menu's items out of `rootfs/bin/menu`
+  into a menu file (user's copy in `~/.config/pocket-terminal/`), an
+  editor to add/hide/reorder items, `pocket menu …`. The menu itself is
+  in the rootfs today, so this moves it to the tools too (it then
+  updates with the app).
+- **6.6 Settings hub and docs:** menu → System → Settings opens
+  `pocket edit` (theme, font, key bars, menu). Move the agent guide to
+  `/opt/pocket-terminal/` so it updates with the app, leaving a short
+  `~/AGENTS.md` that points to it (the current home docs only reach
+  fresh installs).
 
-**Decide with the owner:** editors as terminal programs (TUI in Debian,
-like the menu) or Android screens; which settings come first (e.g. a
-menu config file, theme presets to pick from, font size that persists
-— pinch zoom is lost on restart today); whether `pocket` (README's CLI,
-roadmap 7) starts here as the way editors apply changes.
+**6.1 checks for the owner** (after installing, without clearing data):
+- `pocket version` prints a number; `pocket help` lists the commands;
+  `which pocket` is `/opt/pocket-terminal/bin/pocket`
+- `pocket check` says "No problems in ~/.config/pocket-terminal"
+- live apply: `sed -i 's/^background=.*/background=#200020/'
+  ~/.config/pocket-terminal/colors.properties && pocket check` turns the
+  background purple at once, no leaving the app. Put it back:
+  `background=#14101f` (or delete the file for Neon).
+- problems: `printf 'Quit = q\noops\n' >
+  ~/.config/pocket-terminal/keybars/shell.conf && pocket check` lists
+  `line 2: …` under that file, exits 1 (`echo $?`), and **no dialog**
+  pops up. `pocket check --json` prints the same as JSON. Delete the
+  file and `pocket check` again: the shell bar is back.
+- no dialog about "Couldn't update the app's tools"
 
 Step 5's checks (kept for regressions): `rogue`/`drive`/`flap` bars and
 pages; holding arrows repeats in games, nnn, menu and shell; generic
@@ -162,6 +199,51 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (18): step 6 planned; 6.1, the app's tools and `pocket`
+
+**Decided with the owner:** start a small `pocket` now, in step 6;
+editors are terminal programs; the aim is that AI coding CLIs can work
+on every setting. Plan in "Next".
+
+**Done**
+- `core`, test-first: `TarUnpacker` (refactor: the rootfs installer's
+  tar code, shared). `ToolsInstaller` (5 tests): unpacks the tools
+  archive into `filesDir/tools` when the version changes, writes
+  `.version`, keeps the old tools until the new ones are complete.
+  `prootLaunch(toolsDir, requestDir)`: mounts the tools at
+  `/opt/pocket-terminal`, adds its `bin` to the end of the PATH, sets
+  `POCKET_REQUESTS`. `checkConfig()` (6 tests): problems in
+  `colors.properties` and each key bar file (also bad bar file names),
+  by Debian path. `PocketRequests` (7 tests): answers `ID.req` files
+  with JSON `ID.reply` files.
+- `tools/bin/pocket` (Python 3, 11 unittest tests against a fake app):
+  `check`, `version`, `help`, `--json`, exit codes 0/1/2, times out
+  with a clear message when the app doesn't answer, cleans up its
+  files.
+- App: the service updates the tools before any shell starts (version =
+  version code + install time, so every build counts), watches the
+  request folder with a `FileObserver` (the activity's 250 ms poll also
+  processes requests, in case an event is missed), and a `check`
+  reloads colours and key bars without dialogs. A failed tools update
+  shows a dialog with the stack trace.
+- CI: `pocket tests` step; `scripts/pack-tools.sh` packs `tools/` into
+  the APK. `check-tdd.sh`: `tools/` needs `tests/pocket/`.
+- Docs: home `AGENTS.md` "Changing settings: `pocket`" (a new
+  home-docs test fails if a `pocket` command isn't documented there),
+  repo `AGENTS.md` (architecture, tests), README.
+
+**Decisions**
+- **App-owned tools live outside the rootfs** (mounted from the app's
+  files), so they update with the app; the user's Debian is still never
+  touched. The rootfs's own app parts (menu, `files`, `keybar`, `play`)
+  can move there later (6.5 moves the menu).
+- **Python for `pocket` and the editors:** already in the image, JSON
+  and curses in the standard library; the games are Python curses too.
+- **Request files instead of a socket:** proven by the key bar file,
+  no Android socket APIs to spike; one request is a few ms.
+- **Config checking stays in `core`** (the app answers `check`), so
+  there's one parser per format, not a Python copy.
 
 ### 2026-10-04 (17): step 5 rethought: game and program key bars
 

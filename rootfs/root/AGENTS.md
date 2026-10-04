@@ -38,11 +38,12 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 | Key bars above the keyboard | `~/.config/pocket-terminal/keybars/` |
 | Menu state (last choices, menu theme) | `~/.local/state/pocket-terminal/menu` |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
+| The app's tools: `pocket`, editors, themes | `/opt/pocket-terminal` |
 
 - **Terminal colours:** one `key=#rrggbb` per line: `background`,
   `foreground`, `cursor`, `color0` to `color255`. Keys left out keep the
-  Neon colour. The app reads the file when it comes back to the front,
-  so leave the app and return to apply. Bad lines are shown in a dialog
+  Neon colour. Run `pocket check` to apply (or leave the app and come
+  back). Bad lines are shown in a dialog
   and skipped. Delete the file to go back to Neon.
 - **Font:** JetBrains Mono Nerd Font, so Nerd Font icons work in prompts
   and `ls`. It's built into the app; there's no setting for it yet.
@@ -81,13 +82,32 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
   to the app and may be replaced by an app update; put your changes in
   your home folder.
 
+## Changing settings: `pocket`
+
+Every setting is a plain-text file in `~/.config/pocket-terminal/`, and
+`pocket` (`/opt/pocket-terminal/bin/pocket`) tells the app about them.
+**After editing any of those files, run `pocket check`**: the app
+applies the change right away (no need to leave the app) and lists
+problems by file and line. Exit code 0 means no problems, 1 problems
+found, 2 an error (for example not running inside the app). Fix what
+it lists and run it again.
+
+- `pocket check`: apply the config now and list problems.
+- `pocket version`: the version of the app's tools.
+- `pocket help`: all commands.
+- `--json` on any command prints `{"ok": true, ...}` or
+  `{"ok": false, "error": "..."}`, for scripts.
+
+`/opt/pocket-terminal` belongs to the app and is replaced on every app
+update; don't change it.
+
 ## Key bar files
 
 The built-in bars are in `/usr/share/pocket-terminal/keybars/`. To
 change one, copy it to
 `~/.config/pocket-terminal/keybars/` and edit the copy; a new
-`NAME.conf` there adds a bar for `keybar NAME …`. Leave the app and come
-back to apply. Buttons fill two rows in file order, the first half on
+`NAME.conf` there adds a bar for `keybar NAME …`. Run `pocket check`
+to apply. Buttons fill two rows in file order, the first half on
 top. Format, one button per line:
 
 ```

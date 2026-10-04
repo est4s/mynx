@@ -120,6 +120,24 @@ class ProotLaunchTest {
         assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_KEYBAR_FILE=") })
     }
 
+    @Test
+    fun `mounts the app's tools and puts their commands on the PATH`() {
+        val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("/data/files/tools:/opt/pocket-terminal" in argv.valuesAfter("-b"))
+        val path = shellEnv.single { it.startsWith("PATH=") }.removePrefix("PATH=").split(':')
+        assertEquals("/opt/pocket-terminal/bin", path.last())
+    }
+
+    @Test
+    fun `tells programs where to send requests to the app`() {
+        val argv = prootLaunch(paths, requestDir = "/tmp/.pocket-terminal/requests").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("POCKET_REQUESTS=/tmp/.pocket-terminal/requests" in shellEnv, shellEnv.toString())
+    }
+
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]
 
     private fun List<String>.valuesAfter(flag: String) =

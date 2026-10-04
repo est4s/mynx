@@ -14,7 +14,7 @@ It's also built for **AI coding agents** like Claude Code: the setup is
 documented for them and fully scriptable, so an agent can customize it for
 you.
 
-> **Status:** in development, not released. Roadmap steps 1–4 work;
+> **Status:** in development, not released. Roadmap steps 1–5 work;
 > this README describes the intended scope.
 
 ---
@@ -143,10 +143,10 @@ written for agents, kept in sync with the app version and the active profile:
 - **Plain-text config.** Everything you can change in the settings screens
   is stored in readable, commented files that an agent can edit directly.
 - **A `pocket` command for everything.** Anything the app can do, a script
-  can do: `pocket theme set neon`, `pocket profile export`, `pocket keybar
-  reload`, … with `--json` output for scripts and agents.
+  can do: `pocket theme set neon`, `pocket set font-size 14`,
+  `pocket profile export`, … with `--json` output for scripts and agents.
 - **Live reload.** Config changes apply without restarting the app.
-- **Checks before applying.** `pocket config check` validates edits and
+- **Checks before applying.** `pocket check` validates edits and
   explains mistakes, so a broken edit never breaks the app.
 - **Undo.** Config is snapshotted before each change; `pocket undo` rolls
   back the last one.
@@ -214,7 +214,8 @@ Because Debian runs through `proot` rather than a virtual machine:
    keyboard.
 5. **Game and program key bars:** game controls, hold to repeat, bars for
    any program or game (replaces the in-app keyboard).
-6. **Customization:** theme, key bar and menu editors.
+6. **Customization:** theme, key bar and menu editors (terminal programs),
+   and the first `pocket` commands they're built on.
 7. **Agent support:** `AGENTS.md`/`CLAUDE.md`, `pocket` CLI, config check
    and undo, agent notifications. The agent docs are updated with every
    later feature.

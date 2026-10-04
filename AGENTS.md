@@ -132,6 +132,22 @@ See README "How it works". The details:
   (`ColorScheme.kt`). The built-in Neon theme is
   `core/src/main/resources/.../neon.colors.properties`; a user's
   `~/.config/pocket-terminal/colors.properties` in Debian is laid over it.
+- **The app's tools** (`tools/` → `/opt/pocket-terminal`): `pocket`, the
+  settings editors and themes. They belong to the app, not the user's
+  Debian: CI packs them (`scripts/pack-tools.sh`) into
+  `assets/tools.tar.xz`, and `TerminalService` unpacks them into
+  `filesDir/tools` whenever the app version changes (`core/.../ToolsInstaller.kt`),
+  then proot mounts that folder at `/opt/pocket-terminal` with its `bin`
+  on the PATH. So fixes to them reach installed Debians without a
+  migration. Put new app-owned commands there, not in the rootfs.
+- **`pocket` ↔ app:** request files, no sockets. `pocket` writes
+  `ID.req` (renamed into place) to `$POCKET_REQUESTS`
+  (`/tmp/.pocket-terminal/requests`); the service answers in `ID.reply`
+  as JSON (`core/.../PocketRequests.kt`), woken by a `FileObserver`, with
+  the activity's 250 ms poll as a fallback. Logic (checking, answers)
+  stays in `core`; `pocket` only sends, waits and prints. Requests
+  `pocket` triggers apply quietly (no dialogs: `pocket` prints the
+  problems).
 - **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
   apps. The app probes them at each start and binds static stand-ins from
   `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).
@@ -183,7 +199,10 @@ These come from the README scope and apply to every feature:
 - **Plain-text config.** Every setting lives in a readable, commented text
   file inside Debian, so users and AI agents can edit it.
 - **A `pocket` command for everything** the settings UI can do, with `--json`
-  output.
+  output. Settings editors are terminal programs (owner's decision,
+  2026-10-04), built on `pocket`, so an AI agent can change everything a
+  person can. `tests/shell/home-docs.bats` fails if a `pocket` command
+  isn't in the home `AGENTS.md`.
 - **Agent docs ship with the app.** Each Debian environment gets `AGENTS.md` /
   `CLAUDE.md` in the home folder describing the setup
   (`rootfs/root/AGENTS.md`, `CLAUDE.md`). When you add a feature that users
@@ -228,7 +247,11 @@ does this automatically through `.claude/settings.json`.)
   services, permissions, USB, camera). Keep logic out of it. When Android
   code needs tests, add Robolectric tests in `app/src/test/`; they only run
   in CI.
-- **Shell code** (the `pocket` CLI, the menu in `rootfs/bin/`, root's
+- **`pocket` and the editors** (`tools/`, Python 3 from Debian, standard
+  library only): tests with `unittest` in `tests/pocket/`
+  (`python3 -m unittest discover -s tests/pocket`, works on the phone).
+  They run `pocket` against a fake app that answers requests.
+- **Shell code** (the menu in `rootfs/bin/`, root's
   dotfiles in `rootfs/root/`):
   tests with `bats` in `tests/shell/`. CI runs real bats. **On the phone
   run `scripts/bats-lite.sh tests/shell/*.bats`**: real bats needs process

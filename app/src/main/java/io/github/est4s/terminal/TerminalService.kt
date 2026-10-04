@@ -10,10 +10,15 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Binder
 import android.os.Build
+import android.os.FileObserver
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import com.termux.terminal.TerminalSession
+import io.github.est4s.terminal.core.PocketRequests
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.ToolsInstaller
 import io.github.est4s.terminal.core.Tabs
 import io.github.est4s.terminal.core.closesOnExit
 import io.github.est4s.terminal.core.hostPath
@@ -31,6 +36,8 @@ private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.pocket-terminal"
+private const val REQUEST_DIR = "$CWD_DIR/requests"
+private const val TOOLS_ASSET = "tools.tar.xz"
 
 /**
  * Owns the terminal sessions and keeps them running while the app is in the
@@ -55,6 +62,15 @@ class TerminalService : Service() {
     // Each shell's `keybar` command writes the key bar to show here.
     private val keyBarFiles = WeakHashMap<TerminalSession, File>()
     private var nextShellId = 1
+    private val tools by lazy { ToolsInstaller(filesDir) }
+    /** Why the app's tools couldn't be updated, for the activity to show. */
+    var toolsError: String? = null
+        private set
+    private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
+    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root")) }
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    // Kept in a field: a FileObserver stops when it's garbage collected.
+    private var requestWatcher: FileObserver? = null
     // Last folder known for each session: where it started, or what its shell
     // last reported. Restored tabs only start when first shown, so this keeps
     // their folder until then.
@@ -64,6 +80,31 @@ class TerminalService : Service() {
         super.onCreate()
         // Reports from a previous run would belong to the wrong shells.
         cwdDir.deleteRecursively()
+        updateTools()
+        watchRequests()
+    }
+
+    // Before any shell starts, so none runs old tools while they're replaced.
+    private fun updateTools() {
+        val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}"
+        toolsError = runCatching { tools.update(version) { assets.open(TOOLS_ASSET) } }
+            .exceptionOrNull()?.stackTraceToString()
+    }
+
+    @Suppress("DEPRECATION") // the File constructor needs API 29
+    private fun watchRequests() {
+        requestDir.mkdirs()
+        requestWatcher = object : FileObserver(requestDir.path, MOVED_TO or CLOSE_WRITE) {
+            override fun onEvent(event: Int, path: String?) {
+                if (path?.endsWith(".req") == true) mainHandler.post { processRequests() }
+            }
+        }.also { it.startWatching() }
+    }
+
+    /** Answers waiting `pocket` requests; a check also applies the config. */
+    fun processRequests() {
+        val handled = runCatching { requests.processPending() }.getOrDefault(emptyList())
+        if ("check" in handled) activity?.reloadConfig(quiet = true)
     }
 
     /** The activity showing the sessions, if any. Sessions must never hold it otherwise. */
@@ -82,6 +123,7 @@ class TerminalService : Service() {
     }
 
     override fun onDestroy() {
+        requestWatcher?.stopWatching()
         killAll()
         super.onDestroy()
     }
@@ -184,7 +226,7 @@ class TerminalService : Service() {
             loader = "$libDir/libproot-loader.so",
             rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(

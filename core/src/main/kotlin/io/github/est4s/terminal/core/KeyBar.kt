@@ -130,6 +130,8 @@ fun keyBarNames(reported: String?): List<String> =
     reported.orEmpty().split(',').map { it.trim() }.filter { BAR_NAME.matches(it) }
         .ifEmpty { listOf(SHELL_KEY_BAR) }
 
+internal fun isKeyBarName(name: String) = BAR_NAME.matches(name)
+
 /** A built-in bar's file, as shipped with the app. */
 fun builtInKeyBarText(name: String): String? =
     if (BAR_NAME.matches(name)) KeyBarResources::class.java.getResource("keybars/$name.conf")?.readText() else null

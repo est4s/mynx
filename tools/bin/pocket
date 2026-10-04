@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""pocket: control the app from Debian. `pocket help` lists the commands.
+
+Talks to the app through request files in $POCKET_REQUESTS (the app sets
+it in every tab): ID.req holds the request name, the app answers in
+ID.reply as JSON. Both are renamed into place when complete.
+"""
+import json
+import os
+import sys
+import time
+
+TOOLS = os.environ.get("POCKET_TOOLS", "/opt/pocket-terminal")
+
+HELP = """\
+usage: pocket COMMAND [--json]
+
+Commands:
+  check      apply config changes now and list problems in them
+  version    the app tools' version
+  help       this list
+
+--json prints the answer as JSON: {"ok": true, ...} or
+{"ok": false, "error": "..."}. Exit codes: 0 fine, 1 problems found,
+2 error.
+
+Settings live in ~/.config/pocket-terminal/ (see ~/AGENTS.md).
+"""
+
+
+class Failure(Exception):
+    pass
+
+
+def request(name):
+    """Sends a request to the app and returns its answer."""
+    folder = os.environ.get("POCKET_REQUESTS")
+    if not folder or not os.path.isdir(folder):
+        raise Failure("pocket only works inside the app's terminal")
+    ident = f"{os.getpid()}-{time.time_ns()}"
+    req = os.path.join(folder, ident + ".req")
+    reply = os.path.join(folder, ident + ".reply")
+    with open(req + ".tmp", "w") as f:
+        f.write(name + "\n")
+    os.rename(req + ".tmp", req)
+    deadline = time.monotonic() + float(os.environ.get("POCKET_TIMEOUT", "5"))
+    while not os.path.exists(reply):
+        if time.monotonic() > deadline:
+            try:
+                os.remove(req)
+            except FileNotFoundError:
+                pass  # answered just now; the reply is left behind
+            raise Failure("the app didn't answer (is it still running?)")
+        time.sleep(0.02)
+    with open(reply) as f:
+        answer = json.load(f)
+    os.remove(reply)
+    if not answer.get("ok"):
+        raise Failure(answer.get("error", "the app refused the request"))
+    return answer
+
+
+def cmd_check(as_json):
+    answer = request("check")
+    if as_json:
+        print(json.dumps(answer))
+    elif not answer["problems"]:
+        print("No problems in ~/.config/pocket-terminal")
+    for file in [] if as_json else answer["problems"]:
+        print(file["file"])
+        for problem in file["problems"]:
+            print("  " + problem)
+    return 1 if answer["problems"] else 0
+
+
+def cmd_version(as_json):
+    try:
+        with open(os.path.join(TOOLS, ".version")) as f:
+            version = f.read().strip()
+    except OSError:
+        raise Failure(f"no version file in {TOOLS}")
+    print(json.dumps({"ok": True, "version": version}) if as_json else version)
+    return 0
+
+
+def cmd_help(as_json):
+    print(HELP, end="")
+    return 0
+
+
+COMMANDS = {"check": cmd_check, "version": cmd_version, "help": cmd_help}
+
+
+def main(argv):
+    as_json = "--json" in argv
+    args = [a for a in argv if a != "--json"]
+    name = args[0] if args else "help"
+    if name in ("-h", "--help"):
+        name = "help"
+    try:
+        if name not in COMMANDS:
+            raise Failure(f"unknown command '{name}' (pocket help lists them)")
+        return COMMANDS[name](as_json)
+    except Failure as e:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(e)}))
+        else:
+            print(f"pocket: {e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

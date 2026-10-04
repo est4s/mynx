@@ -10,3 +10,5 @@ app/src/main/jniLibs/
 app/src/main/assets/debian-rootfs.*
 # Downloaded in CI by scripts/fetch-font.sh, never committed.
 app/src/main/assets/fonts/
+# Packed in CI by scripts/pack-tools.sh, never committed.
+app/src/main/assets/tools.tar.xz
