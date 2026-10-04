@@ -14,7 +14,7 @@ It's also built for **AI coding agents** like Claude Code: the setup is
 documented for them and fully scriptable, so an agent can customize it for
 you.
 
-> **Status:** in development, not released. Roadmap steps 1–5 work;
+> **Status:** in development, not released. Roadmap steps 1–6 work;
 > this README describes the intended scope.
 
 ---
@@ -220,9 +220,10 @@ Because Debian runs through `proot` rather than a virtual machine:
    any program or game (replaces the in-app keyboard).
 6. **Customization:** theme, key bar and menu editors (terminal programs),
    and the first `pocket` commands they're built on.
-7. **Agent support:** `AGENTS.md`/`CLAUDE.md`, `pocket` CLI, config check
-   and undo, agent notifications. The agent docs are updated with every
-   later feature.
+7. **Agent support:** undo for config changes, agent notifications,
+   one-tap install of agent CLIs. (The agent guide, the `pocket` CLI and
+   config checks came with step 6.) The agent docs are updated with
+   every later feature.
 8. **Profiles:** multiple profiles, switching, export/import.
 9. **Android integration:** notifications, clipboard, share, storage,
    location, camera, sensors.

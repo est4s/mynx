@@ -8,195 +8,113 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **Roadmap step 3 (*Default setup*) is done** and confirmed on the
-  phone: Neon colours and JetBrains Mono Nerd Font (user colours file in
-  Debian), a customized Debian image (starship, eza, mc, nano, less,
-  python3, the three games, no debconf warnings), the launcher menu on a
-  fresh start, and agent docs in `/root`.
-- **Roadmap step 4 (*File manager*) is done** and confirmed on the
-  phone: nnn as `files` (detail mode, bookmarks, nano for text) and an
-  always-visible two-row key bar above the keyboard that follows the
-  running program (`keybar NAME cmd`), with pages to swipe and
-  user-editable bar files.
-- **Roadmap step 5 (*Game and program key bars*) is done** and
-  confirmed on the phone. The owner dropped the in-app keyboard
-  (2026-10-04): game bars (Rogue, Drive, Flap, generic `game`), `play`,
-  `keybar NAME,FALLBACK`, bars any program can bring, hold-to-repeat.
-- **Roadmap step 6 (*Customization*) is built, waiting for the owner's
-  check.** Editors are terminal programs (`pocket edit`), built on the
-  `pocket` CLI so AI agents can change every setting. 6.1 (the app's
-  tools at `/opt/pocket-terminal`, `pocket check`) is confirmed on the
-  phone; 6.2-6.6 were built in one go at the owner's request. See
-  "Next" for the checks.
-- **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
-  strip, background service, activity/bell marks, exit rule, and tabs
-  (with their folders and names) restored after Android kills the app.
-  Tabs can be renamed with a long-press (or Ctrl+Shift+R). Still
-  untested: hardware keyboard shortcuts (owner has no keyboard, see
-  "Hardware keyboard checks").
-- **Roadmap step 1 (*Core*) is done** and confirmed on the owner's phone:
-  opening the app shows a `root@localhost` bash inside the built-in Debian
-  13 (trixie); `apt install` works; `htop` draws; app updates keep the
-  user's Debian.
-- **App:** a tab strip above one Termux `TerminalView` that shows the
-  selected tab's session, each run through proot (`prootLaunch()` from
-  `core`). Sessions live in `TerminalService` (foreground service), so they
-  survive Back, rotation and leaving the app; its notification shows the
-  tab count and has an **Exit** action. Tabs are saved to
-  `filesDir/state/tabs` and restored on a cold start. First launch unpacks the bundled
-  rootfs into `filesDir/debian` (~5 s, progress screen). Blocked `/proc`
-  files get static stand-ins from `filesDir/fake-proc`. Crashes are saved
-  and shown on the next launch. APK: 30 MB.
-- **Build:** GitHub Actions runs the TDD check and all tests, builds proot
-  with the NDK (cached) and the rootfs from `debian:trixie` (arm64), then a
-  debug APK. `scripts/deliver.sh` installs it on the phone.
-- **Code:** `core/` has `ProotLaunch.kt`, `RootfsInstaller.kt`,
-  `FakeProc.kt`, `ServiceNotification.kt`, `Tabs.kt`, `TabShortcuts.kt`,
-  `TabState.kt`, `HostPath.kt`, `ColorScheme.kt` and `KeyBar.kt` (100
-  tests in all). `app/` also has `KeyBarView.kt`. `rootfs/` holds the
-  Debian image (Dockerfile, `bin/` menu/files/keybar, dotfiles, games);
-  `tests/shell/` has 40 bats tests. `app/` is
-  `TerminalApp` (crash reporter), `TerminalService`, `MainActivity` and
-  `TerminalClients.kt`.
-
----
+- **Roadmap steps 1-6 are done** and confirmed on the owner's phone.
+  **Next: step 7 (*Agent support*), for a new agent.** See "Next".
+- **Step 6 (*Customization*), confirmed 2026-10-04:** every setting is a
+  plain-text file in `~/.config/pocket-terminal/`, changed with the
+  `pocket` CLI (`check`, `settings`/`get`/`set`/`reset`, `theme`,
+  `keybar`, `menu`, `--json`) and the curses editors `pocket edit`
+  (menu → Settings): theme with live preview and a colour editor, font
+  & cursor, key bars, launcher menu (`menu.conf`, `run COMMAND` items),
+  `r` resets to default everywhere. Ten built-in themes; strip and key
+  bar colours chosen by contrast. The app's commands and the agent
+  guide live in the app's tools at `/opt/pocket-terminal` (replaced on
+  each app update, first on the PATH); `~/AGENTS.md` points to the guide.
+- **Step 5 (*Game and program key bars*):** game bars, `play`, `keybar
+  NAME,FALLBACK`, bars any program can bring, hold-to-repeat. The owner
+  dropped the in-app keyboard.
+- **Step 4 (*File manager*):** nnn as `files`, and the always-visible
+  two-row key bar that follows the running program.
+- **Step 3 (*Default setup*):** Neon theme, JetBrains Mono Nerd Font,
+  customized Debian image (starship, eza, mc, nano, less, htop,
+  python3, three games), launcher menu on a fresh start.
+- **Step 2 (*Tabs*):** tab strip, background service, activity/bell
+  marks, rename, tabs restored after Android kills the app. Hardware
+  keyboard shortcuts untested (see "Hardware keyboard checks").
+- **Step 1 (*Core*):** a `root@localhost` bash in the built-in Debian 13
+  (trixie) through proot; `apt` works; app updates keep the user's
+  Debian.
+- **App:** a tab strip above one Termux `TerminalView`, the key bar
+  below it; sessions live in `TerminalService` (foreground service with
+  an Exit action), saved to `filesDir/state/tabs`. First launch unpacks
+  the rootfs into `filesDir/debian`; every start updates the tools in
+  `filesDir/tools` and answers `pocket` requests from
+  `/tmp/.pocket-terminal/requests`. Crashes are shown on the next
+  launch.
+- **Build:** GitHub Actions runs the TDD check and all tests, builds
+  proot (cached), the rootfs and the tools archive, then a debug APK.
+  `scripts/deliver.sh` installs it on the phone.
+- **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
+  tools installers, tabs, key bars, colours/themes, settings, config
+  check, `pocket` requests; 176 tests), `app/` (thin Android layer),
+  `tools/` (`pocket` and editors in Python, `menu` and other commands,
+  the agent guide; 50 unittest tests incl. editors driven in a pty),
+  `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (55 bats
+  tests).
 
 ## Next
 
-### Roadmap step 4: File manager (nnn + key bar)
+### Roadmap step 7: Agent support (plan with the owner first)
 
-**Decided with the owner (2026-10-04):** no home-made file manager. The
-owner tried nnn and lf in the app and liked both, nnn a bit more (more
-info out of the box). What was missing: the shortcuts, so they're shown
-as a **key bar** above the keyboard, **always visible**, with labels
-that change with the running program. The README's File manager section
-was rewritten to match (plus a Key bar section).
+**Goal (README "Built for AI agents", roadmap 7):** agents like Claude
+Code can set up and change the user's terminal safely. Already done in
+step 6: the agent guide (`tools/AGENTS.md` → `/opt/pocket-terminal/AGENTS.md`,
+home `AGENTS.md`/`CLAUDE.md` point to it), the `pocket` CLI with
+`--json`, and `pocket check`. Left:
 
-**4.1 nnn and `keybar` (rootfs). Built, in the same build as 4.2.**
-**4.2 Key bar (app). Owner's first check (2026-10-04): "looks pretty
-good"; asked for ↑ ↓ in nnn's bar and two rows instead of one sliding
-row, with pages to swipe when two rows aren't enough. Done in 4.3.**
-Checks from the first round:
-- the bar sits under the terminal, right above the keyboard, and stays
-  when the keyboard is hidden; neon colours; buttons scroll sideways if
-  they don't fit
-- the menu shows ↑ ↓ Select Back Quit, and they work
-- menu → Files opens nnn in detail mode; the bar changes to Open Back
-  Select Copy Move Rename Delete Search Places Quit; quitting nnn brings
-  back the menu's bar, leaving the menu the shell's (Esc Tab Ctrl ← ↓ ↑ →
-  Files Menu)
-- in nnn: select a file in Download (Places → d), go to another folder,
-  Copy pastes it there; Rename and Delete ask and work; Search filters
-- shell bar: Files and Menu open them; ↑ recalls history; Tab completes;
-  Ctrl lights up, then typing `c` interrupts `sleep 100`, and Ctrl goes
-  dark again
-- each tab keeps its own bar when switching tabs (nnn in one, shell in
-  the other)
-- typing on the system keyboard still works after pressing bar buttons
-- a bar file with a bad line shows a "Problems in a key bar file" dialog:
-  `mkdir -p ~/.config/pocket-terminal/keybars && printf 'Quit = q\noops\n'
-  > ~/.config/pocket-terminal/keybars/nnn.conf`, leave the app and come
-  back, run `files`: dialog, then a bar with only Quit. Delete the file.
-- opening a text file in nnn opens nano
+1. **Undo.** Snapshot `~/.config/pocket-terminal/` before each change,
+   and add `pocket undo` (and probably a way to list snapshots). Changes
+   come from three places: app requests in `core/.../PocketRequests.kt`
+   (`set`, `reset`, `theme-set`, `theme-reset`, `keybar-edit`,
+   `keybar-reset`); file writes in the Python tools (`pocket menu
+   edit|reset`, the editors' saves of key bars, menu and colours in
+   `tools/lib/pocket_terminal/`); and agents editing files by hand.
+   Something to decide: a single snapshot mechanism, for example
+   routing the Python writes through app requests, or doing all
+   snapshots in Python before each request. Hand edits can't be
+   snapshotted before they happen; one idea is a snapshot of the last
+   good state at each `pocket check`. Keep the logic in `core` or
+   `models.py` and test it first.
+2. **Agent notifications.** A phone notification when an agent finishes
+   or needs input, so the user can switch apps. This needs a `pocket
+   notify` request that the service posts (it already owns a
+   notification channel), plus hooks for each agent: Claude Code's
+   `Stop`/`Notification` hooks in `~/.claude/settings.json`, and
+   Codex's `notify` setting. The owner runs this setup today on Termux
+   (`~/.claude/notify-phone.sh`, only notifying when a turn took 30 s or
+   more), which is a good model. Notifications overlap with step 9
+   (Android integration), so design `pocket notify` to fit both.
+3. **One-tap install of agent CLIs** (Claude Code, Codex, Gemini CLI)
+   through their **official installers**: never bundle them, and the
+   user signs in with their own account. A menu item, and
+   `pocket install NAME`, that shows what it will run before running it.
+   Known so far: Claude Code's native installer puts it in
+   `~/.local/bin` (already on the PATH in the home `.bashrc`). Codex and
+   Gemini CLI need Node.js (`apt install nodejs npm`; trixie has 20.x),
+   so check their minimum versions. **proot quirk:** Claude Code's
+   cross-session messaging failed under proot-distro ("user namespace
+   without a uid mapping"); the owner's workaround there is a `claude()`
+   wrapper passing `--messaging-socket-path ~/.claude/run/$$.sock`.
+   Check whether the app's proot needs the same.
+4. **Agent test still open from step 6:** once Claude Code is installed,
+   start it in `~` and ask it to "make the theme gruvbox and the font
+   bigger". It should read the guide and use `pocket`.
 
-**4.3 Two-row key bar with pages. Done, owner confirmed ("works
-perfectly").** Checks the owner ran:
-- the bar is two rows: nnn `↑ ↓ Open Back Select Search` over `Copy Move
-  Rename Delete Places Quit`; shell `Esc Tab Ctrl Files Menu` over
-  `← ↓ ↑ →`; menu `↑ ↓ Select` over `Back Quit`
-- buttons in a row share the width evenly; the terminal keeps its size
-  when the bar changes (nnn ↔ shell)
-- ↑ ↓ move in nnn
-- pages: `mkdir -p ~/.config/pocket-terminal/keybars && for i in $(seq 1
-  20); do echo "K$i = \"$i\""; done > ~/.config/pocket-terminal/keybars/shell.conf`,
-  leave and come back: two rows of K-buttons, dots at the bottom, swipe
-  left/right switches pages, taps still type the numbers. Delete the
-  file afterwards.
-- rotate to landscape: more buttons per row
+**Decide with the owner:** the order of 1-3; how undo should behave
+(how many snapshots, whether it covers hand edits); which agents get
+one-tap installs and notification hooks first; whether installing an
+agent also installs its notification hooks.
 
-### Roadmap step 6: Customization
-
-**Decided with the owner (2026-10-04):** settings editors are
-**terminal programs** (like the menu), and a small `pocket` CLI starts
-now, as the way the editors apply changes. Goal: AI coding CLIs can work
-on every setting, so people can customize their setup by asking.
-
-**What was built** (details in the log, 2026-10-04 (19)):
-- **6.1** the app's tools, mounted at `/opt/pocket-terminal`, replaced
-  on every app update; `pocket check`. **Confirmed on the phone.**
-- **6.2** `settings.conf` (font-size, font, cursor-style, cursor-blink),
-  `pocket settings|get|set`, pinch zoom saves `font-size`.
-- **6.3** ten built-in themes, user themes, `pocket theme
-  list|show|set`; theme editor with live preview and a colour editor.
-- **6.4** `pocket keybar list|show|edit|reset`; key bar editor.
-- **6.5** the app's commands (menu, files, keybar, play, games' commands)
-  moved from the image into the tools; menu items from `menu.conf`
-  (`run COMMAND` items), `pocket menu show|edit|reset`, menu editor;
-  the menu follows the terminal theme.
-- **6.6** `pocket edit` hub (the menu's Settings item); the agent guide
-  moved to `/opt/pocket-terminal/AGENTS.md`, `~/AGENTS.md` points to it.
-
-**Checks for the owner** (install over the old app, don't clear data):
-
-*Before the checks* (once, because this Debian predates the changes):
-`cp /opt/pocket-terminal/home/AGENTS.md /opt/pocket-terminal/home/CLAUDE.md ~/`
-replaces the old home docs with pointers to the new guide.
-
-1. **Menu:** close all tabs and reopen the app (or run `menu`). Items:
-   Terminal, Files, Games, Settings, System, Exit; colours look right
-   with Neon. System has Update all and System info (no Theme item).
-2. **Settings hub:** menu → Settings opens "Settings" with Theme, Font
-   & cursor, Key bars, Launcher menu, Check config; the key bar shows
-   ↑ ↓ ← → Open Back / Save Add Del Move↑ Move↓ Reset. Back leaves.
-3. **Theme:** Settings → Theme. Moving with ↑↓ previews each theme on the
-   whole screen (terminal, tab strip, key bar) at once; Open keeps one
-   (the `*` moves); Back on a theme you didn't pick returns to the kept
-   one. Try `amber` and `solarized-light`. The menu's colours follow.
-4. **Colours:** Theme → Edit colours…: rows with colour swatches; change
-   `background` to `#200020` (Open, delete, type, Enter): preview at
-   once; Save keeps it; Back without saving asks "Discard…?".
-5. **Font & cursor:** → on font-size grows the text at once (← shrinks);
-   cursor-style → underline / bar changes the cursor; cursor-blink → on
-   blinks. Leave and reopen the app: all kept. Pinch zoom, then
-   `pocket get font-size`: the new size.
-6. **Key bars:** Settings → Key bars → shell: the shell bar's buttons.
-   Add one (Add, label `Top`, keys `"htop" Enter`), Save, Back twice,
-   Back: the shell bar has Top. Key bars → shell → Reset (r) → y: back to
-   the built-in bar.
-7. **Launcher menu editor:** Settings → Launcher menu: move Settings to
-   the top (Move↑), add `Top` with action "run a command…" `htop`, Save,
-   leave: `menu` shows the new order and Top runs htop.
-   `pocket menu reset` puts it back.
-8. **Commands an agent would use:** `pocket settings`, `pocket theme
-   list`, `pocket theme set nord`, `pocket set cursor-style bar`,
-   `pocket keybar list`, `pocket menu show`, `pocket check` (and each
-   with `--json`). All apply at once, no dialogs.
-9. **Guide:** `cat /opt/pocket-terminal/AGENTS.md | less` reads well on
-   the phone; start an agent (e.g. Claude Code) in `~` and ask it to
-   "make the theme gruvbox and the font bigger": it should use
-   `pocket`.
-10. **Regressions:** `files` (nnn bar), `rogue` (game bar), tabs, the
-    boot splash says `theme: …`.
-
-**Round 2 checks** (after the light-theme, htop and reset fixes):
-`pocket theme set solarized-light`: tab names and key bar labels
-readable, the selected tab a light tint; a menu item `run nosuch` says
-"nosuch: command not found" and waits; `r` in Font & cursor resets the
-selected setting, the last row resets all; `r` in Theme → default
-(Neon); `r` in the colour editor → that colour from the theme; `r`
-inside an edited key bar → built-in back.
-
-**Known gaps / for later:** undo for config changes (`pocket undo`,
-roadmap 7); fonts other than the built-in one lack Nerd Font icons;
-`pocket edit` isn't usable with a screen reader (keyboard-only, like
-the menu); no light-theme tuning of the tab strip (selected tab uses
-colour 0).
-
-Step 5's checks (kept for regressions): `rogue`/`drive`/`flap` bars and
-pages; holding arrows repeats in games, nnn, menu and shell; generic
-`game` bar for games without their own (`play`, menu Games); a quiet
-program still switches the bar (polling); a swipe that starts on an
-arrow doesn't leave it repeating.
+### Regression checks (steps 4-6)
+- **Step 6:** `pocket theme set` for a dark and a light theme (strip
+  and key bar readable); the theme editor's live preview and `r` reset;
+  font size from the editor and from pinch (kept after a restart);
+  cursor style and blink; editing and resetting a key bar; editing and
+  resetting the menu (`run` items, and a failing command explains
+  itself); `pocket check` lists problems without dialogs.
+- **Steps 4-5:** `files` (nnn bar, two rows, pages to swipe), game bars
+  for `rogue`/`drive`/`flap` and the generic `game` bar, hold-to-repeat
+  on arrows, each tab keeping its own bar.
 
 ### Hardware keyboard checks (later)
 The owner has no hardware keyboard, so these are untested. Run them when
@@ -225,6 +143,13 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (21): step 6 done
+
+**Owner confirmed** the round 2 fixes: readable light themes, htop and
+failing menu commands, reset in every editor. **Step 6 done.** The
+owner wants step 7 done by another agent: "Next" now describes it for a
+fresh start. Docs updated: work log status, README status.
 
 ### 2026-10-04 (20): owner's first round on step 6
 
