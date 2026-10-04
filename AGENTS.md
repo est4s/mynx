@@ -118,31 +118,45 @@ See README "How it works". The details:
 - **Debian:** an arm64 rootfs built in CI by `scripts/build-rootfs.sh`
   from `rootfs/Dockerfile` (buildx + QEMU, `--output type=tar`) on top of
   the official `debian:trixie` image, pinned to the digest it pulled. The
-  Dockerfile adds packages, root's dotfiles (`rootfs/root/`), the
-  launcher menu (`rootfs/bin/menu` → `/usr/local/bin/menu`), the games
-  (`rootfs/games/` → `/opt/neon-games/`, commands `rogue`, `drive`,
-  `flap`), nnn with `files` and `keybar`, and from `core`'s resources (the
-  `core` build context) the Neon colours file and the built-in key bars
-  (`/usr/share/pocket-terminal/keybars/`, for users to copy). Ship it compressed in the APK's assets and unpack
-  it on first launch into the app's private storage.
+  Dockerfile adds packages (nnn, python3, …), root's dotfiles
+  (`rootfs/root/`) and the games (`rootfs/games/` → `/opt/neon-games/`).
+  The app's own commands are **not** in the image (see "The app's
+  tools"). Ship it compressed in the APK's assets and unpack it on first
+  launch into the app's private storage.
 - **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
   in CI by `scripts/fetch-font.sh` (release pinned by hash) into
   `app/src/main/assets/fonts/` with its `OFL.txt`; never committed.
 - **Colours:** Termux's `colors.properties` format, parsed in `core`
-  (`ColorScheme.kt`). The built-in Neon theme is
-  `core/src/main/resources/.../neon.colors.properties`; a user's
-  `~/.config/pocket-terminal/colors.properties` in Debian is laid over it.
-- **The app's tools** (`tools/` → `/opt/pocket-terminal`): `pocket`, the
-  settings editors and themes. They belong to the app, not the user's
-  Debian: CI packs them (`scripts/pack-tools.sh`) into
-  `assets/tools.tar.xz`, and `TerminalService` unpacks them into
+  (`ColorScheme.kt`). Built-in themes are
+  `core/src/main/resources/.../themes/NAME.colors.properties`, listed in
+  `BUILT_IN_THEMES` (Android can't list resources; a test checks the list
+  matches the files). Each sets background, foreground, cursor and
+  colours 0-15. A user's `~/.config/pocket-terminal/colors.properties` is
+  laid over Neon; `pocket theme set` writes a theme into it, marked
+  `# theme: NAME`. The launcher menu uses the 16 basic colours, so it
+  follows the theme.
+- **Settings:** `~/.config/pocket-terminal/settings.conf`, `key = value`
+  (`core/.../Settings.kt`: `SETTINGS` describes each; `setSetting()`
+  changes one line and keeps the rest). Font size in dp (pinch saves it),
+  a font file from Debian, cursor style and blink.
+- **The app's tools** (`tools/` → `/opt/pocket-terminal`): `pocket` and
+  the settings editors (`tools/lib/pocket_terminal/`), `menu` and its
+  `menu.conf`, `files`, `keybar`, `play`, the game commands, and the
+  agent guide `AGENTS.md`; `scripts/pack-tools.sh` adds core's built-in
+  key bars and themes (to read and copy) and the home folder's
+  `AGENTS.md`/`CLAUDE.md` pointers (`home/`). They belong to the app, not
+  the user's Debian: CI packs them into `assets/tools.tar.xz`, and `TerminalService` unpacks them into
   `filesDir/tools` whenever the app version changes (`core/.../ToolsInstaller.kt`),
   then proot mounts that folder at `/opt/pocket-terminal`. Its `bin` goes
-  on the PATH through `/etc/profile.d/pocket-terminal.sh`, which the app
+  first on the PATH (so it beats older copies left in a rootfs) through `/etc/profile.d/pocket-terminal.sh`, which the app
   rewrites at start (`writeToolsProfile()`): Debian's `/etc/profile`
   resets root's PATH, so the PATH the app passes in doesn't survive a
   login shell. So fixes to them reach installed Debians without a
   migration. Put new app-owned commands there, not in the rootfs.
+- **Who checks what:** the program that reads a file checks it. The app
+  (`core`) checks colours, themes, settings and key bars (`checkConfig`);
+  the menu checks `menu.conf` (`menu --check FILE`); `pocket check`
+  merges both.
 - **`pocket` ↔ app:** request files, no sockets. `pocket` writes
   `ID.req` (renamed into place) to `$POCKET_REQUESTS`
   (`/tmp/.pocket-terminal/requests`); the service answers in `ID.reply`
@@ -176,6 +190,11 @@ See README "How it works". The details:
   `TextStyle.COLOR_INDEX_FOREGROUND/BACKGROUND/CURSOR`). Each emulator
   copies it when it starts; `emulator.mColors.reset()` re-copies it.
 - `TerminalView.setTypeface()` needs `setTextSize()` called first.
+- **Cursor style** comes from `TerminalSessionClient.getTerminalCursorStyle()`,
+  read by each emulator on reset; call `emulator.setCursorStyle()` to
+  re-read it. Programs can still change it (DECSCUSR). **Blinking:**
+  `TerminalView.setTerminalCursorBlinkerRate()` (0 or 100-2000 ms), then
+  `setTerminalCursorBlinkerState(true, true)`; stop it in `onStop`.
 
 ### proot notes
 - **The host can't see a guest process's working directory:** proot
@@ -206,12 +225,13 @@ These come from the README scope and apply to every feature:
   2026-10-04), built on `pocket`, so an AI agent can change everything a
   person can. `tests/shell/home-docs.bats` fails if a `pocket` command
   isn't in the home `AGENTS.md`.
-- **Agent docs ship with the app.** Each Debian environment gets `AGENTS.md` /
-  `CLAUDE.md` in the home folder describing the setup
-  (`rootfs/root/AGENTS.md`, `CLAUDE.md`). When you add a feature that users
-  can configure, update those docs in the same change;
-  `tests/shell/home-docs.bats` fails if a file in `rootfs/root/` isn't
-  mentioned there.
+- **Agent docs ship with the app.** The guide to the setup is
+  `tools/AGENTS.md` (`/opt/pocket-terminal/AGENTS.md`, updated with the
+  app); root's home gets short `AGENTS.md` / `CLAUDE.md` files pointing
+  to it (`rootfs/root/`), which are then the user's. When you add a
+  feature that users can configure, update the guide in the same change;
+  `tests/shell/home-docs.bats` fails if a home file, a built-in key bar
+  or theme, or a `pocket` command isn't in it.
 - **Don't bundle third-party agent CLIs** (Claude Code, Codex, …). Offer to
   install them with their official installers; users sign in with their own
   accounts.
@@ -250,11 +270,14 @@ does this automatically through `.claude/settings.json`.)
   services, permissions, USB, camera). Keep logic out of it. When Android
   code needs tests, add Robolectric tests in `app/src/test/`; they only run
   in CI.
-- **`pocket` and the editors** (`tools/`, Python 3 from Debian, standard
-  library only): tests with `unittest` in `tests/pocket/`
-  (`python3 -m unittest discover -s tests/pocket`, works on the phone).
-  They run `pocket` against a fake app that answers requests.
-- **Shell code** (the menu in `rootfs/bin/`, root's
+- **`pocket` and the editors** (`tools/lib/pocket_terminal/`, Python 3
+  from Debian, standard library only): tests with `unittest` in
+  `tests/pocket/` (`python3 -m unittest discover -s tests/pocket`, about
+  1.5 min on the phone). They run `pocket` against a fake app that
+  answers requests; `test_editors.py` drives the curses editors in a
+  pseudo-terminal (send application cursor keys, `\x1bOA`, not
+  `\x1b[A`). Keep file logic in `models.py`, unit-tested.
+- **Shell code** (the menu and other commands in `tools/bin/`, root's
   dotfiles in `rootfs/root/`):
   tests with `bats` in `tests/shell/`. CI runs real bats. **On the phone
   run `scripts/bats-lite.sh tests/shell/*.bats`**: real bats needs process

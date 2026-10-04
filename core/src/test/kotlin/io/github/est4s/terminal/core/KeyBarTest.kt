@@ -262,4 +262,15 @@ class KeyBarTest {
     fun `built-in bar files explain the format`() {
         assertTrue(builtInKeyBarText("shell")!!.startsWith("#"))
     }
+
+    @Test
+    fun `the editors' bar sends the keys the editors use`() {
+        val bar = loadKeyBar("pocket-edit", File("/nonexistent"))
+
+        assertEquals(emptyList(), bar.problems)
+        val sent = bar.buttons.flatMap { it.strokes }
+        for (key in listOf("Up", "Down", "Left", "Right", "Enter", "Esc", "s", "a", "d", "K", "J", "r")) {
+            assertTrue(KeyStroke.Key(key) in sent, key)
+        }
+    }
 }

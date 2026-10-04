@@ -89,7 +89,11 @@ always visible, so the phone's own keyboard is all you need for typing
   cursor style.
 - **Key bars:** edit the built-in bars or add your own, for any program.
 - **Launcher menu:** a "Pocket Terminal" start menu (Terminal, Files, Games,
-  System, …) that you can edit, reorder or turn off.
+  Settings, System, …) that you can edit and reorder, with items that run
+  any command.
+- **Editors in the terminal:** `pocket edit` (or the menu's Settings) for
+  the theme (with live preview), font and cursor, key bars and the menu.
+  Every change is also a `pocket` command, so an AI agent can make it.
 - **Shell:** your own dotfiles, prompt, aliases and packages.
 
 ### Profiles: share your setup

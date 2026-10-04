@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Pocket Terminal launcher menu.
 # Keys: arrows / j k move, Enter / → pick, ← / Esc / q back, 1-9 jump.
+# Items: ~/.config/pocket-terminal/menu.conf, else menu.conf next to this
+#   folder (/opt/pocket-terminal/menu.conf); format in that file.
+#   menu --check FILE lists problems in a menu file (exit 1 if any).
+# Colours: the terminal theme's 16 basic colours, so the menu follows it.
 # Games: every executable in /opt/neon-games and ~/games shows up under
 #   Games, named after the file (neon-flap.py → "Neon Flap"). Add your own:
 #   ln -s /path/to/game ~/games/my-game
@@ -11,7 +15,8 @@
 
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pocket-terminal
 STATE=$STATE_DIR/menu
-THEMES=(neon amber phosphor)
+CONFIG_DIR=$HOME/.config/pocket-terminal
+DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
 export LC_COLLATE=C       # games in the same order whatever the locale
@@ -41,23 +46,66 @@ save_state() {
   { for k in "${!ST[@]}"; do printf '%s=%s\n' "$k" "${ST[$k]}"; done >"$STATE"; } 2>/dev/null
 }
 
-# --- themes ----------------------------------------------------------------
-set_theme() {
-  case $1 in
-    amber)
-      C_TITLE=$'\e[38;5;214m' C_ITEM=$'\e[38;5;222m' C_SUB=$'\e[38;5;172m'
-      C_DIM=$'\e[38;5;94m' C_SEL=$'\e[1;38;5;16;48;5;214m'
-      C_OK=$'\e[38;5;220m' C_BAD=$'\e[38;5;160m' ;;
-    phosphor)
-      C_TITLE=$'\e[38;5;46m' C_ITEM=$'\e[38;5;120m' C_SUB=$'\e[38;5;34m'
-      C_DIM=$'\e[38;5;28m' C_SEL=$'\e[1;38;5;16;48;5;46m'
-      C_OK=$'\e[38;5;46m' C_BAD=$'\e[38;5;196m' ;;
-    *) # neon
-      C_TITLE=$'\e[38;5;205m' C_ITEM=$'\e[38;5;51m' C_SUB=$'\e[38;5;141m'
-      C_DIM=$'\e[38;5;244m' C_SEL=$'\e[1;38;5;16;48;5;205m'
-      C_OK=$'\e[38;5;48m' C_BAD=$'\e[38;5;196m' ;;
-  esac
-  C_OFF=$'\e[0m'
+# --- colours ---------------------------------------------------------------
+# The 16 basic colours, which every theme sets (pocket theme set …).
+C_TITLE=$'\e[95m' C_ITEM=$'\e[96m' C_SUB=$'\e[35m' C_DIM=$'\e[90m'
+C_SEL=$'\e[1;30;105m' C_OK=$'\e[92m' C_BAD=$'\e[91m' C_OFF=$'\e[0m'
+
+theme_name() { # the theme the colours file was set from (see pocket theme)
+  local first
+  [[ -f $CONFIG_DIR/colors.properties ]] || { echo neon; return; }
+  IFS= read -r first <"$CONFIG_DIR/colors.properties"
+  if [[ $first =~ ^#[[:space:]]*theme:[[:space:]]*([^[:space:]]+) ]]; then
+    echo "${BASH_REMATCH[1]}"
+  else
+    echo custom
+  fi
+}
+
+# --- menu file -------------------------------------------------------------
+MENU_ACTIONS="shell, files, games, settings, system, exit or run COMMAND"
+
+read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
+  local line label action n=0
+  ITEMS=() ACTS=() PROBLEMS=()
+  while IFS= read -r line || [[ -n $line ]]; do
+    n=$((n + 1))
+    line=${line#"${line%%[![:space:]]*}"}
+    [[ -z $line || $line == \#* ]] && continue
+    if [[ $line != *=* ]]; then
+      PROBLEMS+=("line $n: expected Label = action"); continue
+    fi
+    label=${line%%=*} action=${line#*=}
+    label=${label%"${label##*[![:space:]]}"}
+    action=${action#"${action%%[![:space:]]*}"}
+    action=${action%"${action##*[![:space:]]}"}
+    if [[ -z $label ]]; then
+      PROBLEMS+=("line $n: missing label"); continue
+    fi
+    case $action in
+      shell) action=exit ;;
+      files) action=files ;;
+      games) action=menu:games ;;
+      settings) action=settings ;;
+      system) action=menu:system ;;
+      exit) action=quit_session ;;
+      run) PROBLEMS+=("line $n: run needs a command"); continue ;;
+      run\ *) action="cmd:${action#run }" ;;
+      *) PROBLEMS+=("line $n: unknown action '$action' ($MENU_ACTIONS)"); continue ;;
+    esac
+    if ((${#label} > 20)); then
+      PROBLEMS+=("line $n: label longer than 20 characters"); label=${label:0:20}
+    fi
+    ITEMS+=("$label") ACTS+=("$action")
+  done <"$1"
+}
+
+check_menu_file() { # menu --check <file>
+  [[ -r $1 ]] || { echo "can't read $1"; return 2; }
+  read_menu_file "$1"
+  ((${#PROBLEMS[@]} == 0)) && return 0
+  printf '%s\n' "${PROBLEMS[@]}"
+  return 1
 }
 
 # --- system facts ----------------------------------------------------------
@@ -112,8 +160,15 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
   ITEMS=() ACTS=()
   case $1 in
     main)
-      ITEMS=(Terminal Files Games System Exit)
-      ACTS=(exit files menu:games menu:system quit_session) ;;
+      # The user's file, else the built-in one, else these (no file at all).
+      local file
+      for file in "$CONFIG_DIR/menu.conf" "$DEFAULT_MENU"; do
+        [[ -r $file ]] || continue
+        read_menu_file "$file"
+        ((${#ITEMS[@]})) && return
+      done
+      ITEMS=(Terminal Files Games Settings System Exit)
+      ACTS=(exit files menu:games settings menu:system quit_session) ;;
     games)
       local dir f
       for dir in "${GAME_DIRS[@]}"; do
@@ -124,8 +179,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       done
       ((${#ITEMS[@]})) || { ITEMS=("(no games yet)"); ACTS=(none); } ;;
     system)
-      ITEMS=("Update all" "System info" "Theme: ${ST[theme]:-neon}")
-      ACTS=(update info theme) ;;
+      ITEMS=("Update all" "System info")
+      ACTS=(update info) ;;
   esac
 }
 
@@ -213,7 +268,7 @@ boot() {
     "OK|pocket terminal online"
     "$([[ -n $debian ]] && echo OK || echo FAIL)|debian ${debian:-missing}"
     "OK|games: ${games:-0} found"
-    "OK|theme: ${ST[theme]:-neon}"
+    "OK|theme: $(theme_name)"
   )
   pad=$(((COLS - 34) / 2)); ((pad < 0)) && pad=0
   for line in "${log[@]}"; do
@@ -240,6 +295,8 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
 
 act_none() { :; }
 act_files() { run files; }
+act_settings() { run pocket edit; }
+act_cmd() { run bash -c "$1"; }
 act_game() { run play "$1"; }
 
 act_update() {
@@ -271,14 +328,6 @@ act_info() {
   out=$(du -skx / 2>/dev/null | cut -f1)
   printf '\r%*s%s%-9s%s%-14s%s\n' $pad '' "$C_SUB" size "$C_ITEM" "$(human_kb "${out:-0}")" "$C_OFF"
   pause
-}
-
-act_theme() { # cycle to the next theme
-  local i cur=${ST[theme]:-neon}
-  for i in "${!THEMES[@]}"; do [[ ${THEMES[i]} == "$cur" ]] && break; done
-  ST[theme]=${THEMES[(i + 1) % ${#THEMES[@]}]}
-  set_theme "${ST[theme]}"; save_state
-  STATUS_MIN=   # status line has theme colors baked in
 }
 
 # --- input -----------------------------------------------------------------
@@ -351,10 +400,14 @@ show() { # show <menu> <breadcrumb>
 }
 
 # Sourced (tests): define the functions only.
-[[ ${BASH_SOURCE[0]} == "$0" ]] || { declare -A ST; set_theme neon; return 0; }
+[[ ${BASH_SOURCE[0]} == "$0" ]] || { declare -A ST; return 0; }
+
+if [[ $1 == --check ]]; then
+  check_menu_file "${2:?usage: menu --check FILE}"
+  exit
+fi
 
 load_state
-set_theme "${ST[theme]:-neon}"
 trap 'cursor_show; printf "\e[0m"' EXIT
 printf '\e]0;Menu\a'  # tab title
 
