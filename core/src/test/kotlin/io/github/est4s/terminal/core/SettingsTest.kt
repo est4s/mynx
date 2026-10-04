@@ -58,7 +58,10 @@ class SettingsTest {
 
     @Test
     fun `every setting is described, with its default`() {
-        assertEquals(listOf("font-size", "font", "cursor-style", "cursor-blink"), SETTINGS.map { it.key })
+        assertEquals(
+            listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after"),
+            SETTINGS.map { it.key },
+        )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
         assertEquals(listOf("block", "underline", "bar"), SETTINGS.single { it.key == "cursor-style" }.choices)
         assertEquals("12", SETTINGS.single { it.key == "font-size" }.default)
@@ -67,8 +70,11 @@ class SettingsTest {
     @Test
     fun `values reads each setting as text`() {
         assertEquals(
-            mapOf("font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on"),
-            Settings(fontSize = 14, cursorBlink = true).values(),
+            mapOf(
+                "font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on",
+                "agent-notify" to "off", "agent-notify-after" to "45",
+            ),
+            Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45).values(),
         )
     }
 
@@ -112,5 +118,25 @@ class SettingsTest {
             unsetSetting("# mine\nfont-size = 16\ncursor-style = bar\nfont-size = 8\n", "font-size").getOrThrow())
         assertEquals("font-size = 16\n", unsetSetting("font-size = 16\n", "cursor-blink").getOrThrow())
         assertEquals("unknown setting 'x' (pocket settings lists them)", unsetSetting("", "x").exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun `agent notifications are on by default, for turns of 30 seconds or more`() {
+        assertEquals(true, Settings().agentNotify)
+        assertEquals(30, Settings().agentNotifyAfter)
+    }
+
+    @Test
+    fun `reads and checks the agent notification settings`() {
+        val parsed = parseSettings("agent-notify = off\nagent-notify-after = 0\nagent-notify-after = soon\nagent-notify-after = 9999\n")
+
+        assertEquals(Settings(agentNotify = false, agentNotifyAfter = 0), parsed.settings)
+        assertEquals(
+            listOf(
+                "line 3: agent-notify-after must be a whole number of seconds from 0 to 3600",
+                "line 4: agent-notify-after must be a whole number of seconds from 0 to 3600",
+            ),
+            parsed.problems,
+        )
     }
 }

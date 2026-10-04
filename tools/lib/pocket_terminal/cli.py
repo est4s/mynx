@@ -4,6 +4,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 
 from .client import TOOLS, Failure, request, tools_version
 
@@ -20,6 +22,8 @@ Commands:
   keybar     keybar [list] | show NAME | edit NAME | reset NAME
   menu       menu [show] | edit | reset: the launcher menu's items
   edit       edit [settings|theme|keybars|menu]: the settings editors
+  notify     notify [--if-away] TITLE [TEXT]: a phone notification
+  hook       hook claude: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
 
@@ -209,6 +213,68 @@ def cmd_edit(args, as_json):
     return editors.main(args)
 
 
+def cmd_notify(args, as_json):
+    if_away = "--if-away" in args
+    words = [a.replace("\n", " ") for a in args if a != "--if-away"]
+    if not words:
+        raise Usage("usage: pocket notify [--if-away] TITLE [TEXT]")
+    answer = request("notify", words[0], " ".join(words[1:]), *notify_options(if_away))
+    if answer["shown"]:
+        out(as_json, answer, "Notification shown")
+        return 0
+    out(as_json, answer, f"Not shown: {answer['reason']}")
+    return 1
+
+
+def notify_options(if_away):
+    """The tab the notification comes from, so tapping it opens that tab."""
+    shell = os.environ.get("POCKET_SHELL", "")
+    return ([f"shell={shell}"] if shell.isdigit() else []) + (["if-away"] if if_away else [])
+
+
+AGENTS = {"claude": "Claude Code"}
+
+
+def cmd_hook(args, as_json):
+    """Claude Code's hooks call this with the event as JSON on stdin.
+
+    Never fails and prints nothing: Claude Code treats a Stop hook's exit
+    code 2 as "keep working", and shows other failures to the user.
+    """
+    if len(args) != 1 or args[0] not in AGENTS:
+        raise Usage("usage: pocket hook claude (reads the hook's JSON on stdin)")
+    try:
+        agent_hook(args[0], json.load(sys.stdin))
+    except Exception:
+        pass
+    return 0
+
+
+def agent_hook(agent, event):
+    session = "".join(c for c in str(event.get("session_id") or "default") if c.isalnum() or c in "-_")
+    turns = os.path.join(tempfile.gettempdir(), "pocket-agent-turns")
+    started = os.path.join(turns, f"{agent}-{session}")
+    name = event.get("hook_event_name")
+    options = notify_options(if_away=True) + ["agent"]
+    if name == "UserPromptSubmit":
+        os.makedirs(turns, exist_ok=True)
+        with open(started, "w") as f:
+            f.write(f"{time.time()}\n")
+    elif name == "Stop":
+        try:
+            with open(started) as f:
+                took = int(time.time() - float(f.read()))
+        except (OSError, ValueError):
+            return  # hooks set up mid-turn: no start time, nothing to measure
+        os.remove(started)
+        folder = os.path.basename(str(event.get("cwd") or "").rstrip("/"))
+        text = f"Your turn ({folder})" if folder else "Your turn"
+        request("notify", AGENTS[agent], text, *options, f"took={took}")
+    elif name == "Notification":
+        text = str(event.get("message") or "Needs your input").replace("\n", " ")
+        request("notify", AGENTS[agent], text, *options)
+
+
 def cmd_version(args, as_json):
     version = tools_version()
     out(as_json, {"ok": True, "version": version}, version)
@@ -223,6 +289,7 @@ def cmd_help(args, as_json):
 COMMANDS = {
     "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
+    "notify": cmd_notify, "hook": cmd_hook,
     "version": cmd_version, "help": cmd_help,
 }
 

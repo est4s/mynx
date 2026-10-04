@@ -16,6 +16,7 @@ import android.os.IBinder
 import android.os.Looper
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
+import io.github.est4s.terminal.core.Notice
 import io.github.est4s.terminal.core.PocketRequests
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
@@ -38,6 +39,10 @@ import java.util.WeakHashMap
 
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
+private const val NOTICE_CHANNEL_ID = "notices"
+// `pocket notify` notifications: one per tab, so a new one replaces the last.
+private const val NOTICE_ID_BASE = 1000
+const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.pocket-terminal"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
@@ -75,7 +80,9 @@ class TerminalService : Service() {
     var toolsError: String? = null
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
-    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root")) }
+    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root"), ::showNotice) }
+    // The POCKET_SHELL number of each session, for `pocket notify`.
+    private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     // Kept in a field: a FileObserver stops when it's garbage collected.
     private var requestWatcher: FileObserver? = null
@@ -213,6 +220,7 @@ class TerminalService : Service() {
 
     private fun newTabs(): Tabs<TerminalSession> = Tabs {
         if (!tabs.isEmpty && tabs.tabs.size != notifiedCount) updateNotification()
+        clearNoticeOfShownTab()
         saveTabs()
         activity?.onTabsChanged()
     }
@@ -256,7 +264,7 @@ class TerminalService : Service() {
             loader = "$libDir/libproot-loader.so",
             rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
             tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        ), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -268,9 +276,53 @@ class TerminalService : Service() {
             client,
         ).also {
             knownCwd[it] = workDir
+            shellIds[it] = shellId
             cwdFiles[it] = File(cwdDir, cwdName)
             keyBarFiles[it] = File(cwdDir, keyBarFileName)
         }
+    }
+
+    private fun sessionOfShell(id: Int): TerminalSession? =
+        tabs.tabs.map { it.session }.firstOrNull { shellIds[it] == id }
+
+    /** Selects the tab of shell [id] (from a tapped notification), if it's still open. */
+    fun selectShell(id: Int) {
+        val session = sessionOfShell(id) ?: return
+        tabs.select(tabs.tabs.indexOfFirst { it.session === session })
+    }
+
+    /** Removes the notification of the tab on screen: the user has seen it. */
+    fun clearNoticeOfShownTab() {
+        if (activity?.onScreen != true) return
+        val id = tabs.selected?.session?.let { shellIds[it] } ?: return
+        getSystemService(NotificationManager::class.java).cancel(NOTICE_ID_BASE + id)
+    }
+
+    // Answers `pocket notify`: null when shown, else why not.
+    private fun showNotice(notice: Notice): String? {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled()) return "the app's notifications are off in Android's settings"
+        val session = notice.shell?.let { sessionOfShell(it) }
+        if (notice.ifAway && activity?.onScreen == true && (session == null || tabs.selected?.session === session)) {
+            return if (session == null) "the app is on screen" else "that tab is on screen"
+        }
+        manager.createNotificationChannel(
+            NotificationChannel(NOTICE_CHANNEL_ID, "Notifications from programs", NotificationManager.IMPORTANCE_HIGH))
+        val id = NOTICE_ID_BASE + (if (session != null) notice.shell!! else 0)
+        val open = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .apply { if (session != null) putExtra(EXTRA_SHELL, notice.shell) }
+        val tap = PendingIntent.getActivity(this, id, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(id, Notification.Builder(this, NOTICE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(notice.title)
+            .setContentText(notice.text)
+            .setStyle(Notification.BigTextStyle().bigText(notice.text))
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build())
+        return null
     }
 
     // Called while the activity is visible: Android 12+ only allows going

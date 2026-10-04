@@ -25,6 +25,7 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * Debian path) is where programs report the key bar they want.
  * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
  * on the PATH. [requestDir] (a Debian path) is where `pocket` sends requests.
+ * [shellId] tells programs which tab they run in (`pocket notify`).
  */
 fun prootLaunch(
     paths: ProotPaths,
@@ -35,6 +36,7 @@ fun prootLaunch(
     keyBarFile: String? = null,
     toolsDir: String? = null,
     requestDir: String? = null,
+    shellId: Int? = null,
 ): Launch {
     val argv = buildList {
         add(paths.proot)
@@ -56,6 +58,7 @@ fun prootLaunch(
         // The keybar command writes the bar to show here (a Debian path).
         keyBarFile?.let { add("POCKET_KEYBAR_FILE=$it") }
         requestDir?.let { add("POCKET_REQUESTS=$it") }
+        shellId?.let { add("POCKET_SHELL=$it") }
         addAll(listOf("/bin/bash", "--login"))
     }
     val env = mapOf(

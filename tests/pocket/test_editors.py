@@ -95,7 +95,7 @@ class EditorTest(unittest.TestCase):
     def test_the_hub_lists_the_editors_and_quits(self):
         code, screen = self.edit([], ["q"])
         self.assertEqual(code, 0, screen)
-        for item in ["Theme", "Font & cursor", "Key bars", "Launcher menu"]:
+        for item in ["Theme", "Settings", "Key bars", "Launcher menu"]:
             self.assertIn(item, screen)
 
     def test_shows_its_own_key_bar_while_open(self):
@@ -111,7 +111,7 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(seen[0], "pocket-edit")
         self.assertEqual(self.read(self.keybar_file), "shell")
 
-    # --- font & cursor -----------------------------------------------------
+    # --- settings ----------------------------------------------------------
 
     def test_settings_change_at_once(self):
         self.start_app({"settings": SETTINGS, "set": lambda k, v: {"ok": True, "key": k, "value": v}})
@@ -119,6 +119,12 @@ class EditorTest(unittest.TestCase):
         self.assertEqual(code, 0, screen)
         sets = [r for r in self.app.requests if r[0] == "set"]
         self.assertEqual(sets, [["set", "font-size", "15"], ["set", "cursor-style", "underline"]])
+
+    def test_number_settings_step_with_the_arrows(self):
+        self.start_app({"settings": SETTINGS, "set": lambda k, v: {"ok": True, "key": k, "value": v}})
+        code, screen = self.edit(["settings"], [DOWN, DOWN, DOWN, RIGHT, "q"])
+        self.assertEqual(code, 0, screen)
+        self.assertEqual([r for r in self.app.requests if r[0] == "set"], [["set", "agent-notify-after", "35"]])
 
     def test_a_refused_setting_is_shown(self):
         self.start_app({"settings": SETTINGS, "set": {"ok": False, "error": "font-size must be small"}})
@@ -240,6 +246,7 @@ SETTINGS = {"ok": True, "problems": [], "settings": [
     {"key": "font", "value": "default", "default": "default", "description": "Font file.", "choices": None},
     {"key": "cursor-style", "value": "block", "default": "block", "description": "Cursor shape.",
      "choices": ["block", "underline", "bar"]},
+    {"key": "agent-notify-after", "value": "30", "default": "30", "description": "Seconds.", "choices": None},
 ]}
 
 THEME_REPLIES = {

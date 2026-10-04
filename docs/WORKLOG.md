@@ -9,7 +9,8 @@ Newest entries first. Rules for keeping it up to date: see
 ## Current status
 
 - **Roadmap steps 1-6 are done** and confirmed on the owner's phone.
-  **Next: step 7 (*Agent support*), for a new agent.** See "Next".
+  **Step 7 (*Agent support*) is in progress:** 7.1 (notifications) is
+  built and waiting for the owner's check; see "Next".
 - **Step 6 (*Customization*), confirmed 2026-10-04:** every setting is a
   plain-text file in `~/.config/pocket-terminal/`, changed with the
   `pocket` CLI (`check`, `settings`/`get`/`set`/`reset`, `theme`,
@@ -48,62 +49,59 @@ Newest entries first. Rules for keeping it up to date: see
   tools installers, tabs, key bars, colours/themes, settings, config
   check, `pocket` requests; 176 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 50 unittest tests incl. editors driven in a pty),
+  the agent guide; 62 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (55 bats
   tests).
 
+
 ## Next
 
-### Roadmap step 7: Agent support (plan with the owner first)
+### Roadmap step 7: Agent support
 
-**Goal (README "Built for AI agents", roadmap 7):** agents like Claude
-Code can set up and change the user's terminal safely. Already done in
-step 6: the agent guide (`tools/AGENTS.md` → `/opt/pocket-terminal/AGENTS.md`,
-home `AGENTS.md`/`CLAUDE.md` point to it), the `pocket` CLI with
-`--json`, and `pocket check`. Left:
+**Owner's decisions (2026-10-04):** order **7.1 notifications → 7.2
+installs → 7.3 undo**, with an owner test after each. Agents in the
+order **Claude Code, Codex, Gemini CLI**. Installing an agent **asks**
+whether to set up its notification hooks, and that choice can be
+changed later in the settings. Undo keeps **1 snapshot by default,
+configurable** by the user. Standing OK to commit and push at each
+checkpoint of step 7.
 
-1. **Undo.** Snapshot `~/.config/pocket-terminal/` before each change,
-   and add `pocket undo` (and probably a way to list snapshots). Changes
-   come from three places: app requests in `core/.../PocketRequests.kt`
-   (`set`, `reset`, `theme-set`, `theme-reset`, `keybar-edit`,
-   `keybar-reset`); file writes in the Python tools (`pocket menu
-   edit|reset`, the editors' saves of key bars, menu and colours in
-   `tools/lib/pocket_terminal/`); and agents editing files by hand.
-   Something to decide: a single snapshot mechanism, for example
-   routing the Python writes through app requests, or doing all
-   snapshots in Python before each request. Hand edits can't be
-   snapshotted before they happen; one idea is a snapshot of the last
-   good state at each `pocket check`. Keep the logic in `core` or
-   `models.py` and test it first.
-2. **Agent notifications.** A phone notification when an agent finishes
-   or needs input, so the user can switch apps. This needs a `pocket
-   notify` request that the service posts (it already owns a
-   notification channel), plus hooks for each agent: Claude Code's
-   `Stop`/`Notification` hooks in `~/.claude/settings.json`, and
-   Codex's `notify` setting. The owner runs this setup today on Termux
-   (`~/.claude/notify-phone.sh`, only notifying when a turn took 30 s or
-   more), which is a good model. Notifications overlap with step 9
-   (Android integration), so design `pocket notify` to fit both.
-3. **One-tap install of agent CLIs** (Claude Code, Codex, Gemini CLI)
-   through their **official installers**: never bundle them, and the
-   user signs in with their own account. A menu item, and
-   `pocket install NAME`, that shows what it will run before running it.
-   Known so far: Claude Code's native installer puts it in
-   `~/.local/bin` (already on the PATH in the home `.bashrc`). Codex and
-   Gemini CLI need Node.js (`apt install nodejs npm`; trixie has 20.x),
-   so check their minimum versions. **proot quirk:** Claude Code's
-   cross-session messaging failed under proot-distro ("user namespace
-   without a uid mapping"); the owner's workaround there is a `claude()`
-   wrapper passing `--messaging-socket-path ~/.claude/run/$$.sock`.
-   Check whether the app's proot needs the same.
-4. **Agent test still open from step 6:** once Claude Code is installed,
-   start it in `~` and ask it to "make the theme gruvbox and the font
-   bigger". It should read the guide and use `pocket`.
+**7.1 Notifications: built, owner to check.** On the phone:
+- `pocket notify "Hi" "from tab 1"` → a heads-up notification; tap it
+  in another tab or with the app in the background → that tab opens.
+- `sleep 5; pocket notify --if-away Hi` and switch tabs during the
+  sleep → shown; stay on the tab → `Not shown: that tab is on screen`.
+- A notification from a tab disappears when you switch to that tab.
+- `pocket edit` → Settings: `agent-notify` and `agent-notify-after`
+  (←→ steps 5 s); the hub item is now "Settings".
+- Hooks (`pocket hook claude`) can't be checked until 7.2 installs
+  Claude Code; the guide shows how to add them by hand.
 
-**Decide with the owner:** the order of 1-3; how undo should behave
-(how many snapshots, whether it covers hand edits); which agents get
-one-tap installs and notification hooks first; whether installing an
-agent also installs its notification hooks.
+**7.2 Installs (next):** `pocket install claude|codex|gemini` and a
+menu item. Show the official installer commands before running them,
+then ask "Also set up notifications for this agent? [y/N]". Hooks go
+into the agent's own config (Claude: `~/.claude/settings.json`,
+merged, never overwriting other hooks; Codex: `notify` in
+`~/.codex/config.toml`; Gemini CLI: its hooks in
+`~/.gemini/settings.json`, check the current format). A setting per
+agent turns the hooks on/off later (`pocket set agents.claude.notify
+on|off`, or similar), applied by adding/removing the hook entries.
+`pocket hook` needs `codex` and `gemini` handlers: Codex's `notify`
+program gets one JSON argument (`type: agent-turn-complete`, no turn
+length). Codex and Gemini CLI need Node.js (trixie has 20.x; check
+their minimum versions). Check whether Claude Code needs the
+`--messaging-socket-path` workaround under the app's proot (it did
+under proot-distro, see the owner's `claude()` wrapper). Then the
+step-6 agent test: in `~`, ask Claude Code to "make the theme gruvbox
+and the font bigger"; it should read the guide and use `pocket`.
+
+**7.3 Undo:** snapshot `~/.config/pocket-terminal/` before each change
+(app requests in `PocketRequests.kt`, and the Python tools' own writes:
+`pocket menu edit|reset`, the editors' saves), keep `undo.keep`
+snapshots (default 1), `pocket undo` and `pocket undo --list`. Hand
+edits: `pocket check` saves the last good config when it finds no
+problems, so `pocket undo` recovers from a broken hand edit. Logic in
+`core` (or `models.py`), test first.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `pocket theme set` for a dark and a light theme (strip
@@ -143,6 +141,38 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (22): step 7 planned; 7.1, `pocket notify` and agent hooks
+
+**Done**
+- Planned step 7 with the owner (decisions under "Next").
+- `pocket notify [--if-away] TITLE [TEXT]`: a `notify` request
+  (`PocketRequests`, options `shell=N`, `if-away`, `agent`, `took=N`);
+  the service posts it on a new high-importance channel, one
+  notification per tab (id 1000 + shell number), so a tab's new
+  notice replaces its last. Tapping it selects that tab
+  (`EXTRA_SHELL`, `onNewIntent`); showing a tab clears its notice.
+- Each shell gets `POCKET_SHELL=N` (`prootLaunch(shellId)`), so a
+  notification knows its tab.
+- Settings `agent-notify` (on) and `agent-notify-after` (30 s). Agent
+  notices (`agent` option) follow them in core; the editor steps
+  `agent-notify-after` by 5 with ←→. The editor hub's "Font & cursor"
+  is now "Settings".
+- `pocket hook claude`: Claude Code's `UserPromptSubmit`/`Stop`/
+  `Notification` hooks. Turn start times live in
+  `$TMPDIR/pocket-agent-turns/`. Always exits 0 and prints nothing:
+  a `Stop` hook exiting 2 makes Claude Code keep working.
+- Agent guide: the commands, settings and how to add the hooks by hand.
+
+**Decisions**
+- Turn-length and on/off rules are in core, not in the hook script, so
+  every agent's hook just reports what happened.
+- `--if-away` (used by the hooks) skips the notice only while that
+  tab is on screen; plain `pocket notify` always shows.
+- A notice from a tab that no longer exists opens the app without
+  switching tabs.
+
+**Commits:** see git log (this entry's commit)
 
 ### 2026-10-04 (21): step 6 done
 

@@ -8,12 +8,17 @@ data class Settings(
     val font: String = "default",
     val cursorStyle: String = "block",
     val cursorBlink: Boolean = false,
+    val agentNotify: Boolean = true,
+    /** Seconds an agent's turn must take before its end notifies. */
+    val agentNotifyAfter: Int = 30,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
         "font" to font,
         "cursor-style" to cursorStyle,
         "cursor-blink" to if (cursorBlink) "on" else "off",
+        "agent-notify" to if (agentNotify) "on" else "off",
+        "agent-notify-after" to agentNotifyAfter.toString(),
     )
 }
 
@@ -31,6 +36,7 @@ data class SettingDef(
 
 const val MIN_FONT_SIZE = 6
 const val MAX_FONT_SIZE = 40
+const val MAX_AGENT_NOTIFY_AFTER = 3600
 
 private fun oneOf(key: String, choices: List<String>): (String) -> String? =
     { if (it in choices) null else "$key must be one of: ${choices.joinToString(", ")}" }
@@ -59,6 +65,21 @@ val SETTINGS: List<SettingDef> = listOf(
         "cursor-blink", "Whether the cursor blinks.", "off", listOf("on", "off"),
         oneOf("cursor-blink", listOf("on", "off")),
         { copy(cursorBlink = it == "on") },
+    ),
+    SettingDef(
+        "agent-notify", "Phone notifications from AI agents (Claude Code, …) when they finish or need you.",
+        "on", listOf("on", "off"),
+        oneOf("agent-notify", listOf("on", "off")),
+        { copy(agentNotify = it == "on") },
+    ),
+    SettingDef(
+        "agent-notify-after", "Only notify about a finished agent turn that took at least this many seconds (0-$MAX_AGENT_NOTIFY_AFTER).",
+        "30", null,
+        {
+            if (it.toIntOrNull() in 0..MAX_AGENT_NOTIFY_AFTER) null
+            else "agent-notify-after must be a whole number of seconds from 0 to $MAX_AGENT_NOTIFY_AFTER"
+        },
+        { copy(agentNotifyAfter = it.toInt()) },
     ),
 )
 

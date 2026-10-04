@@ -82,6 +82,8 @@ their own.
 | `pocket menu show` | the launcher menu file in use |
 | `pocket menu edit` | copy the built-in menu to `~/.config/pocket-terminal/menu.conf` to edit |
 | `pocket menu reset` | delete your menu file (back to the built-in one) |
+| `pocket notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
+| `pocket hook claude` | run by Claude Code's hooks (see "Agent notifications"); reads the hook's JSON on stdin |
 | `pocket edit` | the settings editors, for people (full screen) |
 | `pocket version` | the version of the app's tools |
 | `pocket help` | all commands |
@@ -90,8 +92,8 @@ their own.
 `{"ok": false, "error": "..."}`, for scripts.
 
 `pocket edit` (also the menu's Settings item) opens editors for people:
-theme (moving through the list previews each theme live), font &
-cursor, key bars, the launcher menu, and a config check. In each, `r`
+theme (moving through the list previews each theme live), settings
+(font, cursor, agent notifications), key bars, the launcher menu, and a config check. In each, `r`
 puts things back to the default. Don't run it
 yourself: it's interactive. Use the commands above.
 
@@ -108,6 +110,30 @@ One `key = value` per line; `pocket settings` describes each.
   Other fonts don't show Nerd Font icons.
 - `cursor-style`: `block`, `underline` or `bar`.
 - `cursor-blink`: `on` or `off`.
+- `agent-notify`: `on` (default) or `off`: phone notifications from AI
+  agents (see "Agent notifications").
+- `agent-notify-after`: 0 to 3600 seconds (default 30). A finished
+  agent turn only notifies if it took at least this long.
+
+### Agent notifications
+
+`pocket hook claude` turns Claude Code's hook events into phone
+notifications: when a turn that took `agent-notify-after` seconds or
+more ends ("Your turn"), and whenever Claude needs permission or input.
+Nothing is shown while you're looking at that agent's tab, and tapping
+a notification opens it. It never fails, so it can't disturb the agent.
+To set it up by hand, add this to `~/.claude/settings.json` (merge it
+with any `hooks` already there):
+
+```json
+{"hooks": {
+  "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "pocket hook claude"}]}],
+  "Stop": [{"hooks": [{"type": "command", "command": "pocket hook claude"}]}],
+  "Notification": [{"hooks": [{"type": "command", "command": "pocket hook claude"}]}]
+}}
+```
+
+Your own scripts can notify too: `long-job && pocket notify "Done" "long-job finished"`.
 
 ### Themes and colours
 

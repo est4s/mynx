@@ -138,6 +138,15 @@ class ProotLaunchTest {
         assertTrue("POCKET_REQUESTS=/tmp/.pocket-terminal/requests" in shellEnv, shellEnv.toString())
     }
 
+    @Test
+    fun `tells programs which tab they run in`() {
+        val argv = prootLaunch(paths, shellId = 7).argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("POCKET_SHELL=7" in shellEnv, shellEnv.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_SHELL=") })
+    }
+
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]
 
     private fun List<String>.valuesAfter(flag: String) =

@@ -311,6 +311,101 @@ class PocketTest(unittest.TestCase):
             f"  line 2: bad {self.config}/menu.conf",
         ])
 
+    # --- notify ------------------------------------------------------------
+
+    def notify_app(self, shown=True):
+        reply = {"ok": True, "shown": True} if shown else {"ok": True, "shown": False, "reason": "agent-notify is off"}
+        self.start_app({"notify": lambda *args: reply})
+
+    def test_notify_sends_title_text_and_tab(self):
+        self.notify_app()
+        run = self.pocket("notify", "Build done", "all", "tests", "pass", env={"POCKET_SHELL": "4"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Notification shown\n")
+        self.assertEqual(self.app.requests, [["notify", "Build done", "all tests pass", "shell=4"]])
+
+    def test_notify_if_away_and_without_text(self):
+        self.notify_app()
+        self.pocket("notify", "--if-away", "Hi")
+        self.assertEqual(self.app.requests, [["notify", "Hi", "", "if-away"]])
+
+    def test_notify_turns_line_breaks_into_spaces(self):
+        self.notify_app()
+        self.pocket("notify", "two\nlines", "and\nmore")
+        self.assertEqual(self.app.requests, [["notify", "two lines", "and more"]])
+
+    def test_notify_says_why_nothing_was_shown(self):
+        self.notify_app(shown=False)
+        run = self.pocket("notify", "Hi")
+        self.assertEqual(run.returncode, 1)
+        self.assertEqual(run.stdout, "Not shown: agent-notify is off\n")
+
+    def test_notify_needs_a_title(self):
+        run = self.pocket("notify")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: pocket notify", run.stderr)
+
+    # --- hook (agents' notification hooks) -----------------------------------
+
+    def hook(self, event, env=None, **fields):
+        data = {"hook_event_name": event, "session_id": "s1", "cwd": "/root/project", **fields}
+        environ = {"TMPDIR": self.tmp.name, "POCKET_SHELL": "2", **(env or {})}
+        run = subprocess.run(["python3", POCKET, "hook", "claude"], input=json.dumps(data),
+                             capture_output=True, text=True,
+                             env={"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests,
+                                  "HOME": self.home, "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1",
+                                  **environ})
+        return run
+
+    def turn_started(self, seconds_ago):
+        folder = os.path.join(self.tmp.name, "pocket-agent-turns")
+        os.makedirs(folder, exist_ok=True)
+        self.write(os.path.join(folder, "claude-s1"), f"{time.time() - seconds_ago}\n")
+
+    def test_hook_records_when_a_turn_starts_without_asking_the_app(self):
+        self.notify_app()
+        run = self.hook("UserPromptSubmit", prompt="hi")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmp.name, "pocket-agent-turns", "claude-s1")))
+        self.assertEqual(self.app.requests, [])
+
+    def test_hook_at_the_end_of_a_turn_sends_how_long_it_took(self):
+        self.notify_app()
+        self.turn_started(seconds_ago=42)
+        run = self.hook("Stop")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "")
+        (request,) = self.app.requests
+        self.assertEqual(request[:-1], ["notify", "Claude Code", "Your turn (project)", "shell=2", "if-away", "agent"])
+        self.assertIn(request[-1], ["took=42", "took=43", "took=44"])  # a slow phone takes a moment
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "pocket-agent-turns", "claude-s1")))
+
+    def test_hook_end_of_a_turn_it_didnt_see_start_is_ignored(self):
+        self.notify_app()
+        self.assertEqual(self.hook("Stop").returncode, 0)
+        self.assertEqual(self.app.requests, [])
+
+    def test_hook_passes_on_what_the_agent_needs(self):
+        self.notify_app()
+        self.hook("Notification", message="Claude needs your permission to use Bash")
+        self.assertEqual(self.app.requests, [["notify", "Claude Code", "Claude needs your permission to use Bash",
+                                              "shell=2", "if-away", "agent"]])
+
+    def test_hook_never_fails_the_agent(self):
+        # No app answering, and garbage input: still exit 0 and say nothing,
+        # since an agent may treat a failing hook as a reason to stop or retry.
+        self.turn_started(seconds_ago=99)
+        self.assertEqual(self.hook("Stop").returncode, 0)
+        run = subprocess.run(["python3", POCKET, "hook", "claude"], input="not json",
+                             capture_output=True, text=True,
+                             env={"PATH": os.environ["PATH"], "TMPDIR": self.tmp.name})
+        self.assertEqual((run.returncode, run.stdout), (0, ""))
+
+    def test_hook_for_an_unknown_agent(self):
+        run = self.pocket("hook", "skynet")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: pocket hook claude", run.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

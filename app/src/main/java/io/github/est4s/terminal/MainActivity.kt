@@ -89,6 +89,10 @@ class MainActivity : Activity() {
     private var shownSettingsProblems = emptyList<String>()
     private var fontSize = 0 // dp
     private var visible = false
+    /** Whether the terminal is on screen (between onStart and onStop). */
+    val onScreen get() = visible
+    // A tapped notification's tab, selected once the service is connected.
+    private var shellToShow: Int? = null
     private var appliedFont: String? = null
 
     private val connection = object : ServiceConnection {
@@ -97,6 +101,7 @@ class MainActivity : Activity() {
             service = s
             s.activity = this@MainActivity
             showTerminal(s.currentSession())
+            showShellFromNotification()
             s.toolsError?.let { showToolsError(it) }
         }
 
@@ -135,8 +140,26 @@ class MainActivity : Activity() {
         setContentView(root)
         applySystemInsets(root)
 
+        shellToShow = shellOf(intent)
         if (installer.isInstalled) connectService() else installDebian()
         showLastCrash()
+    }
+
+    // A tapped `pocket notify` notification, while the activity exists.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        shellToShow = shellOf(intent)
+        showShellFromNotification()
+    }
+
+    private fun shellOf(intent: Intent?): Int? =
+        intent?.getIntExtra(EXTRA_SHELL, -1)?.takeIf { it >= 0 }
+
+    private fun showShellFromNotification() {
+        val id = shellToShow ?: return
+        val service = service ?: return
+        shellToShow = null
+        service.selectShell(id)
     }
 
     // Picks up edits to the colours file when the user comes back to the app.
@@ -149,6 +172,7 @@ class MainActivity : Activity() {
             applySettings()
         }
         root.post(keyBarPoll)
+        service?.clearNoticeOfShownTab()
     }
 
     // Folders change without tab changes, and leaving the app is the last

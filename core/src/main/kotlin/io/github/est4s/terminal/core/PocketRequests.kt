@@ -7,6 +7,16 @@ private val REQUEST_FILE = Regex("[A-Za-z0-9_-]{1,64}\\.req")
 /** A request from `pocket`: its [name] and the lines after it. */
 data class PocketRequest(val name: String, val args: List<String>)
 
+/**
+ * A notification `pocket notify` asks for. [shell] is the tab it came
+ * from (`POCKET_SHELL`); with [ifAway], skip it while that tab is on
+ * screen.
+ */
+data class Notice(val title: String, val text: String, val shell: Int?, val ifAway: Boolean)
+
+private const val MAX_NOTICE_TITLE = 100
+private const val MAX_NOTICE_TEXT = 1000
+
 private class Refused(message: String) : Exception(message)
 
 /**
@@ -15,9 +25,14 @@ private class Refused(message: String) : Exception(message)
  * line, one argument per line after it. The answer goes to `ID.reply` as
  * JSON, also renamed into place, and the request is removed. [home] is
  * root's home in Debian. The app applies what changed (see the names
- * returned by [processPending]).
+ * returned by [processPending]). [notify] shows a [Notice] and returns
+ * null, or says why it didn't.
  */
-class PocketRequests(private val dir: File, private val home: File) {
+class PocketRequests(
+    private val dir: File,
+    private val home: File,
+    private val notify: (Notice) -> String? = { "notifications aren't available" },
+) {
     private val config = File(home, CONFIG_DIR)
     private val settingsFile = File(config, "settings.conf")
     private val colorsFile = File(config, "colors.properties")
@@ -121,9 +136,45 @@ class PocketRequests(private val dir: File, private val home: File) {
                 user!!.delete()
                 ok()
             }
+            "notify" -> notify(args)
             else -> throw Refused("unknown request '${request.name}'")
         }
     }
+
+    // Lines: title, text, then options: shell=N, if-away, agent, took=SECONDS.
+    // Agent notices follow the agent-notify settings.
+    private fun notify(args: List<String>): String {
+        val title = args.getOrNull(0)?.trim().orEmpty()
+        if (title.isEmpty()) throw Refused("notify needs a title")
+        var shell: Int? = null
+        var ifAway = false
+        var agent = false
+        var took: Int? = null
+        for (option in args.drop(2)) {
+            val value = option.substringAfter('=', "")
+            when {
+                option == "if-away" -> ifAway = true
+                option == "agent" -> agent = true
+                option.startsWith("shell=") && value.toIntOrNull() != null -> shell = value.toInt()
+                option.startsWith("took=") && (value.toIntOrNull() ?: -1) >= 0 -> took = value.toInt()
+                else -> throw Refused("unknown notify option '$option'")
+            }
+        }
+        if (agent) {
+            val settings = loadSettings(settingsFile).settings
+            if (!settings.agentNotify) return notShown("agent-notify is off (pocket set agent-notify on)")
+            if (took != null && took < settings.agentNotifyAfter) {
+                return notShown("the turn took ${took}s; agent-notify-after is ${settings.agentNotifyAfter}s")
+            }
+        }
+        val text = args.getOrNull(1)?.trim().orEmpty()
+        val reason = notify(Notice(title.cut(MAX_NOTICE_TITLE), text.cut(MAX_NOTICE_TEXT), shell, ifAway))
+        return if (reason == null) ok("shown" to "true") else notShown(reason)
+    }
+
+    private fun notShown(reason: String) = ok("shown" to "false", "reason" to json(reason))
+
+    private fun String.cut(max: Int) = if (length <= max) this else take(max - 1) + "…"
 
     private fun settings(): String {
         val parsed = loadSettings(settingsFile)

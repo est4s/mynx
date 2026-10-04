@@ -20,6 +20,7 @@ KEY_BAR = "pocket-edit"
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 COLOR_KEYS = ["background", "foreground", "cursor"] + [f"color{i}" for i in range(16)]
 MENU_ACTIONS = ["shell", "files", "games", "settings", "system", "exit"]
+NUMBER_STEPS = {"font-size": 1, "agent-notify-after": 5}  # ←→ change these by this much
 FONT_DIRS = ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts", "~/.local/share/fonts",
              "~/.config/pocket-terminal/fonts"]
 
@@ -222,7 +223,7 @@ def attempt(ui, action):
 # --- the hub -------------------------------------------------------------------
 
 def hub(ui):
-    items = [("Theme", theme_editor), ("Font & cursor", settings_editor), ("Key bars", keybars_editor),
+    items = [("Theme", theme_editor), ("Settings", settings_editor), ("Key bars", keybars_editor),
              ("Launcher menu", menu_editor), ("Check config", check_screen)]
     sel = 0
     while True:
@@ -243,7 +244,7 @@ def check_screen(ui):
     ui.message("Check config", lines or ["No problems in ~/.config/pocket-terminal"])
 
 
-# --- font & cursor ---------------------------------------------------------------
+# --- settings --------------------------------------------------------------------
 
 def settings_editor(ui):
     sel = 0
@@ -252,12 +253,12 @@ def settings_editor(ui):
         width = max(len(s["key"]) for s in settings) + 2
         rows = [f"{s['key']:<{width}}{s['value']}" for s in settings] + ["Reset all to defaults"]
         crumb = settings[sel]["description"] if sel < len(settings) else "Every setting back to its default."
-        key, sel = ui.list("Font & cursor", crumb, rows, sel, "←→ change  Enter: pick  r: reset  q: back",
+        key, sel = ui.list("Settings", crumb, rows, sel, "←→ change  Enter: pick  r: reset  q: back",
                            "left right r")
         if key == "back":
             return
         if sel == len(settings):
-            if key in ("enter", "r") and ui.confirm("Reset font & cursor to the defaults?"):
+            if key in ("enter", "r") and ui.confirm("Reset all settings to their defaults?"):
                 if attempt(ui, lambda: request("reset", "all")):
                     ui.status = "All settings back to their defaults"
             continue
@@ -270,11 +271,11 @@ def settings_editor(ui):
         if s["choices"]:
             step = -1 if key == "left" else 1
             value = s["choices"][(s["choices"].index(s["value"]) + step) % len(s["choices"])]
-        elif s["key"] == "font-size":
+        elif s["key"] in NUMBER_STEPS:
             if key == "enter":
-                value = ui.prompt("Font size", s["description"], s["value"])
+                value = ui.prompt(s["key"], s["description"], s["value"])
             else:
-                value = str(int(s["value"]) + (-1 if key == "left" else 1))
+                value = str(int(s["value"]) + NUMBER_STEPS[s["key"]] * (-1 if key == "left" else 1))
         elif s["key"] == "font":
             fonts = ["default"] + find_fonts()
             i = ui.pick("Font", "Fonts found in Debian (apt install fonts-…)", fonts,
