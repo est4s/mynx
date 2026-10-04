@@ -36,9 +36,10 @@ and will change before release.
 
 ## Development environment
 
-The owner develops on a **phone**: Claude Code runs in Debian under
-`proot-distro`, inside Termux (Play Store build), on a Pixel 10 (arm64,
-Android 16). The terminal is about 56 columns wide in portrait.
+The owner develops on a **phone**: Claude Code runs in the app's own
+Debian (a debug build of this app, from CI), on a Pixel 10 (arm64,
+Android 16). Until 2026-10-04 it ran in Debian under `proot-distro`
+inside Termux. The terminal is about 56 columns wide in portrait.
 
 Consequences:
 - **No local Android builds.** Google's `aapt2` only exists for x86-64, so
@@ -49,7 +50,8 @@ Consequences:
   the owner installs the build and reports back. Ask for specific observations
   ("what does the screen show after tapping X?") and make failures visible in
   the UI (show error text and stack traces on screen) rather than only in logs.
-- JDK 21 is installed locally, which `./gradlew :core:test` uses.
+- JDK 21 (`openjdk-21-jdk-headless`) and `bats` are installed locally;
+  `./gradlew :core:test` uses the JDK.
 - `gh` is logged in as `est4s` with the `workflow` scope.
 
 ### Build → install loop
@@ -57,16 +59,21 @@ Consequences:
 1. Commit and push to `main` (or open a PR). `.github/workflows/build.yml`
    builds a debug APK (~2.5 min). Pushes that only change
    Markdown files skip the build.
-2. Run `scripts/deliver.sh` from Debian on the phone. It waits for the latest
-   run, downloads the APK, copies it to the phone's Download folder, indexes it
-   and opens Android's installer. The owner just taps **Install**.
+2. Run `scripts/deliver.sh` in the app's Debian, with the app on screen.
+   It waits for HEAD's run, downloads the APK, copies it to the phone's
+   Download folder and opens Android's installer with `pocket install-apk`.
+   The owner just taps **Install** (the app restarts as the new build).
 
 Notes on why the script does what it does:
-- Files written into `/sdcard/Download` from proot are **not** visible in the
-  Files app until indexed; the script runs Termux's `termux-media-scan`.
-- `termux-open` with the APK MIME type opens the system installer directly.
-- Termux tools are called from Debian with Termux's `PATH`, `PREFIX` and
-  `LD_LIBRARY_PATH` set (`/data/data/com.termux/files/usr`).
+- `pocket install-apk FILE` (left out of `pocket help` and the user guide)
+  asks the app to open the installer. Only **debug builds** can:
+  `app/src/debug/AndroidManifest.xml` adds `REQUEST_INSTALL_PACKAGES` and
+  `ApkProvider`, which serves just that one file to the installer. Release
+  builds have neither (Play restricts that permission).
+- The first time, Android asks to allow the app to install apps; the
+  request opens that setting and says to try again.
+- If the request fails (an older build, the app not on screen), the APK
+  is still in Download: open it from the Files app.
 
 ---
 
@@ -279,10 +286,11 @@ does this automatically through `.claude/settings.json`.)
   `\x1b[A`). Keep file logic in `models.py`, unit-tested.
 - **Shell code** (the menu and other commands in `tools/bin/`, root's
   dotfiles in `rootfs/root/`):
-  tests with `bats` in `tests/shell/`. CI runs real bats. **On the phone
-  run `scripts/bats-lite.sh tests/shell/*.bats`**: real bats needs process
-  substitution, which the dev Debian's `/dev/fd` breaks (see "proot
-  notes"); bats-lite supports only `@test`, `setup`, `run`, `skip`,
+  tests with `bats` in `tests/shell/`. CI runs real bats, and so does the
+  app's own Debian (`bats tests/shell/*.bats`). In the old proot-distro
+  Debian, use `scripts/bats-lite.sh tests/shell/*.bats`: real bats needs
+  process substitution, which its `/dev/fd` breaks (see "proot notes");
+  bats-lite supports only `@test`, `setup`, `run`, `skip`,
   `$output`, `$lines`, `$status` and the temp/dir variables. Build scripts
   are checked by the CI build itself.
 

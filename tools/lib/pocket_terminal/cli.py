@@ -225,6 +225,16 @@ def cmd_open(args, as_json):
     return 0
 
 
+# Not in HELP: for installing builds of the app while developing it. Only
+# debug builds of the app answer it.
+def cmd_install_apk(args, as_json):
+    if len(args) != 1:
+        raise Usage("usage: pocket install-apk FILE")
+    answer = request("install-apk", os.path.abspath(args[0]))
+    out(as_json, answer, "Installer opened on the phone.")
+    return 0
+
+
 def cmd_undo(args, as_json):
     if args == ["--list"]:
         answer = request("undo-list")
@@ -554,7 +564,7 @@ COMMANDS = {
     "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
-    "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 
 

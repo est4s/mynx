@@ -26,7 +26,8 @@ private class Refused(message: String) : Exception(message)
  * JSON, also renamed into place, and the request is removed. [home] is
  * root's home in Debian. The app applies what changed (see the names
  * returned by [processPending]). [notify] shows a [Notice] and returns
- * null, or says why it didn't; [openUrl] likewise opens a web link.
+ * null, or says why it didn't; [openUrl] likewise opens a web link,
+ * and [installApk] opens Android's installer for an APK (a host file).
  */
 class PocketRequests(
     private val dir: File,
@@ -34,6 +35,7 @@ class PocketRequests(
     now: () -> Long = System::currentTimeMillis,
     private val notify: (Notice) -> String? = { "notifications aren't available" },
     private val openUrl: (String) -> String? = { "links can't be opened here" },
+    private val installApk: (File) -> String? = { "apps can't be installed here" },
 ) {
     private val config = File(home, CONFIG_DIR)
     private val settingsFile = File(config, "settings.conf")
@@ -163,6 +165,18 @@ class PocketRequests(
                 val url = args[0].trim()
                 if (!isWebLink(url)) throw Refused("only http and https links open: $url")
                 openUrl(url)?.let { throw Refused(it) }
+                ok()
+            }
+            "install-apk" -> {
+                need(1)
+                val path = args[0].trim()
+                val apk = hostPath(path, home.parentFile.path)?.let(::File)
+                    ?: throw Refused("the path must start with /: $path")
+                when {
+                    !apk.exists() -> throw Refused("no such file: $path")
+                    !apk.isFile || !apk.name.endsWith(".apk", ignoreCase = true) -> throw Refused("not an APK: $path")
+                }
+                installApk(apk)?.let { throw Refused(it) }
                 ok()
             }
             else -> throw Refused("unknown request '${request.name}'")

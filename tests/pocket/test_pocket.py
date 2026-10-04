@@ -69,11 +69,11 @@ class PocketTest(unittest.TestCase):
         self.app = FakeApp(self.requests, replies)
         self.app.thread.start()
 
-    def pocket(self, *args, env=None):
+    def pocket(self, *args, env=None, cwd=None):
         environ = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
                    "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
         environ.update(env or {})
-        return subprocess.run(["python3", POCKET, *args], capture_output=True, text=True, env=environ)
+        return subprocess.run(["python3", POCKET, *args], capture_output=True, text=True, env=environ, cwd=cwd)
 
     # --- check -------------------------------------------------------------
 
@@ -637,6 +637,28 @@ class PocketTest(unittest.TestCase):
 
     def test_open_needs_one_link(self):
         self.assertIn("usage: pocket open URL", self.pocket("open").stderr)
+
+    # --- install-apk (debug builds) ------------------------------------------
+
+    def test_install_apk_sends_the_full_path(self):
+        self.start_app({"install-apk": {"ok": True}})
+        run = self.pocket("install-apk", "app.apk", cwd=self.tmp.name)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Installer opened on the phone.\n")
+        self.assertEqual(self.app.requests, [["install-apk", os.path.join(self.tmp.name, "app.apk")]])
+
+    def test_install_apk_says_why_it_failed(self):
+        self.start_app({"install-apk": {"ok": False, "error": "only debug builds can install apps"}})
+        run = self.pocket("install-apk", "/tmp/app.apk")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("only debug builds can install apps", run.stderr)
+
+    def test_install_apk_needs_one_file(self):
+        self.assertIn("usage: pocket install-apk FILE", self.pocket("install-apk").stderr)
+
+    def test_install_apk_is_left_out_of_help(self):
+        # A tool for developing the app, not for users.
+        self.assertNotIn("install-apk", self.pocket("help").stdout)
 
 
 if __name__ == "__main__":

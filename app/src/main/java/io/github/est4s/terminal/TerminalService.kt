@@ -82,7 +82,7 @@ class TerminalService : Service() {
     var toolsError: String? = null
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
-    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root"), notify = ::showNotice, openUrl = ::openLink) }
+    private val requests by lazy { PocketRequests(requestDir, File(rootfs, "root"), notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk) }
     // The POCKET_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -310,6 +310,30 @@ class TerminalService : Service() {
             null
         } catch (e: ActivityNotFoundException) {
             "no app on the phone opens links"
+        }
+    }
+
+    // Answers `pocket install-apk`: null when the installer opened, else why not.
+    private fun installApk(apk: File): String? {
+        if (!BuildConfig.DEBUG) return "only debug builds of the app can install apps"
+        val shown = activity?.takeIf { it.onScreen }
+            ?: return "the app must be on screen to open the installer"
+        if (!packageManager.canRequestPackageInstalls()) {
+            shown.startActivity(
+                Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+            )
+            return "allow the app to install apps (Android's settings are open), then try again"
+        }
+        ApkProvider.apk = apk
+        return try {
+            shown.startActivity(
+                Intent(Intent.ACTION_VIEW)
+                    .setDataAndType(ApkProvider.uri, ApkProvider.MIME)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            )
+            null
+        } catch (e: ActivityNotFoundException) {
+            "no app on the phone installs apps"
         }
     }
 

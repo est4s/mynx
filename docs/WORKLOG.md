@@ -58,6 +58,22 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
+### First: install the build with `pocket install-apk`
+
+The owner now develops inside the app's own Debian (no Termux), so
+`scripts/deliver.sh` opens the installer through the app (see the log,
+2026-10-04 (25)). On the phone, after the push that adds it:
+- Run `scripts/deliver.sh`. The installed build doesn't know the request
+  yet, so it says to open `Download/pocket-terminal-debug.apk` from the
+  Files app: do that once. Does the Files app show the file?
+- Then `scripts/deliver.sh` again (or `pocket install-apk
+  /storage/emulated/0/Download/pocket-terminal-debug.apk`) with the app
+  on screen: Android asks to allow installing apps the first time (the
+  request opens that setting); after allowing, run it again and the
+  installer opens. Tap **Install**: the app restarts as the new build.
+- If the installer says "There was a problem parsing the package" or
+  similar, report the exact text: `ApkProvider` then needs a fix.
+
 ### Roadmap step 7: Agent support
 
 **Owner's decisions (2026-10-04):** order **7.1 notifications → 7.2
@@ -157,6 +173,39 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (25): dev setup in the app's own Debian; `pocket install-apk`
+
+**Done**
+- The owner now runs Claude Code in the app's own Debian instead of
+  Termux. Installed there: `git`, `gh` (logged in as `est4s`), JDK 21,
+  `bats`. Baseline: 217 core, 113 `pocket` (after this work) and 63
+  bats tests pass; real bats works here (its `/dev/fd` is fine).
+- `scripts/deliver.sh` no longer uses Termux: it copies the APK to
+  `/storage/emulated/0/Download` and runs `pocket install-apk FILE`,
+  falling back to "open it from the Files app".
+- `install-apk` request (`core/.../PocketRequests.kt`, tested in
+  `InstallApkRequestTest`): maps the Debian path to the host
+  (`hostPath`), refuses what isn't an `.apk` file, then calls the app's
+  `installApk`. `pocket install-apk` sends the absolute path; it's left
+  out of `pocket help` and the user guide (a development tool).
+- App: `TerminalService.installApk` (debug builds only, app on screen)
+  opens Android's "install unknown apps" setting if needed, else
+  `ACTION_VIEW` on `content://io.github.est4s.terminal.apk/app.apk`,
+  served by `ApkProvider` (just that file). The permission and the
+  provider are declared only in `app/src/debug/AndroidManifest.xml`.
+
+**Decisions**
+- Owner's choice (2026-10-04): a debug-only install request rather than
+  copying the APK and tapping it by hand. Release builds must not get
+  `REQUEST_INSTALL_PACKAGES` (Play restricts it).
+- A tiny `ContentProvider` instead of androidx `FileProvider`: no new
+  dependency for one file.
+
+**Not checked:** the app module can't build here; CI checks it compiles.
+The installer flow needs the owner's check (see "Next").
+
+**Commits:** see git log (this entry's commit)
 
 ### 2026-10-04 (24): 7.3 undo; AI agents submenu; links open
 

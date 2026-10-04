@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: `pocket install-apk` (scripts/deliver.sh) installs new
+     builds from inside the app. Release builds can't install apps. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <application>
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="io.github.est4s.terminal.apk"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

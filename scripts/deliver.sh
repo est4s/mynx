@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Download the latest CI build of the APK and hand it to Android's installer.
-# Runs in Debian under proot on the phone (see AGENTS.md, "Build → install loop").
+# Runs in the app's own Debian on the phone (see AGENTS.md, "Build → install loop").
 #
 #   scripts/deliver.sh            wait for HEAD's run on main, then install
 #   scripts/deliver.sh <run-id>   use a specific run
-#   scripts/deliver.sh --no-open  copy and index only, don't open the installer
+#   scripts/deliver.sh --no-open  copy to Download only, don't open the installer
 set -euo pipefail
 
 open=1 run=""
@@ -39,17 +39,14 @@ gh run watch "$run" --exit-status >/dev/null || {
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 gh run download "$run" -D "$tmp"
-apk=/sdcard/Download/pocket-terminal-debug.apk
+apk=/storage/emulated/0/Download/pocket-terminal-debug.apk
 cp "$tmp"/*/*.apk "$apk"
 echo "Copied to $apk"
 
-# Termux tools, called from Debian.
-T=/data/data/com.termux/files/usr
-termux() { env PATH="$T/bin:$PATH" PREFIX="$T" LD_LIBRARY_PATH="$T/lib" "$T/bin/$@"; }
-
-termux termux-media-scan /storage/emulated/0/Download/pocket-terminal-debug.apk >/dev/null
-if [[ $open == 1 ]]; then
-    termux termux-open --content-type application/vnd.android.package-archive \
-        /storage/emulated/0/Download/pocket-terminal-debug.apk
-    echo "Installer opened on the phone."
+[[ $open == 1 ]] || exit 0
+# Debug builds of the app answer this; older or release builds can't.
+if ! pocket install-apk "$apk"; then
+    echo "Open Download/$(basename "$apk") in the Files app to install it,"
+    echo "or try again: pocket install-apk $apk"
+    exit 1
 fi
