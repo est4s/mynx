@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
-# `play` (runs a game with its key bar) and the game commands, in rootfs/bin/.
+# `play` (runs a game with its key bar) and the game commands, in tools/bin/.
 
-BIN="$BATS_TEST_DIRNAME/../../rootfs/bin"
+BIN="$BATS_TEST_DIRNAME/../../tools/bin"
 
 setup() {
     STUBS="$BATS_TEST_TMPDIR/stubs"

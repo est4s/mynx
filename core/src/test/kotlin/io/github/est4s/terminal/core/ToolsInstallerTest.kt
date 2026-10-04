@@ -77,13 +77,14 @@ class ToolsInstallerTest {
     }
 
     @Test
-    fun `puts the tools on the PATH of login shells, after Debian's profile resets it`() {
+    fun `puts the tools first on the PATH of login shells, after Debian's profile resets it`() {
         val rootfs = File(base, "debian").apply { mkdirs() }
 
         writeToolsProfile(rootfs)
 
         val script = File(rootfs, "etc/profile.d/pocket-terminal.sh")
-        assertEquals("/usr/bin:/bin:/opt/pocket-terminal/bin\n", sourced(script, "/usr/bin:/bin"))
+        // First: the tools replace older copies of the same commands left in the rootfs.
+        assertEquals("/opt/pocket-terminal/bin:/usr/bin:/bin\n", sourced(script, "/usr/bin:/bin"))
         // Sourcing it twice (a nested login shell) adds nothing.
         assertEquals("/usr/bin:/opt/pocket-terminal/bin\n", sourced(script, "/usr/bin:/opt/pocket-terminal/bin"))
     }

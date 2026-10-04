@@ -20,7 +20,6 @@ docker pull -q --platform linux/arm64 "$IMAGE" >/dev/null
 digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$IMAGE")
 docker buildx build --platform linux/arm64 \
     --build-arg "BASE=$digest" \
-    --build-context "core=$repo/core/src/main/resources/io/github/est4s/terminal/core" \
     --output "type=tar,dest=$work/rootfs.tar" \
     "$repo/rootfs"
 # Docker's marker file, if any; meaningless outside a container.

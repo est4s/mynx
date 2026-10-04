@@ -33,8 +33,8 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
 | Terminal colours | `~/.config/pocket-terminal/colors.properties` |
-| Launcher menu | `/usr/local/bin/menu` |
-| File manager (nnn) | `/usr/local/bin/files` |
+| Launcher menu | `/opt/pocket-terminal/bin/menu` |
+| File manager (nnn) | `/opt/pocket-terminal/bin/files` |
 | Key bars above the keyboard | `~/.config/pocket-terminal/keybars/` |
 | Menu state (last choices, menu theme) | `~/.local/state/pocket-terminal/menu` |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
@@ -63,21 +63,21 @@ phone, through proot. The screen is narrow: about 56 columns in portrait.
   (more than fit go on pages: swipe sideways). Holding an arrow (or
   any button marked `Repeat`) repeats it. Which bar shows depends on
   what's running: `keybar NAME[,FALLBACK…] command…`
-  (`/usr/local/bin/keybar`) shows the first of those bars that exists
+  (`/opt/pocket-terminal/bin/keybar`) shows the first of those bars that exists
   while the command runs, then the previous one; with no command
   running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`.
   Built-in bars: `shell`, `nnn`, `menu`, the games' `neon-rogue`,
   `neon-drive`, `neon-flap`, and `game` for any other game. A file
   `~/.config/pocket-terminal/keybars/NAME.conf` replaces or adds one
   (format in "Key bar files" below).
-- **Games and key bars:** `play GAME [args]` (`/usr/local/bin/play`) runs
+- **Games and key bars:** `play GAME [args]` (`/opt/pocket-terminal/bin/play`) runs
   a game with the bar named after its file (`my-game.py` → `my-game`),
   else the generic `game` bar. `rogue`, `drive` and `flap` use it.
 - **Prompt hook:** the app sets `PROMPT_COMMAND` so it can reopen each
   tab in its folder after Android closes the app. If you change the
   prompt setup in `~/.bashrc`, keep whatever `PROMPT_COMMAND` the shell
   started with (starship keeps it on its own).
-- `/usr/local/bin/menu`, `files`, `keybar`, `play`, the game commands
+- `/opt/pocket-terminal/bin/menu`, `files`, `keybar`, `play`, the game commands
   and `/opt/neon-games` belong
   to the app and may be replaced by an app update; put your changes in
   your home folder.
@@ -103,7 +103,7 @@ update; don't change it.
 
 ## Key bar files
 
-The built-in bars are in `/usr/share/pocket-terminal/keybars/`. To
+The built-in bars are in `/opt/pocket-terminal/keybars/`. To
 change one, copy it to
 `~/.config/pocket-terminal/keybars/` and edit the copy; a new
 `NAME.conf` there adds a bar for `keybar NAME …`. Run `pocket check`

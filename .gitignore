@@ -12,3 +12,6 @@ app/src/main/assets/debian-rootfs.*
 app/src/main/assets/fonts/
 # Packed in CI by scripts/pack-tools.sh, never committed.
 app/src/main/assets/tools.tar.xz
+
+# Python bytecode from running the tools and their tests.
+__pycache__/

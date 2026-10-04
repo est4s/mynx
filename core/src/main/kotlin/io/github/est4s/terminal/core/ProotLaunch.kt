@@ -23,8 +23,8 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * proot tracks the folder itself, so the host can't see it in /proc.
  * [openMenu] has the shell open the launcher menu first. [keyBarFile] (a
  * Debian path) is where programs report the key bar they want.
- * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` on the
- * PATH. [requestDir] (a Debian path) is where `pocket` sends requests.
+ * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
+ * on the PATH. [requestDir] (a Debian path) is where `pocket` sends requests.
  */
 fun prootLaunch(
     paths: ProotPaths,
@@ -48,7 +48,7 @@ fun prootLaunch(
         toolsDir?.let { add("-b"); add("$it:$TOOLS_MOUNT") }
         // env -i: the shell must not inherit Android's environment (PATH, LD_*, ANDROID_*).
         addAll(listOf("/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8"))
-        add("PATH=$DEBIAN_PATH" + if (toolsDir != null) ":$TOOLS_MOUNT/bin" else "")
+        add("PATH=" + (if (toolsDir != null) "$TOOLS_MOUNT/bin:" else "") + DEBIAN_PATH)
         // Silent if the file can't be written (e.g. its folder was deleted).
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         // Root's .bashrc opens the launcher menu when this is set.

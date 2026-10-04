@@ -38,11 +38,11 @@ class ToolsInstaller(baseDir: File) {
 // Debian's /etc/profile sets root's PATH from scratch, dropping what the
 // app passed in, and then sources /etc/profile.d.
 private val TOOLS_PROFILE = """
-    |# Written by the app at every start: puts its tools (pocket, the
-    |# editors) on the PATH. Changes here are overwritten.
+    |# Written by the app at every start: puts its tools (pocket, menu,
+    |# the editors) first on the PATH. Changes here are overwritten.
     |case ":${'$'}PATH:" in
     |    *:$TOOLS_MOUNT/bin:*) ;;
-    |    *) PATH="${'$'}PATH:$TOOLS_MOUNT/bin" ;;
+    |    *) PATH="$TOOLS_MOUNT/bin:${'$'}PATH" ;;
     |esac
     |""".trimMargin()
 

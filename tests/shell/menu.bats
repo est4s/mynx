@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
-# The launcher menu (rootfs/bin/menu). Sourcing it loads the functions
+# The launcher menu (tools/bin/menu). Sourcing it loads the functions
 # without starting the menu; running it with MENU_DRYRUN=1 prints the
 # commands it would run instead of running them.
 
-MENU="$BATS_TEST_DIRNAME/../../rootfs/bin/menu"
+MENU="$BATS_TEST_DIRNAME/../../tools/bin/menu"
 
 setup() {
     export HOME="$BATS_TEST_TMPDIR/home"

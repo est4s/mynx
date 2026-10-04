@@ -127,7 +127,7 @@ class ProotLaunchTest {
 
         assertTrue("/data/files/tools:/opt/pocket-terminal" in argv.valuesAfter("-b"))
         val path = shellEnv.single { it.startsWith("PATH=") }.removePrefix("PATH=").split(':')
-        assertEquals("/opt/pocket-terminal/bin", path.last())
+        assertEquals("/opt/pocket-terminal/bin", path.first())
     }
 
     @Test

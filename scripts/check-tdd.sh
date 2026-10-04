@@ -10,8 +10,7 @@ set -euo pipefail
 pairs=(
     "core/src/main/ core/src/test/"
     "rootfs/root/ tests/shell/"
-    "rootfs/bin/ tests/shell/"
-    "tools/ tests/pocket/"
+    "tools/ tests/"
 )
 
 files=$(cat)

@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 # `keybar` (tells the app which key bar to show while a command runs) and
-# `files` (nnn set up for a phone screen), both in rootfs/bin/.
+# `files` (nnn set up for a phone screen), both in tools/bin/.
 
-BIN="$BATS_TEST_DIRNAME/../../rootfs/bin"
+BIN="$BATS_TEST_DIRNAME/../../tools/bin"
 
 setup() {
     export POCKET_KEYBAR_FILE="$BATS_TEST_TMPDIR/keybar"
