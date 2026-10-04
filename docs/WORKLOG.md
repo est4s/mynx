@@ -13,9 +13,13 @@ Newest entries first. Rules for keeping it up to date: see
   Debian), a customized Debian image (starship, eza, mc, nano, less,
   python3, the three games, no debconf warnings), the launcher menu on a
   fresh start, and agent docs in `/root`.
-- **Step 4 (*File manager*) in progress:** nnn as `files` plus a key
-  bar above the keyboard. 4.1 + 4.2 built, **waiting for the owner's
-  check (needs a data clear)**. See "Next".
+- **Roadmap step 4 (*File manager*) is done** and confirmed on the
+  phone: nnn as `files` (detail mode, bookmarks, nano for text) and an
+  always-visible two-row key bar above the keyboard that follows the
+  running program (`keybar NAME cmd`), with pages to swipe and
+  user-editable bar files.
+- **Next: roadmap step 5 (*In-app keyboard*)**, to plan with the owner;
+  it builds on the key bar. See "Next".
 - **Roadmap step 2 (*Tabs*) is done** and confirmed on the phone: tab
   strip, background service, activity/bell marks, exit rule, and tabs
   (with their folders and names) restored after Android kills the app.
@@ -87,8 +91,8 @@ Checks from the first round:
   back, run `files`: dialog, then a bar with only Quit. Delete the file.
 - opening a text file in nnn opens nano
 
-**4.3 Two-row key bar with pages. Built, not yet confirmed** (app only,
-no data clear needed). Owner checks:
+**4.3 Two-row key bar with pages. Done, owner confirmed ("works
+perfectly").** Checks the owner ran:
 - the bar is two rows: nnn `↑ ↓ Open Back Select Search` over `Copy Move
   Rename Delete Places Quit`; shell `Esc Tab Ctrl Files Menu` over
   `← ↓ ↑ →`; menu `↑ ↓ Select` over `Back Quit`
@@ -102,8 +106,25 @@ no data clear needed). Owner checks:
   file afterwards.
 - rotate to landscape: more buttons per row
 
-**Next after step 4:** roadmap step 5 (in-app keyboard), which builds on
-the key bar (`KeyBarView`, `core/KeyBar.kt`).
+### Roadmap step 5: In-app keyboard (plan with the owner first)
+
+**Goal (README "In-app keyboard"):** a terminal keyboard drawn by the
+app: terminal layout with Ctrl/Alt/Esc/Tab/arrows, shortcuts, a game
+mode (D-pad and buttons with real press and release), one key to switch
+to the system keyboard, customizable layouts/sizes/haptics/sounds.
+
+**Builds on step 4's key bar:** `core/KeyBar.kt` (key names, strokes,
+sticky Ctrl, bar files, `keyBarPages`), `app/KeyBarView.kt` (sending
+keys through `TerminalView.handleKeyCode()` / `inputCodePoint()`), and
+the per-tab `keybar` channel. Reuse its key model for layouts.
+
+**Decide with the owner:** whether the key bar becomes the keyboard's
+top row or stays separate; layout file format (likely an extension of
+the bar files); what game mode needs from the terminal (key release
+events don't exist in a terminal: games get repeated presses, so "hold"
+means auto-repeat unless a program opts in); default layout; how the
+switch to the system keyboard works. Also on the list from step 4: key
+repeat when holding a bar button.
 
 **Where things stand:** step 3 left a customized rootfs
 (`rootfs/Dockerfile`), the menu (`rootfs/bin/menu`), root's dotfiles and
@@ -194,7 +215,11 @@ in-app keyboard (step 5) can send these combos:
   bottom edge. nnn's bar gained ↑ ↓; built-in bars reordered so the
   halves make sense as rows.
 
-**Commits:** `4c11f36`, `796502a`, (4.3 pending)
+**Owner confirmed on the phone:** all 4.2 and 4.3 checks (two rows,
+↑ ↓ in nnn, no terminal resize on bar changes, pages with dots and
+swipe, landscape). **Step 4 done.**
+
+**Commits:** `4c11f36`, `796502a`, `d3ff5f1`
 
 ### 2026-10-03 (15): step 3.4, agent docs in the home folder
 
