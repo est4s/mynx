@@ -34,3 +34,26 @@ class ToolsInstaller(baseDir: File) {
         deleteTree(old)
     }
 }
+
+// Debian's /etc/profile sets root's PATH from scratch, dropping what the
+// app passed in, and then sources /etc/profile.d.
+private val TOOLS_PROFILE = """
+    |# Written by the app at every start: puts its tools (pocket, the
+    |# editors) on the PATH. Changes here are overwritten.
+    |case ":${'$'}PATH:" in
+    |    *:$TOOLS_MOUNT/bin:*) ;;
+    |    *) PATH="${'$'}PATH:$TOOLS_MOUNT/bin" ;;
+    |esac
+    |""".trimMargin()
+
+/**
+ * Writes `/etc/profile.d/pocket-terminal.sh` into [rootfs] unless it's
+ * already current. Apart from runtime files in /tmp, the only file the
+ * app writes in an installed Debian, and it's the app's own.
+ */
+fun writeToolsProfile(rootfs: File) {
+    val script = File(rootfs, "etc/profile.d/pocket-terminal.sh")
+    if (runCatching { script.readText() }.getOrNull() == TOOLS_PROFILE) return
+    script.parentFile.mkdirs()
+    script.writeText(TOOLS_PROFILE)
+}

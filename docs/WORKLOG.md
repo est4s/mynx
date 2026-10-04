@@ -233,6 +233,12 @@ on every setting. Plan in "Next".
   home-docs test fails if a `pocket` command isn't documented there),
   repo `AGENTS.md` (architecture, tests), README.
 
+**Bug found by the owner:** `pocket: command not found`. Debian's
+`/etc/profile` sets root's PATH from scratch, dropping the app's
+`/opt/pocket-terminal/bin` (the test only checked the env the app
+passes). Fix: the app writes `/etc/profile.d/pocket-terminal.sh` at
+start (tested by sourcing it with `sh`).
+
 **Decisions**
 - **App-owned tools live outside the rootfs** (mounted from the app's
   files), so they update with the app; the user's Debian is still never

@@ -137,8 +137,11 @@ See README "How it works". The details:
   Debian: CI packs them (`scripts/pack-tools.sh`) into
   `assets/tools.tar.xz`, and `TerminalService` unpacks them into
   `filesDir/tools` whenever the app version changes (`core/.../ToolsInstaller.kt`),
-  then proot mounts that folder at `/opt/pocket-terminal` with its `bin`
-  on the PATH. So fixes to them reach installed Debians without a
+  then proot mounts that folder at `/opt/pocket-terminal`. Its `bin` goes
+  on the PATH through `/etc/profile.d/pocket-terminal.sh`, which the app
+  rewrites at start (`writeToolsProfile()`): Debian's `/etc/profile`
+  resets root's PATH, so the PATH the app passes in doesn't survive a
+  login shell. So fixes to them reach installed Debians without a
   migration. Put new app-owned commands there, not in the rootfs.
 - **`pocket` ↔ app:** request files, no sockets. `pocket` writes
   `ID.req` (renamed into place) to `$POCKET_REQUESTS`

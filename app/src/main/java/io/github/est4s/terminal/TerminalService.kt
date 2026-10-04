@@ -29,6 +29,7 @@ import io.github.est4s.terminal.core.snapshot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
+import io.github.est4s.terminal.core.writeToolsProfile
 import java.io.File
 import java.util.WeakHashMap
 
@@ -87,8 +88,10 @@ class TerminalService : Service() {
     // Before any shell starts, so none runs old tools while they're replaced.
     private fun updateTools() {
         val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}"
-        toolsError = runCatching { tools.update(version) { assets.open(TOOLS_ASSET) } }
-            .exceptionOrNull()?.stackTraceToString()
+        toolsError = runCatching {
+            tools.update(version) { assets.open(TOOLS_ASSET) }
+            writeToolsProfile(File(rootfs))
+        }.exceptionOrNull()?.stackTraceToString()
     }
 
     @Suppress("DEPRECATION") // the File constructor needs API 29

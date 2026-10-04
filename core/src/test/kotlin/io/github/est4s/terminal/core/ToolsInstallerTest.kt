@@ -76,5 +76,39 @@ class ToolsInstallerTest {
         assertEquals("new", File(tools, "bin/pocket").readText())
     }
 
+    @Test
+    fun `puts the tools on the PATH of login shells, after Debian's profile resets it`() {
+        val rootfs = File(base, "debian").apply { mkdirs() }
+
+        writeToolsProfile(rootfs)
+
+        val script = File(rootfs, "etc/profile.d/pocket-terminal.sh")
+        assertEquals("/usr/bin:/bin:/opt/pocket-terminal/bin\n", sourced(script, "/usr/bin:/bin"))
+        // Sourcing it twice (a nested login shell) adds nothing.
+        assertEquals("/usr/bin:/opt/pocket-terminal/bin\n", sourced(script, "/usr/bin:/opt/pocket-terminal/bin"))
+    }
+
+    @Test
+    fun `rewrites the profile script only when it changed`() {
+        val rootfs = File(base, "debian").apply { mkdirs() }
+        writeToolsProfile(rootfs)
+        val script = File(rootfs, "etc/profile.d/pocket-terminal.sh")
+        script.setLastModified(1000)
+
+        writeToolsProfile(rootfs)
+        assertEquals(1000, script.lastModified())
+
+        script.writeText("stale")
+        writeToolsProfile(rootfs)
+        assertTrue("/opt/pocket-terminal/bin" in script.readText())
+    }
+
+    private fun sourced(script: File, path: String): String {
+        val process = ProcessBuilder("/bin/sh", "-c", ". \"$1\"; printf '%s\\n' \"\$PATH\"", "sh", script.path)
+            .apply { environment()["PATH"] = path }
+            .start()
+        return process.inputStream.bufferedReader().readText().also { process.waitFor() }
+    }
+
     private fun update(version: String, bytes: ByteArray) = installer.update(version) { ByteArrayInputStream(bytes) }
 }
