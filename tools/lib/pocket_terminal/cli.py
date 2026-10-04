@@ -3,6 +3,7 @@ import contextlib
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -391,7 +392,30 @@ def start_agent(agent):
     if not binary:
         raise Failure(f"can't find {agent.command} after installing it; open a new tab and run {agent.command}")
     sys.stdout.flush()
-    os.execv(binary, [agent.command])
+    bar_file = os.environ.get("POCKET_KEYBAR_FILE")
+    if not bar_file:
+        os.execv(binary, [agent.command])
+    # Like the keybar command: the agent's bar (else the generic one) while
+    # it runs, then the bar from before.
+    try:
+        with open(bar_file) as f:
+            before = f.read()
+    except OSError:
+        before = ""
+    write_quietly(bar_file, f"{agent.name},agent")
+    signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl+C is for the agent
+    try:
+        return subprocess.run([agent.command], executable=binary).returncode
+    finally:
+        write_quietly(bar_file, before)
+
+
+def write_quietly(path, text):
+    try:
+        with open(path, "w") as f:
+            f.write(text)
+    except OSError:
+        pass
 
 
 def folder_size(path):

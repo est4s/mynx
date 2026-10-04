@@ -391,14 +391,15 @@ readkey() { # sets KEY to up/down/enter/back/quit/<digit>/tick/other
 show() { # show <menu> <breadcrumb>
   local name=$1 crumb="$2 › ${TITLE[$1]}" sel=${ST[sel_$1]:-0} n drawn= act
   [[ $name == main ]] && crumb=${TITLE[main]}
-  menu_items "$name"; n=${#ITEMS[@]}
-  ((sel < n)) || sel=0
   while :; do
     term_cols
     update_status && drawn=
     if [[ $drawn != "$sel:$COLS" ]]; then
-      menu_items "$name"; n=${#ITEMS[@]}
-      ((sel < n)) || sel=0
+      # Items only on a full redraw: some menus ask pocket (slow) for them.
+      if [[ -z $drawn ]]; then
+        menu_items "$name"; n=${#ITEMS[@]}
+        ((sel < n)) || sel=0
+      fi
       cursor_hide
       draw "$name" "$sel" "$crumb"
       drawn=$sel:$COLS

@@ -284,6 +284,7 @@ class KeyBarView(
         var mod = 0
         if (ctrl) mod = mod or KeyHandler.KEYMOD_CTRL
         if (key.alt) mod = mod or KeyHandler.KEYMOD_ALT
+        if (key.shift) mod = mod or KeyHandler.KEYMOD_SHIFT
         // The library has no sequence for a plain Space; type it instead.
         if (!terminalView.handleKeyCode(code, mod) && key.key == "Space") {
             terminalView.inputCodePoint(' '.code, ctrl, key.alt)

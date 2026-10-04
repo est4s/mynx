@@ -226,7 +226,9 @@ running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`,
 the editors use `pocket-edit`.
 
 Built-in bars: `shell`, `nnn`, `menu`, `pocket-edit`, the games'
-`neon-rogue`, `neon-drive`, `neon-flap`, and `game` for any other game.
+`neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, and
+`agent` for AI agents started with `pocket agent start` (an agent's own
+bar, e.g. `claude`, wins when it exists).
 A file `~/.config/pocket-terminal/keybars/NAME.conf` replaces or adds
 one. To change a built-in bar: `pocket keybar edit NAME`, edit the copy,
 `pocket check`. Buttons fill two rows in file order, the first half on
@@ -243,7 +245,7 @@ Ctrl   = Ctrl
 - Key names (any case): Enter Esc Tab Space Backspace Delete Insert Up
   Down Left Right Home End PgUp PgDn F1-F12.
 - Any single character is a key: `l`, `/`, `=`.
-- Modifiers: `Ctrl+R`, `Alt+Left`, `Ctrl+Alt+Delete`.
+- Modifiers: `Ctrl+R`, `Alt+Left`, `Shift+Tab`, `Ctrl+Alt+Delete` (Shift: named keys only).
 - `"text"` is typed as is (`\"` for a quote).
 - `Ctrl` on its own is a sticky Ctrl for the next key typed.
 - `Repeat` anywhere on the line: the button repeats while held. Arrows,

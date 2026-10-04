@@ -52,6 +52,15 @@ class KeyBarTest {
     }
 
     @Test
+    fun `Shift goes with named keys, like Shift+Tab`() {
+        val parsed = parseKeyBar("Mode = Shift+Tab ctrl+shift+up\nBig = Shift+a")
+
+        assertEquals(listOf(Key("Tab", shift = true), Key("Up", ctrl = true, shift = true)),
+            parsed.buttons.single().strokes)
+        assertEquals(listOf("line 2: Shift only goes with named keys; type 'A' for a capital"), parsed.problems)
+    }
+
+    @Test
     fun `knows the keys a terminal needs`() {
         val names = "Enter Esc Tab Space Backspace Delete Insert Up Down Left Right Home End PgUp PgDn " +
             (1..12).joinToString(" ") { "F$it" }

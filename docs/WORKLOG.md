@@ -90,6 +90,13 @@ phone:
 - Installing Claude Code shows `Downloading Claude Code: N MB` growing
   instead of a silent minute (its installer downloads ~200 MB quietly);
   the line clears before "Setting up Claude Code...".
+- Menu → AI agents: ↑/↓ react at once (the list is read once, not on
+  every key).
+- An agent started from the menu (or `pocket agent start`) gets the
+  `agent` key bar: Esc, Ctrl+C, Mode (Shift+Tab: Claude Code's permission
+  modes), Tab, Newline (Ctrl+J: a new line in the prompt), /, arrows.
+  Leaving the agent brings the menu bar back. `claude` typed in the
+  shell still shows the shell bar (only `pocket agent start` switches).
 - Links: `echo https://example.com`, tap the link → the browser opens.
   `pocket open https://example.com` too. In `claude`, `/login` should
   open the browser by itself (`BROWSER` → `xdg-open`); if not, tapping

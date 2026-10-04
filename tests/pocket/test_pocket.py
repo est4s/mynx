@@ -519,6 +519,18 @@ class PocketTest(unittest.TestCase):
         run = self.agent("start", "claude", path=path)
         self.assertEqual((run.returncode, run.stdout), (0, "CLAUDE STARTED \n"))
 
+    def test_agent_start_shows_the_agents_key_bar_then_puts_the_old_one_back(self):
+        bar_file = os.path.join(self.tmp.name, "keybar")
+        self.write(bar_file, "menu")
+        path = self.fake_commands(claude=f'echo "BAR $(cat {bar_file})"; exit 3')
+        environ = {"PATH": path, "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1", "POCKET_KEYBAR_FILE": bar_file}
+        run = subprocess.run(["python3", POCKET, "agent", "start", "claude"], capture_output=True,
+                             text=True, env=environ)
+        self.assertEqual((run.returncode, run.stdout), (3, "BAR claude,agent\n"))
+        with open(bar_file) as f:
+            self.assertEqual(f.read(), "menu")
+
     def test_agent_start_offers_to_install_a_missing_agent_then_starts_it(self):
         local_bin = os.path.join(self.home, ".local", "bin")
         installer = (f'mkdir -p {local_bin}; printf "#!/bin/sh\\necho CLAUDE STARTED\\n" >{local_bin}/claude; '

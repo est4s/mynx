@@ -170,6 +170,14 @@ fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
     [[ $output == *"RUN: pocket agent start codex"* ]]
 }
 
+@test "moving through AI agents doesn't ask pocket again on each key" {
+    fake_pocket
+    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pocket"
+    run keys 5jjjkqq
+    [ "$status" -eq 0 ]
+    [ "$(wc -l <"$BATS_TEST_TMPDIR/calls")" -eq 1 ]
+}
+
 @test "AI agents without a working pocket says so" {
     export PATH="$BATS_TEST_TMPDIR/empty:/usr/bin:/bin"
     source "$MENU"
