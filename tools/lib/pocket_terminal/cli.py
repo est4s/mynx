@@ -1,10 +1,12 @@
 """The `pocket` command. `pocket help` lists the commands."""
+import contextlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 from . import agents
@@ -392,6 +394,48 @@ def start_agent(agent):
     os.execv(binary, [agent.command])
 
 
+def folder_size(path):
+    total = 0
+    for root, _, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass  # removed while we looked
+    return total
+
+
+@contextlib.contextmanager
+def watch_download(agent, every=0.5):
+    """Shows how much of [agent]'s silent download has arrived."""
+    if not agent.downloads:
+        yield
+        return
+    folder = os.path.expanduser(agent.downloads)
+    done = threading.Event()
+
+    def watch():
+        before, showing = folder_size(folder), False
+        while not done.wait(every):
+            size = folder_size(folder)
+            text, showing = agents.download_progress(agent.title, before, size, showing)
+            before = size
+            if text:
+                sys.stdout.write(text)
+                sys.stdout.flush()
+        if showing:
+            sys.stdout.write("\r\x1b[K")
+            sys.stdout.flush()
+
+    thread = threading.Thread(target=watch, daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        done.set()
+        thread.join()
+
+
 def install_agent(agent, yes, notify, then=None):
     steps = agents.install_steps(agent, curl=bool(shutil.which("curl")), node=node_major())
     print(f"Installing {agent.title} with its official installer runs:\n")
@@ -404,7 +448,8 @@ def install_agent(agent, yes, notify, then=None):
     for step in steps:
         sys.stdout.flush()
         # pipefail: a failed download in "curl … | bash" must fail the step
-        code = subprocess.run(["bash", "-o", "pipefail", "-c", step]).returncode
+        with watch_download(agent):
+            code = subprocess.run(["bash", "-o", "pipefail", "-c", step]).returncode
         if code != 0:
             raise Failure(f"'{step}' failed (exit {code}); nothing else was run")
     print()

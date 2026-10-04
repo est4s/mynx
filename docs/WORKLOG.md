@@ -87,6 +87,9 @@ phone:
 - `pocket edit` → "Undo last change" asks, then undoes.
 - Menu → AI agents: Claude Code starts it; "Codex (install)" offers to
   install, then to start it.
+- Installing Claude Code shows `Downloading Claude Code: N MB` growing
+  instead of a silent minute (its installer downloads ~200 MB quietly);
+  the line clears before "Setting up Claude Code...".
 - Links: `echo https://example.com`, tap the link → the browser opens.
   `pocket open https://example.com` too. In `claude`, `/login` should
   open the browser by itself (`BROWSER` → `xdg-open`); if not, tapping

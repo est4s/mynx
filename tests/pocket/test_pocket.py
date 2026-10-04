@@ -476,6 +476,16 @@ class PocketTest(unittest.TestCase):
         self.assertIn("notifications", run.stdout)
         self.assertIn("Stop", self.claude_settings()["hooks"])
 
+    def test_agent_install_shows_the_silent_download_growing(self):
+        installer = ('d=$HOME/.claude/downloads; mkdir -p $d; '
+                     'head -c 2000000 /dev/zero > $d/claude; sleep 1; '
+                     'head -c 5000000 /dev/zero > $d/claude; sleep 1; echo Setting up')
+        path = self.fake_commands(curl=f"echo '{installer}'")
+        run = self.agent("install", "claude", "--yes", "--no-notify", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("Downloading Claude Code: 5 MB", run.stdout)
+        self.assertIn("\x1b[KSetting up", run.stdout)  # text mode reads "\r" as "\n"
+
     def test_agent_install_without_questions(self):
         path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
         run = self.agent("install", "claude", "--yes", "--no-notify", path=path)

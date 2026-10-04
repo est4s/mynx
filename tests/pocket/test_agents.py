@@ -7,7 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
 
-from pocket_terminal.agents import AGENTS, add_hooks, has_hooks, install_steps, remove_hooks  # noqa: E402
+from pocket_terminal.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,  # noqa: E402
+                                    remove_hooks)
 from pocket_terminal.client import Failure  # noqa: E402
 
 CLAUDE = AGENTS["claude"]
@@ -94,6 +95,29 @@ class InstallStepsTest(unittest.TestCase):
             self.assertEqual(install_steps(AGENTS["gemini"], curl=True, node=node),
                              ["apt-get update && apt-get install -y nodejs npm",
                               "npm install -g @google/gemini-cli"])
+
+
+class DownloadProgressTest(unittest.TestCase):
+    """The official installers download silently; pocket shows what has arrived."""
+
+    def test_shows_the_size_while_it_grows(self):
+        self.assertEqual(download_progress("Claude Code", 0, 87_400_000, showing=False),
+                         ("\r\x1b[K  Downloading Claude Code: 87 MB", True))
+        self.assertEqual(download_progress("Claude Code", 87_400_000, 120_000_000, showing=True),
+                         ("\r\x1b[K  Downloading Claude Code: 120 MB", True))
+
+    def test_clears_the_line_when_it_stops_growing(self):
+        # So the installer's own output starts on a clean line.
+        self.assertEqual(download_progress("Claude Code", 5, 5, showing=True), ("\r\x1b[K", False))
+        self.assertEqual(download_progress("Claude Code", 5, 0, showing=True), ("\r\x1b[K", False))
+
+    def test_says_nothing_before_anything_arrives(self):
+        self.assertEqual(download_progress("Claude Code", 0, 0, showing=False), ("", False))
+        self.assertEqual(download_progress("Claude Code", 5, 5, showing=False), ("", False))
+
+    def test_claude_downloads_into_its_own_folder(self):
+        self.assertEqual(AGENTS["claude"].downloads, "~/.claude/downloads")
+        self.assertIsNone(AGENTS["codex"].downloads)
 
 
 if __name__ == "__main__":

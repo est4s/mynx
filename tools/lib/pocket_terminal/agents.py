@@ -12,12 +12,13 @@ from collections import namedtuple
 from .client import TOOLS, Failure
 
 # events: the agent's hook event -> what it means for `pocket hook`
-Agent = namedtuple("Agent", "name title command config events installer")
+# downloads: where its installer downloads silently (None: it shows progress)
+Agent = namedtuple("Agent", "name title command config events installer downloads", defaults=[None])
 
 AGENTS = {
     "claude": Agent("claude", "Claude Code", "claude", "~/.claude/settings.json",
                     {"UserPromptSubmit": "start", "Stop": "stop", "Notification": "attention"},
-                    "curl -fsSL https://claude.ai/install.sh | bash"),
+                    "curl -fsSL https://claude.ai/install.sh | bash", "~/.claude/downloads"),
     "codex": Agent("codex", "Codex", "codex", "~/.codex/hooks.json",
                    {"UserPromptSubmit": "start", "Stop": "stop", "PermissionRequest": "attention"},
                    "curl -fsSL https://chatgpt.com/codex/install.sh | sh"),
@@ -37,6 +38,15 @@ def install_steps(agent, curl, node):
     if agent.installer.startswith("npm "):
         return ([] if node is not None and node >= MIN_NODE else [GET_NODE]) + [agent.installer]
     return ([] if curl else [GET_CURL]) + [agent.installer]
+
+
+def download_progress(title, before, size, showing):
+    """What to write after the download folder went from [before] to [size]
+    bytes, and whether a progress line shows then. The line is cleared as
+    soon as the download stops growing, before the installer talks again."""
+    if size > before:
+        return f"\r\x1b[K  Downloading {title}: {size // 1_000_000} MB", True
+    return ("\r\x1b[K" if showing else ""), False
 
 
 def hook_command(agent):
