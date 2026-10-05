@@ -17,6 +17,8 @@ data class Settings(
     val androidClipboard: Boolean = true,
     /** Whether programs in Debian may open Android's share sheet. */
     val androidShare: Boolean = true,
+    /** Whether programs in Debian may ask for the phone's location. */
+    val androidLocation: Boolean = true,
     /** Where files shared to the app from other apps go, in Debian. */
     val shareFolder: String = "~/Shared",
 ) {
@@ -30,6 +32,7 @@ data class Settings(
         "undo-keep" to undoKeep.toString(),
         "android-clipboard" to if (androidClipboard) "on" else "off",
         "android-share" to if (androidShare) "on" else "off",
+        "android-location" to if (androidLocation) "on" else "off",
         "share-folder" to shareFolder,
     )
 }
@@ -111,6 +114,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("android-share", listOf("on", "off")),
         { copy(androidShare = it == "on") },
+    ),
+    SettingDef(
+        "android-location", "Whether programs in Debian can ask for the phone's location (pocket location).",
+        "on", listOf("on", "off"),
+        oneOf("android-location", listOf("on", "off")),
+        { copy(androidLocation = it == "on") },
     ),
     SettingDef(
         "share-folder", "Where files shared to the app from other apps are saved: a full path or one starting with ~/.",

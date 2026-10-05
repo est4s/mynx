@@ -432,7 +432,7 @@ private fun problemsJson(found: List<ConfigProblems>) = array(found.map {
 
 internal fun ok(vararg fields: Pair<String, String>) = obj("ok" to "true", *fields)
 
-private fun obj(vararg fields: Pair<String, String>) =
+internal fun obj(vararg fields: Pair<String, String>) =
     fields.joinToString(",", "{", "}") { (key, value) -> "${json(key)}:$value" }
 
 private fun array(items: List<String>) = items.joinToString(",", "[", "]")

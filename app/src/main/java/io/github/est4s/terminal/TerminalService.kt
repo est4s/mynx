@@ -24,6 +24,7 @@ import android.os.VibratorManager
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Notice
+import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.PocketRequests
 import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
@@ -97,8 +98,20 @@ class TerminalService : Service() {
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share,
+            later = locationRequests(File(rootfs, "root"), locator::locate),
         )
     }
+    private val locator by lazy {
+        Locator(
+            this, mainHandler,
+            onScreen = { activity?.onScreen == true },
+            askPermission = { answer -> activity?.takeIf { it.onScreen }?.askForLocation(answer) != null },
+            locatingChanged = ::setLocating,
+        )
+    }
+    // Whether the foreground service has the location type: only while
+    // something is locating, so a stream keeps going in the background.
+    private var locating = false
     private val sweep = Runnable { sweepRequests() }
     // The POCKET_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
@@ -197,6 +210,7 @@ class TerminalService : Service() {
     override fun onDestroy() {
         requestWatcher?.stopWatching()
         mainHandler.removeCallbacks(sweep)
+        locator.stopAll()
         killAll()
         super.onDestroy()
     }
@@ -461,10 +475,19 @@ class TerminalService : Service() {
     private fun goForeground() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            val location = if (locating) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or location)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+    }
+
+    // Locating starts on screen, where Android allows adding the location
+    // type; dropping it may happen in the background. Before API 34 the
+    // service has every type in the manifest anyway.
+    private fun setLocating(on: Boolean) {
+        locating = on
+        if (Build.VERSION.SDK_INT >= 34) runCatching { goForeground() }
     }
 
     // Tab count changes can happen in the background, so update the

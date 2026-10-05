@@ -90,6 +90,7 @@ their own.
 | `pocket clipboard set [TEXT]` | copy TEXT to the phone's clipboard, or stdin when there's no TEXT |
 | `pocket share FILE…` | send files to another app through Android's share sheet (the app must be on screen) |
 | `pocket share --text [TEXT]` | send TEXT, or stdin when there's no TEXT, to another app |
+| `pocket location` | where the phone is: one fix; `--stream` keeps printing them (see "The phone") |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -132,6 +133,8 @@ One `key = value` per line; `pocket settings` describes each.
   can read and change the phone's clipboard (see "The phone").
 - `android-share`: `on` (default) or `off`: whether programs here can
   open Android's share sheet (`pocket share`).
+- `android-location`: `on` (default) or `off`: whether programs here
+  can ask for the phone's location (`pocket location`).
 - `share-folder`: where files other apps share to this app are saved,
   a full path or one starting with `~/` (default `~/Shared`).
 
@@ -184,8 +187,7 @@ it too, even one spread over several rows.
 
 ### The phone
 
-Commands for the phone itself (more are coming: location,
-sensors, camera):
+Commands for the phone itself (more are coming: sensors, camera):
 
 - `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
 - `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
@@ -198,6 +200,18 @@ sensors, camera):
   another app (mail, chat, …): `pocket share report.pdf photo.jpg`.
   `pocket share --text TEXT` sends text, or what's piped in. The app
   must be on screen. `android-share off` blocks it.
+- `pocket location` prints one fix: `60.1695213, 24.9354471 ±12 m
+  network 08:41:02` (latitude, longitude, accuracy, where it came
+  from, time). It takes the first fix from GPS or the network;
+  `--gps` waits for GPS only. It gives up after 60 s (`--timeout
+  SECONDS`, up to 300). `--stream` prints a fix about every 5 s
+  (`--every SECONDS`) until Ctrl+C. `--json` gives `latitude`,
+  `longitude`, `accuracy`, `altitude`, `speed`, `bearing` (null when
+  unknown), `provider` and `time` (ms since 1970); with `--stream`,
+  one object per line. The first time, Android asks to allow location
+  (only while the app is in use), so the app must be on screen to
+  start it; a stream keeps going in the background. `android-location
+  off` blocks it.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved

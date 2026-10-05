@@ -5,6 +5,7 @@ Run: python3 -m unittest discover -s tests/pocket
 import json
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
@@ -23,6 +24,7 @@ class FakeApp:
         self.seen = []  # request names
         self.requests = []  # [name, *args]
         self.stop = threading.Event()
+        self.cancelled = False
         self.thread = threading.Thread(target=self.run, daemon=True)
 
     def run(self):
@@ -40,11 +42,28 @@ class FakeApp:
                 if callable(answer):
                     answer = answer(*lines[1:])
                 reply = os.path.join(self.folder, name[:-4] + ".reply")
+                if "_lines" in answer:
+                    answer = self.stream(path[:-4], answer)
                 with open(reply + ".tmp", "w") as f:
                     json.dump(answer, f)
                 os.rename(reply + ".tmp", reply)
                 os.remove(path)
             time.sleep(0.01)
+
+
+    def stream(self, base, answer):
+        """A stream: the readings in "_lines", then the answer, or with
+        "_hold" no answer until pocket cancels it."""
+        with open(base + ".wait", "w") as f:
+            f.write("stream")
+        with open(base + ".stream", "a") as f:
+            f.writelines(json.dumps(line) + "\n" for line in answer["_lines"])
+        if answer.get("_hold"):
+            while not os.path.exists(base + ".cancel") and not self.stop.is_set():
+                time.sleep(0.01)
+            self.cancelled = True
+            return {"ok": True}
+        return {k: v for k, v in answer.items() if not k.startswith("_")}
 
 
 class PocketTest(unittest.TestCase):
@@ -691,6 +710,67 @@ class PocketTest(unittest.TestCase):
             run = self.pocket(*args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: pocket clipboard get | set [TEXT]", run.stderr)
+
+    # --- location -----------------------------------------------------------
+
+    FIX = {"latitude": 60.1695213, "longitude": 24.9354471, "accuracy": 12.3, "altitude": 21, "speed": None,
+           "bearing": None, "provider": "network", "time": 1791177403145}
+
+    def test_location_prints_one_fix(self):
+        self.start_app({"location": {"ok": True, "location": self.FIX}})
+        run = self.pocket("location", env={"TZ": "UTC"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "60.1695213, 24.9354471 ±12 m network 05:16:43\n")
+        self.assertEqual(self.app.requests, [["location"]])
+        run = self.pocket("location", "--json")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "location": self.FIX})
+
+    def test_location_leaves_out_an_unknown_accuracy(self):
+        self.start_app({"location": {"ok": True, "location": dict(self.FIX, accuracy=None)}})
+        self.assertEqual(self.pocket("location", env={"TZ": "UTC"}).stdout, "60.1695213, 24.9354471 network 05:16:43\n")
+
+    def test_location_options(self):
+        self.start_app({"location": {"ok": True, "location": self.FIX},
+                        "location-stream": {"ok": True, "_lines": []}})
+        self.assertEqual(self.pocket("location", "--gps", "--timeout", "120").returncode, 0)
+        self.assertEqual(self.pocket("location", "--stream", "--every", "2", "--gps").returncode, 0)
+        self.assertEqual(self.app.requests, [["location", "gps", "timeout=120"],
+                                             ["location-stream", "interval=2", "gps"]])
+
+    def test_location_stream_prints_a_line_per_fix(self):
+        second = dict(self.FIX, provider="gps", time=1791177408145)
+        self.start_app({"location-stream": {"ok": True, "_lines": [self.FIX, second]}})
+        run = self.pocket("location", "--stream", env={"TZ": "UTC"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "60.1695213, 24.9354471 ±12 m network 05:16:43\n"
+                                     "60.1695213, 24.9354471 ±12 m gps 05:16:48\n")
+        run = self.pocket("location", "--stream", "--json")
+        self.assertEqual([json.loads(line) for line in run.stdout.splitlines()], [self.FIX, second])
+
+    def test_location_stream_stops_quietly_on_ctrl_c(self):
+        self.start_app({"location-stream": {"ok": True, "_lines": [self.FIX], "_hold": True}})
+        environ = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
+        proc = subprocess.Popen(["python3", POCKET, "location", "--stream"], env=environ, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertIn("network", proc.stdout.readline())
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, err), (0, ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_location_says_why_there_is_no_fix(self):
+        self.start_app({"location": {"ok": False, "error": "no fix within 60 s"}})
+        run = self.pocket("location")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "pocket: no fix within 60 s\n")
+
+    def test_location_usage(self):
+        usage = "usage: pocket location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
+        for args in [("--fast",), ("--timeout",), ("--every", "2"), ("--stream", "--timeout", "5"), ("x",)]:
+            run = self.pocket("location", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn(usage, run.stderr, args)
 
     # --- share --------------------------------------------------------------
 

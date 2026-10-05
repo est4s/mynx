@@ -34,6 +34,7 @@ Commands:
   vibrate    vibrate [MS]: vibrate the phone (300 ms unless given)
   clipboard  clipboard get | set [TEXT]: the phone's clipboard
   share      share FILE... | --text [TEXT]: send to another app
+  location   location [--gps] [--stream]: where the phone is
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -273,6 +274,49 @@ def cmd_share(args, as_json):
     count = answer["count"]
     out(as_json, answer, f"Sharing {count} file{'' if count == 1 else 's'}: pick an app on the phone")
     return 0
+
+
+LOCATION_USAGE = "usage: pocket location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
+
+
+def cmd_location(args, as_json):
+    options, stream = [], False
+    rest = list(args)
+    while rest:
+        arg = rest.pop(0)
+        if arg == "--gps":
+            options.append("gps")
+        elif arg == "--stream":
+            stream = True
+        elif arg in ("--timeout", "--every") and rest:
+            options.append(f"{'timeout' if arg == '--timeout' else 'interval'}={rest.pop(0)}")
+        else:
+            raise Usage(LOCATION_USAGE)
+    # A stream never ends on its own; one fix has no interval.
+    if any(o.startswith("timeout=" if stream else "interval=") for o in options):
+        raise Usage(LOCATION_USAGE)
+    if not stream:
+        answer = request("location", *options)
+        out(as_json, answer, fix_text(answer["location"]))
+        return 0
+
+    def show(fix):
+        print(json.dumps(fix) if as_json else fix_text(fix), flush=True)
+
+    try:
+        request("location-stream", *options, on_line=show)
+    except KeyboardInterrupt:
+        pass
+    except BrokenPipeError:
+        # The reader went away (| head): nothing more to say.
+        sys.stdout = open(os.devnull, "w")
+    return 0
+
+
+def fix_text(fix):
+    accuracy = f" ±{round(fix['accuracy'])} m" if fix.get("accuracy") is not None else ""
+    when = time.strftime("%H:%M:%S", time.localtime(fix["time"] / 1000))
+    return f"{fix['latitude']}, {fix['longitude']}{accuracy} {fix['provider']} {when}"
 
 
 # Not in HELP: for installing builds of the app while developing it. Only
@@ -615,6 +659,7 @@ COMMANDS = {
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
+    "location": cmd_location,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

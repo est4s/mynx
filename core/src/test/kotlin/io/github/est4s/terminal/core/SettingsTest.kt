@@ -61,7 +61,7 @@ class SettingsTest {
     fun `every setting is described, with its default`() {
         assertEquals(
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
-                "android-clipboard", "android-share", "share-folder"),
+                "android-clipboard", "android-share", "android-location", "share-folder"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -75,10 +75,11 @@ class SettingsTest {
             mapOf(
                 "font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on",
                 "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
-                "android-clipboard" to "off", "android-share" to "off", "share-folder" to "/srv/in",
+                "android-clipboard" to "off", "android-share" to "off", "android-location" to "off",
+                "share-folder" to "/srv/in",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
-                androidClipboard = false, androidShare = false, shareFolder = "/srv/in").values(),
+                androidClipboard = false, androidShare = false, androidLocation = false, shareFolder = "/srv/in").values(),
         )
     }
 
@@ -166,6 +167,14 @@ class SettingsTest {
         val parsed = parseSettings("android-share = off\nandroid-share = yes\n")
         assertFalse(parsed.settings.androidShare)
         assertEquals(listOf("line 2: android-share must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `location is on by default and can be turned off`() {
+        assertTrue(Settings().androidLocation)
+        val parsed = parseSettings("android-location = off\nandroid-location = gps\n")
+        assertFalse(parsed.settings.androidLocation)
+        assertEquals(listOf("line 2: android-location must be one of: on, off"), parsed.problems)
     }
 
     @Test

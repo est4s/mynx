@@ -13,7 +13,8 @@ Newest entries first. Rules for keeping it up to date: see
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
-  (2026-10-05). Next is 9.3 (location).
+  (2026-10-05). **9.3 (location) is built** (entry 32) and waits for
+  the owner's test.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -59,9 +60,9 @@ Newest entries first. Rules for keeping it up to date: see
 - **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
   tools installers, tabs, key bars, colours/themes, settings, config
   check, `pocket` requests, undo, links, waiting and streaming
-  requests, sharing; 240 tests), `app/` (thin Android layer),
+  requests, sharing, location; 271 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 126 unittest tests incl. editors driven in a pty),
+  the agent guide; 139 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
   tests).
 
@@ -76,7 +77,30 @@ owner test after each part.
 
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
-**Build 9.3 (location) next.**
+**9.3 (location) is built** (entry 32): run `scripts/deliver.sh`, then
+go through this with the owner (the agent runs the commands, the
+owner says what the phone shows):
+1. `pocket location` with the app on screen: Android asks to allow
+   location (while using the app / only this time / don't allow, and
+   precise or approximate). Allow precise: a line like
+   `60.16, 24.93 ±12 m network 08:41:02` within a few seconds.
+2. `pocket location --json`; `pocket location --gps` near a window:
+   provider `gps` (or "no fix within 60 s" indoors: that's right).
+3. `pocket location --stream --every 2 > ~/loc.txt` in one tab;
+   leave the app for a minute, come back, Ctrl+C: the times in
+   `~/loc.txt` kept going while away. The service notification still
+   says terminals are running (Android may show a location icon).
+4. `pocket location --stream | head -3`: ends after 3 lines, no error.
+5. `pocket set android-location off`: refused with the setting's
+   name; set it back on.
+6. Phone location off in quick settings: "location is off on the
+   phone"; turn it back on.
+7. `sleep 10; pocket location`, leave the app before it runs: "the app
+   must be on screen to start".
+8. In the app's Android settings switch to approximate: plain
+   `pocket location` works (network), `--gps` says it needs precise.
+   Deny entirely: "location wasn't allowed …".
+**Then build 9.4 (sensors).**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -238,6 +262,41 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (32): step 9.3, location
+
+**Done**
+- `pocket location [--gps] [--timeout S]` and `--stream [--every S]`
+  (plain line or `--json`; a stream prints one line per fix, Ctrl+C or
+  a closed pipe stops it quietly). Core (`Location.kt`,
+  `LocationRequestTest`, `LocationProvidersTest`): the `location`
+  request (wait 300 s, the app gives up after the timeout: 60 s
+  default, 1-300) and `location-stream` (interval 5 s default,
+  1-3600); option checks; `locationProviders()` picks `gps`/`network`
+  from the permissions, the location switch and the providers, or
+  says why not; `fixJson()` (7 decimals for degrees, 1 for the rest,
+  null for unknown). New setting `android-location` (on).
+- App: `Locator` (LocationManager, main thread; one-off fixes stop at
+  the first fix from any provider), the permission dialog through
+  `MainActivity.askForLocation()` (queued answers; refused if the app
+  is off screen), manifest permissions (coarse, fine,
+  `FOREGROUND_SERVICE_LOCATION`) and the service's `location`
+  foreground type, added while something is locating.
+- Guide: command, setting, "The phone" text. Repo guide: Location.
+
+**Decisions**
+- Owner: accept whichever fix comes first; `--gps` insists on GPS.
+- Agent's choices: no last-known location (always a fresh fix);
+  locating must *start* with the app on screen (Android gives "while
+  in use" location only then, or to a service already locating in the
+  foreground), so a second request while a stream runs works in the
+  background. `obj()` in PocketRequests.kt is now internal, for
+  `fixJson`.
+
+**Not checked:** the app module builds only in CI; on the phone see
+"Next". One full run of the pocket and bats suites had a failure each
+(bats in `shell-setup.bats` line 33) while both ran at once; neither
+came back when re-run, so it looked like load, not a bug.
 
 ### 2026-10-05 (31): 9.2 confirmed on the phone
 

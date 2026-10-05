@@ -182,6 +182,15 @@ See README "How it works". The details:
   open, which also stops those whose `pocket` process (the number
   before `-` in the id) has gone. Values with line breaks (clipboard
   text) are sent percent-encoded.
+- **Location** (`core/.../Location.kt`, `app/.../Locator.kt`):
+  `locationRequests()` gives the `location` and `location-stream`
+  [Later] requests; core parses options, picks providers from what
+  Android allows (`locationProviders`) and writes fixes as JSON.
+  `Locator` listens to LocationManager (GPS and network, first fix
+  wins). Only "while in use" permission, asked through the activity,
+  so locating must start on screen; while anything locates, the
+  service adds the `location` foreground type (API 34+) so a stream
+  keeps going in the background.
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only
