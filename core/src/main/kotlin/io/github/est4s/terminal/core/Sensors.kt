@@ -108,16 +108,19 @@ fun sensorRequests(
             return@Later
         }
         if (!on(reply)) return@Later
-        val minGap = 800.0 / query.rateHz
-        var last: Long? = null
+        val period = 1000.0 / query.rateHz
+        var due: Double? = null
         read(query, object : SensorReport {
             @Synchronized
             override fun reading(reading: SensorReading) {
                 val json = readingJson(query.kind, reading)
                 if (!stream) return reply.ok("reading" to json)
-                // Android often sends more often than asked.
-                if (last.let { it != null && reading.time - it < minGap }) return
-                last = reading.time
+                // Android often sends more often than asked, and not evenly: take
+                // a reading up to a fifth of a period early, but keep to the
+                // schedule so the average is the asked rate.
+                val next = due
+                if (next != null && reading.time < next - period / 5) return
+                due = if (next == null || reading.time - next >= period) reading.time + period else next + period
                 reply.line(json)
             }
 

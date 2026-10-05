@@ -119,6 +119,17 @@ class SensorRequestTest {
     }
 
     @Test
+    fun `a stream keeps the asked rate on average when Android sends a bit more often`() {
+        send("7-1", "sensor-stream", "accelerometer", "rate=1")
+        val report = asked.single().second
+        (0L..4000L step 200).forEach { report.reading(SensorReading(listOf(0f, 0f, 0f), 3, it)) }
+        assertEquals(
+            listOf(0L, 800L, 1800L, 2800L, 3800L),
+            file("7-1.stream").readLines().map { it.substringAfter("\"time\":").trimEnd('}').toLong() },
+        )
+    }
+
+    @Test
     fun `values Android leaves out are left out, extra ones dropped`() {
         send("7-1", "sensor", "rotation-vector")
         asked.single().second.reading(SensorReading(listOf(0f, 0f, 0.5f), -1, 5))

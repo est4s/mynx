@@ -782,13 +782,16 @@ class PocketTest(unittest.TestCase):
     def test_sensor_list(self):
         sensors = [{"name": "accelerometer", "values": ["x", "y", "z"], "unit": "m/s²"},
                    {"name": "rotation-vector", "values": ["x", "y", "z", "w"], "unit": ""},
-                   {"name": "light", "values": ["illuminance"], "unit": "lx"}]
+                   {"name": "light", "values": ["illuminance"], "unit": "lx"},
+                   {"name": "magnetic-field-uncalibrated", "values": ["x", "bias-x"], "unit": "µT"}]
         self.start_app({"sensor-list": {"ok": True, "sensors": sensors}})
         run = self.pocket("sensor", "list")
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(run.stdout, "accelerometer        x y z m/s²\n"
-                                     "rotation-vector      x y z w\n"
-                                     "light                illuminance lx\n")
+        # Values line up under the longest name.
+        self.assertEqual(run.stdout, "accelerometer               x y z m/s²\n"
+                                     "rotation-vector             x y z w\n"
+                                     "light                       illuminance lx\n"
+                                     "magnetic-field-uncalibrated x bias-x µT\n")
         self.assertEqual(self.app.requests, [["sensor-list"]])
         self.assertEqual(json.loads(self.pocket("sensor", "list", "--json").stdout), {"ok": True, "sensors": sensors})
 

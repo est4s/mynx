@@ -328,8 +328,9 @@ def cmd_sensor(args, as_json):
         if len(args) > 1:
             raise Usage(SENSOR_USAGE)
         answer = request("sensor-list")
+        width = max((len(s["name"]) for s in answer["sensors"]), default=0)
         out(as_json, answer, "\n".join(
-            f"{s['name']:<20} {' '.join(s['values'])} {s['unit']}".rstrip() for s in answer["sensors"]))
+            f"{s['name']:<{width}} {' '.join(s['values'])} {s['unit']}".rstrip() for s in answer["sensors"]))
         return 0
     names, options, stream = [], [], False
     rest = list(args)

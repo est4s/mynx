@@ -14,7 +14,8 @@ Newest entries first. Rules for keeping it up to date: see
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
-  (sensors) is built** (entry 34) and waits for the owner's test.
+  (sensors) passed the owner's checks** (entry 35); two small fixes
+  wait for a recheck.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -78,9 +79,10 @@ owner test after each part.
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
-**9.4 (sensors) is built** (entry 34): run `scripts/deliver.sh`, then
-go through this with the owner (the agent runs the commands, the
-owner says what the phone shows):
+**9.4 (sensors) passed the owner's checks** (entry 35); two fixes
+since. With the next build, recheck: `pocket sensor list` lines up,
+and `pocket sensor accelerometer --stream --rate 1 | head -5` gives
+times about 1 s apart. The original checklist, for reference:
 1. `pocket sensor list`: the phone's sensors, `compass` last.
 2. `pocket sensor accelerometer` with the phone flat: z about 9.8.
    `pocket sensor light` covered and uncovered: the lux changes.
@@ -284,6 +286,40 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (35): 9.4 tested on the phone
+
+**Checks** (build 57, commit 55c2b54), steps from "Next":
+1. pass: 17 sensors, `compass` last. Cosmetic: names longer than
+   20 characters (`magnetic-field-uncalibrated`, …) push their
+   value columns out of line in `pocket sensor list`.
+2. pass: flat z = 9.9; light 113 → 23 lx covered, sent only on change.
+3. pass on the second try: 349° pointing north, about 75° after a
+   quarter turn clockwise, wrapping through 0. (The first try read
+   108° "north", probably the phone not really facing north or an
+   uncalibrated magnetometer; maths checked against Android's.)
+4. pass: 100 lines in 2.0 s, gaps 19-21 ms, exit 0, no request
+   files left.
+5. pass: 172 readings over 2 min 18 s with the app in the
+   background, no gaps. SIGINT stopped it cleanly (exit 1, no
+   request files left). Note: `--rate 1` gave readings about 0.8 s
+   apart, not 1 s.
+6. pass: allowed gave `108873 steps`; with physical activity denied
+   in the app's settings: "step-counter wasn't allowed (allow
+   physical activity in the app's Android settings)".
+7. pass: refused with "sensors are off (pocket set android-sensors
+   on)", also in `--json`; works again once back on.
+8. pass: `pocket location` gave a network fix.
+
+**Fixed after the checks** (not yet on the phone):
+- Stream rate: the throttle kept 0.8 periods since the last reading
+  sent, so with Android sending every ~200 ms `--rate 1` always gave
+  0.8 s. Now readings are measured against a schedule (one period
+  apart, a fifth of a period early allowed), so the average is the
+  asked rate. Test in `SensorsTest`.
+- `pocket sensor list` pads names to the longest one, not 20
+  characters. (The `magnetic-field-uncalibrated` line is 57 columns,
+  one more than the portrait screen; left as is.)
 
 ### 2026-10-05 (34): step 9.4, sensors
 
