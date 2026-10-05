@@ -12,9 +12,8 @@ Newest entries first. Rules for keeping it up to date: see
   Step 8 (*Profiles*) is planned but **parked** by the owner
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
-  waiting/streaming requests); **9.2 (sharing) is confirmed** except
-  sharing a web page from the browser, fixed in entry 30 and waiting
-  for the owner's re-test.
+  waiting/streaming requests); **9.2 (sharing) is confirmed**
+  (2026-10-05). Next is 9.3 (location).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -76,11 +75,8 @@ README section "Android integration". Planned with the owner
 owner test after each part.
 
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
-**9.2 is confirmed** (entries 29-30) except one re-test: after
-`scripts/deliver.sh` installs the build with entry 30's fix, the owner
-shares a web page from the browser to the app; `~/Shared` should get a
-`.txt` named after the page title holding the link (not the site's
-icon). **Then build 9.3 (location).**
+**9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
+**Build 9.3 (location) next.**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -242,6 +238,15 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (31): 9.2 confirmed on the phone
+
+Build 55 (commit 9a1becd). The owner shared a web page from the
+browser: `~/Shared` got `Polkukengät Nike ACG Zegama -
+Top4Running.fi.txt` (named after the page title, non-ASCII kept)
+holding only the link, with a trailing newline. Entry 30's fix works,
+so 9.2 is fully confirmed. Older test files from entry 30 are still in
+the owner's `~/Shared`, left alone.
 
 ### 2026-10-05 (30): 9.2 tested on the phone; browser share fixed
 
