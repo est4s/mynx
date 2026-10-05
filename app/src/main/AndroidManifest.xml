@@ -15,7 +15,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- pocket sensor step-counter and step-detector (Android 10+). -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    <!-- pocket camera --quick. Declaring it also makes Android require it
+    <!-- Quick photos (pocket camera, quick option). Declaring it also makes Android require it
          for the camera app (pocket camera). -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- The camera permission would otherwise hide the app from phones without one. -->
