@@ -182,6 +182,13 @@ See README "How it works". The details:
   open, which also stops those whose `pocket` process (the number
   before `-` in the id) has gone. Values with line breaks (clipboard
   text) are sent percent-encoded.
+- **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
+  by `ShareProvider` (not exported, read-only) under a random token per
+  share (`SharedFiles`, last 20 kept in memory), so receiving apps only
+  reach the files they were granted. Incoming shares go to
+  `ShareActivity`, which stays open while it copies (the read grant
+  lasts as long as the activity) into the `share-folder` (`Inbox`:
+  safe names, never overwrites) and posts a notification.
 - **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
   apps. The app probes them at each start and binds static stand-ins from
   `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).

@@ -12,7 +12,8 @@ Newest entries first. Rules for keeping it up to date: see
   Step 8 (*Profiles*) is planned but **parked** by the owner
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
-  waiting/streaming requests); 9.2 (sharing) is next.
+  waiting/streaming requests); **9.2 (sharing) is built**, waiting
+  for CI and the owner's test on the phone.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -74,8 +75,11 @@ README section "Android integration". Planned with the owner
 owner test after each part.
 
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
-**Next: build 9.2 (sharing)** test-first, as described under
-"Parts" below, then give the owner a checklist like 9.1's.
+**9.2 is built** (log entry 29), not yet pushed or tried on the phone.
+**Next:** once the owner says to commit and push, wait for CI, run
+`scripts/deliver.sh`, then go through the 9.2 checklist in entry 29
+with the owner. Fix what fails (test first), then build 9.3
+(location).
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -237,6 +241,63 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-04 (29): step 9.2, sharing
+
+Built test-first; not yet committed (the owner commits and pushes).
+
+- **`pocket share FILE…`** and **`pocket share --text [TEXT]`** (stdin
+  when no TEXT) open Android's share sheet. `core` checks the request
+  (files exist and are files, at most 100; text non-empty, at most
+  100 000 characters, percent-encoded like the clipboard) and the new
+  `android-share` setting. The app needs to be on screen. `pocket`
+  refuses file names with line breaks (one value per request line).
+- **`ShareProvider`** (main manifest, so release builds too; not
+  exported) serves the shared files read-only under a random token
+  per share (`SharedFiles` in `core`, last 20 shares kept in memory,
+  lost when the process dies). One type for several files comes from
+  `shareType()` (`image/png`, else `image/*`, else `*/*`); single
+  files use `ACTION_SEND`, several `ACTION_SEND_MULTIPLE`, with
+  ClipData so the grant survives the chooser.
+- **Share target:** `ShareActivity` (dialog theme, "Saving to
+  ~/Shared…") takes `SEND`/`SEND_MULTIPLE` of any type and copies into
+  the `share-folder` setting (default `~/Shared`) on a thread, staying
+  open meanwhile because the read grant lasts as long as the activity.
+  `Inbox` in `core` keeps the other app's file name made safe (last
+  path part, no control characters, cut to 120 characters keeping the
+  extension), names files without a name `shared-YYYY-MM-DD-HHMMSS`,
+  saves text as `SUBJECT.txt` or `shared-….txt`, and never overwrites
+  (` (2)`, ` (3)`…). A notification ("Saved photo.jpg in ~/Shared",
+  "Saved 3 files in ~/Shared; 1 couldn't be read") opens the app; with
+  notifications off it's a toast. Before Debian is set up it says to
+  open the app first.
+- Decided: `android-share` only covers `pocket share`. Sharing into
+  the app is always the user's own action in another app, so it isn't
+  gated.
+- Docs: `tools/AGENTS.md` (commands, settings, "The phone"),
+  `AGENTS.md` (architecture note).
+- Tests: core 259 (was 239), pocket 132 (was 126), bats 63. The app
+  module only builds in CI.
+
+**Owner's checklist for 9.2** (after installing the build):
+1. `pocket share --text "hello from Debian"`: the share sheet opens;
+   send it to a chat or notes app and check the text arrives.
+2. `echo -e "a\nb" | pocket share --text`: line breaks arrive.
+3. `pocket share` on one photo (e.g. one in `/storage/emulated/0/DCIM`
+   copied to `~`): the preview/receiving app shows the image and its
+   name.
+4. `pocket share` on two files of different types: both arrive
+   (e.g. in mail as attachments, or Drive).
+5. With the app in the background (`sleep 10; pocket share --text x`
+   then switch away): it refuses and says the app must be on screen.
+6. `pocket set android-share off`, then share: refused; set it back.
+7. From the Gallery or Files app, share a photo **to the app**: a
+   small "Saving to ~/Shared…" box, then a notification; `ls ~/Shared`
+   shows it with its name. Share it again: `name (2).jpg`.
+8. Share several files at once to the app, and a web page link from
+   the browser (a `.txt` named after the page title).
+9. `pocket set share-folder ~/inbox`, share once more: it lands in
+   `~/inbox`. `pocket reset share-folder`.
 
 ### 2026-10-04 (28): 9.1 confirmed on the phone
 

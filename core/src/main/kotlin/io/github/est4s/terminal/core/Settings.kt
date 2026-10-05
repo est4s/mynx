@@ -15,6 +15,10 @@ data class Settings(
     val undoKeep: Int = 1,
     /** Whether programs in Debian may read and change the phone's clipboard. */
     val androidClipboard: Boolean = true,
+    /** Whether programs in Debian may open Android's share sheet. */
+    val androidShare: Boolean = true,
+    /** Where files shared to the app from other apps go, in Debian. */
+    val shareFolder: String = "~/Shared",
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -25,6 +29,8 @@ data class Settings(
         "agent-notify-after" to agentNotifyAfter.toString(),
         "undo-keep" to undoKeep.toString(),
         "android-clipboard" to if (androidClipboard) "on" else "off",
+        "android-share" to if (androidShare) "on" else "off",
+        "share-folder" to shareFolder,
     )
 }
 
@@ -99,6 +105,18 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("android-clipboard", listOf("on", "off")),
         { copy(androidClipboard = it == "on") },
+    ),
+    SettingDef(
+        "android-share", "Whether programs in Debian can share files and text with other apps (pocket share).",
+        "on", listOf("on", "off"),
+        oneOf("android-share", listOf("on", "off")),
+        { copy(androidShare = it == "on") },
+    ),
+    SettingDef(
+        "share-folder", "Where files shared to the app from other apps are saved: a full path or one starting with ~/.",
+        "~/Shared", null,
+        { if (it.startsWith("/") || (it.startsWith("~/") && it.length > 2)) null else "share-folder must be a full path or start with ~/" },
+        { copy(shareFolder = it) },
     ),
 )
 

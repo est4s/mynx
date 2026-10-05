@@ -61,7 +61,7 @@ class SettingsTest {
     fun `every setting is described, with its default`() {
         assertEquals(
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
-                "android-clipboard"),
+                "android-clipboard", "android-share", "share-folder"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -75,10 +75,10 @@ class SettingsTest {
             mapOf(
                 "font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on",
                 "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
-                "android-clipboard" to "off",
+                "android-clipboard" to "off", "android-share" to "off", "share-folder" to "/srv/in",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
-                androidClipboard = false).values(),
+                androidClipboard = false, androidShare = false, shareFolder = "/srv/in").values(),
         )
     }
 
@@ -158,5 +158,22 @@ class SettingsTest {
         val parsed = parseSettings("android-clipboard = off\nandroid-clipboard = maybe\n")
         assertFalse(parsed.settings.androidClipboard)
         assertEquals(listOf("line 2: android-clipboard must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `sharing is on by default and can be turned off`() {
+        assertTrue(Settings().androidShare)
+        val parsed = parseSettings("android-share = off\nandroid-share = yes\n")
+        assertFalse(parsed.settings.androidShare)
+        assertEquals(listOf("line 2: android-share must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `shared files go to ~ Shared unless another folder is set`() {
+        assertEquals("~/Shared", Settings().shareFolder)
+        val parsed = parseSettings("share-folder = /srv/in\nshare-folder = ~/a b\nshare-folder = Shared\nshare-folder = ~\n")
+        assertEquals("~/a b", parsed.settings.shareFolder)
+        val error = "share-folder must be a full path or start with ~/"
+        assertEquals(listOf("line 3: $error", "line 4: $error"), parsed.problems)
     }
 }

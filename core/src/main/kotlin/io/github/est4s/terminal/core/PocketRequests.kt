@@ -34,7 +34,8 @@ private class Refused(message: String) : Exception(message)
  * null, or says why it didn't; [openUrl] likewise opens a web link,
  * and [installApk] opens Android's installer for an APK (a host file).
  * [vibrate] and [setClipboard] work the same way; [readClipboard] gives
- * the clipboard's text or fails with the reason.
+ * the clipboard's text or fails with the reason. [share] opens
+ * Android's share sheet for a [Share].
  *
  * Requests in [later] are answered later, or stream (see [Later]).
  * [sweep] cancels those whose `pocket` cancelled them or has gone
@@ -50,6 +51,7 @@ class PocketRequests(
     private val vibrate: (Long) -> String? = { "vibration isn't available here" },
     private val setClipboard: (String) -> String? = { "the clipboard isn't available here" },
     private val readClipboard: () -> Result<String> = { Result.failure(Exception("the clipboard isn't available here")) },
+    private val share: (Share) -> String? = { "sharing isn't available here" },
     private val later: Map<String, Later> = emptyMap(),
     private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
 ) {
@@ -241,16 +243,38 @@ class PocketRequests(
             }
             "clipboard-set" -> {
                 clipboardAllowed()
-                // Percent-encoded, so the text can hold line breaks.
-                val text = try {
-                    URLDecoder.decode(args.getOrNull(0).orEmpty(), "UTF-8")
-                } catch (e: IllegalArgumentException) {
-                    throw Refused("clipboard-set: badly encoded text")
-                }
+                val text = decoded(request)
                 if (text.length > MAX_CLIPBOARD_TEXT) {
                     throw Refused("too long for the clipboard: ${text.length} characters (at most $MAX_CLIPBOARD_TEXT)")
                 }
                 setClipboard(text)?.let { throw Refused(it) }
+                ok()
+            }
+            "share" -> {
+                shareAllowed()
+                if (args.isEmpty()) throw Refused("share needs a file")
+                if (args.size > MAX_SHARE_FILES) throw Refused("too many files: ${args.size} (at most $MAX_SHARE_FILES at once)")
+                val files = args.map { path ->
+                    val file = hostPath(path, home.parentFile.path)?.let(::File)
+                        ?: throw Refused("the path must start with /: $path")
+                    when {
+                        !file.exists() -> throw Refused("no such file: $path")
+                        !file.isFile -> throw Refused("not a file: $path")
+                    }
+                    file
+                }
+                share(Share(files, null))?.let { throw Refused(it) }
+                ok("count" to files.size.toString())
+            }
+            "share-text" -> {
+                shareAllowed()
+                val text = decoded(request)
+                when {
+                    text.isEmpty() -> throw Refused("nothing to share")
+                    text.length > MAX_SHARE_TEXT ->
+                        throw Refused("too long to share: ${text.length} characters (at most $MAX_SHARE_TEXT)")
+                }
+                share(Share(emptyList(), text))?.let { throw Refused(it) }
                 ok()
             }
             else -> throw Refused("unknown request '${request.name}'")
@@ -286,6 +310,19 @@ class PocketRequests(
         val text = args.getOrNull(1)?.trim().orEmpty()
         val reason = notify(Notice(title.cut(MAX_NOTICE_TITLE), text.cut(MAX_NOTICE_TEXT), shell, ifAway))
         return if (reason == null) ok("shown" to "true") else notShown(reason)
+    }
+
+    // Text sent percent-encoded, so it can hold line breaks.
+    private fun decoded(request: PocketRequest): String = try {
+        URLDecoder.decode(request.args.getOrNull(0).orEmpty(), "UTF-8")
+    } catch (e: IllegalArgumentException) {
+        throw Refused("${request.name}: badly encoded text")
+    }
+
+    private fun shareAllowed() {
+        if (!loadSettings(settingsFile).settings.androidShare) {
+            throw Refused("sharing is off (pocket set android-share on)")
+        }
     }
 
     private fun clipboardAllowed() {

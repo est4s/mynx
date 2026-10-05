@@ -88,6 +88,8 @@ their own.
 | `pocket vibrate [MS]` | vibrate the phone, 300 ms unless given (1 to 5000) |
 | `pocket clipboard get` | print the phone's clipboard (the app must be on screen) |
 | `pocket clipboard set [TEXT]` | copy TEXT to the phone's clipboard, or stdin when there's no TEXT |
+| `pocket share FILE…` | send files to another app through Android's share sheet (the app must be on screen) |
+| `pocket share --text [TEXT]` | send TEXT, or stdin when there's no TEXT, to another app |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -128,6 +130,10 @@ One `key = value` per line; `pocket settings` describes each.
   take back. 0 turns undo off.
 - `android-clipboard`: `on` (default) or `off`: whether programs here
   can read and change the phone's clipboard (see "The phone").
+- `android-share`: `on` (default) or `off`: whether programs here can
+  open Android's share sheet (`pocket share`).
+- `share-folder`: where files other apps share to this app are saved,
+  a full path or one starting with `~/` (default `~/Shared`).
 
 ### Undo
 
@@ -178,7 +184,7 @@ it too, even one spread over several rows.
 
 ### The phone
 
-Commands for the phone itself (more are coming: sharing, location,
+Commands for the phone itself (more are coming: location,
 sensors, camera):
 
 - `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
@@ -188,6 +194,16 @@ sensors, camera):
   unless it goes to the terminal. Android only lets the app on screen
   read the clipboard, so `get` fails while the app is in the
   background; `set` works anyway. `android-clipboard off` blocks both.
+- `pocket share FILE…` opens Android's share sheet to send files to
+  another app (mail, chat, …): `pocket share report.pdf photo.jpg`.
+  `pocket share --text TEXT` sends text, or what's piped in. The app
+  must be on screen. `android-share off` blocks it.
+- **Sharing to Debian:** the app is in Android's share sheet too.
+  Files shared to it from other apps are saved in `~/Shared` (the
+  `share-folder` setting), keeping their names; shared text is saved
+  as a `.txt` file there, named after its subject (a page's title) or
+  the time. A name that's taken gets ` (2)`, so nothing is overwritten.
+  A notification says what was saved where.
 - `pocket notify` and `pocket open`: see "AI agents" above.
 
 ### Themes and colours

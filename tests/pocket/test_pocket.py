@@ -692,6 +692,43 @@ class PocketTest(unittest.TestCase):
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: pocket clipboard get | set [TEXT]", run.stderr)
 
+    # --- share --------------------------------------------------------------
+
+    def test_share_sends_the_files_full_paths(self):
+        self.start_app({"share": {"ok": True, "count": 2}})
+        run = self.pocket("share", "a.jpg", "/srv/b c.txt", cwd=self.tmp.name)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Sharing 2 files: pick an app on the phone\n")
+        self.assertEqual(self.app.requests, [["share", os.path.join(self.tmp.name, "a.jpg"), "/srv/b c.txt"]])
+
+    def test_share_one_file(self):
+        self.start_app({"share": {"ok": True, "count": 1}})
+        self.assertEqual(self.pocket("share", "/a").stdout, "Sharing 1 file: pick an app on the phone\n")
+
+    def test_share_text_from_words_or_stdin(self):
+        self.start_app({"share-text": {"ok": True}})
+        run = self.pocket("share", "--text", "50%", "off")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Sharing 7 characters: pick an app on the phone\n")
+        self.assertEqual(self.pocket("share", "--text", input="a\nb\n").returncode, 0)
+        self.assertEqual(self.app.requests, [["share-text", "50%25%20off"], ["share-text", "a%0Ab%0A"]])
+
+    def test_share_says_why_it_couldnt(self):
+        self.start_app({"share": {"ok": False, "error": "no such file: /a"}})
+        run = self.pocket("share", "/a")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no such file: /a", run.stderr)
+
+    def test_share_refuses_names_with_line_breaks(self):
+        run = self.pocket("share", "/a\nb")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("can't share a file whose name has a line break", run.stderr)
+
+    def test_share_needs_files_or_text(self):
+        run = self.pocket("share")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: pocket share FILE... | --text [TEXT]", run.stderr)
+
     def test_install_apk_says_why_it_failed(self):
         self.start_app({"install-apk": {"ok": False, "error": "only debug builds can install apps"}})
         run = self.pocket("install-apk", "/tmp/app.apk")

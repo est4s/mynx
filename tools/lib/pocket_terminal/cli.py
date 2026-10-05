@@ -33,6 +33,7 @@ Commands:
   open       open URL: open a link in the phone's browser
   vibrate    vibrate [MS]: vibrate the phone (300 ms unless given)
   clipboard  clipboard get | set [TEXT]: the phone's clipboard
+  share      share FILE... | --text [TEXT]: send to another app
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -255,6 +256,23 @@ def cmd_clipboard(args, as_json):
         out(as_json, answer, f"Copied {len(text)} character{'' if len(text) == 1 else 's'}")
         return 0
     raise Usage("usage: pocket clipboard get | set [TEXT]")
+
+
+def cmd_share(args, as_json):
+    if args[:1] == ["--text"]:
+        text = " ".join(args[1:]) if len(args) > 1 else sys.stdin.read()
+        answer = request("share-text", urllib.parse.quote(text, safe=""))
+        out(as_json, answer, f"Sharing {len(text)} character{'' if len(text) == 1 else 's'}: pick an app on the phone")
+        return 0
+    if not args:
+        raise Usage("usage: pocket share FILE... | --text [TEXT]")
+    # A request holds one value per line.
+    if any("\n" in a for a in args):
+        raise Failure("can't share a file whose name has a line break")
+    answer = request("share", *(os.path.abspath(a) for a in args))
+    count = answer["count"]
+    out(as_json, answer, f"Sharing {count} file{'' if count == 1 else 's'}: pick an app on the phone")
+    return 0
 
 
 # Not in HELP: for installing builds of the app while developing it. Only
@@ -596,7 +614,7 @@ COMMANDS = {
     "check": cmd_check, "settings": cmd_settings, "get": cmd_get, "set": cmd_set, "reset": cmd_reset,
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
-    "vibrate": cmd_vibrate, "clipboard": cmd_clipboard,
+    "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

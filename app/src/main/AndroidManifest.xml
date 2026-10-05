@@ -26,6 +26,32 @@
             </intent-filter>
         </activity>
 
+        <!-- Other apps share files and text into Debian's share folder. -->
+        <activity
+            android:name=".ShareActivity"
+            android:theme="@android:style/Theme.Material.Dialog.NoActionBar"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <!-- Serves the files `pocket share` shares, only to the apps granted them. -->
+        <provider
+            android:name=".ShareProvider"
+            android:authorities="io.github.est4s.terminal.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <!-- specialUse: the time-limited types (dataSync, …) don't fit a terminal. -->
         <service
             android:name=".TerminalService"

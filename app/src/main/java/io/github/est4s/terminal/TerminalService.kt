@@ -25,6 +25,8 @@ import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Notice
 import io.github.est4s.terminal.core.PocketRequests
+import io.github.est4s.terminal.core.Share
+import io.github.est4s.terminal.core.shareType
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.NEON
@@ -94,6 +96,7 @@ class TerminalService : Service() {
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
+            share = ::share,
         )
     }
     private val sweep = Runnable { sweepRequests() }
@@ -374,6 +377,32 @@ class TerminalService : Service() {
         val clip = clipboard.primaryClip
         val text = if (clip == null || clip.itemCount == 0) "" else clip.getItemAt(0).coerceToText(this)?.toString().orEmpty()
         return Result.success(text)
+    }
+
+    // Answers `pocket share`: null when the share sheet opened, else why not.
+    private fun share(share: Share): String? {
+        val shown = activity?.takeIf { it.onScreen }
+            ?: return "the app must be on screen to share (Android only lets the app in front open the share sheet)"
+        val send = if (share.text != null) {
+            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, share.text)
+        } else {
+            val uris = ShareProvider.uris(share.files)
+            val type = shareType(share.files.map(ShareProvider::typeOf))
+            val intent = if (uris.size == 1) {
+                Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+            } else {
+                Intent(Intent.ACTION_SEND_MULTIPLE).putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            }
+            // ClipData carries the read grant through the chooser to the chosen app.
+            val clip = ClipData.newRawUri(null, uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
+            intent.setType(type).setClipData(clip).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        return try {
+            shown.startActivity(Intent.createChooser(send, null))
+            null
+        } catch (e: ActivityNotFoundException) {
+            "no app on the phone takes shares"
+        }
     }
 
     // Answers `pocket install-apk`: null when the installer opened, else why not.
