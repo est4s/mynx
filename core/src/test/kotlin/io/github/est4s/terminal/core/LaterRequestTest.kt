@@ -104,6 +104,27 @@ class LaterRequestTest {
     }
 
     @Test
+    fun `stopping may answer with what it has, as for a recording`() {
+        send("12-1", "feed")
+        val reply = started.single().second
+        reply.onCancel { reply.ok("seconds" to "4") }
+        file("12-1.cancel").writeText("")
+        requests.sweep()
+        assertEquals("""{"ok":true,"seconds":4}""", file("12-1.reply").readText())
+        assertFalse(file("12-1.wait").exists())
+        assertFalse(file("12-1.cancel").exists())
+        assertFalse(requests.hasOpen())
+
+        send("77-5", "feed")
+        val second = started.last().second
+        second.onCancel { second.ok("seconds" to "4") }
+        gone += 77
+        requests.sweep()
+        assertEquals(emptyList(), dir.list()!!.filter { it.startsWith("77-5.") })
+        assertFalse(requests.hasOpen())
+    }
+
+    @Test
     fun `a stream that ends by itself answers like any request`() {
         send("12-1", "feed")
         val reply = started.single().second

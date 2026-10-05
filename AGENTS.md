@@ -213,6 +213,20 @@ See README "How it works". The details:
   too until it's granted, so both ask for it. `torch` is a plain
   request (`setTorchMode`, strength levels on API 33+), with no setting
   and no permission.
+- **Sound files** (`core/.../Audio.kt`, `app/.../AudioPlayer.kt`,
+  `app/.../AudioRecorder.kt`): `audioRequests()` gives `audio-play`
+  and `audio-record`, both [Later] streams that run until they end or
+  `pocket` stops them. The file's ending picks the format
+  (`AudioFormat`): MediaRecorder for AAC and Opus, AudioRecord for
+  WAV (header from core's `wavHeader()`). A recording goes to
+  `.NAME.part` next to the target and core renames it when complete.
+  Ctrl+C is the normal end of a recording, so a [Later]'s `onCancel`
+  may still answer (`RecordReport.onStop` stops and reports before it
+  returns), and `pocket` reads that answer (`answer_on_interrupt`).
+  RECORD_AUDIO is asked through the activity; recording starts on
+  screen and the service adds the `microphone` foreground type while
+  anything records, like location. The sound device (PulseAudio
+  pipes) is still to come.
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

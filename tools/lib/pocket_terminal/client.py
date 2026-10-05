@@ -15,14 +15,15 @@ class Failure(Exception):
     """Something to tell the user; `pocket` prints it and exits with 2."""
 
 
-def request(name, *args, on_line=None):
+def request(name, *args, on_line=None, answer_on_interrupt=False):
     """Sends a request to the app and returns its answer (a dict).
 
     The app may answer later: it then writes ID.wait at once, with the
     seconds to wait or "stream". A stream's readings arrive in ID.stream,
     one JSON object per line, each handed to [on_line]; it runs until the
     app answers, or until we stop (Ctrl+C, a closed pipe), which writes
-    ID.cancel so the app stops too.
+    ID.cancel so the app stops too. With [answer_on_interrupt], Ctrl+C
+    returns the app's answer to that (a recording says what it saved).
     """
     folder = os.environ.get("POCKET_REQUESTS")
     if not folder or not os.path.isdir(folder):
@@ -55,10 +56,13 @@ def request(name, *args, on_line=None):
             answer = json.load(f)
     except Failure:
         raise
-    except BaseException:
+    except BaseException as e:
         if waiting and not os.path.exists(base + ".reply"):
             cancel(base)
-        raise
+        if not (answer_on_interrupt and isinstance(e, KeyboardInterrupt) and os.path.exists(base + ".reply")):
+            raise
+        with open(base + ".reply") as f:
+            answer = json.load(f)
     finally:
         for suffix in (".req", ".wait", ".stream", ".reply", ".cancel"):
             with contextlib.suppress(FileNotFoundError):
@@ -94,7 +98,7 @@ class Lines:
 def cancel(base):
     """Asks the app to stop a stream, and gives it a moment to answer."""
     touch(base + ".cancel")
-    deadline = time.monotonic() + 2
+    deadline = time.monotonic() + 5
     while not os.path.exists(base + ".reply") and time.monotonic() < deadline:
         time.sleep(0.02)
 

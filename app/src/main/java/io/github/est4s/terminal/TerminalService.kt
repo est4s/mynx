@@ -24,6 +24,7 @@ import android.os.VibratorManager
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Notice
+import io.github.est4s.terminal.core.audioRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
@@ -105,7 +106,8 @@ class TerminalService : Service() {
             share = ::share, torch = camera::torch,
             later = locationRequests(File(rootfs, "root"), locator::locate) +
                 sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
-                cameraRequests(File(rootfs, "root"), camera::take),
+                cameraRequests(File(rootfs, "root"), camera::take) +
+                audioRequests(File(rootfs, "root"), player::play, recorder::record),
         )
     }
     private val camera by lazy { CameraShooter(this) { activity?.takeIf { it.onScreen } } }
@@ -118,9 +120,15 @@ class TerminalService : Service() {
         )
     }
     private val sensors by lazy { SensorReader(this, ::askPermissions) }
-    // Whether the foreground service has the location type: only while
-    // something is locating, so a stream keeps going in the background.
+    private val player by lazy { AudioPlayer(mainHandler) }
+    private val recorder by lazy {
+        AudioRecorder(this, mainHandler, { activity?.onScreen == true }, ::askPermissions, ::setRecording)
+    }
+    // Whether the foreground service has the location and microphone
+    // types: only while something locates or records, so it keeps going
+    // in the background.
     private var locating = false
+    private var recording = false
     private val sweep = Runnable { sweepRequests() }
     // The POCKET_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
@@ -221,6 +229,8 @@ class TerminalService : Service() {
         mainHandler.removeCallbacks(sweep)
         locator.stopAll()
         sensors.stopAll()
+        player.stopAll()
+        recorder.stopAll()
         killAll()
         super.onDestroy()
     }
@@ -486,17 +496,26 @@ class TerminalService : Service() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) {
             val location = if (locating) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or location)
+            val microphone = if (recording) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+            startForeground(
+                NOTIFICATION_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or location or microphone,
+            )
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
     }
 
-    // Locating starts on screen, where Android allows adding the location
-    // type; dropping it may happen in the background. Before API 34 the
-    // service has every type in the manifest anyway.
+    // Locating and recording start on screen, where Android allows adding
+    // their types; dropping one may happen in the background. Before API
+    // 34 the service has every type in the manifest anyway.
     private fun setLocating(on: Boolean) {
         locating = on
+        if (Build.VERSION.SDK_INT >= 34) runCatching { goForeground() }
+    }
+
+    private fun setRecording(on: Boolean) {
+        recording = on
         if (Build.VERSION.SDK_INT >= 34) runCatching { goForeground() }
     }
 

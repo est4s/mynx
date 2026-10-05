@@ -95,6 +95,8 @@ their own.
 | `pocket sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
 | `pocket camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
 | `pocket torch on [PERCENT]\|off` | the phone's flashlight |
+| `pocket audio play FILE` | play a sound file through the phone's speaker, until it ends |
+| `pocket audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -143,6 +145,8 @@ One `key = value` per line; `pocket settings` describes each.
   can read the phone's sensors (`pocket sensor`).
 - `android-camera`: `on` (default) or `off`: whether programs here
   can take photos (`pocket camera`).
+- `android-microphone`: `on` (default) or `off`: whether programs
+  here can record from the microphone (`pocket audio record`).
 - `share-folder`: where files other apps share to this app are saved,
   a full path or one starting with `~/` (default `~/Shared`).
 
@@ -195,8 +199,8 @@ it too, even one spread over several rows.
 
 ### The phone
 
-Commands for the phone itself (more are coming: speaker and
-microphone):
+Commands for the phone itself (more is coming: a sound device, so
+programs here play and record sound themselves):
 
 - `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
 - `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
@@ -252,6 +256,21 @@ microphone):
   in percent, on phones whose flashlight has levels (Android 13+).
   Both work with the app in the background. Opening the camera turns
   it off.
+- `pocket audio play FILE` plays a sound file (mp3, ogg, wav, m4a,
+  flac, … whatever Android can play) and returns when it ends; Ctrl+C
+  stops it. It works with the app in the background. `--json` gives
+  `file` and `seconds`.
+- `pocket audio record FILE` records from the microphone until Ctrl+C,
+  or for `--seconds N`, then prints `Saved /root/memo.m4a (240 KB,
+  15 s)`. The file's ending picks the format: `.m4a` or `.aac` (AAC),
+  `.ogg` or `.opus` (Opus, Android 10+), `.wav` (16-bit PCM, for
+  tools like whisper.cpp). Mono; `--rate HZ` (8000 to 48000) sets the
+  sample rate, e.g. `pocket audio record --rate 16000 note.wav`. FILE
+  only changes once the recording is complete. `--json` gives `file`,
+  `bytes` and `seconds`. Android asks to allow the microphone the
+  first time, and only lets the app on screen start recording; a
+  recording keeps going in the background (Android shows its
+  microphone indicator). `android-microphone off` blocks it.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved

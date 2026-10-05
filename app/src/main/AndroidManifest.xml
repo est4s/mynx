@@ -18,9 +18,13 @@
     <!-- Quick photos (pocket camera, quick option). Declaring it also makes Android require it
          for the camera app (pocket camera). -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- The camera permission would otherwise hide the app from phones without one. -->
+    <!-- pocket audio record; a recording started on screen keeps going in the background. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- The camera and microphone permissions would otherwise hide the app from phones without one. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <application
         android:name=".TerminalApp"
@@ -73,11 +77,11 @@
             android:grantUriPermissions="true" />
 
         <!-- specialUse: the time-limited types (dataSync, …) don't fit a terminal.
-             location: added while `pocket location` runs. -->
+             location, microphone: added while `pocket location` or `pocket audio record` runs. -->
         <service
             android:name=".TerminalService"
             android:exported="false"
-            android:foregroundServiceType="specialUse|location">
+            android:foregroundServiceType="specialUse|location|microphone">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the user's terminal sessions (shell processes) running while the app is in the background, like a terminal emulator." />

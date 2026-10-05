@@ -25,6 +25,7 @@ class PendingReply internal constructor(
     private val closed: (PendingReply) -> Unit,
 ) {
     private var done = false
+    private var stopping = false
     private var cancelled: (() -> Unit)? = null
 
     /** One reading of a stream, as a JSON object. */
@@ -42,7 +43,11 @@ class PendingReply internal constructor(
         answer(refusal(message))
     }
 
-    /** What to do when `pocket` cancels the request: stop listening, mainly. */
+    /**
+     * What to do when `pocket` cancels the request: stop listening, mainly.
+     * It may still answer (a recording says what it saved); else the
+     * answer is a plain `{"ok":true}`.
+     */
     @Synchronized
     fun onCancel(block: () -> Unit) {
         cancelled = block
@@ -62,16 +67,16 @@ class PendingReply internal constructor(
     // nothing of the request is left behind.
     internal fun cancel(listening: Boolean) {
         val block = synchronized(this) {
-            if (done) return
-            done = true
+            if (done || stopping) return
+            stopping = true
             cancelled
         }
         runCatching { block?.invoke() }
         if (listening) {
-            writeReply(dir, id, okJson())
-            File(dir, "$id.wait").delete()
+            ok()
             File(dir, "$id.cancel").delete()
         } else {
+            synchronized(this) { done = true }
             dir.listFiles { f -> f.name.startsWith("$id.") }.orEmpty().forEach { it.delete() }
         }
         closed(this)

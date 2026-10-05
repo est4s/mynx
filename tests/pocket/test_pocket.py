@@ -62,7 +62,7 @@ class FakeApp:
             while not os.path.exists(base + ".cancel") and not self.stop.is_set():
                 time.sleep(0.01)
             self.cancelled = True
-            return {"ok": True}
+            return answer.get("_stopped", {"ok": True})
         return {k: v for k, v in answer.items() if not k.startswith("_")}
 
 
@@ -94,6 +94,18 @@ class PocketTest(unittest.TestCase):
         environ.update(env or {})
         return subprocess.run(["python3", POCKET, *args], capture_output=True, text=True, env=environ, cwd=cwd,
                               input=input)
+
+    def wait_for_request(self):
+        deadline = time.monotonic() + 5
+        while not self.app.requests:
+            self.assertLess(time.monotonic(), deadline, "pocket sent no request")
+            time.sleep(0.01)
+
+    def popen(self, *args):
+        environ = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
+        return subprocess.Popen(["python3", POCKET, *args], env=environ, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # --- check -------------------------------------------------------------
 
@@ -908,6 +920,65 @@ class PocketTest(unittest.TestCase):
             run = self.pocket("torch", *args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: pocket torch on [PERCENT] | off", run.stderr, args)
+
+    # --- audio --------------------------------------------------------------
+
+    def test_audio_play_waits_for_the_end_quietly(self):
+        self.start_app({"audio-play": {"ok": True, "file": "/srv/a.mp3", "seconds": 3.3}})
+        run = self.pocket("audio", "play", "a.mp3", cwd="/srv")
+        self.assertEqual((run.returncode, run.stdout, run.stderr), (0, "", ""))
+        self.assertEqual(self.app.requests, [["audio-play", "/srv/a.mp3"]])
+        self.assertEqual(json.loads(self.pocket("audio", "play", "/srv/a.mp3", "--json").stdout),
+                         {"ok": True, "file": "/srv/a.mp3", "seconds": 3.3})
+
+    def test_audio_play_stops_quietly_on_ctrl_c(self):
+        self.start_app({"audio-play": {"ok": True, "_lines": [], "_hold": True}})
+        proc = self.popen("audio", "play", "/srv/a.mp3")
+        self.wait_for_request()
+        time.sleep(0.2)
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, out, err), (130, "", ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_audio_record_for_some_seconds(self):
+        self.start_app({"audio-record": {"ok": True, "_lines": [{"recording": True}],
+                                         "file": "/srv/a.wav", "bytes": 160_044, "seconds": 5}})
+        run = self.pocket("audio", "record", "a.wav", "--seconds", "5", "--rate", "16000", cwd="/srv")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stderr, "Recording to /srv/a.wav for 5 s\n")
+        self.assertEqual(run.stdout, "Saved /srv/a.wav (156 KB, 5 s)\n")
+        self.assertEqual(self.app.requests, [["audio-record", "/srv/a.wav", "seconds=5", "rate=16000"]])
+        run = self.pocket("audio", "record", "/srv/a.wav", "--json")
+        self.assertEqual(run.stderr, "")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "file": "/srv/a.wav", "bytes": 160_044, "seconds": 5})
+
+    def test_audio_record_until_ctrl_c_says_what_it_saved(self):
+        saved = {"ok": True, "file": "/srv/a.m4a", "bytes": 48_000, "seconds": 2.5}
+        self.start_app({"audio-record": {"ok": True, "_lines": [{"recording": True}], "_hold": True,
+                                         "_stopped": saved}})
+        proc = self.popen("audio", "record", "/srv/a.m4a")
+        self.wait_for_request()
+        time.sleep(0.3)
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual(err, "Recording to /srv/a.m4a: Ctrl+C stops\n")
+        self.assertEqual((proc.returncode, out), (0, "Saved /srv/a.m4a (47 KB, 2.5 s)\n"))
+        self.assertTrue(self.app.cancelled)
+
+    def test_audio_says_why_it_couldnt(self):
+        self.start_app({"audio-record": {"ok": False, "error": "the microphone is off (pocket set android-microphone on)"}})
+        run = self.pocket("audio", "record", "/srv/a.m4a")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "pocket: the microphone is off (pocket set android-microphone on)\n")
+
+    def test_audio_usage(self):
+        usage = "usage: pocket audio play FILE | record FILE [--seconds N] [--rate HZ]"
+        for args in [(), ("play",), ("play", "a", "b"), ("play", "a", "--seconds", "2"), ("record",),
+                     ("record", "a.m4a", "--seconds"), ("record", "a.m4a", "--loud"), ("stop",)]:
+            run = self.pocket("audio", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn(usage, run.stderr, args)
 
     # --- share --------------------------------------------------------------
 

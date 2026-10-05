@@ -79,12 +79,7 @@ fun cameraRequests(home: File, take: (PhotoQuery, PhotoReport) -> Unit): Map<Str
 private fun parsePhotoQuery(args: List<String>, quick: Boolean, rootfs: String): Result<PhotoQuery> = runCatching {
     val path = args.getOrNull(0)?.trim().orEmpty().trimEnd('/')
     if (path.isEmpty()) throw IllegalArgumentException("camera needs a file to save the photo to")
-    val target = hostPath(path, rootfs)?.let(::File) ?: throw IllegalArgumentException("the path must start with /: $path")
-    when {
-        target.isDirectory -> throw IllegalArgumentException("$path is a folder")
-        target.parentFile?.isDirectory != true ->
-            throw IllegalArgumentException("no such folder: ${path.substringBeforeLast('/').ifEmpty { "/" }}")
-    }
+    val target = targetFile(path, rootfs)
     val facing = if (!quick) null else when (val side = args.getOrNull(1)?.trim().orEmpty()) {
         "front" -> Facing.FRONT
         "back" -> Facing.BACK

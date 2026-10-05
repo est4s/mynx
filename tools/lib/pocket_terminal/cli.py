@@ -38,6 +38,7 @@ Commands:
   sensor     sensor list | NAME [--stream]: the phone's sensors
   camera     camera FILE [--quick front|back]: take a photo
   torch      torch on [PERCENT] | off: the flashlight
+  audio      audio play FILE | record FILE [--seconds N]: sound
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -418,6 +419,38 @@ def cmd_torch(args, as_json):
     return 0
 
 
+AUDIO_USAGE = "usage: pocket audio play FILE | record FILE [--seconds N] [--rate HZ]"
+
+
+def cmd_audio(args, as_json):
+    what, rest = (args[0], list(args[1:])) if args else (None, [])
+    files, options = [], []
+    while rest:
+        arg = rest.pop(0)
+        if what == "record" and arg in ("--seconds", "--rate") and rest:
+            options.append(f"{arg[2:]}={rest.pop(0)}")
+        elif not arg.startswith("-"):
+            files.append(arg)
+        else:
+            raise Usage(AUDIO_USAGE)
+    if what not in ("play", "record") or len(files) != 1:
+        raise Usage(AUDIO_USAGE)
+    path = os.path.abspath(files[0])
+    if what == "play":
+        out(as_json, request("audio-play", path), None)
+        return 0
+    seconds = next((o.split("=", 1)[1] for o in options if o.startswith("seconds=")), None)
+
+    def started(_):
+        if not as_json:
+            print(f"Recording to {path} for {seconds} s" if seconds else f"Recording to {path}: Ctrl+C stops",
+                  file=sys.stderr, flush=True)
+
+    answer = request("audio-record", path, *options, on_line=started, answer_on_interrupt=True)
+    out(as_json, answer, f"Saved {answer['file']} ({size_text(answer['bytes'])}, {answer['seconds']} s)")
+    return 0
+
+
 # Not in HELP: for installing builds of the app while developing it. Only
 # debug builds of the app answer it.
 def cmd_install_apk(args, as_json):
@@ -759,6 +792,7 @@ COMMANDS = {
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
+    "audio": cmd_audio,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

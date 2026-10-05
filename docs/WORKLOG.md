@@ -15,7 +15,9 @@ Newest entries first. Rules for keeping it up to date: see
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
-  flashlight) is confirmed** (2026-10-05).
+  flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
+  half (`pocket audio play`/`record`) is built, untested on the phone
+  (entry 40); the sound device comes next.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -61,9 +63,9 @@ Newest entries first. Rules for keeping it up to date: see
 - **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
   tools installers, tabs, key bars, colours/themes, settings, config
   check, `pocket` requests, undo, links, waiting and streaming
-  requests, sharing, location; 271 tests), `app/` (thin Android layer),
+  requests, sharing, location; 312 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 153 unittest tests incl. editors driven in a pty),
+  the agent guide; 159 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
   tests).
 
@@ -82,7 +84,30 @@ owner test after each part.
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
 **9.5 (camera and flashlight) is done** (confirmed on the phone
 2026-10-05, entries 38-39).
-**Next: build 9.6 (sound).**
+**9.6 (sound), files half: built (entry 40), not yet on the phone.**
+Push, `scripts/deliver.sh`, then with the app on screen (the agent
+can run each and read the result; the owner listens and talks):
+1. `pocket audio record ~/a.m4a`, speak, Ctrl+C: Android asks for
+   the microphone the first time; prints `Recording to /root/a.m4a:
+   Ctrl+C stops`, then `Saved /root/a.m4a (… KB, N s)`, exit 0.
+2. `pocket audio play ~/a.m4a`: the owner hears it; returns at the
+   end, prints nothing; `--json` gives file and seconds.
+3. `pocket audio record --seconds 3 --rate 16000 ~/a.wav`: stops by
+   itself after 3 s; `file ~/a.wav` says 16-bit mono 16000 Hz; plays.
+4. `.ogg` and `.aac` too (`--seconds 3`), and both play.
+5. Ctrl+C during `pocket audio play` of a long file stops the sound.
+6. Background: start `pocket audio record ~/b.m4a`, switch to another
+   app for ~10 s (mic indicator stays on), come back, Ctrl+C: the
+   file is ~10 s+ and has sound from while away. Also start
+   `pocket audio play` and leave the app: it keeps playing.
+7. With the app off screen (`sleep 5; pocket audio record ~/c.m4a`,
+   switch away): "the app must be on screen to start".
+8. `pocket set android-microphone off`: record refuses; play works;
+   set it back on. `pocket audio record ~/a.mp3`: format error.
+9. Deny the microphone in the app's Android settings: record says it
+   wasn't allowed. Allow it again after.
+That passes → build the sound device (spike first: do PulseAudio's
+pipe modules work under proot?), as planned below.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -267,6 +292,44 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (40): 9.6 started, `pocket audio play` and `record`
+
+- **Files first**, per the owner's plan. `pocket audio play FILE`
+  (MediaPlayer, the file opened by the app and handed over as an fd)
+  waits until the sound ends; Ctrl+C stops it. `pocket audio record
+  FILE [--seconds N] [--rate HZ]`: the ending picks the format, `.m4a`/
+  `.aac` (AAC) and `.ogg`/`.opus` (Opus, API 29+) through
+  MediaRecorder, `.wav` (16-bit mono PCM, for whisper.cpp and the
+  like) through AudioRecord with core's `wavHeader()`. Recordings go
+  to `.NAME.part` and core renames them when complete.
+- **Ctrl+C ends a recording normally**, so `PendingReply.cancel` now
+  lets the `onCancel` block answer (else `{"ok":true}` as before);
+  `RecordReport.onStop` must stop and report before returning, and
+  `pocket`'s `request(answer_on_interrupt=True)` returns that answer.
+  The client's cancel wait went from 2 to 5 s for slow finishes.
+  The app sends a `{"recording":true}` stream line once the mic is
+  on, so "Recording to …" only shows when it really records.
+- **Setting `android-microphone`** (not `android-audio` as planned):
+  only recording is gated, like the other privacy settings; playing
+  has no setting, like vibrate and torch.
+- Service gains the `microphone` foreground type while anything
+  records (`setRecording`, like `setLocating`); manifest adds
+  RECORD_AUDIO, FOREGROUND_SERVICE_MICROPHONE, microphone feature
+  optional. A stop before the permission dialog answers means the
+  recording never starts (`AudioRecorder.Request`).
+- `targetFile()` (folder checks for a file to save to) is shared by
+  camera and audio.
+- **Test flake seen, not explained:** while iterating, the Ctrl+C
+  tests (`test_camera_stops…`, `test_audio_play_stops…`) failed now
+  and then with `pocket` exiting 130 in 0.1 s without writing
+  `ID.cancel`, though `ID.wait` existed. Tracing never caught it,
+  and it may have been leftover load from a hung test run (the
+  first red run hung: the tests waited for a request that never
+  came, so `wait_for_request()` now gives up after 5 s). The full
+  suite then passed. Watch CI for it.
+- App code can't build here: CI is its compile check.
+- Tests: core 312, pocket 159.
 
 ### 2026-10-05 (39): 9.5 confirmed on the phone
 
