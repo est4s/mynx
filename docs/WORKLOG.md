@@ -12,8 +12,9 @@ Newest entries first. Rules for keeping it up to date: see
   Step 8 (*Profiles*) is planned but **parked** by the owner
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
-  waiting/streaming requests); **9.2 (sharing) is built**, waiting
-  for CI and the owner's test on the phone.
+  waiting/streaming requests); **9.2 (sharing) is confirmed** except
+  sharing a web page from the browser, fixed in entry 30 and waiting
+  for the owner's re-test.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -59,7 +60,7 @@ Newest entries first. Rules for keeping it up to date: see
 - **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
   tools installers, tabs, key bars, colours/themes, settings, config
   check, `pocket` requests, undo, links, waiting and streaming
-  requests; 239 tests), `app/` (thin Android layer),
+  requests, sharing; 240 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
   the agent guide; 126 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
@@ -75,11 +76,11 @@ README section "Android integration". Planned with the owner
 owner test after each part.
 
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
-**9.2 is built** (log entry 29), not yet pushed or tried on the phone.
-**Next:** once the owner says to commit and push, wait for CI, run
-`scripts/deliver.sh`, then go through the 9.2 checklist in entry 29
-with the owner. Fix what fails (test first), then build 9.3
-(location).
+**9.2 is confirmed** (entries 29-30) except one re-test: after
+`scripts/deliver.sh` installs the build with entry 30's fix, the owner
+shares a web page from the browser to the app; `~/Shared` should get a
+`.txt` named after the page title holding the link (not the site's
+icon). **Then build 9.3 (location).**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -242,9 +243,32 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-05 (30): 9.2 tested on the phone; browser share fixed
+
+Tested build 54 (commit 197d67e) with the owner, the agent running
+the commands. Checklist from entry 29:
+- 1-2: `pocket share --text`, also from stdin with line breaks: the
+  share sheet opens and the text arrives, lines kept.
+- 3-4: one image (a generated PNG; the app can't read
+  `/storage/emulated/0/DCIM` without a media permission) shows its
+  preview and name; an image and a `.txt` together both arrive by mail.
+- 5: with the owner still in the receiving app, `pocket share` refused
+  ("the app must be on screen"), exit 2. 6: `android-share off`
+  refuses, exit 2.
+- 7: a Gallery photo shared to the app shows the box and notification
+  and keeps its name; again gives `NAME (2).jpg`, identical bytes.
+- 8: four photos at once all saved. **A web page from the browser
+  saved the site's icon (a PNG) instead of the link:** the browser
+  sends the link as EXTRA_TEXT with the icon in the ClipData as a
+  share-sheet preview, and `ShareActivity` fell back to ClipData URIs
+  whenever EXTRA_STREAM was empty. Fixed test-first: `filesToSave()` in
+  `core/Sharing.kt` takes EXTRA_STREAM, else nothing when there's text
+  (the clip is then a preview), else the clip's URIs.
+- 9: `share-folder /root/inbox` saved there (folder created); reset.
+
 ### 2026-10-04 (29): step 9.2, sharing
 
-Built test-first; not yet committed (the owner commits and pushes).
+Built test-first; committed as 7108d5c, with 197d67e fixing the share intent (`setClipData` returns nothing, so it can't be chained).
 
 - **`pocket share FILE…`** and **`pocket share --text [TEXT]`** (stdin
   when no TEXT) open Android's share sheet. `core` checks the request

@@ -62,6 +62,16 @@ class SharingTest {
     }
 
     @Test
+    fun `which shared files to save`() {
+        assertEquals(listOf("a", "b"), filesToSave(streams = listOf("a", "b"), clip = listOf("a", "b"), text = null))
+        assertEquals(listOf("a"), filesToSave(streams = emptyList(), clip = listOf("a"), text = null))
+        assertEquals(listOf("a"), filesToSave(streams = listOf("a"), clip = emptyList(), text = "caption"))
+        // A browser shares a link with the site's icon in the clip, as a preview: save the link
+        assertEquals(emptyList(), filesToSave(streams = emptyList(), clip = listOf("icon"), text = "https://example.org"))
+        assertEquals(listOf("a"), filesToSave(streams = emptyList(), clip = listOf("a"), text = ""))
+    }
+
+    @Test
     fun `the inbox is the share-folder setting, in Debian`() {
         assertEquals(File(home, "Shared"), inbox(Settings(), home) { time }.folder)
         assertEquals("~/Shared", inbox(Settings(), home) { time }.label)

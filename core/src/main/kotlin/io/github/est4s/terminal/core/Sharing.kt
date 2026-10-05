@@ -43,6 +43,18 @@ fun shareType(types: List<String?>): String {
     return if (top.size == 1) "${top[0]}/*" else "*/*"
 }
 
+/**
+ * Which files of an incoming share to save: its [streams] (EXTRA_STREAM),
+ * else the [clip]'s, unless it has [text]. Then the clip only holds a
+ * preview for the share sheet (a browser puts the site's icon there) and
+ * the text is what was shared. Empty means save the text.
+ */
+fun <T> filesToSave(streams: List<T>, clip: List<T>, text: String?): List<T> = when {
+    streams.isNotEmpty() -> streams
+    !text.isNullOrEmpty() -> emptyList()
+    else -> clip
+}
+
 /** Where files and text shared to the app from other apps are saved (the share-folder setting). */
 fun inbox(settings: Settings, home: File, now: () -> LocalDateTime = LocalDateTime::now): Inbox {
     val path = settings.shareFolder

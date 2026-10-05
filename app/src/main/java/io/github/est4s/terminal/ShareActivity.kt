@@ -15,6 +15,7 @@ import android.widget.Toast
 import io.github.est4s.terminal.core.CONFIG_DIR
 import io.github.est4s.terminal.core.Inbox
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.filesToSave
 import io.github.est4s.terminal.core.inbox
 import io.github.est4s.terminal.core.loadSettings
 import java.io.File
@@ -48,8 +49,8 @@ class ShareActivity : Activity() {
             setPadding(pad, pad, pad, pad)
         })
         thread(name = "share-save") {
-            val uris = streamsOf(share)
             val text = share.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+            val uris = filesToSave(streamsOf(share), clipUris(share), text)
             val message = try {
                 if (uris.isEmpty() && !text.isNullOrEmpty()) {
                     val file = inbox.saveText(text, share.getStringExtra(Intent.EXTRA_SUBJECT))
@@ -66,12 +67,12 @@ class ShareActivity : Activity() {
     }
 
     @Suppress("DEPRECATION") // the typed getParcelable…Extra need API 33
-    private fun streamsOf(share: Intent): List<Uri> {
-        val extra = when (share.action) {
-            Intent.ACTION_SEND_MULTIPLE -> share.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
-            else -> listOfNotNull(share.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
-        }
-        if (extra.isNotEmpty()) return extra
+    private fun streamsOf(share: Intent): List<Uri> = when (share.action) {
+        Intent.ACTION_SEND_MULTIPLE -> share.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM).orEmpty()
+        else -> listOfNotNull(share.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
+    }
+
+    private fun clipUris(share: Intent): List<Uri> {
         val clip = share.clipData ?: return emptyList()
         return (0 until clip.itemCount).mapNotNull { clip.getItemAt(it).uri }
     }
