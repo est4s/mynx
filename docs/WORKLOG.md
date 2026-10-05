@@ -19,7 +19,8 @@ Newest entries first. Rules for keeping it up to date: see
   half (`pocket audio play`/`record`) is confirmed (2026-10-05,
   entry 42); the sound device's speaker half is confirmed (2026-10-05,
   entry 47); the microphone half is built (entry 49), waiting for
-  the phone check.
+  the phone check. Also built, not yet checked: `pocket rotation
+  lock` (entry 50) and swiping between tabs (entry 51).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -91,9 +92,13 @@ owner test after each part.
 **9.6 sound device, speaker half is done** (confirmed on the phone
 2026-10-05, entries 45-47).
 
-**Next: check the sound device's microphone on the phone** (entry
-49, built but not yet run on the phone; the plan is in entry 48).
-With the new build installed and the app on screen, in a new tab:
+**Next: phone checks for three features built 2026-10-05 night**
+(entries 49-51; none run on the phone yet). Install the newest build
+first (`scripts/deliver.sh` with the app on screen, or open
+Download/pocket-terminal-build.apk).
+
+**A. The sound device's microphone** (entry 49; plan in entry 48).
+With the app on screen, in a new tab:
 1. Nothing records: no microphone indicator, the notification says
    "N terminals running".
 2. `arecord -f S16_LE -r 48000 -c 1 -d 5 /tmp/m.wav` and speak:
@@ -110,6 +115,23 @@ With the new build installed and the app on screen, in a new tab:
    it keeps recording in the background (indicator stays).
 If something fails: `cat /tmp/.pocket-terminal/sound/inputs` (who
 Pulse says records) and `server.log`.
+
+**B. Rotation lock** (entry 50), with auto-rotate on in Android:
+1. `pocket rotation lock`, turn the phone: the screen stays.
+   `pocket rotation` says "locked as it is".
+2. `pocket rotation unlock`: it turns again.
+3. `pocket rotation lock landscape` in portrait: the screen turns to
+   landscape and stays.
+4. `bash -c 'pocket rotation lock; sleep 5'`: locked for 5 s, then
+   it turns again within a second (the lock ends with its process).
+5. The owner's inclinometer: `pocket rotation lock` at its start.
+
+**C. Swiping between tabs** (entry 51), with 3 tabs open:
+1. A quick swipe left on the terminal goes to the next tab, right to
+   the one before; nothing past the first or last.
+2. Scrolling up and down, pinching, long-press selecting, and typing
+   still work as before; a slow sideways drag doesn't switch.
+3. `pocket set tab-swipe off`: swipes do nothing; `on` again.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -295,6 +317,38 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-05 (51): swipe sideways to switch tabs
+
+The owner asked for it (2026-10-05) and chose: on the terminal, **on
+by default** (an exception to "touch off by default", noted in
+AGENTS.md). Not yet run on the phone.
+- core: `TabSwipe` classifies one finger's touch: at least 60 dp
+  sideways within 400 ms, vertical wander under half the sideways
+  distance, no second finger. `swipeTarget()` stops at the ends (the
+  keyboard's Next/Previous wrap; a swipe that wraps felt wrong for
+  pages). `tab-swipe` setting (last in the list, so the editors'
+  order is unchanged).
+- app: an OnTouchListener on the TerminalView that only watches
+  (returns false); ignored while selecting text
+  (`isSelectingText()`, checked in the library's v0.118.3 source).
+- A bats test now checks the guide documents every setting (it failed
+  without the `tab-swipe` entry).
+
+### 2026-10-05 (50): pocket rotation lock
+
+For the owner's inclinometer app. Owner's choice: the program asks.
+Not yet run on the phone.
+- `pocket rotation lock [portrait|landscape] [--pid PID]` | `unlock`
+  | `status`. The lock belongs to `pocket`'s parent (the program, or
+  the shell when typed), stored as pid + start time (`/proc/PID/stat`
+  field 22) in core's `RotationLocks`, so a reused pid doesn't keep
+  it. The newest lock decides; `unlock` ends all.
+- The service sweeps every second while locked; the activity sets
+  `requestedOrientation` (LOCKED for "as it is", PORTRAIT/LANDSCAPE,
+  else UNSPECIFIED, which follows Android's auto-rotate) and reapplies
+  it when it connects.
+- Tests: core 365 (with entry 51), pocket 174.
+
 ### 2026-10-05 (49): sound device, microphone half
 
 Built test-first from entry 48's plan; not yet run on the phone.
@@ -328,7 +382,7 @@ Built test-first from entry 48's plan; not yet run on the phone.
 The owner worried about Android's microphone indicator; the plan
 opens the microphone only while a program records from Pulse, names
 the program in the notification and keeps `android-microphone off`
-as the switch (see "Next"). Checked here with the real Pulse 17: a
+as the switch (built in entry 49; see AGENTS.md, "Sound device"). Checked here with the real Pulse 17: a
 pipe source with no writer gives `parecord` nothing (0 bytes in 2 s,
 no silence), and `pactl list source-outputs` shows `Source: N`,
 `Corked:` and `application.process.binary`.
