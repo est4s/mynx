@@ -175,6 +175,39 @@ class SoundRequestTest {
         )
     }
 
+    private val pidFile = File(base, "pid")
+    private val proc = File(base, "proc")
+
+    private fun process(pid: Int, comm: String) {
+        File(proc, "$pid").mkdirs()
+        File(proc, "$pid/comm").writeText("$comm\n")
+    }
+
+    @Test
+    fun `finds the running sound server by its pid file`() {
+        pidFile.writeText("4242\n")
+        process(4242, "pulseaudio")
+
+        assertEquals(4242, soundServerPid(pidFile, proc))
+    }
+
+    @Test
+    fun `finds no sound server without a pid file or a process`() {
+        assertNull(soundServerPid(pidFile, proc))
+        pidFile.writeText("4242\n")
+        assertNull(soundServerPid(pidFile, proc))
+        pidFile.writeText("garbage\n")
+        assertNull(soundServerPid(pidFile, proc))
+    }
+
+    @Test
+    fun `never takes another program that got the pid for the sound server`() {
+        pidFile.writeText("4242\n")
+        process(4242, "bash")
+
+        assertNull(soundServerPid(pidFile, proc))
+    }
+
     private fun send(id: String, vararg lines: String) {
         File(dir, "$id.req").writeText(lines.joinToString("\n", postfix = "\n"))
         requests.processPending()

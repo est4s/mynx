@@ -291,6 +291,21 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-05 (46): stop PulseAudio itself, by its pid
+
+Picked up from a session that crashed before committing. Killing
+the proot that runs the sound server leaves PulseAudio running, so a
+stop (or an app killed by Android) would leave a stray Pulse, and the
+next start would compete with it.
+- `sound-server` writes its pid (`exec` keeps it) to
+  `/tmp/.pocket-terminal/sound/pid`, and first stops an older Pulse
+  named there (TERM, up to 2 s, then KILL), only if
+  `/proc/PID/comm` is still `pulseaudio`.
+- core: `SOUND_PID`, `soundServerPid()` (same check). `SoundDevice`
+  sends SIGTERM to that pid before killing proot.
+- Not yet compiled (CI) or run on the phone. Tests: core green,
+  `sound-server.bats` 6/6.
+
 ### 2026-10-05 (45): sound device, speaker half
 
 Built test-first from the spike's design (entries 43-44); not yet

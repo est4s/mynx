@@ -7,6 +7,18 @@
 dir=${POCKET_SOUND_DIR:-/tmp/.pocket-terminal/sound}
 command -v pulseaudio >/dev/null 2>&1 || exit 3
 mkdir -p "$dir"
+# A Pulse outlives the proot that ran it, so the app stops it by the pid
+# left here, and so does the next start (after the app was killed).
+old=$(cat "$dir/pid" 2>/dev/null)
+if [ -n "$old" ] && [ "$(cat "/proc/$old/comm" 2>/dev/null)" = pulseaudio ]; then
+    kill "$old" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        [ -e "/proc/$old" ] && ! grep -q '^State:.*Z' "/proc/$old/status" 2>/dev/null || break
+        sleep 0.2
+    done
+    kill -9 "$old" 2>/dev/null
+fi
+echo $$ >"$dir/pid"
 # -n: none of Debian's default.pa, which looks for sound cards we don't
 # have. The pipe has no clock of its own: the app's reading paces it.
 exec pulseaudio -n --daemonize=no --exit-idle-time=-1 --use-pid-file=no \

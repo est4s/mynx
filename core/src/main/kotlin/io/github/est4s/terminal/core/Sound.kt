@@ -1,5 +1,6 @@
 package io.github.est4s.terminal.core
 
+import java.io.File
 import java.io.InputStream
 
 /** Where Debian's sound server (PulseAudio) and the app meet, in Debian's /tmp. */
@@ -9,6 +10,8 @@ const val SOUND_SOCKET = "$SOUND_DIR/native"
 /** The pipe the server plays into and the app reads: s16le, [SOUND_RATE] Hz, stereo. */
 const val SOUND_OUT = "$SOUND_DIR/out"
 const val SOUND_RATE = 48000
+/** The server's pid, written by [SOUND_SERVER]: a Pulse outlives the proot that ran it. */
+const val SOUND_PID = "$SOUND_DIR/pid"
 /** The app's script that runs the server, in Debian. */
 const val SOUND_SERVER = "$TOOLS_MOUNT/lib/sound-server"
 /** The script's exit code when PulseAudio isn't installed in Debian. */
@@ -97,4 +100,15 @@ class ServerRestarts {
         if (ranMs >= 30_000) failures = 0
         return (1000L shl failures.coerceAtMost(6)).coerceAtMost(60_000).also { failures++ }
     }
+}
+
+/**
+ * The sound server's pid from its [pidFile], while that process is still
+ * PulseAudio (in [proc]), so a pid taken over by another program is left
+ * alone. Proot doesn't hide pids: Debian's are Android's.
+ */
+fun soundServerPid(pidFile: File, proc: File = File("/proc")): Int? {
+    val pid = runCatching { pidFile.readText().trim().toInt() }.getOrNull() ?: return null
+    val comm = runCatching { File(proc, "$pid/comm").readText().trim() }.getOrNull()
+    return pid.takeIf { comm == "pulseaudio" }
 }

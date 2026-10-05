@@ -12,6 +12,7 @@ import io.github.est4s.terminal.core.PipePlayer
 import io.github.est4s.terminal.core.SOUND_RATE
 import io.github.est4s.terminal.core.ServerRestarts
 import io.github.est4s.terminal.core.SoundOut
+import io.github.est4s.terminal.core.soundServerPid
 import java.io.File
 import java.io.FileInputStream
 import kotlin.concurrent.thread
@@ -19,13 +20,15 @@ import kotlin.concurrent.thread
 /**
  * The sound device: runs Debian's PulseAudio (`sound-server`, started by
  * [launch]) outside any tab and plays the [pipe] it writes on the phone.
- * The server's output goes to [log]. Call from [handler]'s thread.
+ * The server's output goes to [log], its pid to [pidFile]. Call from
+ * [handler]'s thread.
  */
 class SoundDevice(
     private val launch: () -> Launch,
     private val workDir: File,
     private val pipe: File,
     private val log: File,
+    private val pidFile: File,
     private val installed: () -> Boolean,
     private val handler: Handler,
 ) {
@@ -72,6 +75,8 @@ class SoundDevice(
         fun stop() {
             stopped = true
             handler.removeCallbacks(idleCheck)
+            // Killing proot leaves Pulse running: stop Pulse itself.
+            soundServerPid(pidFile)?.let { runCatching { Os.kill(it, OsConstants.SIGTERM) } }
             process?.destroyForcibly()
             // A reader waiting for the pipe to open would wait forever:
             // opening it to write lets it through, to the end of the pipe.

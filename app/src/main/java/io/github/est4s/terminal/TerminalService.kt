@@ -35,6 +35,7 @@ import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.CONFIG_DIR
 import io.github.est4s.terminal.core.SOUND_DIR
 import io.github.est4s.terminal.core.SOUND_OUT
+import io.github.est4s.terminal.core.SOUND_PID
 import io.github.est4s.terminal.core.SOUND_SERVER
 import io.github.est4s.terminal.core.SOUND_SOCKET
 import io.github.est4s.terminal.core.loadSettings
@@ -133,6 +134,7 @@ class TerminalService : Service() {
             workDir = filesDir,
             pipe = File(rootfs, SOUND_OUT),
             log = File(rootfs, "$SOUND_DIR/server.log"),
+            pidFile = File(rootfs, SOUND_PID),
             installed = { File(rootfs, "usr/bin/pulseaudio").exists() },
             handler = mainHandler,
         )

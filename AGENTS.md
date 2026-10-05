@@ -232,7 +232,10 @@ See README "How it works". The details:
   ~5.5 MB and no CPU, and it refuses to autospawn as root, so not on
   demand). It runs in a proot of its own (`prootLaunch(command = …)`),
   restarted with backoff (`ServerRestarts`), except exit 3: not
-  installed (`pocket sound install` for Debians from before). Pulse
+  installed (`pocket sound install` for Debians from before). Killing
+  proot leaves Pulse running, so `sound-server` writes its pid to
+  `sound/pid`: the app stops Pulse by it (`soundServerPid()` checks
+  it's still `pulseaudio`), and so does the next start. Pulse
   plays into `module-pipe-sink` at `/tmp/.pocket-terminal/sound/out`
   (48 kHz s16 stereo); `PipePlayer` reads it in 20 ms chunks into a
   blocking AudioTrack, which paces the clockless pipe, pauses the

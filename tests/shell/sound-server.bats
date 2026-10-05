@@ -10,8 +10,12 @@ setup() {
     export POCKET_SOUND_DIR="$BATS_TEST_TMPDIR/sound"
 }
 
+teardown() {
+    [ -z "$OLD" ] || kill "$OLD" 2>/dev/null || true
+}
+
 stub_pulseaudio() {
-    printf '#!/bin/sh\nprintf "%%s\\n" "$@"\n' >"$STUBS/pulseaudio"
+    printf '#!/bin/sh\nprintf "%%s\\n" "$@"\necho "pid=$$"\n' >"$STUBS/pulseaudio"
     chmod +x "$STUBS/pulseaudio"
 }
 
@@ -35,4 +39,41 @@ stub_pulseaudio() {
     [[ $output == *"module-pipe-sink file=$POCKET_SOUND_DIR/out format=s16le rate=48000 channels=2"* ]]
     [[ $output == *"module-native-protocol-unix auth-anonymous=1 socket=$POCKET_SOUND_DIR/native"* ]]
     [ -d "$POCKET_SOUND_DIR" ]
+}
+
+@test "sound-server leaves Pulse's pid in the pid file, for the app to stop it" {
+    stub_pulseaudio
+    PATH="$STUBS:$PATH" run "$SERVER"
+    [ "${lines[-1]}" = "pid=$(cat "$POCKET_SOUND_DIR/pid")" ]
+}
+
+# Ended: the test shell hasn't reaped it, so a zombie counts.
+gone() {
+    [ ! -e "/proc/$1" ] || grep -q '^State:.*Z' "/proc/$1/status"
+}
+
+# A copy of sleep named pulseaudio, as an older server left running.
+old_server() {
+    mkdir -p "$BATS_TEST_TMPDIR/old" "$POCKET_SOUND_DIR"
+    cp "$(command -v sleep)" "$BATS_TEST_TMPDIR/old/$1"
+    "$BATS_TEST_TMPDIR/old/$1" 30 &
+    OLD=$!
+    echo $! >"$POCKET_SOUND_DIR/pid"
+}
+
+@test "sound-server stops an older Pulse left running first" {
+    stub_pulseaudio
+    old_server pulseaudio
+    old=$(cat "$POCKET_SOUND_DIR/pid")
+    PATH="$STUBS:$PATH" run "$SERVER"
+    [ "$status" -eq 0 ]
+    gone "$old"
+}
+
+@test "sound-server leaves alone another program with the old pid" {
+    stub_pulseaudio
+    old_server not-pulse
+    old=$(cat "$POCKET_SOUND_DIR/pid")
+    PATH="$STUBS:$PATH" run "$SERVER"
+    kill -0 "$old"
 }
