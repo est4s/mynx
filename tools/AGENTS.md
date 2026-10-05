@@ -147,7 +147,8 @@ One `key = value` per line; `pocket settings` describes each.
 - `android-camera`: `on` (default) or `off`: whether programs here
   can take photos (`pocket camera`).
 - `android-microphone`: `on` (default) or `off`: whether programs
-  here can record from the microphone (`pocket audio record`).
+  here can record from the microphone (`pocket audio record`, and
+  the sound device: they get silence while it's off).
 - `sound-device`: `on` (default) or `off`: whether the app runs the
   sound device, so programs here play through the phone's speaker.
 - `share-folder`: where files other apps share to this app are saved,
@@ -284,8 +285,15 @@ Commands for the phone itself, and the sound device:
   need `pocket sound install` once (it runs `apt-get install
   pulseaudio …`, asking first; `--yes` skips that). PulseAudio's
   output is in `/tmp/.pocket-terminal/sound/server.log`.
-  `sound-device off` turns it off. Recording through it (the
-  microphone) isn't there yet: use `pocket audio record`.
+  `sound-device off` turns it off. Programs record through it too
+  (`arecord`, `parecord`, `sox`'s `rec`, whisper.cpp, …): the app
+  opens the phone's microphone only while a program records, and
+  its notification names the programs ("Microphone: arecord").
+  Programs get silence, and the notification says why, when
+  `android-microphone` is off, when the microphone isn't allowed
+  yet, or when recording starts while the app is in the background
+  (Android only lets the app in use start the microphone): open the
+  app and it starts. Recording is 48 kHz mono.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved

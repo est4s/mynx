@@ -146,7 +146,7 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(androidCamera = it == "on") },
     ),
     SettingDef(
-        "android-microphone", "Whether programs in Debian can record from the phone's microphone (pocket audio record).",
+        "android-microphone", "Whether programs in Debian can record from the phone's microphone (pocket audio record, the sound device).",
         "on", listOf("on", "off"),
         oneOf("android-microphone", listOf("on", "off")),
         { copy(androidMicrophone = it == "on") },

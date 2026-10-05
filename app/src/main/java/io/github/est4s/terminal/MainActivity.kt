@@ -180,7 +180,7 @@ class MainActivity : Activity() {
             applySettings()
         }
         root.post(keyBarPoll)
-        service?.clearNoticeOfShownTab()
+        service?.cameOnScreen()
     }
 
     // Folders change without tab changes, and leaving the app is the last

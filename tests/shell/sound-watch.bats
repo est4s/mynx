@@ -110,3 +110,17 @@ Event 'remove' on source-output #0" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     [ "$status" -eq 0 ]
     [ "$(lists)" -eq 0 ]
 }
+
+@test "with the real PulseAudio, a recording program shows up and mic is the default source" {
+    command -v pulseaudio >/dev/null && command -v arecord >/dev/null || skip "PulseAudio isn't installed"
+    "$BATS_TEST_DIRNAME/../../tools/lib/sound-server" 2>/dev/null &
+    for _ in $(seq 50); do [ -e "$POCKET_SOUND_DIR/inputs" ] && break; sleep 0.1; done
+    PULSE="$(cat "$POCKET_SOUND_DIR/pid")"
+    export PULSE_SERVER="unix:$POCKET_SOUND_DIR/native"
+    [ "$(pactl get-default-source)" = mic ]
+    timeout 2 arecord -q -f S16_LE -r 48000 -c 1 /dev/null 2>/dev/null &
+    for _ in $(seq 30); do grep -q 'Source Output' "$POCKET_SOUND_DIR/inputs" && break; sleep 0.1; done
+    grep -q '^1	mic	' "$POCKET_SOUND_DIR/inputs"
+    grep -q 'application.process.id' "$POCKET_SOUND_DIR/inputs"
+    wait %2 || true
+}

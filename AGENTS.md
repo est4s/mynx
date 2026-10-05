@@ -241,7 +241,16 @@ See README "How it works". The details:
   blocking AudioTrack, which paces the clockless pipe, pauses the
   track after 500 ms quiet and reopens the pipe when Pulse restarts.
   Tabs get `PULSE_SERVER`; ALSA programs follow through Debian's
-  pulse plugin. The microphone half is still to come.
+  pulse plugin. **Microphone:** `module-pipe-source` `mic` reads
+  `sound/in` (48 kHz mono). `tools/lib/sound-watch` (started by
+  `sound-server`) writes Pulse's sources and source outputs to
+  `sound/inputs` on every change; `MicFeeder` watches it and, through
+  core's `micUsers()`/`micState()` (`Mic.kt`), opens an AudioRecord
+  only while a program records from `mic` (owner's decision: the
+  indicator shows only then). It feeds paced zeros (`Silence`) when
+  it can't record: with no writer, Pulse gives recorders nothing and
+  they hang. The service adds the `microphone` type and names the
+  programs in its notification (`micNotice()`).
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

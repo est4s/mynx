@@ -23,7 +23,9 @@ import android.os.Vibrator
 import android.os.VibratorManager
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
+import io.github.est4s.terminal.core.Mic
 import io.github.est4s.terminal.core.Notice
+import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
@@ -139,6 +141,15 @@ class TerminalService : Service() {
             handler = mainHandler,
         )
     }
+    private val mic by lazy {
+        MicFeeder(
+            this, mainHandler, File(rootfs, SOUND_DIR),
+            allowed = { currentSettings()?.androidMicrophone ?: true },
+            onScreen = { activity?.onScreen == true },
+            askPermission = ::askPermissions,
+            changed = ::setMic,
+        )
+    }
     private val recorder by lazy {
         AudioRecorder(this, mainHandler, { activity?.onScreen == true }, ::askPermissions, ::setRecording)
     }
@@ -147,6 +158,7 @@ class TerminalService : Service() {
     // in the background.
     private var locating = false
     private var recording = false
+    private var micState: Mic = Mic.Off
     private var sweepDue = false
     private val sweep = Runnable {
         sweepDue = false
@@ -174,12 +186,26 @@ class TerminalService : Service() {
 
     // The sound device runs while its setting is on.
     private fun applySoundSetting() {
-        val on = runCatching { loadSettings(File(rootfs, "root/$CONFIG_DIR/settings.conf")).settings.soundDevice }
-            .getOrDefault(true)
+        val on = currentSettings()?.soundDevice ?: true
         when {
             on && !sound.running -> sound.start()
             !on && sound.running -> sound.stop()
         }
+        if (sound.running) {
+            mic.start()
+            mic.update() // android-microphone may have changed
+        } else {
+            mic.stop()
+        }
+    }
+
+    private fun currentSettings() =
+        runCatching { loadSettings(File(rootfs, "root/$CONFIG_DIR/settings.conf")).settings }.getOrNull()
+
+    /** The app came on screen: a program waiting for the microphone can have it now. */
+    fun cameOnScreen() {
+        clearNoticeOfShownTab()
+        mic.update()
     }
 
     // Before any shell starts, so none runs old tools while they're replaced.
@@ -270,6 +296,7 @@ class TerminalService : Service() {
         sensors.stopAll()
         player.stopAll()
         recorder.stopAll()
+        mic.stop()
         sound.stop()
         killAll()
         super.onDestroy()
@@ -540,7 +567,7 @@ class TerminalService : Service() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) {
             val location = if (locating) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-            val microphone = if (recording) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+            val microphone = if (recording || micState is Mic.On) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
             startForeground(
                 NOTIFICATION_ID, notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE or location or microphone,
@@ -561,6 +588,14 @@ class TerminalService : Service() {
     private fun setRecording(on: Boolean) {
         recording = on
         if (Build.VERSION.SDK_INT >= 34) runCatching { goForeground() }
+    }
+
+    // The microphone foreground type before the microphone opens; the
+    // notification names who listens, or who is blocked and why.
+    private fun setMic(next: Mic) {
+        val typeChanged = (next is Mic.On) != (micState is Mic.On)
+        micState = next
+        if (typeChanged && Build.VERSION.SDK_INT >= 34) runCatching { goForeground() } else updateNotification()
     }
 
     // Android's permission dialogs need the activity on screen.
@@ -584,7 +619,13 @@ class TerminalService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(runningTerminalsText(tabs.tabs.size))
+            .setContentText(micNotice(micState) ?: runningTerminalsText(tabs.tabs.size))
+            .apply {
+                micNotice(micState)?.let {
+                    setSubText(runningTerminalsText(tabs.tabs.size))
+                    setStyle(Notification.BigTextStyle().bigText(it))
+                }
+            }
             .setContentIntent(open)
             .setOngoing(true)
             .addAction(Notification.Action.Builder(null as Icon?, "Exit", exit).build())
