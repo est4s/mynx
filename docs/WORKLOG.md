@@ -16,8 +16,8 @@ Newest entries first. Rules for keeping it up to date: see
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
-  half (`pocket audio play`/`record`) mostly passes on the phone
-  (entry 41), with a Ctrl+C fix to check; the sound device comes next.
+  half (`pocket audio play`/`record`) is confirmed (2026-10-05,
+  entry 42); the sound device comes next.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -84,18 +84,29 @@ owner test after each part.
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
 **9.5 (camera and flashlight) is done** (confirmed on the phone
 2026-10-05, entries 38-39).
-**9.6 (sound), files half: built (entry 40), tested on build 62
-(entry 41): all pass but test 5; the fix for it is pushed.** On the
-new build (`scripts/deliver.sh`), app on screen:
-1. `timeout -s INT 3 pocket audio play ~/long.wav` (a 20 s 440 Hz
-   tone; make one with Python's `wave` if it's gone): the owner hears
-   it stop at 3 s; nothing left in `/tmp/.pocket-terminal/requests`.
-2. Background playback: `pocket audio play ~/long.wav`, the owner
-   leaves the app: it keeps playing.
-3. Deny the microphone in the app's Android settings: record says it
-   wasn't allowed. Allow it again after.
-That passes → build the sound device (spike first: do PulseAudio's
-pipe modules work under proot?), as planned below.
+**9.6 (sound), files half is done** (confirmed on the phone
+2026-10-05, entries 40-42).
+
+**Next: the sound device, spike first** (on a branch, thrown away
+after). Find out in the app's Debian whether PulseAudio's pipe
+modules work under proot:
+1. `apt install pulseaudio pulseaudio-utils sox` (also `alsa-utils`
+   and `libasound2-plugins` for `aplay`/`arecord` through Pulse).
+2. `pulseaudio --daemonize=no --exit-idle-time=-1 -n -L
+   "module-pipe-sink file=/tmp/snd/out format=s16le rate=48000
+   channels=2" -L "module-pipe-source file=/tmp/snd/in …" -L
+   module-native-protocol-unix` (no system bus, no realtime, `-n`
+   skips the default config). Check it starts as fake root and that
+   `paplay`/`sox … -t pulse` write PCM into the FIFO (`cat
+   /tmp/snd/out | wc -c`).
+3. If it works: the app reads the FIFO (from the host side, through
+   the rootfs path) into an AudioTrack, and writes AudioRecord PCM
+   into the source FIFO; check latency and what happens when nobody
+   reads (Pulse blocks or drops?).
+If the pipe modules fail under proot, look at `module-simple-protocol-tcp`
+on 127.0.0.1 (ports above 1024 work) before anything else.
+Then rebuild test-first: who starts PulseAudio (a `pocket`
+command or `/etc/profile.d`), setting `android-audio`, the docs.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -280,6 +291,17 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (42): 9.6 files half confirmed on the phone
+
+The three checks from "Next" on the build with `a723342`, all pass:
+1. `timeout -s INT 3 pocket audio play ~/long.wav`: the tone stops at
+   3 s, nothing left in the request folder (the double-SIGINT fix
+   and the sweep fix work).
+2. Background playback keeps playing with the app left.
+3. Microphone denied in Android's settings: record says it wasn't
+   allowed.
+The files half of 9.6 is done; the sound device is next.
 
 ### 2026-10-05 (41): 9.6 tested on the phone; Ctrl+C on a stream fixed
 
