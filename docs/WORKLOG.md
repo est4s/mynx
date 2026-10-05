@@ -13,8 +13,8 @@ Newest entries first. Rules for keeping it up to date: see
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
-  (2026-10-05). **9.3 (location) is built** (entry 32) and waits for
-  the owner's test.
+  (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). Next:
+  9.4 (sensors).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -77,30 +77,9 @@ owner test after each part.
 
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
-**9.3 (location) is built** (entry 32): run `scripts/deliver.sh`, then
-go through this with the owner (the agent runs the commands, the
-owner says what the phone shows):
-1. `pocket location` with the app on screen: Android asks to allow
-   location (while using the app / only this time / don't allow, and
-   precise or approximate). Allow precise: a line like
-   `60.16, 24.93 ±12 m network 08:41:02` within a few seconds.
-2. `pocket location --json`; `pocket location --gps` near a window:
-   provider `gps` (or "no fix within 60 s" indoors: that's right).
-3. `pocket location --stream --every 2 > ~/loc.txt` in one tab;
-   leave the app for a minute, come back, Ctrl+C: the times in
-   `~/loc.txt` kept going while away. The service notification still
-   says terminals are running (Android may show a location icon).
-4. `pocket location --stream | head -3`: ends after 3 lines, no error.
-5. `pocket set android-location off`: refused with the setting's
-   name; set it back on.
-6. Phone location off in quick settings: "location is off on the
-   phone"; turn it back on.
-7. `sleep 10; pocket location`, leave the app before it runs: "the app
-   must be on screen to start".
-8. In the app's Android settings switch to approximate: plain
-   `pocket location` works (network), `--gps` says it needs precise.
-   Deny entirely: "location wasn't allowed …".
-**Then build 9.4 (sensors).**
+**9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
+**Build 9.4 (sensors) next:** part 4 under "Parts" below. Plan its
+owner checks like 9.3's (entry 32 and git history have them).
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -262,6 +241,17 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (33): 9.3 confirmed on the phone
+
+The owner went through all eight checks from entry 32 (one fix,
+`--json`, `--gps`, a stream kept going in the background, `| head
+-3`, the setting off, phone location off, starting off screen,
+approximate and denied). After "Don't allow" in the app's Android
+settings, `pocket location` showed Android's dialog again; denying
+gave "location wasn't allowed (allow it in the app's Android
+settings)", exit 2. Allowed again: `60.2070536, 24.7659244 ±100 m
+network`. Step 9.3 is done.
 
 ### 2026-10-05 (32): step 9.3, location
 
