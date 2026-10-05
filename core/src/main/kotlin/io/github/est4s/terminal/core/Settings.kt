@@ -29,6 +29,8 @@ data class Settings(
     val soundDevice: Boolean = true,
     /** Where files shared to the app from other apps go, in Debian. */
     val shareFolder: String = "~/Shared",
+    /** Whether a quick sideways swipe on the terminal switches tabs. */
+    val tabSwipe: Boolean = true,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -46,6 +48,7 @@ data class Settings(
         "android-microphone" to if (androidMicrophone) "on" else "off",
         "sound-device" to if (soundDevice) "on" else "off",
         "share-folder" to shareFolder,
+        "tab-swipe" to if (tabSwipe) "on" else "off",
     )
 }
 
@@ -162,6 +165,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "~/Shared", null,
         { if (it.startsWith("/") || (it.startsWith("~/") && it.length > 2)) null else "share-folder must be a full path or start with ~/" },
         { copy(shareFolder = it) },
+    ),
+    SettingDef(
+        "tab-swipe", "Whether a quick sideways swipe on the terminal goes to the next or previous tab.",
+        "on", listOf("on", "off"),
+        oneOf("tab-swipe", listOf("on", "off")),
+        { copy(tabSwipe = it == "on") },
     ),
 )
 

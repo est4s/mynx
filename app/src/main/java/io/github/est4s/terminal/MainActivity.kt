@@ -43,6 +43,8 @@ import io.github.est4s.terminal.core.ColorScheme
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
 import io.github.est4s.terminal.core.MIN_FONT_SIZE
 import io.github.est4s.terminal.core.Orientation
+import io.github.est4s.terminal.core.TabSwipe
+import io.github.est4s.terminal.core.swipeTarget
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tab
@@ -99,6 +101,8 @@ class MainActivity : Activity() {
     private var shownSettingsProblems = emptyList<String>()
     private var fontSize = 0 // dp
     private var visible = false
+    private var tabSwipe: TabSwipe? = null
+    private var tabSwipeOn = true
     /** Whether the terminal is on screen (between onStart and onStop). */
     val onScreen get() = visible
     // A tapped notification's tab, selected once the service is connected.
@@ -306,6 +310,11 @@ class MainActivity : Activity() {
             setTerminalViewClient(ViewClient(this@MainActivity))
             isFocusable = true
             isFocusableInTouchMode = true
+            // Watches only: the terminal still gets every event.
+            setOnTouchListener { _, e ->
+                watchSwipe(e)
+                false
+            }
         }
         // Before attaching: the size decides the first rows and columns.
         appliedFont = null
@@ -488,6 +497,22 @@ class MainActivity : Activity() {
         service?.tabs?.tabs?.forEach { it.session.emulator?.mColors?.reset() }
     }
 
+    /** `tab-swipe`: a quick sideways swipe on the terminal goes to the next or previous tab. */
+    private fun watchSwipe(e: MotionEvent) {
+        val swipe = tabSwipe ?: TabSwipe(resources.displayMetrics.density).also { tabSwipe = it }
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> swipe.down(e.x, e.y, e.eventTime)
+            MotionEvent.ACTION_MOVE -> swipe.move(e.x, e.y)
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> swipe.secondFinger()
+            MotionEvent.ACTION_UP -> {
+                val step = swipe.up(e.x, e.y, e.eventTime) ?: return
+                if (!tabSwipeOn || terminalView.isSelectingText) return
+                val tabs = service?.tabs ?: return
+                swipeTarget(tabs.selectedIndex, tabs.tabs.size, step)?.let { onTabAction(TabAction.GoTo(it)) }
+            }
+        }
+    }
+
     /** Runs a tab shortcut, from the keyboard or the strip. */
     fun onTabAction(action: TabAction) {
         val service = service ?: return
@@ -606,6 +631,7 @@ class MainActivity : Activity() {
         }
         service?.setCursorStyle(settings.cursorStyle)
         terminalView.setTerminalCursorBlinkerRate(if (settings.cursorBlink) CURSOR_BLINK_MS else 0)
+        tabSwipeOn = settings.tabSwipe
         setCursorBlinking(true)
         terminalView.onScreenUpdated()
         if (!quiet && problems.isNotEmpty() && problems != shownSettingsProblems) {

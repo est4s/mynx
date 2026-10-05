@@ -315,7 +315,8 @@ See README "How it works". The details:
 These come from the README scope and apply to every feature:
 - **Keyboard-first.** Everything must work from the keyboard (the in-app
   keyboard, once it exists). Tap/touch support is a low priority: add it later,
-  off by default, behind a settings toggle.
+  off by default, behind a settings toggle. Exception (owner's decision,
+  2026-10-05): swiping between tabs (`tab-swipe`) is on by default.
 - **Plain-text config.** Every setting lives in a readable, commented text
   file inside Debian, so users and AI agents can edit it.
 - **A `pocket` command for everything** the settings UI can do, with `--json`

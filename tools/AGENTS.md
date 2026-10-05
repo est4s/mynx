@@ -154,6 +154,10 @@ One `key = value` per line; `pocket settings` describes each.
   sound device, so programs here play through the phone's speaker.
 - `share-folder`: where files other apps share to this app are saved,
   a full path or one starting with `~/` (default `~/Shared`).
+- `tab-swipe`: `on` (default) or `off`: whether a quick sideways
+  swipe on the terminal goes to the next tab (swipe left) or the
+  one before (swipe right). It stops at the first and last tab;
+  scrolling, pinching and selecting text are left alone.
 
 ### Undo
 

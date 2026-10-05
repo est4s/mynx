@@ -75,3 +75,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF "pocket $name" "$GUIDE" || { echo "not in the guide: pocket $name"; false; }
     done
 }
+
+@test "the guide documents every setting" {
+    settings="$BATS_TEST_DIRNAME/../../core/src/main/kotlin/io/github/est4s/terminal/core/Settings.kt"
+    keys=$(grep -A1 'SettingDef($' "$settings" | sed -n 's/^ *"\([a-z-]*\)",.*/\1/p')
+    [ "$(wc -w <<<"$keys")" -ge 16 ]
+    for key in $keys; do
+        grep -qF -- "- \`$key\`:" "$GUIDE" || { echo "not in the guide: $key"; false; }
+    done
+}
