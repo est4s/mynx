@@ -321,7 +321,7 @@ Built test-first from entry 48's plan; not yet run on the phone.
   compiled locally: CI is the first compile.
 - A bats test runs the real Pulse where installed (skipped
   otherwise): `arecord` shows up in `inputs`, `mic` is default.
-- Guide and architecture notes updated. Tests: core 344, bats 84.
+- Guide and architecture notes updated. Tests: core 344, bats 78.
 
 ### 2026-10-05 (48): microphone half planned
 
