@@ -17,7 +17,8 @@ Newest entries first. Rules for keeping it up to date: see
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
   half (`pocket audio play`/`record`) is confirmed (2026-10-05,
-  entry 42); the sound device comes next.
+  entry 42); the sound device spike worked on the phone
+  (entry 44), the real build is next.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -87,18 +88,26 @@ owner test after each part.
 **9.6 (sound), files half is done** (confirmed on the phone
 2026-10-05, entries 40-42).
 
-**Next: the sound device. Spike under way** (entry 43, branch
-`spike/sound-device`, run 37330111521). Debian side works. Phone
-check, with the app on screen:
-1. `scripts/deliver.sh 37330111521` (installs the spike build).
-2. `~/snd-spike.sh`: starts PulseAudio on pipes, plays a 2 s 440 Hz
-   tone, prints the app's trace (`spike-sound.txt`). The owner says
-   whether they heard it, clean or crackling; note `real` from `time`
-   (≈2.3 s expected) and the underruns in the trace.
-3. Run it again (checks the app reopens the pipe after Pulse restarts).
-Then: throw the branch away (`git push origin :spike/sound-device`,
-delete `~/snd-spike.sh`, `~/spike-tone.wav`, `~/.asoundrc`) and plan
-the real build with the owner (see entry 43's design notes).
+**Next: the sound device. The spike worked on the phone** (entry
+44) and is thrown away. Plan the real build with the owner, then
+build it test-first. Design from the spike (entries 43-44):
+- PulseAudio in Debian on pipes (`module-pipe-sink`,
+  `module-pipe-source`, `module-native-protocol-unix`
+  `auth-anonymous=1`), started by an app-owned command; ALSA
+  programs through `libasound2-plugins` (`type pulse`).
+  **Owner's decisions (2026-10-05):** Pulse starts **on demand**
+  (the first time a program plays or records), not at each app
+  start; the packages go **in the rootfs image**, with a one-time
+  additive install for existing Debians.
+- The app reads the sink FIFO in 20 ms chunks into a blocking
+  48 kHz stereo AudioTrack, which paces the clockless pipe sink;
+  it reopens the FIFO whenever Pulse restarts (Pulse deletes it).
+- Mic: a helper watching `pactl subscribe` (source-output
+  `new`/`remove`) tells the app when to record into the source
+  FIFO, so the mic is only on while something records (RECORD_AUDIO,
+  started on screen, `microphone` foreground type as in 9.6).
+- Spike code was a `SpikeSound` thread in the service; the real
+  logic (formats, chunking, FIFO lifecycle) goes in `core`.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -283,6 +292,20 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (44): sound device spike confirmed on the phone
+
+Spike build 65 (run 37330111521, `c401742`), `~/snd-spike.sh` run
+twice with the app on screen:
+- The owner heard the 2 s tone **both times, clean**.
+- `paplay` took 2.35 s and 2.32 s (≈2.3 s expected): the AudioTrack
+  paces the pipe sink. No underruns in the trace.
+- Second run: the trace shows `eof` when Pulse stopped, then the
+  FIFO reopened and played: the app recovers from a Pulse restart.
+Thrown away: branch `spike/sound-device` (local and remote),
+`~/snd-spike.sh`, `~/spike-tone.wav`, `~/.asoundrc`. The Pulse,
+sox and ALSA packages from entry 43 stay installed in the dev
+Debian. Next: plan the real sound device with the owner.
 
 ### 2026-10-05 (43): sound device spike, Debian side
 
