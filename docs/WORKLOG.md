@@ -14,8 +14,8 @@ Newest entries first. Rules for keeping it up to date: see
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
-  (sensors) is confirmed** (2026-10-05). Next: 9.5 (camera and
-  flashlight).
+  (sensors) is confirmed** (2026-10-05). **9.5 (camera and
+  flashlight) is built** (entry 37) and waits for the owner's test.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -80,7 +80,29 @@ owner test after each part.
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
-**Build 9.5 next (camera and flashlight).**
+**9.5 (camera and flashlight) is built** (entry 37). Owner's test,
+with the app on screen:
+1. `pocket camera ~/a.jpg`: Android asks to allow the camera; allow.
+   The camera app opens; take a photo and accept it: back in the
+   terminal, `Saved /root/a.jpg (… MB)`. `files` or `pocket share
+   ~/a.jpg` to look at it: upright.
+2. `pocket camera ~/a.jpg` again, back out of the camera app without
+   a photo: "no photo was taken", the old `a.jpg` is still there.
+3. `pocket camera --quick back ~/b.jpg` and `--quick front ~/c.jpg`:
+   saved within a few seconds, not dark, in focus, upright. Again with
+   the phone turned to landscape (auto-rotate on): still upright.
+4. `pocket camera --quick back ~/b.jpg` with Ctrl+C at once: no error
+   afterwards, the next shot works.
+5. `pocket torch on`, `pocket torch off`; `pocket torch on 10` and
+   `on 100`: dimmer and brighter (or "no strength levels"). Torch on,
+   leave the app: does `pocket torch off` from a running `sleep 10;
+   pocket torch off` still work in the background? (The guide doesn't
+   claim it yet.)
+6. `pocket set android-camera off`: `pocket camera` refused with the
+   setting's name; back on.
+7. Deny the camera in the app's Android settings: "the camera wasn't
+   allowed".
+**Then build 9.6 (sound).**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -265,6 +287,35 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (37): step 9.5, camera and flashlight
+
+- `pocket camera FILE` opens the phone's camera app
+  (`ACTION_IMAGE_CAPTURE`); the photo goes to a temporary file in the
+  app's cache through `PhotoProvider` (writable, one random name at a
+  time) and core moves it to FILE, so backing out or Ctrl+C never
+  touches an existing FILE. The result comes back through
+  `MainActivity.startForResult()`.
+- `--quick front|back`: Camera2 in `CameraShooter`, no screen. A
+  small YUV stream runs until `shotReady()` (AE converged and AF
+  settled, at least 0.3 s, at most 2.5 s), then one full-size JPEG at
+  quality 95, `JPEG_ORIENTATION` from `jpegOrientation()` (sensor
+  mounting and the screen's rotation). 15 s app-side timeout.
+- **Decision:** CAMERA is in the manifest for `--quick`, and Android
+  then refuses `ACTION_IMAGE_CAPTURE` to an app that hasn't been
+  granted it, so the camera-app way asks for the permission too (the
+  owner's plan said it needed none: not possible with `--quick` in the
+  same app). `uses-feature camera` is `required="false"`.
+- `pocket torch on [PERCENT] | off`: `setTorchMode`, or
+  `turnOnTorchWithStrengthLevel` with `torchLevel()` mapping percent
+  onto the phone's levels (API 33+). No setting, no permission, like
+  `vibrate`.
+- Setting `android-camera` (blocks `camera`, not `torch`).
+- Not done: the `camera` foreground-service type (a shot only runs
+  with the app on screen, so not needed yet).
+- Tests: core 298 (`CameraTest.kt`: requests, moving the photo,
+  orientation, settling, torch levels), pocket 152, bats 63. The app
+  code only compiles in CI.
 
 ### 2026-10-05 (36): 9.4 confirmed on the phone
 

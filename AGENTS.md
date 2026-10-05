@@ -199,6 +199,20 @@ See README "How it works". The details:
   thread of its own. Only the step sensors need a permission
   (physical activity), asked through the activity's
   `askPermissions()`, which location uses too.
+- **Camera and flashlight** (`core/.../Camera.kt`,
+  `app/.../CameraShooter.kt`): `cameraRequests()` gives the [Later]
+  `camera` (the phone's camera app, `ACTION_IMAGE_CAPTURE`, 10 min) and
+  `camera-quick` (Camera2 with no screen, 30 s); core checks the path
+  and moves the finished photo from the app's cache into Debian, so a
+  cancelled shot never touches the target. The camera app writes
+  through `PhotoProvider` (one random name at a time); its result
+  comes back through `MainActivity.startForResult()`. A quick shot
+  runs a small YUV preview until `shotReady()` (exposure and focus
+  settled, 0.3-2.5 s), then one JPEG turned by `jpegOrientation()`.
+  Declaring CAMERA (for `--quick`) makes Android refuse the camera app
+  too until it's granted, so both ask for it. `torch` is a plain
+  request (`setTorchMode`, strength levels on API 33+), with no setting
+  and no permission.
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

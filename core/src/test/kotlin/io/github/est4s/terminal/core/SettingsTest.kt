@@ -61,7 +61,8 @@ class SettingsTest {
     fun `every setting is described, with its default`() {
         assertEquals(
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
-                "android-clipboard", "android-share", "android-location", "android-sensors", "share-folder"),
+                "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
+                "share-folder"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -76,11 +77,11 @@ class SettingsTest {
                 "font-size" to "14", "font" to "default", "cursor-style" to "block", "cursor-blink" to "on",
                 "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
                 "android-clipboard" to "off", "android-share" to "off", "android-location" to "off",
-                "android-sensors" to "off", "share-folder" to "/srv/in",
+                "android-sensors" to "off", "android-camera" to "off", "share-folder" to "/srv/in",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
-                shareFolder = "/srv/in").values(),
+                androidCamera = false, shareFolder = "/srv/in").values(),
         )
     }
 
@@ -176,6 +177,14 @@ class SettingsTest {
         val parsed = parseSettings("android-location = off\nandroid-location = gps\n")
         assertFalse(parsed.settings.androidLocation)
         assertEquals(listOf("line 2: android-location must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `the camera is on by default and can be turned off`() {
+        assertTrue(Settings().androidCamera)
+        val parsed = parseSettings("android-camera = off\nandroid-camera = maybe\n")
+        assertFalse(parsed.settings.androidCamera)
+        assertEquals(listOf("line 2: android-camera must be one of: on, off"), parsed.problems)
     }
 
     @Test

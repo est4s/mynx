@@ -849,6 +849,52 @@ class PocketTest(unittest.TestCase):
             self.assertEqual(run.returncode, 2, args)
             self.assertIn(usage, run.stderr, args)
 
+    # --- camera and torch ---------------------------------------------------
+
+    def test_camera_saves_to_the_files_full_path(self):
+        self.start_app({"camera": {"ok": True, "file": "/srv/a.jpg", "bytes": 2_400_000}})
+        run = self.pocket("camera", "a.jpg", cwd="/srv")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Saved /srv/a.jpg (2.3 MB)\n")
+        self.assertEqual(self.app.requests, [["camera", "/srv/a.jpg"]])
+        self.assertEqual(json.loads(self.pocket("camera", "/srv/a.jpg", "--json").stdout),
+                         {"ok": True, "file": "/srv/a.jpg", "bytes": 2_400_000})
+
+    def test_camera_quick_from_the_front_or_back(self):
+        self.start_app({"camera-quick": {"ok": True, "file": "/srv/a.jpg", "bytes": 900_000}})
+        run = self.pocket("camera", "--quick", "front", "/srv/a.jpg")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Saved /srv/a.jpg (879 KB)\n")
+        self.assertEqual(self.pocket("camera", "/srv/a.jpg", "--quick", "back").returncode, 0)
+        self.assertEqual(self.app.requests, [["camera-quick", "/srv/a.jpg", "front"],
+                                             ["camera-quick", "/srv/a.jpg", "back"]])
+
+    def test_camera_says_why_there_is_no_photo(self):
+        self.start_app({"camera": {"ok": False, "error": "no photo was taken"}})
+        run = self.pocket("camera", "/srv/a.jpg")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "pocket: no photo was taken\n")
+
+    def test_camera_usage(self):
+        usage = "usage: pocket camera FILE [--quick front|back]"
+        for args in [(), ("a.jpg", "b.jpg"), ("a.jpg", "--quick"), ("a.jpg", "--fast"), ("--quick", "back")]:
+            run = self.pocket("camera", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn(usage, run.stderr, args)
+
+    def test_torch_on_at_a_strength_and_off(self):
+        self.start_app({"torch": {"ok": True}})
+        for args in [("on",), ("on", "40"), ("off",)]:
+            run = self.pocket("torch", *args)
+            self.assertEqual((run.returncode, run.stdout), (0, ""), run.stderr)
+        self.assertEqual(self.app.requests, [["torch", "on"], ["torch", "on", "40"], ["torch", "off"]])
+
+    def test_torch_usage(self):
+        for args in [(), ("bright",), ("off", "5"), ("on", "5", "6")]:
+            run = self.pocket("torch", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: pocket torch on [PERCENT] | off", run.stderr, args)
+
     # --- share --------------------------------------------------------------
 
     def test_share_sends_the_files_full_paths(self):

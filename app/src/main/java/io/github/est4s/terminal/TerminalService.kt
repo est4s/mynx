@@ -24,6 +24,7 @@ import android.os.VibratorManager
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Notice
+import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
 import io.github.est4s.terminal.core.PocketRequests
@@ -101,11 +102,13 @@ class TerminalService : Service() {
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
-            share = ::share,
+            share = ::share, torch = camera::torch,
             later = locationRequests(File(rootfs, "root"), locator::locate) +
-                sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read),
+                sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
+                cameraRequests(File(rootfs, "root"), camera::take),
         )
     }
+    private val camera by lazy { CameraShooter(this) { activity?.takeIf { it.onScreen } } }
     private val locator by lazy {
         Locator(
             this, mainHandler,

@@ -36,6 +36,8 @@ Commands:
   share      share FILE... | --text [TEXT]: send to another app
   location   location [--gps] [--stream]: where the phone is
   sensor     sensor list | NAME [--stream]: the phone's sensors
+  camera     camera FILE [--quick front|back]: take a photo
+  torch      torch on [PERCENT] | off: the flashlight
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -378,6 +380,44 @@ def reading_text(reading):
     return f"{text} {reading['unit']}".rstrip()
 
 
+CAMERA_USAGE = "usage: pocket camera FILE [--quick front|back]"
+
+
+def cmd_camera(args, as_json):
+    files, facing = [], None
+    rest = list(args)
+    while rest:
+        arg = rest.pop(0)
+        if arg == "--quick" and rest:
+            facing = rest.pop(0)
+        elif not arg.startswith("-"):
+            files.append(arg)
+        else:
+            raise Usage(CAMERA_USAGE)
+    if len(files) != 1:
+        raise Usage(CAMERA_USAGE)
+    path = os.path.abspath(files[0])
+    answer = request("camera", path) if facing is None else request("camera-quick", path, facing)
+    out(as_json, answer, f"Saved {answer['file']} ({size_text(answer['bytes'])})")
+    return 0
+
+
+def size_text(size):
+    if size < 1024:
+        return f"{size} bytes"
+    if size < 1024 * 1024:
+        return f"{round(size / 1024)} KB"
+    return f"{size / 1024 / 1024:.1f} MB"
+
+
+def cmd_torch(args, as_json):
+    if not (args[:1] == ["on"] and len(args) <= 2 or args == ["off"]):
+        raise Usage("usage: pocket torch on [PERCENT] | off")
+    answer = request("torch", *args)
+    out(as_json, answer, None)
+    return 0
+
+
 # Not in HELP: for installing builds of the app while developing it. Only
 # debug builds of the app answer it.
 def cmd_install_apk(args, as_json):
@@ -718,7 +758,7 @@ COMMANDS = {
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
-    "location": cmd_location, "sensor": cmd_sensor,
+    "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

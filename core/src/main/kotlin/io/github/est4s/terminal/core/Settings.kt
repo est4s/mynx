@@ -21,6 +21,8 @@ data class Settings(
     val androidLocation: Boolean = true,
     /** Whether programs in Debian may read the phone's sensors. */
     val androidSensors: Boolean = true,
+    /** Whether programs in Debian may take photos. */
+    val androidCamera: Boolean = true,
     /** Where files shared to the app from other apps go, in Debian. */
     val shareFolder: String = "~/Shared",
 ) {
@@ -36,6 +38,7 @@ data class Settings(
         "android-share" to if (androidShare) "on" else "off",
         "android-location" to if (androidLocation) "on" else "off",
         "android-sensors" to if (androidSensors) "on" else "off",
+        "android-camera" to if (androidCamera) "on" else "off",
         "share-folder" to shareFolder,
     )
 }
@@ -129,6 +132,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("android-sensors", listOf("on", "off")),
         { copy(androidSensors = it == "on") },
+    ),
+    SettingDef(
+        "android-camera", "Whether programs in Debian can take photos with the phone's cameras (pocket camera).",
+        "on", listOf("on", "off"),
+        oneOf("android-camera", listOf("on", "off")),
+        { copy(androidCamera = it == "on") },
     ),
     SettingDef(
         "share-folder", "Where files shared to the app from other apps are saved: a full path or one starting with ~/.",

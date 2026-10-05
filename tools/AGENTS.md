@@ -93,6 +93,8 @@ their own.
 | `pocket location` | where the phone is: one fix; `--stream` keeps printing them (see "The phone") |
 | `pocket sensor list` | the phone's sensors, with their values and units |
 | `pocket sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
+| `pocket camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
+| `pocket torch on [PERCENT]\|off` | the phone's flashlight |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -139,6 +141,8 @@ One `key = value` per line; `pocket settings` describes each.
   can ask for the phone's location (`pocket location`).
 - `android-sensors`: `on` (default) or `off`: whether programs here
   can read the phone's sensors (`pocket sensor`).
+- `android-camera`: `on` (default) or `off`: whether programs here
+  can take photos (`pocket camera`).
 - `share-folder`: where files other apps share to this app are saved,
   a full path or one starting with `~/` (default `~/Shared`).
 
@@ -191,8 +195,8 @@ it too, even one spread over several rows.
 
 ### The phone
 
-Commands for the phone itself (more are coming: camera and
-flashlight, speaker and microphone):
+Commands for the phone itself (more are coming: speaker and
+microphone):
 
 - `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
 - `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
@@ -233,6 +237,20 @@ flashlight, speaker and microphone):
   step sensors need Android's "physical activity" permission, asked
   the first time (app on screen). Readings keep coming in the
   background. `android-sensors off` blocks it.
+- `pocket camera FILE` opens the phone's camera app; the photo you
+  take is saved to FILE as a JPEG (replacing it), and `pocket` prints
+  `Saved /root/photo.jpg (2.3 MB)`. Backing out of the camera app
+  leaves FILE alone ("no photo was taken"). `--quick back` (or
+  `front`) takes the photo straight away with no screen, for scripts
+  and agents: exposure and focus get a moment to settle, then it's
+  saved, within a few seconds. `--json` gives `file` and `bytes`. Android asks
+  to allow the camera the first time (for both ways), and only lets
+  the app on screen use it, so the app must be on screen.
+  `android-camera off` blocks it.
+- `pocket torch on` and `pocket torch off` turn the flashlight on and
+  off. `pocket torch on 30` sets a strength
+  in percent, on phones whose flashlight has levels (Android 13+).
+  Opening the camera turns it off.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved

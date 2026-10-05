@@ -2,6 +2,7 @@ package io.github.est4s.terminal
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -15,6 +16,7 @@ import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -61,6 +63,7 @@ private const val KEY_BARS_DIR = "root/.config/pocket-terminal/keybars"
 private const val SETTINGS_FILE = "root/.config/pocket-terminal/settings.conf"
 private const val CURSOR_BLINK_MS = 500
 private const val PERMISSION_REQUEST = 2
+private const val RESULT_REQUEST = 3
 private const val KEY_BAR_POLL_MS = 250L
 private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
 
@@ -237,6 +240,45 @@ class MainActivity : Activity() {
         permissionAsks += permissions to answer
         if (permissionAsks.size == 1) requestPermissions(permissions, PERMISSION_REQUEST)
     }
+
+    // One at a time: the activity started is in front until it answers.
+    private var resultAnswer: ((Boolean) -> Unit)? = null
+
+    /** Starts [intent] (the camera app); [answer] gets whether it finished OK. False if nothing could start it. */
+    @Suppress("DEPRECATION") // the ActivityResult API needs AndroidX
+    fun startForResult(intent: Intent, answer: (Boolean) -> Unit): Boolean {
+        resultAnswer?.invoke(false)
+        return try {
+            startActivityForResult(intent, RESULT_REQUEST)
+            resultAnswer = answer
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != RESULT_REQUEST) return
+        val answer = resultAnswer ?: return
+        resultAnswer = null
+        answer(resultCode == RESULT_OK)
+    }
+
+    /** How far the screen is turned, in degrees (Surface's ROTATION_*), for photos taken now. */
+    val displayRotation: Int
+        get() {
+            @Suppress("DEPRECATION") // display needs API 30
+            val rotation = if (Build.VERSION.SDK_INT >= 30) display?.rotation else windowManager.defaultDisplay.rotation
+            return when (rotation) {
+                Surface.ROTATION_90 -> 90
+                Surface.ROTATION_180 -> 180
+                Surface.ROTATION_270 -> 270
+                else -> 0
+            }
+        }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

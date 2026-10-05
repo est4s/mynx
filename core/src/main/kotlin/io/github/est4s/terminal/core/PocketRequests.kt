@@ -35,7 +35,8 @@ private class Refused(message: String) : Exception(message)
  * and [installApk] opens Android's installer for an APK (a host file).
  * [vibrate] and [setClipboard] work the same way; [readClipboard] gives
  * the clipboard's text or fails with the reason. [share] opens
- * Android's share sheet for a [Share].
+ * Android's share sheet for a [Share]; [torch] turns the flashlight on
+ * (at a strength in percent, or the phone's default) or off.
  *
  * Requests in [later] are answered later, or stream (see [Later]).
  * [sweep] cancels those whose `pocket` cancelled them or has gone
@@ -52,6 +53,7 @@ class PocketRequests(
     private val setClipboard: (String) -> String? = { "the clipboard isn't available here" },
     private val readClipboard: () -> Result<String> = { Result.failure(Exception("the clipboard isn't available here")) },
     private val share: (Share) -> String? = { "sharing isn't available here" },
+    private val torch: (Boolean, Int?) -> String? = { _, _ -> "the flashlight isn't available here" },
     private val later: Map<String, Later> = emptyMap(),
     private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
 ) {
@@ -275,6 +277,21 @@ class PocketRequests(
                         throw Refused("too long to share: ${text.length} characters (at most $MAX_SHARE_TEXT)")
                 }
                 share(Share(emptyList(), text))?.let { throw Refused(it) }
+                ok()
+            }
+            "torch" -> {
+                val words = args.map { it.trim() }.filter { it.isNotEmpty() }
+                val on = when (words.firstOrNull()) {
+                    "on" -> true
+                    "off" -> false
+                    else -> throw Refused("torch is on or off")
+                }
+                if (words.size > (if (on) 2 else 1)) throw Refused("torch is on or off")
+                val percent = words.getOrNull(1)?.let {
+                    it.toIntOrNull()?.takeIf { p -> p in 1..MAX_TORCH_PERCENT }
+                        ?: throw Refused("the strength is 1 to $MAX_TORCH_PERCENT %")
+                }
+                torch(on, percent)?.let { throw Refused(it) }
                 ok()
             }
             else -> throw Refused("unknown request '${request.name}'")

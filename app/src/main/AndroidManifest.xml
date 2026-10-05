@@ -15,6 +15,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <!-- pocket sensor step-counter and step-detector (Android 10+). -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- pocket camera --quick. Declaring it also makes Android require it
+         for the camera app (pocket camera). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- The camera permission would otherwise hide the app from phones without one. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
 
     <application
         android:name=".TerminalApp"
@@ -56,6 +62,13 @@
         <provider
             android:name=".ShareProvider"
             android:authorities="io.github.est4s.terminal.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- The camera app writes the photo `pocket camera` asked for here. -->
+        <provider
+            android:name=".PhotoProvider"
+            android:authorities="io.github.est4s.terminal.photo"
             android:exported="false"
             android:grantUriPermissions="true" />
 
