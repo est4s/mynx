@@ -14,8 +14,8 @@ Newest entries first. Rules for keeping it up to date: see
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
-  (sensors) passed the owner's checks** (entry 35); two small fixes
-  wait for a recheck.
+  (sensors) is confirmed** (2026-10-05). Next: 9.5 (camera and
+  flashlight).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -79,29 +79,8 @@ owner test after each part.
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
-**9.4 (sensors) passed the owner's checks** (entry 35); two fixes
-since. With the next build, recheck: `pocket sensor list` lines up,
-and `pocket sensor accelerometer --stream --rate 1 | head -5` gives
-times about 1 s apart. The original checklist, for reference:
-1. `pocket sensor list`: the phone's sensors, `compass` last.
-2. `pocket sensor accelerometer` with the phone flat: z about 9.8.
-   `pocket sensor light` covered and uncovered: the lux changes.
-3. `pocket sensor compass --stream`: turn the phone flat on the
-   table; azimuth near 0 pointing north, 90 east.
-4. `pocket sensor gyroscope --stream --rate 50 | head -100`: ends in
-   about 2 s, no error; times about 20 ms apart.
-5. `pocket sensor accelerometer --stream --rate 1 > ~/acc.txt`; leave
-   the app for a minute, come back, Ctrl+C: the times kept going
-   (Android may hold back continuous sensors in the background even
-   with the service; if so, say so in the guide or fix it).
-6. `pocket sensor step-counter`: Android asks to allow physical
-   activity; allow: a step count (may wait for a step: `--timeout
-   60`). Deny it in the app's settings: "step-counter wasn't allowed".
-7. `pocket set android-sensors off`: refused with the setting's name;
-   back on.
-8. Location still works (the permission code was shared out):
-   `pocket location`.
-**Then build 9.5 (camera and flashlight).**
+**9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
+**Build 9.5 next (camera and flashlight).**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -286,6 +265,14 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (36): 9.4 confirmed on the phone
+
+With build 68a5c70 installed, the agent ran the two rechecks from
+entry 35 in the app's Debian: `pocket sensor list` lines up in
+columns (17 sensors, `compass` last), and `pocket sensor accelerometer
+--stream --rate 1 | head -5` printed times about 1 s apart
+(21.172, 21.977, 22.972, 23.979, 24.974). Step 9.4 is done.
 
 ### 2026-10-05 (35): 9.4 tested on the phone
 
