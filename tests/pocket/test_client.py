@@ -6,6 +6,7 @@ ID.reply; pocket cancels a stream by writing ID.cancel.
 """
 import json
 import os
+import signal
 import sys
 import tempfile
 import threading
@@ -20,8 +21,9 @@ from pocket_terminal import client  # noqa: E402
 class LaterApp:
     """Answers one request the way the app answers a Later request."""
 
-    def __init__(self, folder, wait, lines=(), answer=None, delay=0.0, until_cancelled=False):
+    def __init__(self, folder, wait, lines=(), answer=None, delay=0.0, until_cancelled=False, slow_to_notice=0.0):
         self.folder = folder
+        self.slow_to_notice = slow_to_notice
         self.wait, self.lines, self.answer = wait, list(lines), answer or {"ok": True}
         self.delay, self.until_cancelled = delay, until_cancelled
         self.cancelled = False
@@ -56,6 +58,7 @@ class LaterApp:
                 f.write(json.dumps(line) + "\n")
             time.sleep(0.02)
         if self.until_cancelled:
+            time.sleep(self.slow_to_notice)
             while not os.path.exists(self.path(ident, ".cancel")):
                 if time.monotonic() > deadline:
                     return
@@ -120,6 +123,20 @@ class ClientTest(unittest.TestCase):
         app.thread.join(2)
         self.assertTrue(app.cancelled)
         self.assertEqual(self.left_behind(), [])
+
+    def test_a_second_ctrl_c_doesnt_take_the_cancel_back(self):
+        # timeout(1) and impatient people send two; the app may look later.
+        app = LaterApp(self.folder, "stream", lines=[{"n": 1}], until_cancelled=True, slow_to_notice=0.4)
+
+        def stop(line):
+            threading.Timer(0.1, os.kill, (os.getpid(), signal.SIGINT)).start()
+            raise KeyboardInterrupt
+        with self.assertRaises(KeyboardInterrupt):
+            client.request("feed", on_line=stop)
+        app.thread.join(2)
+        self.assertTrue(app.cancelled)
+        self.assertEqual(self.left_behind(), [])
+        self.assertIs(signal.getsignal(signal.SIGINT), signal.default_int_handler)
 
 
 if __name__ == "__main__":

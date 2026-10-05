@@ -16,8 +16,8 @@ Newest entries first. Rules for keeping it up to date: see
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
-  half (`pocket audio play`/`record`) is built, untested on the phone
-  (entry 40); the sound device comes next.
+  half (`pocket audio play`/`record`) mostly passes on the phone
+  (entry 41), with a Ctrl+C fix to check; the sound device comes next.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -65,7 +65,7 @@ Newest entries first. Rules for keeping it up to date: see
   check, `pocket` requests, undo, links, waiting and streaming
   requests, sharing, location; 312 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 159 unittest tests incl. editors driven in a pty),
+  the agent guide; 160 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
   tests).
 
@@ -84,27 +84,15 @@ owner test after each part.
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
 **9.5 (camera and flashlight) is done** (confirmed on the phone
 2026-10-05, entries 38-39).
-**9.6 (sound), files half: built (entry 40), not yet on the phone.**
-Push, `scripts/deliver.sh`, then with the app on screen (the agent
-can run each and read the result; the owner listens and talks):
-1. `pocket audio record ~/a.m4a`, speak, Ctrl+C: Android asks for
-   the microphone the first time; prints `Recording to /root/a.m4a:
-   Ctrl+C stops`, then `Saved /root/a.m4a (… KB, N s)`, exit 0.
-2. `pocket audio play ~/a.m4a`: the owner hears it; returns at the
-   end, prints nothing; `--json` gives file and seconds.
-3. `pocket audio record --seconds 3 --rate 16000 ~/a.wav`: stops by
-   itself after 3 s; `file ~/a.wav` says 16-bit mono 16000 Hz; plays.
-4. `.ogg` and `.aac` too (`--seconds 3`), and both play.
-5. Ctrl+C during `pocket audio play` of a long file stops the sound.
-6. Background: start `pocket audio record ~/b.m4a`, switch to another
-   app for ~10 s (mic indicator stays on), come back, Ctrl+C: the
-   file is ~10 s+ and has sound from while away. Also start
-   `pocket audio play` and leave the app: it keeps playing.
-7. With the app off screen (`sleep 5; pocket audio record ~/c.m4a`,
-   switch away): "the app must be on screen to start".
-8. `pocket set android-microphone off`: record refuses; play works;
-   set it back on. `pocket audio record ~/a.mp3`: format error.
-9. Deny the microphone in the app's Android settings: record says it
+**9.6 (sound), files half: built (entry 40), tested on build 62
+(entry 41): all pass but test 5; the fix for it is pushed.** On the
+new build (`scripts/deliver.sh`), app on screen:
+1. `timeout -s INT 3 pocket audio play ~/long.wav` (a 20 s 440 Hz
+   tone; make one with Python's `wave` if it's gone): the owner hears
+   it stop at 3 s; nothing left in `/tmp/.pocket-terminal/requests`.
+2. Background playback: `pocket audio play ~/long.wav`, the owner
+   leaves the app: it keeps playing.
+3. Deny the microphone in the app's Android settings: record says it
    wasn't allowed. Allow it again after.
 That passes → build the sound device (spike first: do PulseAudio's
 pipe modules work under proot?), as planned below.
@@ -292,6 +280,40 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (41): 9.6 tested on the phone; Ctrl+C on a stream fixed
+
+**Checks** (build 62, `c00a5a5`), steps from "Next", with the owner
+listening:
+1. pass: 7 s recorded (6.9 s saved), played back clearly. The very
+   first take (owner away) saved 3.3 s of an 8 s run, likely the
+   permission dialog. Playback reports ~0.3 s less than the recorder.
+2. pass: plays to the end; `--json` gives file and seconds.
+3. pass: `a.wav` 16-bit mono 16000 Hz, 3.0 s, plays.
+4. pass: `.ogg` is Ogg Opus, `.aac` ADTS AAC, both play.
+5. **fail**: `timeout -s INT 3 pocket audio play` of a 20 s tone:
+   `pocket` returned at 3 s, the tone played all 20 s, and its reply
+   was left in the request folder. A single `kill -INT` stopped it.
+   Two causes: `timeout` sends SIGINT twice (to `pocket` and its
+   group); the second broke `cancel()`'s wait and the cleanup deleted
+   `ID.cancel` before the app looked. And the fallback (sweep every
+   2 s for requests whose `pocket` has gone) never ran while the app
+   was on screen: the activity's 250 ms poll calls
+   `processRequests()`, whose `scheduleSweep()` pushed the sweep back
+   each time. **Fixed:** `client.cancel()` ignores Ctrl+C while it
+   waits (at most 5 s; test
+   `test_a_second_ctrl_c_doesnt_take_the_cancel_back`), and
+   `scheduleSweep()` never puts off a due sweep (app only, untested
+   locally).
+6. pass: 25 s recording with the owner in another app; mic indicator
+   stayed on, the speech from while away is in it. Background
+   playback not checked yet.
+7. pass (by accident, twice): with the screen off, "the app must be
+   on screen to start", exit 2.
+8. pass: `android-microphone off` refuses recording, play works;
+   `.mp3` gives the format error.
+9. not done yet.
+- Tests: pocket 160.
 
 ### 2026-10-05 (40): 9.6 started, `pocket audio play` and `record`
 

@@ -129,7 +129,11 @@ class TerminalService : Service() {
     // in the background.
     private var locating = false
     private var recording = false
-    private val sweep = Runnable { sweepRequests() }
+    private var sweepDue = false
+    private val sweep = Runnable {
+        sweepDue = false
+        sweepRequests()
+    }
     // The POCKET_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -189,9 +193,12 @@ class TerminalService : Service() {
         scheduleSweep()
     }
 
+    // Never pushes a due sweep back: the activity's poll calls this every
+    // 250 ms, which would put it off for as long as the app is on screen.
     private fun scheduleSweep() {
-        mainHandler.removeCallbacks(sweep)
-        if (requests.hasOpen()) mainHandler.postDelayed(sweep, SWEEP_MS)
+        if (sweepDue || !requests.hasOpen()) return
+        sweepDue = true
+        mainHandler.postDelayed(sweep, SWEEP_MS)
     }
 
     /** The settings' cursor style, which every terminal reads when it (re)starts. */

@@ -6,6 +6,8 @@ place when complete.
 import contextlib
 import json
 import os
+import signal
+import threading
 import time
 
 TOOLS = os.environ.get("POCKET_TOOLS", "/opt/pocket-terminal")
@@ -97,10 +99,25 @@ class Lines:
 
 def cancel(base):
     """Asks the app to stop a stream, and gives it a moment to answer."""
-    touch(base + ".cancel")
-    deadline = time.monotonic() + 5
-    while not os.path.exists(base + ".reply") and time.monotonic() < deadline:
-        time.sleep(0.02)
+    # A second Ctrl+C (timeout(1) sends two) would clean up ID.cancel
+    # before the app sees it, and the app would carry on.
+    with ignoring_ctrl_c():
+        touch(base + ".cancel")
+        deadline = time.monotonic() + 5
+        while not os.path.exists(base + ".reply") and time.monotonic() < deadline:
+            time.sleep(0.02)
+
+
+@contextlib.contextmanager
+def ignoring_ctrl_c():
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
 
 
 def read(path):
