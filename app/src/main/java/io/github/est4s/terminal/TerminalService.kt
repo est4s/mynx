@@ -25,6 +25,7 @@ import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Notice
 import io.github.est4s.terminal.core.locationRequests
+import io.github.est4s.terminal.core.sensorRequests
 import io.github.est4s.terminal.core.PocketRequests
 import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
@@ -59,6 +60,9 @@ private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
 // How often to check whether waiting requests' `pocket`s have gone.
 private const val SWEEP_MS = 2000L
+private val LOCATION_PERMISSIONS = arrayOf(
+    android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION,
+)
 // Requests after which the app applies the config files again.
 private val RELOADING_REQUESTS = setOf(
     "check", "set", "reset", "theme-set", "theme-reset", "preview-end", "keybar-edit", "keybar-reset", "undo",
@@ -98,17 +102,19 @@ class TerminalService : Service() {
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share,
-            later = locationRequests(File(rootfs, "root"), locator::locate),
+            later = locationRequests(File(rootfs, "root"), locator::locate) +
+                sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read),
         )
     }
     private val locator by lazy {
         Locator(
             this, mainHandler,
             onScreen = { activity?.onScreen == true },
-            askPermission = { answer -> activity?.takeIf { it.onScreen }?.askForLocation(answer) != null },
+            askPermission = { answer -> askPermissions(LOCATION_PERMISSIONS, answer) },
             locatingChanged = ::setLocating,
         )
     }
+    private val sensors by lazy { SensorReader(this, ::askPermissions) }
     // Whether the foreground service has the location type: only while
     // something is locating, so a stream keeps going in the background.
     private var locating = false
@@ -211,6 +217,7 @@ class TerminalService : Service() {
         requestWatcher?.stopWatching()
         mainHandler.removeCallbacks(sweep)
         locator.stopAll()
+        sensors.stopAll()
         killAll()
         super.onDestroy()
     }
@@ -489,6 +496,10 @@ class TerminalService : Service() {
         locating = on
         if (Build.VERSION.SDK_INT >= 34) runCatching { goForeground() }
     }
+
+    // Android's permission dialogs need the activity on screen.
+    private fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit): Boolean =
+        activity?.takeIf { it.onScreen }?.askPermissions(permissions, answer) != null
 
     // Tab count changes can happen in the background, so update the
     // notification directly instead of calling startForeground() again.

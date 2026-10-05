@@ -60,7 +60,7 @@ private const val COLORS_FILE = "root/.config/pocket-terminal/colors.properties"
 private const val KEY_BARS_DIR = "root/.config/pocket-terminal/keybars"
 private const val SETTINGS_FILE = "root/.config/pocket-terminal/settings.conf"
 private const val CURSOR_BLINK_MS = 500
-private const val LOCATION_REQUEST = 2
+private const val PERMISSION_REQUEST = 2
 private const val KEY_BAR_POLL_MS = 250L
 private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
 
@@ -192,7 +192,7 @@ class MainActivity : Activity() {
 
     // Sessions live in the service and keep running after the activity is gone.
     override fun onDestroy() {
-        locationAnswers.toList().also { locationAnswers.clear() }.forEach { it(false) }
+        permissionAsks.toList().also { permissionAsks.clear() }.forEach { it.second(false) }
         service?.let { if (it.activity === this) it.activity = null }
         service = null
         if (bound) unbindService(connection)
@@ -229,25 +229,21 @@ class MainActivity : Activity() {
         }
     }
 
-    private val locationAnswers = mutableListOf<(Boolean) -> Unit>()
+    // Asked one dialog at a time, in order.
+    private val permissionAsks = mutableListOf<Pair<Array<String>, (Boolean) -> Unit>>()
 
-    /** Shows Android's location dialog ("while using the app"); [answer] gets whether it was allowed. */
-    fun askForLocation(answer: (Boolean) -> Unit) {
-        locationAnswers += answer
-        if (locationAnswers.size == 1) {
-            requestPermissions(arrayOf(
-                android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION,
-            ), LOCATION_REQUEST)
-        }
+    /** Shows Android's dialog for [permissions]; [answer] gets whether any of them was allowed. */
+    fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit) {
+        permissionAsks += permissions to answer
+        if (permissionAsks.size == 1) requestPermissions(permissions, PERMISSION_REQUEST)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != LOCATION_REQUEST) return
-        val allowed = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
-        val answers = locationAnswers.toList()
-        locationAnswers.clear()
-        answers.forEach { it(allowed) }
+        if (requestCode != PERMISSION_REQUEST || permissionAsks.isEmpty()) return
+        val answer = permissionAsks.removeAt(0).second
+        permissionAsks.firstOrNull()?.let { requestPermissions(it.first, PERMISSION_REQUEST) }
+        answer(grantResults.any { it == PackageManager.PERMISSION_GRANTED })
     }
 
     private fun showTerminal(session: TerminalSession) {

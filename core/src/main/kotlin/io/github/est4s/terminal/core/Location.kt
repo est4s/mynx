@@ -99,7 +99,7 @@ fun fixJson(fix: Fix): String = obj(
     "time" to fix.time.toString(),
 )
 
-private fun number(value: Double?, decimals: Int): String =
+internal fun number(value: Double?, decimals: Int): String =
     if (value == null || !value.isFinite()) "null"
     else BigDecimal(value.toString()).setScale(decimals, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 

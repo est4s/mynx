@@ -191,6 +191,14 @@ See README "How it works". The details:
   so locating must start on screen; while anything locates, the
   service adds the `location` foreground type (API 34+) so a stream
   keeps going in the background.
+- **Sensors** (`core/.../Sensors.kt`, `app/.../SensorReader.kt`):
+  `SENSOR_KINDS` maps Android's sensor types to names, value names and
+  units (`compass` is worked out from the rotation vector in core);
+  `sensorRequests()` gives `sensor-list`, `sensor` and `sensor-stream`
+  and throttles streams to the asked rate. `SensorReader` listens on a
+  thread of its own. Only the step sensors need a permission
+  (physical activity), asked through the activity's
+  `askPermissions()`, which location uses too.
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

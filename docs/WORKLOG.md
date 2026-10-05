@@ -13,8 +13,8 @@ Newest entries first. Rules for keeping it up to date: see
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
-  (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). Next:
-  9.4 (sensors).
+  (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
+  (sensors) is built** (entry 34) and waits for the owner's test.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -78,8 +78,28 @@ owner test after each part.
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
-**Build 9.4 (sensors) next:** part 4 under "Parts" below. Plan its
-owner checks like 9.3's (entry 32 and git history have them).
+**9.4 (sensors) is built** (entry 34): run `scripts/deliver.sh`, then
+go through this with the owner (the agent runs the commands, the
+owner says what the phone shows):
+1. `pocket sensor list`: the phone's sensors, `compass` last.
+2. `pocket sensor accelerometer` with the phone flat: z about 9.8.
+   `pocket sensor light` covered and uncovered: the lux changes.
+3. `pocket sensor compass --stream`: turn the phone flat on the
+   table; azimuth near 0 pointing north, 90 east.
+4. `pocket sensor gyroscope --stream --rate 50 | head -100`: ends in
+   about 2 s, no error; times about 20 ms apart.
+5. `pocket sensor accelerometer --stream --rate 1 > ~/acc.txt`; leave
+   the app for a minute, come back, Ctrl+C: the times kept going
+   (Android may hold back continuous sensors in the background even
+   with the service; if so, say so in the guide or fix it).
+6. `pocket sensor step-counter`: Android asks to allow physical
+   activity; allow: a step count (may wait for a step: `--timeout
+   60`). Deny it in the app's settings: "step-counter wasn't allowed".
+7. `pocket set android-sensors off`: refused with the setting's name;
+   back on.
+8. Location still works (the permission code was shared out):
+   `pocket location`.
+**Then build 9.5 (camera and flashlight).**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -264,6 +284,41 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (34): step 9.4, sensors
+
+**Done**
+- Owner added scope (commit 4786346): flashlight with the camera
+  (9.5), sound as 9.6 (play/record files first, then a PulseAudio
+  sound device through FIFOs), recording may go on in the background.
+  README and "Next" updated.
+- `pocket sensor list`, `pocket sensor NAME [--timeout S]` (10 s
+  default, 1-60) and `--stream [--rate HZ]` (10 default, 1-200; lines
+  start with the time). Core (`Sensors.kt`, `SensorRequestTest`,
+  `CompassTest`): `SENSOR_KINDS` (Android type, value names, unit,
+  extra permission), the `sensor-list`/`sensor`/`sensor-stream`
+  requests, a stream throttle (drops readings closer than 0.8 of the
+  period: Android sends more than asked), reading JSON (4 decimals,
+  accuracy as a word), and `compass` = azimuth/pitch/roll from the
+  rotation vector as Android's getOrientation does. New setting
+  `android-sensors` (blocks the list too).
+- App: `SensorReader` (SensorManager on a `HandlerThread`, event
+  times converted from boot time to clock time); the activity's
+  location dialog became `askPermissions(perms, answer)`, one dialog
+  at a time; `ACTIVITY_RECOGNITION` for the step sensors (only asked
+  on Android 10+).
+- Guide: commands, setting, "The phone". Repo guide: Sensors.
+
+**Decisions (agent's)**
+- Sensors don't need the app on screen (no permission, and the
+  service is in the foreground); only the step permission dialog
+  does. Body sensors (heart rate) left out: they need BODY_SENSORS and
+  Pixels have none. One-shot sensors (significant motion) left out.
+- `compass` is a name of ours; Android's deprecated orientation
+  sensor (type 3) isn't offered.
+
+**Not checked:** the app module builds only in CI; on the phone see
+"Next".
 
 ### 2026-10-05 (33): 9.3 confirmed on the phone
 

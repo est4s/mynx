@@ -35,6 +35,7 @@ Commands:
   clipboard  clipboard get | set [TEXT]: the phone's clipboard
   share      share FILE... | --text [TEXT]: send to another app
   location   location [--gps] [--stream]: where the phone is
+  sensor     sensor list | NAME [--stream]: the phone's sensors
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -317,6 +318,63 @@ def fix_text(fix):
     accuracy = f" ±{round(fix['accuracy'])} m" if fix.get("accuracy") is not None else ""
     when = time.strftime("%H:%M:%S", time.localtime(fix["time"] / 1000))
     return f"{fix['latitude']}, {fix['longitude']}{accuracy} {fix['provider']} {when}"
+
+
+SENSOR_USAGE = "usage: pocket sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
+
+
+def cmd_sensor(args, as_json):
+    if args[:1] == ["list"]:
+        if len(args) > 1:
+            raise Usage(SENSOR_USAGE)
+        answer = request("sensor-list")
+        out(as_json, answer, "\n".join(
+            f"{s['name']:<20} {' '.join(s['values'])} {s['unit']}".rstrip() for s in answer["sensors"]))
+        return 0
+    names, options, stream = [], [], False
+    rest = list(args)
+    while rest:
+        arg = rest.pop(0)
+        if arg == "--stream":
+            stream = True
+        elif arg in ("--timeout", "--rate") and rest:
+            options.append(f"{arg[2:]}={rest.pop(0)}")
+        elif not arg.startswith("-"):
+            names.append(arg)
+        else:
+            raise Usage(SENSOR_USAGE)
+    # A stream never ends on its own; one reading has no rate.
+    if len(names) != 1 or any(o.startswith("timeout=" if stream else "rate=") for o in options):
+        raise Usage(SENSOR_USAGE)
+    if not stream:
+        answer = request("sensor", *names, *options)
+        out(as_json, answer, reading_text(answer["reading"]))
+        return 0
+
+    def show(reading):
+        if as_json:
+            line = json.dumps(reading)
+        else:
+            when = reading["time"] / 1000
+            line = f"{time.strftime('%H:%M:%S', time.localtime(when))}.{reading['time'] % 1000:03d} {reading_text(reading)}"
+        print(line, flush=True)
+
+    try:
+        request("sensor-stream", *names, *options, on_line=show)
+    except KeyboardInterrupt:
+        pass
+    except BrokenPipeError:
+        sys.stdout = open(os.devnull, "w")
+    return 0
+
+
+def reading_text(reading):
+    values = reading["values"]
+    if len(values) == 1:
+        text = " ".join(str(v) for v in values.values())
+    else:
+        text = " ".join(f"{k}={v}" for k, v in values.items())
+    return f"{text} {reading['unit']}".rstrip()
 
 
 # Not in HELP: for installing builds of the app while developing it. Only
@@ -659,7 +717,7 @@ COMMANDS = {
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
-    "location": cmd_location,
+    "location": cmd_location, "sensor": cmd_sensor,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

@@ -772,6 +772,80 @@ class PocketTest(unittest.TestCase):
             self.assertEqual(run.returncode, 2, args)
             self.assertIn(usage, run.stderr, args)
 
+    # --- sensor -------------------------------------------------------------
+
+    READING = {"sensor": "accelerometer", "values": {"x": 0.1235, "y": 9.8067, "z": -0.5}, "unit": "m/s²",
+               "accuracy": "high", "time": 1791177403145}
+    LIGHT = {"sensor": "light", "values": {"illuminance": 108}, "unit": "lx", "accuracy": "medium",
+             "time": 1791177403245}
+
+    def test_sensor_list(self):
+        sensors = [{"name": "accelerometer", "values": ["x", "y", "z"], "unit": "m/s²"},
+                   {"name": "rotation-vector", "values": ["x", "y", "z", "w"], "unit": ""},
+                   {"name": "light", "values": ["illuminance"], "unit": "lx"}]
+        self.start_app({"sensor-list": {"ok": True, "sensors": sensors}})
+        run = self.pocket("sensor", "list")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "accelerometer        x y z m/s²\n"
+                                     "rotation-vector      x y z w\n"
+                                     "light                illuminance lx\n")
+        self.assertEqual(self.app.requests, [["sensor-list"]])
+        self.assertEqual(json.loads(self.pocket("sensor", "list", "--json").stdout), {"ok": True, "sensors": sensors})
+
+    def test_sensor_prints_one_reading(self):
+        self.start_app({"sensor": lambda name, *rest: {"ok": True, "reading": self.READING if name == "accelerometer"
+                                                       else self.LIGHT}})
+        run = self.pocket("sensor", "accelerometer")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "x=0.1235 y=9.8067 z=-0.5 m/s²\n")
+        self.assertEqual(self.pocket("sensor", "light").stdout, "108 lx\n")
+        self.assertEqual(json.loads(self.pocket("sensor", "accelerometer", "--json").stdout),
+                         {"ok": True, "reading": self.READING})
+        self.assertEqual(self.app.requests[0], ["sensor", "accelerometer"])
+
+    def test_sensor_options(self):
+        self.start_app({"sensor": {"ok": True, "reading": self.LIGHT},
+                        "sensor-stream": {"ok": True, "_lines": []}})
+        self.assertEqual(self.pocket("sensor", "light", "--timeout", "30").returncode, 0)
+        self.assertEqual(self.pocket("sensor", "--stream", "gyroscope", "--rate", "50").returncode, 0)
+        self.assertEqual(self.app.requests, [["sensor", "light", "timeout=30"],
+                                             ["sensor-stream", "gyroscope", "rate=50"]])
+
+    def test_sensor_stream_prints_a_line_per_reading(self):
+        self.start_app({"sensor-stream": {"ok": True, "_lines": [self.READING, self.LIGHT]}})
+        run = self.pocket("sensor", "accelerometer", "--stream", env={"TZ": "UTC"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "05:16:43.145 x=0.1235 y=9.8067 z=-0.5 m/s²\n"
+                                     "05:16:43.245 108 lx\n")
+        run = self.pocket("sensor", "accelerometer", "--stream", "--json")
+        self.assertEqual([json.loads(line) for line in run.stdout.splitlines()], [self.READING, self.LIGHT])
+
+    def test_sensor_stream_stops_quietly_on_ctrl_c(self):
+        self.start_app({"sensor-stream": {"ok": True, "_lines": [self.READING], "_hold": True}})
+        environ = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
+        proc = subprocess.Popen(["python3", POCKET, "sensor", "accelerometer", "--stream"], env=environ, text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertIn("m/s²", proc.stdout.readline())
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, err), (0, ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_sensor_says_why_there_is_no_reading(self):
+        self.start_app({"sensor": {"ok": False, "error": "the phone has no pressure sensor"}})
+        run = self.pocket("sensor", "pressure")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "pocket: the phone has no pressure sensor\n")
+
+    def test_sensor_usage(self):
+        usage = "usage: pocket sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
+        for args in [(), ("--stream",), ("light", "--fast"), ("light", "--timeout"), ("light", "--rate", "5"),
+                     ("light", "--stream", "--timeout", "5"), ("light", "dark"), ("list", "x")]:
+            run = self.pocket("sensor", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn(usage, run.stderr, args)
+
     # --- share --------------------------------------------------------------
 
     def test_share_sends_the_files_full_paths(self):

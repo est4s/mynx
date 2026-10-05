@@ -91,6 +91,8 @@ their own.
 | `pocket share FILE…` | send files to another app through Android's share sheet (the app must be on screen) |
 | `pocket share --text [TEXT]` | send TEXT, or stdin when there's no TEXT, to another app |
 | `pocket location` | where the phone is: one fix; `--stream` keeps printing them (see "The phone") |
+| `pocket sensor list` | the phone's sensors, with their values and units |
+| `pocket sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -135,6 +137,8 @@ One `key = value` per line; `pocket settings` describes each.
   open Android's share sheet (`pocket share`).
 - `android-location`: `on` (default) or `off`: whether programs here
   can ask for the phone's location (`pocket location`).
+- `android-sensors`: `on` (default) or `off`: whether programs here
+  can read the phone's sensors (`pocket sensor`).
 - `share-folder`: where files other apps share to this app are saved,
   a full path or one starting with `~/` (default `~/Shared`).
 
@@ -187,7 +191,8 @@ it too, even one spread over several rows.
 
 ### The phone
 
-Commands for the phone itself (more are coming: sensors, camera):
+Commands for the phone itself (more are coming: camera and
+flashlight, speaker and microphone):
 
 - `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
 - `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
@@ -212,6 +217,22 @@ Commands for the phone itself (more are coming: sensors, camera):
   (only while the app is in use), so the app must be on screen to
   start it; a stream keeps going in the background. `android-location
   off` blocks it.
+- `pocket sensor list` names the phone's sensors: `accelerometer`,
+  `gyroscope`, `magnetic-field`, `light`, `proximity`, `pressure`,
+  `gravity`, `rotation-vector`, `step-counter`, … as the phone has
+  them, and `compass` (azimuth clockwise from magnetic north, pitch
+  and roll, in degrees, worked out from `rotation-vector`). `pocket
+  sensor NAME` prints one reading: `x=0.1235 y=9.8067 z=-0.5 m/s²`,
+  or `108 lx` for one value; it gives up after 10 s (`--timeout
+  SECONDS`, up to 60). `--stream` prints up to 10 readings a second
+  (`--rate HZ`, 1 to 200), each line starting with the time, until
+  Ctrl+C; sensors like `light` and `proximity` only send when the
+  value changes. `--json` gives `sensor`, `values` (by name), `unit`,
+  `accuracy` (`high`, `medium`, `low`, `unreliable`, `no-contact`) and
+  `time` (ms since 1970); with `--stream`, one object per line. The
+  step sensors need Android's "physical activity" permission, asked
+  the first time (app on screen). Readings keep coming in the
+  background. `android-sensors off` blocks it.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved
