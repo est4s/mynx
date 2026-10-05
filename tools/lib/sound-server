@@ -19,10 +19,14 @@ if [ -n "$old" ] && [ "$(cat "/proc/$old/comm" 2>/dev/null)" = pulseaudio ]; the
     kill -9 "$old" 2>/dev/null
 fi
 echo $$ >"$dir/pid"
+# exec keeps the pid: the watcher follows Pulse by it.
+"$(dirname "$0")/sound-watch" $$ </dev/null >/dev/null 2>&1 &
 # -n: none of Debian's default.pa, which looks for sound cards we don't
-# have. The pipe has no clock of its own: the app's reading paces it.
+# have. The pipes have no clock of their own: the app paces them. The
+# app writes the microphone into `in` only while a program records.
 exec pulseaudio -n --daemonize=no --exit-idle-time=-1 --use-pid-file=no \
     --log-target=stderr \
     -L "module-pipe-sink file=$dir/out format=s16le rate=48000 channels=2 sink_name=phone sink_properties=device.description=Phone" \
+    -L "module-pipe-source file=$dir/in format=s16le rate=48000 channels=1 source_name=mic source_properties=device.description=Microphone" \
     -L "module-native-protocol-unix auth-anonymous=1 socket=$dir/native" \
     -L "module-suspend-on-idle"

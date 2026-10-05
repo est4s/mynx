@@ -77,3 +77,21 @@ old_server() {
     PATH="$STUBS:$PATH" run "$SERVER"
     kill -0 "$old"
 }
+
+@test "sound-server records from a pipe the app writes the microphone into" {
+    stub_pulseaudio
+    PATH="$STUBS:$PATH" run "$SERVER"
+    [[ $output == *"module-pipe-source file=$POCKET_SOUND_DIR/in format=s16le rate=48000 channels=1 source_name=mic"* ]]
+}
+
+@test "sound-server starts the watcher with Pulse's pid" {
+    stub_pulseaudio
+    lib="$BATS_TEST_TMPDIR/lib"
+    mkdir -p "$lib"
+    cp "$SERVER" "$lib/sound-server"
+    printf '#!/bin/sh\necho "$1" >"%s"\n' "$BATS_TEST_TMPDIR/watched" >"$lib/sound-watch"
+    chmod +x "$lib/sound-watch"
+    PATH="$STUBS:$PATH" run "$lib/sound-server"
+    sleep 0.3
+    [ "${lines[-1]}" = "pid=$(cat "$BATS_TEST_TMPDIR/watched")" ]
+}

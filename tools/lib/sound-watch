@@ -1,0 +1,33 @@
+#!/bin/sh
+# Started by sound-server with Pulse's pid: tells the app which programs
+# record, so it opens the phone's microphone only while one does. On
+# every source or recording event it writes Pulse's sources and source
+# outputs to $dir/inputs (the app watches the folder and reads it).
+pulse=$1
+dir=${POCKET_SOUND_DIR:-/tmp/.pocket-terminal/sound}
+export PULSE_SERVER="unix:$dir/native"
+
+alive() {
+    [ "$(cat "/proc/$pulse/comm" 2>/dev/null)" = pulseaudio ] &&
+        ! grep -q '^State:.*Z' "/proc/$pulse/status" 2>/dev/null
+}
+
+list() {
+    { pactl list short sources && echo && pactl list source-outputs; } \
+        >"$dir/.inputs" 2>/dev/null && mv -f "$dir/.inputs" "$dir/inputs"
+}
+
+while alive; do
+    if [ ! -e "$dir/native" ]; then
+        sleep 0.2
+        continue
+    fi
+    list
+    # "on source" covers source-output too; sink events don't matter.
+    pactl subscribe 2>/dev/null | while read -r line; do
+        case $line in *" on source"*) list ;; esac
+    done
+    alive && sleep 1
+done
+# Nothing records from a Pulse that has stopped.
+rm -f "$dir/inputs" "$dir/.inputs"
