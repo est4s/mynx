@@ -15,8 +15,7 @@ Newest entries first. Rules for keeping it up to date: see
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
-  flashlight) passed tests 1-7 on the phone** (entry 38); the quiet
-  Ctrl+C fix is left to check.
+  flashlight) is confirmed** (2026-10-05).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -81,14 +80,9 @@ owner test after each part.
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
-**9.5 (camera and flashlight):** tests 1-7 passed on the phone
-(entry 38); the camera is allowed again. Left: push `ad76f65`
-(it wasn't pushed, so CI never built it), install it, then
-`timeout -s INT 1 pocket camera --quick back ~/d.jpg` should print
-nothing (build 60 still prints a traceback), exit 124 from `timeout`
-(pocket itself exits 130), and the next shot works.
-That passes → 9.5 is done.
-**Then build 9.6 (sound).**
+**9.5 (camera and flashlight) is done** (confirmed on the phone
+2026-10-05, entries 38-39).
+**Next: build 9.6 (sound).**
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -273,6 +267,13 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (39): 9.5 confirmed on the phone
+
+Build 61 (`ad76f65` + docs) installed. `timeout -s INT 1 pocket
+camera --quick back ~/d.jpg` and the same at 0.3 s printed nothing,
+exit 124 from `timeout`; no file written, no request files left; the
+next `--quick back` shot saved (2.0 MB). Step 9.5 is done.
 
 ### 2026-10-05 (38): 9.5 tested on the phone
 
