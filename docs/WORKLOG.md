@@ -18,7 +18,8 @@ Newest entries first. Rules for keeping it up to date: see
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
   half (`pocket audio play`/`record`) is confirmed (2026-10-05,
   entry 42); the sound device's speaker half is confirmed (2026-10-05,
-  entry 47); the microphone half comes next.
+  entry 47); the microphone half is built (entry 49), waiting for
+  the phone check.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -90,37 +91,25 @@ owner test after each part.
 **9.6 sound device, speaker half is done** (confirmed on the phone
 2026-10-05, entries 45-47).
 
-**Next: the microphone half of the sound device** (planned with the
-owner 2026-10-05, entry 48; being built). The plan:
-- **Microphone only while a program records** (owner's decision):
-  never on just because the sound device runs. Android's indicator
-  shows only then, and the app's notification names the program
-  ("Microphone: arecord").
-- **Debian side:** `sound-server` adds `module-pipe-source` `mic`
-  (s16le 48 kHz mono, FIFO `sound/in`, the default source) and starts
-  `sound-watch` before Pulse: it waits for the socket, follows
-  `pactl subscribe`, and on every source / source-output event
-  writes `pactl list short sources` + `pactl list source-outputs`
-  to `sound/inputs` (renamed into place). Tests: bats with a fake
-  `pactl`.
-- **core:** parse that file into the programs recording from `mic`
-  (uncorked only; recording `phone.monitor` doesn't count); decide
-  per change: off / on / silence (why). Silence when `android-
-  microphone` is off, RECORD_AUDIO isn't granted, or Android won't
-  let a background app start the microphone: checked here, with no
-  writer `parecord` waits forever, so the app must feed zeros
-  paced at 48 kHz rather than nothing. A feeder (like `PipePlayer`)
-  writes 20 ms chunks to the pipe from a source it's given.
-- **app:** a FileObserver on `sound/inputs`; an AudioRecord (48 kHz
-  mono) only while the decision is "on"; the `microphone`
-  foreground type while it records; the notification names the
-  programs, or says the microphone is blocked and why (open the app
-  to allow it). Blocked because off screen → starts when the app
-  comes on screen and a program still records.
-- **Downsides (told the owner):** ~0.1-0.3 s to open the microphone
-  (the program waits, nothing is lost); can't start from the
-  background on Android 14+ (silence + notification); programs that
-  keep a stream open keep the indicator on.
+**Next: check the sound device's microphone on the phone** (entry
+49, built but not yet run on the phone; the plan is in entry 48).
+With the new build installed and the app on screen, in a new tab:
+1. Nothing records: no microphone indicator, the notification says
+   "N terminals running".
+2. `arecord -f S16_LE -r 48000 -c 1 -d 5 /tmp/m.wav` and speak:
+   the first time Android asks to allow the microphone (if `pocket
+   audio record` hasn't already). The indicator shows while it
+   records, the notification says "Microphone: arecord", and both
+   go away when it ends. `aplay /tmp/m.wav` plays the voice back.
+3. `pocket set android-microphone off`, record again: the file is
+   silent, the notification says blocked and why; `on` again.
+4. `sleep 5; arecord -d 5 /tmp/b.wav` then leave the app at once:
+   silence and the "open the app" notice; opening the app within the
+   5 s starts the microphone (the rest of the file has sound).
+5. Start `arecord -d 20 /tmp/c.wav` on screen, then leave the app:
+   it keeps recording in the background (indicator stays).
+If something fails: `cat /tmp/.pocket-terminal/sound/inputs` (who
+Pulse says records) and `server.log`.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -305,6 +294,34 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (49): sound device, microphone half
+
+Built test-first from entry 48's plan; not yet run on the phone.
+- `tools/lib/sound-watch` (bats, fake `pactl`): started by
+  `sound-server` with Pulse's pid (exec keeps it), waits for the
+  socket, lists on start and on every `on source…` event, removes
+  `sound/inputs` and ends when Pulse stops. Bug found by running it
+  here: it must set its own `PULSE_SERVER`, else `pactl` asks the
+  tab's Pulse (the app's own one, here). `sound-server` adds
+  `module-pipe-source` `mic` (default source, checked).
+- core `Mic.kt`: `micUsers()` (only uncorked outputs of `mic`; names
+  from `/proc/PID/comm`, since Pulse calls `arecord` `aplay`),
+  `micState()` → `Mic.Off`/`On`/`Silent(why)`, `micNotice()`,
+  `Silence` (20 ms zero chunks paced by the clock, no burst after a
+  stall).
+- app `MicFeeder`: FileObserver on the sound folder; asks for
+  RECORD_AUDIO once while programs record and the app is on screen;
+  a feed thread writes AudioRecord (48 kHz mono) or `Silence` to the
+  pipe, opened O_NONBLOCK (a full pipe drops a chunk, Pulse gone →
+  reopen). The service: started/stopped with the sound device,
+  re-decided on settings changes and when the activity starts
+  (`cameOnScreen()`); `microphone` FGS type while `Mic.On`; the
+  notification shows `micNotice()` (tab count as subtext). Not
+  compiled locally: CI is the first compile.
+- A bats test runs the real Pulse where installed (skipped
+  otherwise): `arecord` shows up in `inputs`, `mic` is default.
+- Guide and architecture notes updated. Tests: core 344, bats 84.
 
 ### 2026-10-05 (48): microphone half planned
 
