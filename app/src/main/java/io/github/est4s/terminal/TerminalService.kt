@@ -395,7 +395,7 @@ class TerminalService : Service() {
             }
             // ClipData carries the read grant through the chooser to the chosen app.
             val clip = ClipData.newRawUri(null, uris[0]).apply { uris.drop(1).forEach { addItem(ClipData.Item(it)) } }
-            intent.setType(type).setClipData(clip).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.setType(type).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = clip }
         }
         return try {
             shown.startActivity(Intent.createChooser(send, null))
