@@ -39,6 +39,7 @@ Commands:
   sensor     sensor list | NAME [--stream]: the phone's sensors
   camera     camera FILE [--quick front|back]: take a photo
   torch      torch on [PERCENT] | off: the flashlight
+  rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
@@ -418,6 +419,34 @@ def cmd_torch(args, as_json):
         raise Usage("usage: pocket torch on [PERCENT] | off")
     answer = request("torch", *args)
     out(as_json, answer, None)
+    return 0
+
+
+ROTATION_USAGE = "usage: pocket rotation [status] | lock [portrait|landscape] [--pid PID] | unlock"
+
+
+def cmd_rotation(args, as_json):
+    """The lock is held by the program that ran pocket (or --pid): it ends
+    when that program does, so a crash can't leave the screen stuck."""
+    sub, rest = (args[0], list(args[1:])) if args else ("status", [])
+    if sub == "lock":
+        pid, side = os.getppid(), []
+        while rest:
+            word = rest.pop(0)
+            if word == "--pid" and rest and rest[0].isdigit():
+                pid = int(rest.pop(0))
+            elif word in ("portrait", "landscape") and not side:
+                side = [word]
+            else:
+                raise Usage(ROTATION_USAGE)
+        answer = request("rotation", "lock", str(pid), *side)
+    elif sub in ("unlock", "status") and not rest:
+        answer = request("rotation", sub)
+    else:
+        raise Usage(ROTATION_USAGE)
+    locked = answer["locked"]
+    text = {"no": "free", "current": "locked as it is"}.get(locked, f"locked to {locked}")
+    out(as_json, answer, "Rotation: " + text)
     return 0
 
 
@@ -861,6 +890,7 @@ COMMANDS = {
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
+    "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }

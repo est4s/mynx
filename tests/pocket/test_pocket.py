@@ -923,6 +923,35 @@ class PocketTest(unittest.TestCase):
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: pocket torch on [PERCENT] | off", run.stderr, args)
 
+    # --- rotation -----------------------------------------------------------
+
+    def test_rotation_lock_is_held_by_the_program_that_runs_pocket(self):
+        self.start_app({"rotation": {"ok": True, "locked": "current"}})
+        run = self.pocket("rotation", "lock")
+        self.assertEqual((run.returncode, run.stdout), (0, "Rotation: locked as it is\n"), run.stderr)
+        self.assertEqual(self.app.requests, [["rotation", "lock", str(os.getpid())]])
+
+    def test_rotation_lock_to_a_side_or_for_another_process(self):
+        self.start_app({"rotation": {"ok": True, "locked": "landscape"}})
+        run = self.pocket("rotation", "lock", "landscape", "--pid", "77")
+        self.assertEqual((run.returncode, run.stdout), (0, "Rotation: locked to landscape\n"), run.stderr)
+        self.assertEqual(self.app.requests, [["rotation", "lock", "77", "landscape"]])
+
+    def test_rotation_unlock_and_status(self):
+        self.start_app({"rotation": {"ok": True, "locked": "no"}})
+        self.assertEqual(self.pocket("rotation", "unlock").stdout, "Rotation: free\n")
+        self.assertEqual(self.pocket("rotation").stdout, "Rotation: free\n")
+        run = self.pocket("--json", "rotation", "status")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "locked": "no"})
+        self.assertEqual(self.app.requests, [["rotation", "unlock"], ["rotation", "status"], ["rotation", "status"]])
+
+    def test_rotation_usage(self):
+        for args in [("spin",), ("lock", "sideways"), ("lock", "--pid"), ("lock", "--pid", "x"), ("unlock", "now")]:
+            run = self.pocket("rotation", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: pocket rotation [status] | lock [portrait|landscape] [--pid PID] | unlock",
+                          run.stderr, args)
+
     # --- sound --------------------------------------------------------------
 
     SETTINGS_ON = {"ok": True, "problems": [], "settings": [

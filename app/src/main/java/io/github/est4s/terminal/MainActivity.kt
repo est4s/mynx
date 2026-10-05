@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
@@ -41,6 +42,7 @@ import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.ColorScheme
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
 import io.github.est4s.terminal.core.MIN_FONT_SIZE
+import io.github.est4s.terminal.core.Orientation
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.Tab
@@ -108,6 +110,7 @@ class MainActivity : Activity() {
             val s = (binder as TerminalService.LocalBinder).service
             service = s
             s.activity = this@MainActivity
+            applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
             showShellFromNotification()
             s.toolsError?.let { showToolsError(it) }
@@ -115,6 +118,16 @@ class MainActivity : Activity() {
 
         override fun onServiceDisconnected(name: ComponentName) {
             service = null
+        }
+    }
+
+    /** `pocket rotation lock`: hold the screen as it is, or turned to a side; null frees it. */
+    fun applyRotation(lock: Orientation?) {
+        requestedOrientation = when (lock) {
+            null -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            Orientation.CURRENT -> ActivityInfo.SCREEN_ORIENTATION_LOCKED
+            Orientation.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            Orientation.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         }
     }
 

@@ -251,6 +251,11 @@ See README "How it works". The details:
   it can't record: with no writer, Pulse gives recorders nothing and
   they hang. The service adds the `microphone` type and names the
   programs in its notification (`micNotice()`).
+- **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
+  each `pocket rotation lock` for a process (pid + start time from
+  `/proc/PID/stat`, so a reused pid doesn't count); `pocket` sends its
+  parent's pid. The service sweeps every second while locked and the
+  activity sets `requestedOrientation` (LOCKED for "as it is").
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

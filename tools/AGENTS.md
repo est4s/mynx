@@ -95,6 +95,7 @@ their own.
 | `pocket sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
 | `pocket camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
 | `pocket torch on [PERCENT]\|off` | the phone's flashlight |
+| `pocket rotation lock [portrait\|landscape]` | stop the screen turning while the program that ran it runs; `unlock`, `status` |
 | `pocket audio play FILE` | play a sound file through the phone's speaker, until it ends |
 | `pocket audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
 | `pocket sound` | whether the sound device is on; `pocket sound start` starts it again, `pocket sound install` installs it (see "The phone") |
@@ -259,6 +260,16 @@ Commands for the phone itself, and the sound device:
   in percent, on phones whose flashlight has levels (Android 13+).
   Both work with the app in the background. Opening the camera turns
   it off.
+- `pocket rotation lock` stops the screen turning with the phone,
+  e.g. for a program that reads the tilt sensors: it stays as it is,
+  or `pocket rotation lock portrait` (`landscape`) turns it to that
+  side. The lock belongs to the program that ran `pocket` (the shell,
+  when you type it) and ends when that program ends, so a crash
+  can't leave the screen stuck; `--pid PID` gives it to another
+  process. `pocket rotation unlock` ends every lock; `pocket rotation`
+  says whether it's locked (`--json`: `locked` is `no`, `current`,
+  `portrait` or `landscape`). From a program: run `pocket rotation
+  lock` once at start.
 - `pocket audio play FILE` plays a sound file (mp3, ogg, wav, m4a,
   flac, … whatever Android can play) and returns when it ends; Ctrl+C
   stops it. It works with the app in the background. `--json` gives

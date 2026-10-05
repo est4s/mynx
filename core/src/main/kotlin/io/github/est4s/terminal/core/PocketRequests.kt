@@ -38,6 +38,8 @@ private class Refused(message: String) : Exception(message)
  * Android's share sheet for a [Share]; [torch] turns the flashlight on
  * (at a strength in percent, or the phone's default) or off.
  * [startSound] (re)starts the sound server (`pocket sound install`).
+ * [rotation] holds the screen's rotation locks; [rotationChanged] gets
+ * the orientation to hold (null: none) after each change.
  *
  * Requests in [later] are answered later, or stream (see [Later]).
  * [sweep] cancels those whose `pocket` cancelled them or has gone
@@ -56,6 +58,8 @@ class PocketRequests(
     private val share: (Share) -> String? = { "sharing isn't available here" },
     private val torch: (Boolean, Int?) -> String? = { _, _ -> "the flashlight isn't available here" },
     private val startSound: () -> String? = { "the sound device isn't available here" },
+    private val rotation: RotationLocks = RotationLocks(),
+    private val rotationChanged: (Orientation?) -> Unit = {},
     private val later: Map<String, Later> = emptyMap(),
     private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
 ) {
@@ -295,6 +299,28 @@ class PocketRequests(
                 }
                 torch(on, percent)?.let { throw Refused(it) }
                 ok()
+            }
+            "rotation" -> {
+                val usage = "rotation lock PID [portrait|landscape] | unlock | status"
+                val words = args.map { it.trim() }.filter { it.isNotEmpty() }
+                when (words.firstOrNull()) {
+                    "lock" -> {
+                        val pid = words.getOrNull(1)?.toIntOrNull() ?: throw Refused(usage)
+                        val orientation = when (words.getOrNull(2)) {
+                            null -> Orientation.CURRENT
+                            "portrait" -> Orientation.PORTRAIT
+                            "landscape" -> Orientation.LANDSCAPE
+                            else -> throw Refused(usage)
+                        }
+                        if (words.size > 3) throw Refused(usage)
+                        rotation.lock(pid, orientation)?.let { throw Refused(it) }
+                        rotationChanged(rotation.orientation)
+                    }
+                    "unlock" -> if (rotation.unlock()) rotationChanged(null)
+                    "status" -> {}
+                    else -> throw Refused(usage)
+                }
+                ok("locked" to json(rotation.orientation?.word ?: "no"))
             }
             "sound-start" -> {
                 if (!loadSettings(settingsFile).settings.soundDevice) {

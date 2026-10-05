@@ -25,6 +25,8 @@ import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Mic
 import io.github.est4s.terminal.core.Notice
+import io.github.est4s.terminal.core.Orientation
+import io.github.est4s.terminal.core.RotationLocks
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
 import io.github.est4s.terminal.core.cameraRequests
@@ -71,6 +73,7 @@ private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
 // How often to check whether waiting requests' `pocket`s have gone.
 private const val SWEEP_MS = 2000L
+private const val ROTATION_SWEEP_MS = 1000L
 private val LOCATION_PERMISSIONS = arrayOf(
     android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION,
 )
@@ -113,6 +116,7 @@ class TerminalService : Service() {
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share, torch = camera::torch, startSound = sound::start,
+            rotation = rotation, rotationChanged = ::setRotation,
             later = locationRequests(File(rootfs, "root"), locator::locate) +
                 sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
                 cameraRequests(File(rootfs, "root"), camera::take) +
@@ -159,6 +163,17 @@ class TerminalService : Service() {
     private var locating = false
     private var recording = false
     private var micState: Mic = Mic.Off
+    private val rotation = RotationLocks()
+    /** How `pocket rotation lock` holds the screen; null: free. */
+    var rotationLock: Orientation? = null
+        private set
+    // A lock ends with its process: check now and then while one is held.
+    private val rotationSweep = object : Runnable {
+        override fun run() {
+            if (rotation.sweep()) setRotation(rotation.orientation)
+            else if (rotationLock != null) mainHandler.postDelayed(this, ROTATION_SWEEP_MS)
+        }
+    }
     private var sweepDue = false
     private val sweep = Runnable {
         sweepDue = false
@@ -292,6 +307,7 @@ class TerminalService : Service() {
     override fun onDestroy() {
         requestWatcher?.stopWatching()
         mainHandler.removeCallbacks(sweep)
+        mainHandler.removeCallbacks(rotationSweep)
         locator.stopAll()
         sensors.stopAll()
         player.stopAll()
@@ -588,6 +604,13 @@ class TerminalService : Service() {
     private fun setRecording(on: Boolean) {
         recording = on
         if (Build.VERSION.SDK_INT >= 34) runCatching { goForeground() }
+    }
+
+    private fun setRotation(next: Orientation?) {
+        rotationLock = next
+        activity?.applyRotation(next)
+        mainHandler.removeCallbacks(rotationSweep)
+        if (next != null) mainHandler.postDelayed(rotationSweep, ROTATION_SWEEP_MS)
     }
 
     // The microphone foreground type before the microphone opens; the
