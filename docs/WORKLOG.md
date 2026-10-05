@@ -17,8 +17,8 @@ Newest entries first. Rules for keeping it up to date: see
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
   half (`pocket audio play`/`record`) is confirmed (2026-10-05,
-  entry 42); the sound device's speaker half is built (entry 45),
-  waiting for the phone check; the microphone half comes after.
+  entry 42); the sound device's speaker half is confirmed (2026-10-05,
+  entry 47); the microphone half comes next.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -87,25 +87,40 @@ owner test after each part.
 2026-10-05, entries 38-39).
 **9.6 (sound), files half is done** (confirmed on the phone
 2026-10-05, entries 40-42).
+**9.6 sound device, speaker half is done** (confirmed on the phone
+2026-10-05, entries 45-47).
 
-**Next: check the sound device (speaker half) on the phone** (entry
-45, built but not yet run on the phone). With the new build
-installed and the app on screen, in a new tab:
-1. `pocket sound` says "on"; `pgrep -a pulseaudio` shows one.
-2. `sox -n /tmp/t.wav synth 2 sine 440 && time paplay /tmp/t.wav`,
-   then `aplay /tmp/t.wav` (ALSA): the owner hears both, clean;
-   `real` ≈ 2 s.
-3. `pocket set sound-device off`: `pocket sound` says off and
-   `pgrep pulseaudio` finds nothing (proot killed with SIGKILL takes
-   Pulse with it?). `pocket set sound-device on`: on again, plays.
-4. `pkill -9 pulseaudio`: within a few seconds `pocket sound` is on
-   again and `paplay` plays (restart, stale pipe and socket).
-5. Exit from the notification, reopen: one `pulseaudio`, plays.
-If something fails, `/tmp/.pocket-terminal/sound/server.log` has
-Pulse's output. Then: the microphone half (pipe source; a helper
-watching `pactl subscribe` source-outputs tells the app when to
-record; RECORD_AUDIO and the `microphone` foreground type as in
-9.6), planned with the owner first.
+**Next: the microphone half of the sound device** (planned with the
+owner 2026-10-05, entry 48; being built). The plan:
+- **Microphone only while a program records** (owner's decision):
+  never on just because the sound device runs. Android's indicator
+  shows only then, and the app's notification names the program
+  ("Microphone: arecord").
+- **Debian side:** `sound-server` adds `module-pipe-source` `mic`
+  (s16le 48 kHz mono, FIFO `sound/in`, the default source) and starts
+  `sound-watch` before Pulse: it waits for the socket, follows
+  `pactl subscribe`, and on every source / source-output event
+  writes `pactl list short sources` + `pactl list source-outputs`
+  to `sound/inputs` (renamed into place). Tests: bats with a fake
+  `pactl`.
+- **core:** parse that file into the programs recording from `mic`
+  (uncorked only; recording `phone.monitor` doesn't count); decide
+  per change: off / on / silence (why). Silence when `android-
+  microphone` is off, RECORD_AUDIO isn't granted, or Android won't
+  let a background app start the microphone: checked here, with no
+  writer `parecord` waits forever, so the app must feed zeros
+  paced at 48 kHz rather than nothing. A feeder (like `PipePlayer`)
+  writes 20 ms chunks to the pipe from a source it's given.
+- **app:** a FileObserver on `sound/inputs`; an AudioRecord (48 kHz
+  mono) only while the decision is "on"; the `microphone`
+  foreground type while it records; the notification names the
+  programs, or says the microphone is blocked and why (open the app
+  to allow it). Blocked because off screen → starts when the app
+  comes on screen and a program still records.
+- **Downsides (told the owner):** ~0.1-0.3 s to open the microphone
+  (the program waits, nothing is lost); can't start from the
+  background on Android 14+ (silence + notification); programs that
+  keep a stream open keep the indicator on.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -290,6 +305,25 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (48): microphone half planned
+
+The owner worried about Android's microphone indicator; the plan
+opens the microphone only while a program records from Pulse, names
+the program in the notification and keeps `android-microphone off`
+as the switch (see "Next"). Checked here with the real Pulse 17: a
+pipe source with no writer gives `parecord` nothing (0 bytes in 2 s,
+no silence), and `pactl list source-outputs` shows `Source: N`,
+`Corked:` and `application.process.binary`.
+
+### 2026-10-05 (47): sound device (speaker half) confirmed on the phone
+
+Build 67 (1ea1e12). The owner heard all four tones, clean: `paplay`
+and `aplay` (2.4 s and 2.8 s for a 2 s tone), after
+`sound-device off`/`on` (no `pulseaudio` left while off: the pid
+stop works) and after `pkill -9 pulseaudio` (back within 2 s).
+Check 5 passed too: after Exit from the notification and reopening,
+one `pulseaudio`, and it plays.
 
 ### 2026-10-05 (46): stop PulseAudio itself, by its pid
 
