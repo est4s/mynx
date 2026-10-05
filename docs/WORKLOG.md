@@ -87,26 +87,18 @@ owner test after each part.
 **9.6 (sound), files half is done** (confirmed on the phone
 2026-10-05, entries 40-42).
 
-**Next: the sound device, spike first** (on a branch, thrown away
-after). Find out in the app's Debian whether PulseAudio's pipe
-modules work under proot:
-1. `apt install pulseaudio pulseaudio-utils sox` (also `alsa-utils`
-   and `libasound2-plugins` for `aplay`/`arecord` through Pulse).
-2. `pulseaudio --daemonize=no --exit-idle-time=-1 -n -L
-   "module-pipe-sink file=/tmp/snd/out format=s16le rate=48000
-   channels=2" -L "module-pipe-source file=/tmp/snd/in …" -L
-   module-native-protocol-unix` (no system bus, no realtime, `-n`
-   skips the default config). Check it starts as fake root and that
-   `paplay`/`sox … -t pulse` write PCM into the FIFO (`cat
-   /tmp/snd/out | wc -c`).
-3. If it works: the app reads the FIFO (from the host side, through
-   the rootfs path) into an AudioTrack, and writes AudioRecord PCM
-   into the source FIFO; check latency and what happens when nobody
-   reads (Pulse blocks or drops?).
-If the pipe modules fail under proot, look at `module-simple-protocol-tcp`
-on 127.0.0.1 (ports above 1024 work) before anything else.
-Then rebuild test-first: who starts PulseAudio (a `pocket`
-command or `/etc/profile.d`), setting `android-audio`, the docs.
+**Next: the sound device. Spike under way** (entry 43, branch
+`spike/sound-device`, run 37330111521). Debian side works. Phone
+check, with the app on screen:
+1. `scripts/deliver.sh 37330111521` (installs the spike build).
+2. `~/snd-spike.sh`: starts PulseAudio on pipes, plays a 2 s 440 Hz
+   tone, prints the app's trace (`spike-sound.txt`). The owner says
+   whether they heard it, clean or crackling; note `real` from `time`
+   (≈2.3 s expected) and the underruns in the trace.
+3. Run it again (checks the app reopens the pipe after Pulse restarts).
+Then: throw the branch away (`git push origin :spike/sound-device`,
+delete `~/snd-spike.sh`, `~/spike-tone.wav`, `~/.asoundrc`) and plan
+the real build with the owner (see entry 43's design notes).
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -291,6 +283,34 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (43): sound device spike, Debian side
+
+Branch `spike/sound-device` (throwaway). In the app's Debian, with
+`pulseaudio pulseaudio-utils sox alsa-utils libasound2-plugins`
+installed (left installed):
+- **PulseAudio 17 runs under proot** as fake root with `-n`,
+  `module-pipe-sink`, `module-pipe-source` and
+  `module-native-protocol-unix auth-anonymous=1` on `/tmp/snd/`.
+  Harmless warnings: no RLIMIT_RTPRIO, no `/dev/shm`, no D-Bus.
+- **Playback:** `paplay` and `aplay` (`~/.asoundrc` with `type
+  pulse`) put the tone into the FIFO intact (2.0 s, 440 Hz).
+- **The pipe sink has no clock:** it goes as fast as the reader
+  (a 2 s tone in 186 ms). The app's blocking AudioTrack writes must
+  pace it; read in small chunks (20 ms).
+- **Nobody reading blocks players** (`paplay` hung). Idle sink writes
+  nothing. A reader that leaves and comes back gets the rest;
+  Pulse survives it.
+- **Pulse deletes its FIFOs when it stops**, so the app must reopen
+  the pipe each time Pulse starts.
+- **Mic:** PCM written into the source FIFO comes out of `parecord`
+  (660 Hz in, 659 out). But with no recording client the writer
+  **blocks** (the source is suspended). `pactl subscribe` reports
+  `new`/`remove` on source-output, so a helper in Debian can tell
+  the app when to turn the mic on and off (also right for privacy).
+- Spike app code: `SpikeSound` thread in the service reads
+  `rootfs/tmp/snd/out` into a 48 kHz stereo AudioTrack, traces to
+  `spike-sound.txt` in the external files dir. Untested on the phone.
 
 ### 2026-10-05 (42): 9.6 files half confirmed on the phone
 
