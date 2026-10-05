@@ -17,8 +17,8 @@ Newest entries first. Rules for keeping it up to date: see
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
   half (`pocket audio play`/`record`) is confirmed (2026-10-05,
-  entry 42); the sound device spike worked on the phone
-  (entry 44), the real build is next.
+  entry 42); the sound device's speaker half is built (entry 45),
+  waiting for the phone check; the microphone half comes after.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -88,26 +88,24 @@ owner test after each part.
 **9.6 (sound), files half is done** (confirmed on the phone
 2026-10-05, entries 40-42).
 
-**Next: the sound device. The spike worked on the phone** (entry
-44) and is thrown away. Plan the real build with the owner, then
-build it test-first. Design from the spike (entries 43-44):
-- PulseAudio in Debian on pipes (`module-pipe-sink`,
-  `module-pipe-source`, `module-native-protocol-unix`
-  `auth-anonymous=1`), started by an app-owned command; ALSA
-  programs through `libasound2-plugins` (`type pulse`).
-  **Owner's decisions (2026-10-05):** Pulse starts **on demand**
-  (the first time a program plays or records), not at each app
-  start; the packages go **in the rootfs image**, with a one-time
-  additive install for existing Debians.
-- The app reads the sink FIFO in 20 ms chunks into a blocking
-  48 kHz stereo AudioTrack, which paces the clockless pipe sink;
-  it reopens the FIFO whenever Pulse restarts (Pulse deletes it).
-- Mic: a helper watching `pactl subscribe` (source-output
-  `new`/`remove`) tells the app when to record into the source
-  FIFO, so the mic is only on while something records (RECORD_AUDIO,
-  started on screen, `microphone` foreground type as in 9.6).
-- Spike code was a `SpikeSound` thread in the service; the real
-  logic (formats, chunking, FIFO lifecycle) goes in `core`.
+**Next: check the sound device (speaker half) on the phone** (entry
+45, built but not yet run on the phone). With the new build
+installed and the app on screen, in a new tab:
+1. `pocket sound` says "on"; `pgrep -a pulseaudio` shows one.
+2. `sox -n /tmp/t.wav synth 2 sine 440 && time paplay /tmp/t.wav`,
+   then `aplay /tmp/t.wav` (ALSA): the owner hears both, clean;
+   `real` ≈ 2 s.
+3. `pocket set sound-device off`: `pocket sound` says off and
+   `pgrep pulseaudio` finds nothing (proot killed with SIGKILL takes
+   Pulse with it?). `pocket set sound-device on`: on again, plays.
+4. `pkill -9 pulseaudio`: within a few seconds `pocket sound` is on
+   again and `paplay` plays (restart, stale pipe and socket).
+5. Exit from the notification, reopen: one `pulseaudio`, plays.
+If something fails, `/tmp/.pocket-terminal/sound/server.log` has
+Pulse's output. Then: the microphone half (pipe source; a helper
+watching `pactl subscribe` source-outputs tells the app when to
+record; RECORD_AUDIO and the `microphone` foreground type as in
+9.6), planned with the owner first.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -292,6 +290,42 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (45): sound device, speaker half
+
+Built test-first from the spike's design (entries 43-44); not yet
+run on the phone.
+- **Owner's decisions:** the packages go in the image (plus `pocket
+  sound install` for existing Debians); PulseAudio **starts with the
+  app**. First chosen: on demand, but Pulse refuses to autospawn as
+  root ("Not doing autospawn since we are root"), so on demand would
+  need a listener holding the socket, ~9 MB of Python, more than an
+  idle Pulse (5.5 MB RSS, 0 CPU ticks in 10 s). The owner picked
+  starting with the app after hearing that.
+- `tools/lib/sound-server`: PulseAudio with `-n`, pipe sink `phone`
+  (48 kHz s16 stereo) at `/tmp/.pocket-terminal/sound/out`, native
+  socket `…/native` (anonymous), suspend-on-idle; exit 3 when not
+  installed. Checked here with the real Pulse: default sink `phone`,
+  `paplay` into the pipe, a stale FIFO or socket left by `kill -9`
+  doesn't stop the next start.
+- core: `prootLaunch(command = …, soundSocket = …)` (`PULSE_SERVER`
+  in every tab); `PipePlayer` (whole frames, play on sound, pause
+  after 500 ms quiet, reopen after the pipe ends); `ServerRestarts`
+  (1 s doubling to 60 s, reset after 30 s up, none for exit 3);
+  `sound-device` setting; `sound-start` request (refused while the
+  setting is off).
+- ALSA needs no config: Debian's `99-pulse.conf` hook makes pulse the
+  default whenever `PULSE_SERVER` answers (`aplay` checked here).
+- app: `SoundDevice` runs the server in its own proot
+  (`ProcessBuilder`, output appended to `sound/server.log`), plays
+  the pipe on a 48 kHz AudioTrack (2× min buffer), idle check on the
+  main handler; stop kills proot and opens the pipe to write once so
+  a reader stuck opening it gets through. The service starts it when
+  the setting is on, after each settings-changing request, and stops
+  it on destroy. Not compiled locally (no Android SDK): CI is the
+  first compile.
+- `pocket sound [status] | start | install [--yes]`; guide and
+  architecture notes updated. Tests: core 327, pocket 170, bats 66.
 
 ### 2026-10-05 (44): sound device spike confirmed on the phone
 

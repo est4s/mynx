@@ -1,0 +1,16 @@
+#!/bin/sh
+# The sound device: the app runs this at start, in Debian but outside any
+# tab, and plays what PulseAudio writes into the pipe. Programs reach
+# PulseAudio through PULSE_SERVER, which the app sets in every tab; ALSA
+# programs go through it too (Debian's pulse plugin). Exits 3 when
+# PulseAudio isn't installed (Debians from before it was in the image).
+dir=${POCKET_SOUND_DIR:-/tmp/.pocket-terminal/sound}
+command -v pulseaudio >/dev/null 2>&1 || exit 3
+mkdir -p "$dir"
+# -n: none of Debian's default.pa, which looks for sound cards we don't
+# have. The pipe has no clock of its own: the app's reading paces it.
+exec pulseaudio -n --daemonize=no --exit-idle-time=-1 --use-pid-file=no \
+    --log-target=stderr \
+    -L "module-pipe-sink file=$dir/out format=s16le rate=48000 channels=2 sink_name=phone sink_properties=device.description=Phone" \
+    -L "module-native-protocol-unix auth-anonymous=1 socket=$dir/native" \
+    -L "module-suspend-on-idle"

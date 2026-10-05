@@ -155,6 +155,24 @@ class ProotLaunchTest {
         assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_SHELL=") })
     }
 
+    @Test
+    fun `can run a command instead of a login shell`() {
+        val argv = prootLaunch(paths, command = listOf("/bin/sh", "/opt/pocket-terminal/lib/sound-server")).argv
+
+        assertEquals(listOf("/bin/sh", "/opt/pocket-terminal/lib/sound-server"), argv.takeLast(2))
+        assertTrue("/bin/bash" !in argv)
+        assertEquals("-i", argv[argv.indexOf("/usr/bin/env") + 1])
+    }
+
+    @Test
+    fun `tells programs where the sound server is`() {
+        val argv = prootLaunch(paths, soundSocket = "/tmp/.pocket-terminal/sound/native").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("PULSE_SERVER=unix:/tmp/.pocket-terminal/sound/native" in shellEnv, shellEnv.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PULSE_SERVER=") })
+    }
+
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]
 
     private fun List<String>.valuesAfter(flag: String) =

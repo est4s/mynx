@@ -32,6 +32,12 @@ import io.github.est4s.terminal.core.PocketRequests
 import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
 import io.github.est4s.terminal.core.ProotPaths
+import io.github.est4s.terminal.core.CONFIG_DIR
+import io.github.est4s.terminal.core.SOUND_DIR
+import io.github.est4s.terminal.core.SOUND_OUT
+import io.github.est4s.terminal.core.SOUND_SERVER
+import io.github.est4s.terminal.core.SOUND_SOCKET
+import io.github.est4s.terminal.core.loadSettings
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.ToolsInstaller
@@ -103,7 +109,7 @@ class TerminalService : Service() {
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
-            share = ::share, torch = camera::torch,
+            share = ::share, torch = camera::torch, startSound = sound::start,
             later = locationRequests(File(rootfs, "root"), locator::locate) +
                 sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
                 cameraRequests(File(rootfs, "root"), camera::take) +
@@ -121,6 +127,16 @@ class TerminalService : Service() {
     }
     private val sensors by lazy { SensorReader(this, ::askPermissions) }
     private val player by lazy { AudioPlayer(mainHandler) }
+    private val sound by lazy {
+        SoundDevice(
+            launch = { prootLaunch(prootPaths(), toolsDir = tools.tools.absolutePath, command = listOf("/bin/sh", SOUND_SERVER)) },
+            workDir = filesDir,
+            pipe = File(rootfs, SOUND_OUT),
+            log = File(rootfs, "$SOUND_DIR/server.log"),
+            installed = { File(rootfs, "usr/bin/pulseaudio").exists() },
+            handler = mainHandler,
+        )
+    }
     private val recorder by lazy {
         AudioRecorder(this, mainHandler, { activity?.onScreen == true }, ::askPermissions, ::setRecording)
     }
@@ -151,6 +167,17 @@ class TerminalService : Service() {
         updateTools()
         requests.start()
         watchRequests()
+        applySoundSetting()
+    }
+
+    // The sound device runs while its setting is on.
+    private fun applySoundSetting() {
+        val on = runCatching { loadSettings(File(rootfs, "root/$CONFIG_DIR/settings.conf")).settings.soundDevice }
+            .getOrDefault(true)
+        when {
+            on && !sound.running -> sound.start()
+            !on && sound.running -> sound.stop()
+        }
     }
 
     // Before any shell starts, so none runs old tools while they're replaced.
@@ -181,7 +208,10 @@ class TerminalService : Service() {
         for (request in handled) {
             when (request.name) {
                 "preview-colors" -> activity?.previewColors(parseColorScheme(request.args.joinToString("\n"), NEON).scheme)
-                in RELOADING_REQUESTS -> activity?.reloadConfig(quiet = true)
+                in RELOADING_REQUESTS -> {
+                    activity?.reloadConfig(quiet = true)
+                    applySoundSetting()
+                }
             }
         }
         scheduleSweep()
@@ -238,6 +268,7 @@ class TerminalService : Service() {
         sensors.stopAll()
         player.stopAll()
         recorder.stopAll()
+        sound.stop()
         killAll()
         super.onDestroy()
     }
@@ -335,13 +366,7 @@ class TerminalService : Service() {
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val libDir = applicationInfo.nativeLibraryDir
-        val launch = prootLaunch(ProotPaths(
-            proot = "$libDir/libproot.so",
-            loader = "$libDir/libproot-loader.so",
-            rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
-            tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
-        ), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -357,6 +382,16 @@ class TerminalService : Service() {
             cwdFiles[it] = File(cwdDir, cwdName)
             keyBarFiles[it] = File(cwdDir, keyBarFileName)
         }
+    }
+
+    private fun prootPaths(): ProotPaths {
+        val libDir = applicationInfo.nativeLibraryDir
+        return ProotPaths(
+            proot = "$libDir/libproot.so",
+            loader = "$libDir/libproot-loader.so",
+            rootfs = RootfsInstaller(filesDir).rootfs.absolutePath,
+            tmpDir = File(cacheDir, "proot").apply { mkdirs() }.absolutePath,
+        )
     }
 
     private fun sessionOfShell(id: Int): TerminalSession? =

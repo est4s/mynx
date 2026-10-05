@@ -37,6 +37,7 @@ private class Refused(message: String) : Exception(message)
  * the clipboard's text or fails with the reason. [share] opens
  * Android's share sheet for a [Share]; [torch] turns the flashlight on
  * (at a strength in percent, or the phone's default) or off.
+ * [startSound] (re)starts the sound server (`pocket sound install`).
  *
  * Requests in [later] are answered later, or stream (see [Later]).
  * [sweep] cancels those whose `pocket` cancelled them or has gone
@@ -54,6 +55,7 @@ class PocketRequests(
     private val readClipboard: () -> Result<String> = { Result.failure(Exception("the clipboard isn't available here")) },
     private val share: (Share) -> String? = { "sharing isn't available here" },
     private val torch: (Boolean, Int?) -> String? = { _, _ -> "the flashlight isn't available here" },
+    private val startSound: () -> String? = { "the sound device isn't available here" },
     private val later: Map<String, Later> = emptyMap(),
     private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
 ) {
@@ -292,6 +294,13 @@ class PocketRequests(
                         ?: throw Refused("the strength is 1 to $MAX_TORCH_PERCENT %")
                 }
                 torch(on, percent)?.let { throw Refused(it) }
+                ok()
+            }
+            "sound-start" -> {
+                if (!loadSettings(settingsFile).settings.soundDevice) {
+                    throw Refused("the sound device is off (pocket set sound-device on)")
+                }
+                startSound()?.let { throw Refused(it) }
                 ok()
             }
             else -> throw Refused("unknown request '${request.name}'")

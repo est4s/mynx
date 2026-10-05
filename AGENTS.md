@@ -225,8 +225,20 @@ See README "How it works". The details:
   returns), and `pocket` reads that answer (`answer_on_interrupt`).
   RECORD_AUDIO is asked through the activity; recording starts on
   screen and the service adds the `microphone` foreground type while
-  anything records, like location. The sound device (PulseAudio
-  pipes) is still to come.
+  anything records, like location.
+- **Sound device** (`core/.../Sound.kt`, `app/.../SoundDevice.kt`,
+  `tools/lib/sound-server`): PulseAudio in Debian, started by the
+  service with the app (`sound-device` setting; an idle Pulse costs
+  ~5.5 MB and no CPU, and it refuses to autospawn as root, so not on
+  demand). It runs in a proot of its own (`prootLaunch(command = …)`),
+  restarted with backoff (`ServerRestarts`), except exit 3: not
+  installed (`pocket sound install` for Debians from before). Pulse
+  plays into `module-pipe-sink` at `/tmp/.pocket-terminal/sound/out`
+  (48 kHz s16 stereo); `PipePlayer` reads it in 20 ms chunks into a
+  blocking AudioTrack, which paces the clockless pipe, pauses the
+  track after 500 ms quiet and reopens the pipe when Pulse restarts.
+  Tabs get `PULSE_SERVER`; ALSA programs follow through Debian's
+  pulse plugin. The microphone half is still to come.
 - **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

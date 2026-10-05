@@ -26,6 +26,8 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
  * on the PATH. [requestDir] (a Debian path) is where `pocket` sends requests.
  * [shellId] tells programs which tab they run in (`pocket notify`).
+ * [soundSocket] (a Debian path) is the sound server's socket. [command]
+ * runs instead of the login bash.
  */
 fun prootLaunch(
     paths: ProotPaths,
@@ -37,6 +39,8 @@ fun prootLaunch(
     toolsDir: String? = null,
     requestDir: String? = null,
     shellId: Int? = null,
+    soundSocket: String? = null,
+    command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
         add(paths.proot)
@@ -61,7 +65,8 @@ fun prootLaunch(
         keyBarFile?.let { add("POCKET_KEYBAR_FILE=$it") }
         requestDir?.let { add("POCKET_REQUESTS=$it") }
         shellId?.let { add("POCKET_SHELL=$it") }
-        addAll(listOf("/bin/bash", "--login"))
+        soundSocket?.let { add("PULSE_SERVER=unix:$it") }
+        addAll(command)
     }
     val env = mapOf(
         "PROOT_LOADER" to paths.loader,

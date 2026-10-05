@@ -7,9 +7,13 @@ FROM ${BASE}
 # debconf warnings. less and nano: the base image has no pager or editor.
 # curl: the AI agents' official installers (pocket agent install) need it.
 # procps: ps, top, free; Codex runs ps to track its background server.
+# pulseaudio and the rest: the sound device (the app runs PulseAudio on
+# pipes; ALSA programs reach it through libasound2-plugins). Keep the
+# list in step with `pocket sound install` (tools/lib/pocket_terminal/cli.py).
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         apt-utils ca-certificates curl dialog eza htop less mc nano nnn procps python3 starship \
+        pulseaudio pulseaudio-utils libasound2-plugins alsa-utils \
  && rm -rf /var/lib/apt/lists/* /var/cache/apt/*.bin
 
 COPY root/ /root/

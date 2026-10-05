@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -39,6 +40,7 @@ Commands:
   camera     camera FILE [--quick front|back]: take a photo
   torch      torch on [PERCENT] | off: the flashlight
   audio      audio play FILE | record FILE [--seconds N]: sound
+  sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   version    the app tools' version
   help       this list
@@ -451,6 +453,73 @@ def cmd_audio(args, as_json):
     return 0
 
 
+SOUND_USAGE = "usage: pocket sound [status] | start | install [--yes]"
+# Keep in step with rootfs/Dockerfile, which puts them in new Debians.
+SOUND_PACKAGES = "pulseaudio pulseaudio-utils libasound2-plugins alsa-utils"
+SOUND_SERVER = "unix:/tmp/.pocket-terminal/sound/native"
+
+
+def cmd_sound(args, as_json):
+    sub = args[0] if args else "status"
+    if sub == "status" and len(args) <= 1:
+        return sound_status(as_json)
+    if sub == "start" and len(args) == 1:
+        out(as_json, request("sound-start"), "Sound device: started")
+        return 0
+    if sub == "install" and args[1:] in ([], ["--yes"]):
+        return install_sound("--yes" in args)
+    raise Usage(SOUND_USAGE)
+
+
+def sound_status(as_json):
+    server = os.environ.get("PULSE_SERVER") or SOUND_SERVER
+    setting = next(s["value"] for s in request("settings")["settings"] if s["key"] == "sound-device")
+    installed = bool(shutil.which("pulseaudio"))
+    running = server_answers(server)
+    if running:
+        text = "on. Programs play through the phone's speaker."
+    elif setting == "off":
+        text = "off (pocket set sound-device on turns it on)"
+    elif not installed:
+        text = "not installed (pocket sound install installs it)"
+    else:
+        text = "not running (pocket sound start starts it)"
+    out(as_json, {"ok": True, "setting": setting, "installed": installed, "running": running, "server": server},
+        "Sound device: " + text)
+    return 0
+
+
+def server_answers(server):
+    if not server.startswith("unix:"):
+        return False
+    with socket.socket(socket.AF_UNIX) as s:
+        s.settimeout(1)
+        try:
+            s.connect(server[len("unix:"):])
+            return True
+        except OSError:
+            return False
+
+
+def install_sound(yes):
+    steps = ["apt-get update", f"apt-get install -y --no-install-recommends {SOUND_PACKAGES}"]
+    print("Installing the sound device (PulseAudio) runs:\n")
+    for step in steps:
+        print(f"  {step}")
+    print()
+    if not yes and not ask("Run it? [y/N] (--yes skips this question)"):
+        print("Not installed.")
+        return 1
+    for step in steps:
+        sys.stdout.flush()
+        code = subprocess.run(["bash", "-c", step]).returncode
+        if code != 0:
+            raise Failure(f"'{step}' failed (exit {code})")
+    request("sound-start")
+    print("\nSound device: on. Programs play through the phone's speaker.")
+    return 0
+
+
 # Not in HELP: for installing builds of the app while developing it. Only
 # debug builds of the app answer it.
 def cmd_install_apk(args, as_json):
@@ -792,7 +861,7 @@ COMMANDS = {
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
-    "audio": cmd_audio,
+    "audio": cmd_audio, "sound": cmd_sound,
     "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
 }
 

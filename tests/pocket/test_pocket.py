@@ -6,7 +6,9 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -920,6 +922,89 @@ class PocketTest(unittest.TestCase):
             run = self.pocket("torch", *args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: pocket torch on [PERCENT] | off", run.stderr, args)
+
+    # --- sound --------------------------------------------------------------
+
+    SETTINGS_ON = {"ok": True, "problems": [], "settings": [
+        {"key": "sound-device", "value": "on", "default": "on", "choices": ["on", "off"], "description": ""}]}
+
+    def sound(self, *args, stdin="", commands=None, settings=None):
+        """`pocket sound` with only fake commands on the PATH (this machine
+        may have the real PulseAudio), and the server's socket in the test's folder."""
+        bin_dir = os.path.join(self.tmp.name, "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        os.symlink(shutil.which("bash"), os.path.join(bin_dir, "bash"))
+        for name, body in (commands or {}).items():
+            self.write(os.path.join(bin_dir, name), "#!" + shutil.which("sh") + "\n" + body + "\n", 0o755)
+        self.socket_path = os.path.join(self.tmp.name, "native")
+        self.start_app({"settings": settings or self.SETTINGS_ON, "sound-start": {"ok": True}})
+        environ = {"PATH": bin_dir, "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1", "PULSE_SERVER": "unix:" + self.socket_path}
+        return subprocess.run([sys.executable, POCKET, "sound", *args], input=stdin, capture_output=True,
+                              text=True, env=environ)
+
+    def listen(self):
+        server = socket.socket(socket.AF_UNIX)
+        server.bind(os.path.join(self.tmp.name, "native"))
+        server.listen()
+        self.addCleanup(server.close)
+
+    def test_sound_says_the_device_is_on_when_the_server_answers(self):
+        self.listen()
+        run = self.sound(commands={"pulseaudio": "true"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Sound device: on. Programs play through the phone's speaker.\n")
+
+    def test_sound_status_as_json(self):
+        run = self.sound("status", "--json", commands={"pulseaudio": "true"})
+        self.assertEqual(json.loads(run.stdout), {
+            "ok": True, "setting": "on", "installed": True, "running": False,
+            "server": "unix:" + self.socket_path})
+
+    def test_sound_says_when_the_server_isnt_running(self):
+        run = self.sound(commands={"pulseaudio": "true"})
+        self.assertEqual(run.stdout, "Sound device: not running (pocket sound start starts it)\n")
+
+    def test_sound_says_when_pulseaudio_isnt_installed(self):
+        run = self.sound()
+        self.assertEqual(run.stdout, "Sound device: not installed (pocket sound install installs it)\n")
+
+    def test_sound_says_when_the_setting_is_off(self):
+        off = json.loads(json.dumps(self.SETTINGS_ON))
+        off["settings"][0]["value"] = "off"
+        run = self.sound(commands={"pulseaudio": "true"}, settings=off)
+        self.assertEqual(run.stdout, "Sound device: off (pocket set sound-device on turns it on)\n")
+
+    def test_sound_start_asks_the_app(self):
+        run = self.sound("start")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.app.seen, ["sound-start"])
+
+    def test_sound_install_shows_the_commands_and_asks_first(self):
+        run = self.sound("install", stdin="n\n", commands={"apt-get": "echo apt-get $*"})
+        self.assertIn("apt-get install -y --no-install-recommends pulseaudio", run.stdout)
+        self.assertNotIn("apt-get update", run.stdout.split("Run it?")[1])
+        self.assertEqual(run.returncode, 1)
+        self.assertEqual(self.app.seen, [])
+
+    def test_sound_install_installs_then_starts_the_device(self):
+        run = self.sound("install", "--yes", commands={"apt-get": "echo ran apt-get $*"})
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("ran apt-get update", run.stdout)
+        self.assertIn("ran apt-get install -y --no-install-recommends pulseaudio pulseaudio-utils "
+                      "libasound2-plugins alsa-utils", run.stdout)
+        self.assertEqual(self.app.seen, ["sound-start"])
+
+    def test_sound_install_stops_when_apt_fails(self):
+        run = self.sound("install", "--yes", commands={"apt-get": "exit 100"})
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("failed", run.stderr)
+        self.assertEqual(self.app.seen, [])
+
+    def test_sound_usage(self):
+        run = self.sound("loud")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: pocket sound [status] | start | install [--yes]", run.stderr)
 
     # --- audio --------------------------------------------------------------
 

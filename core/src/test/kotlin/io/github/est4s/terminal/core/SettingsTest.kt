@@ -62,7 +62,7 @@ class SettingsTest {
         assertEquals(
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
-                "android-microphone", "share-folder"),
+                "android-microphone", "sound-device", "share-folder"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -78,11 +78,11 @@ class SettingsTest {
                 "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
                 "android-clipboard" to "off", "android-share" to "off", "android-location" to "off",
                 "android-sensors" to "off", "android-camera" to "off", "android-microphone" to "off",
-                "share-folder" to "/srv/in",
+                "sound-device" to "off", "share-folder" to "/srv/in",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
-                androidCamera = false, androidMicrophone = false, shareFolder = "/srv/in").values(),
+                androidCamera = false, androidMicrophone = false, soundDevice = false, shareFolder = "/srv/in").values(),
         )
     }
 
@@ -194,6 +194,14 @@ class SettingsTest {
         val parsed = parseSettings("android-microphone = off\nandroid-microphone = muted\n")
         assertFalse(parsed.settings.androidMicrophone)
         assertEquals(listOf("line 2: android-microphone must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `the sound device is on by default and can be turned off`() {
+        assertTrue(Settings().soundDevice)
+        val parsed = parseSettings("sound-device = off\nsound-device = loud\n")
+        assertFalse(parsed.settings.soundDevice)
+        assertEquals(listOf("line 2: sound-device must be one of: on, off"), parsed.problems)
     }
 
     @Test

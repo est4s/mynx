@@ -97,6 +97,7 @@ their own.
 | `pocket torch on [PERCENT]\|off` | the phone's flashlight |
 | `pocket audio play FILE` | play a sound file through the phone's speaker, until it ends |
 | `pocket audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
+| `pocket sound` | whether the sound device is on; `pocket sound start` starts it again, `pocket sound install` installs it (see "The phone") |
 | `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
 | `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
@@ -147,6 +148,8 @@ One `key = value` per line; `pocket settings` describes each.
   can take photos (`pocket camera`).
 - `android-microphone`: `on` (default) or `off`: whether programs
   here can record from the microphone (`pocket audio record`).
+- `sound-device`: `on` (default) or `off`: whether the app runs the
+  sound device, so programs here play through the phone's speaker.
 - `share-folder`: where files other apps share to this app are saved,
   a full path or one starting with `~/` (default `~/Shared`).
 
@@ -199,8 +202,7 @@ it too, even one spread over several rows.
 
 ### The phone
 
-Commands for the phone itself (more is coming: a sound device, so
-programs here play and record sound themselves):
+Commands for the phone itself, and the sound device:
 
 - `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
 - `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
@@ -271,6 +273,19 @@ programs here play and record sound themselves):
   first time, and only lets the app on screen start recording; a
   recording keeps going in the background (Android shows its
   microphone indicator). `android-microphone off` blocks it.
+- **The sound device:** programs here play sound themselves, through
+  the phone's speaker: `mpv`, `aplay`, `paplay`, `sox`'s `play`,
+  games, anything that uses PulseAudio or ALSA. The app runs
+  PulseAudio in the background (outside the tabs) and plays what it
+  sends; `PULSE_SERVER` in every tab points programs at it
+  (`unix:/tmp/.pocket-terminal/sound/native`). Don't start your own
+  `pulseaudio`. `pocket sound` says whether it's on; `pocket sound
+  start` starts it again; Debians set up before the sound device
+  need `pocket sound install` once (it runs `apt-get install
+  pulseaudio …`, asking first; `--yes` skips that). PulseAudio's
+  output is in `/tmp/.pocket-terminal/sound/server.log`.
+  `sound-device off` turns it off. Recording through it (the
+  microphone) isn't there yet: use `pocket audio record`.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved

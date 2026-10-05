@@ -25,6 +25,8 @@ data class Settings(
     val androidCamera: Boolean = true,
     /** Whether programs in Debian may record from the microphone. */
     val androidMicrophone: Boolean = true,
+    /** Whether the app runs PulseAudio in Debian, so programs play through the phone. */
+    val soundDevice: Boolean = true,
     /** Where files shared to the app from other apps go, in Debian. */
     val shareFolder: String = "~/Shared",
 ) {
@@ -42,6 +44,7 @@ data class Settings(
         "android-sensors" to if (androidSensors) "on" else "off",
         "android-camera" to if (androidCamera) "on" else "off",
         "android-microphone" to if (androidMicrophone) "on" else "off",
+        "sound-device" to if (soundDevice) "on" else "off",
         "share-folder" to shareFolder,
     )
 }
@@ -147,6 +150,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("android-microphone", listOf("on", "off")),
         { copy(androidMicrophone = it == "on") },
+    ),
+    SettingDef(
+        "sound-device", "Whether the app runs a sound server (PulseAudio) in Debian, so programs play through the phone's speaker.",
+        "on", listOf("on", "off"),
+        oneOf("sound-device", listOf("on", "off")),
+        { copy(soundDevice = it == "on") },
     ),
     SettingDef(
         "share-folder", "Where files shared to the app from other apps are saved: a full path or one starting with ~/.",
