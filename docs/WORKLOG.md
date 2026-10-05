@@ -15,8 +15,8 @@ Newest entries first. Rules for keeping it up to date: see
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
-  flashlight) passed tests 1-6 on the phone** (entry 38); test 7
-  (camera denied in Android's settings) is left.
+  flashlight) passed tests 1-7 on the phone** (entry 38); the quiet
+  Ctrl+C fix is left to check.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -81,16 +81,13 @@ owner test after each part.
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
-**9.5 (camera and flashlight):** tests 1-6 passed on the phone
-(entry 38). Left:
-1. **Test 7:** deny the camera in the app's Android settings (this
-   kills the app; reopen it), then `pocket camera --quick back
-   ~/x.jpg`: expect "the camera wasn't allowed", exit 2. Allow it
-   again afterwards.
-2. With the build after entry 38 installed: `timeout -s INT 1 pocket
-   camera --quick back ~/d.jpg` prints nothing (no traceback), exit
-   130, and the next shot works.
-Both pass → 9.5 is done.
+**9.5 (camera and flashlight):** tests 1-7 passed on the phone
+(entry 38); the camera is allowed again. Left: push `ad76f65`
+(it wasn't pushed, so CI never built it), install it, then
+`timeout -s INT 1 pocket camera --quick back ~/d.jpg` should print
+nothing (build 60 still prints a traceback), exit 124 from `timeout`
+(pocket itself exits 130), and the next shot works.
+That passes → 9.5 is done.
 **Then build 9.6 (sound).**
 
 **Owner's decisions (2026-10-04):**
@@ -298,8 +295,10 @@ the agent running each command and reading the photos:
 5. pass: on, 10 % dimmer, 100 % brighter, off; and `torch off` works
    with the app in the background, so the guide now says so.
 6. pass: "the camera is off (pocket set android-camera on)", exit 2.
-7. not yet: revoking a permission kills the app (and this session),
-   so it's left for the owner after the commit.
+7. pass (owner, after the commit): with the camera denied in the
+   app's Android settings, `pocket camera --quick back ~/x.jpg` gave
+   "the camera wasn't allowed (allow it in the app's Android
+   settings)", exit 2.
 - Tests: pocket 153.
 
 ### 2026-10-05 (37): step 9.5, camera and flashlight
