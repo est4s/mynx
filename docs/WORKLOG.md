@@ -93,7 +93,21 @@ owner checks like 9.3's (entry 32 and git history have them).
   apps, and the app is a target in Android's share sheet (files land
   in `~/Shared`).
 - **Order:** 9.1 groundwork + vibration + clipboard, 9.2 sharing,
-  9.3 location, 9.4 sensors, 9.5 camera.
+  9.3 location, 9.4 sensors, 9.5 camera + flashlight, 9.6 sound
+  (added 2026-10-05).
+
+**Owner's decisions (2026-10-05):**
+- **Flashlight** joins the camera part (`pocket torch`, through the
+  camera service; no permission).
+- **Speaker: both, files first.** `pocket audio play FILE` (Android
+  decodes it), then a real sound device: PulseAudio in Debian writes
+  raw audio to a pipe the app plays, so mpv, sox, games make sound.
+- **Microphone: both, files first.** `pocket audio record FILE` (until
+  Ctrl+C or `--seconds`), then a PulseAudio source so arecord, sox,
+  whisper.cpp hear the mic live.
+- **Recording may keep going in the background**, like a location
+  stream: it starts with the app on screen, the service adds the
+  `microphone` foreground type, Android shows its mic indicator.
 
 **Design (agent's proposal, change it if the owner objects):**
 - **Waiting and streaming requests.** Today a request is answered at
@@ -139,7 +153,16 @@ owner checks like 9.3's (entry 32 and git history have them).
    permission). Names like `accelerometer`, `gyroscope`, `light`.
 5. **9.5 Camera:** `pocket camera FILE` (`ACTION_IMAGE_CAPTURE`, the
    photo copied into Debian) and `--quick front|back` (Camera2, camera
-   permission).
+   permission). `pocket torch on|off` (`CameraManager.setTorchMode`,
+   no permission; maybe a strength level on API 33+).
+6. **9.6 Sound:** `pocket audio play FILE` (MediaPlayer; `play` is
+   taken by the games) and `pocket audio record FILE` (RECORD_AUDIO,
+   app on screen to start, `microphone` foreground type, Ctrl+C or
+   `--seconds` ends it). Then the sound device: PulseAudio's
+   `module-pipe-sink`/`module-pipe-source` on FIFOs in `/tmp`, the app
+   moving raw PCM between them and AudioTrack/AudioRecord (no sockets,
+   like the request files). Check first that pipe modules work under
+   proot. Setting `android-audio`.
 
 Vibration needs no permission. Notifications and opening links were
 done in step 7; phone storage is already at `/storage/emulated/0`.

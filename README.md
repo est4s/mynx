@@ -117,7 +117,11 @@ Commands available inside Debian:
 - share files or text to other apps, open URLs
 - access to phone storage (with permission)
 - **location:** GPS position, one-off or as a stream
-- **camera:** take photos from the front or back camera
+- **camera:** take photos from the front or back camera; the flashlight
+  on and off
+- **sound:** play audio files and record from the microphone, and a sound
+  device so Linux programs play through the phone's speaker and hear its
+  microphone
 - **sensors:** read accelerometer, gyroscope, compass, light, proximity
   and other sensors, one-off or as a stream
 
@@ -226,7 +230,7 @@ Because Debian runs through `proot` rather than a virtual machine:
    every later feature.
 8. **Profiles:** multiple profiles, switching, export/import.
 9. **Android integration:** notifications, clipboard, share, storage,
-   location, camera, sensors.
+   location, sensors, camera and flashlight, speaker and microphone.
 10. **Polish:** first-run experience, settings, icon, signed releases.
 11. **Later:**
     - optional tap support in the file manager (settings toggle)
