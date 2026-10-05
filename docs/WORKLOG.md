@@ -15,7 +15,8 @@ Newest entries first. Rules for keeping it up to date: see
   waiting/streaming requests); **9.2 (sharing) is confirmed**
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
-  flashlight) is built** (entry 37) and waits for the owner's test.
+  flashlight) passed tests 1-6 on the phone** (entry 38); test 7
+  (camera denied in Android's settings) is left.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -63,7 +64,7 @@ Newest entries first. Rules for keeping it up to date: see
   check, `pocket` requests, undo, links, waiting and streaming
   requests, sharing, location; 271 tests), `app/` (thin Android layer),
   `tools/` (`pocket` and editors in Python, `menu` and other commands,
-  the agent guide; 139 unittest tests incl. editors driven in a pty),
+  the agent guide; 153 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
   tests).
 
@@ -80,28 +81,16 @@ owner test after each part.
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
 **9.3 is done** (confirmed on the phone 2026-10-05, entries 32-33).
 **9.4 is done** (confirmed on the phone 2026-10-05, entries 34-36).
-**9.5 (camera and flashlight) is built** (entry 37). Owner's test,
-with the app on screen:
-1. `pocket camera ~/a.jpg`: Android asks to allow the camera; allow.
-   The camera app opens; take a photo and accept it: back in the
-   terminal, `Saved /root/a.jpg (… MB)`. `files` or `pocket share
-   ~/a.jpg` to look at it: upright.
-2. `pocket camera ~/a.jpg` again, back out of the camera app without
-   a photo: "no photo was taken", the old `a.jpg` is still there.
-3. `pocket camera --quick back ~/b.jpg` and `--quick front ~/c.jpg`:
-   saved within a few seconds, not dark, in focus, upright. Again with
-   the phone turned to landscape (auto-rotate on): still upright.
-4. `pocket camera --quick back ~/b.jpg` with Ctrl+C at once: no error
-   afterwards, the next shot works.
-5. `pocket torch on`, `pocket torch off`; `pocket torch on 10` and
-   `on 100`: dimmer and brighter (or "no strength levels"). Torch on,
-   leave the app: does `pocket torch off` from a running `sleep 10;
-   pocket torch off` still work in the background? (The guide doesn't
-   claim it yet.)
-6. `pocket set android-camera off`: `pocket camera` refused with the
-   setting's name; back on.
-7. Deny the camera in the app's Android settings: "the camera wasn't
-   allowed".
+**9.5 (camera and flashlight):** tests 1-6 passed on the phone
+(entry 38). Left:
+1. **Test 7:** deny the camera in the app's Android settings (this
+   kills the app; reopen it), then `pocket camera --quick back
+   ~/x.jpg`: expect "the camera wasn't allowed", exit 2. Allow it
+   again afterwards.
+2. With the build after entry 38 installed: `timeout -s INT 1 pocket
+   camera --quick back ~/d.jpg` prints nothing (no traceback), exit
+   130, and the next shot works.
+Both pass → 9.5 is done.
 **Then build 9.6 (sound).**
 
 **Owner's decisions (2026-10-04):**
@@ -287,6 +276,31 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-05 (38): 9.5 tested on the phone
+
+**Checks** (build 60, commit f889717), steps from "Next", done with
+the agent running each command and reading the photos:
+1. pass: camera app, photos upright in portrait and landscape, back
+   and front (2256x4000, 4000x2256, 3840x2160).
+2. pass (after the owner first took photos by mistake): backing out
+   gave "no photo was taken", exit 2, `a.jpg` unchanged.
+3. pass: `--quick back` 1.9 s, `--quick front` 3.3 s, exposed and
+   in focus, upright in portrait and landscape (keyboard lettering
+   reads the right way, so not mirrored or turned).
+4. pass, with a wart: SIGINT at 1 s (`timeout -s INT 1`) cancelled
+   the shot, nothing written, no request files left, the next shot
+   worked; but `pocket` printed a Python traceback (also when
+   interrupted during startup, at 0.3 s). **Fixed:** `tools/bin/pocket`
+   catches KeyboardInterrupt around the import and `main()`, exit 130,
+   silent (the client had already cancelled the request). Test
+   `test_camera_stops_quietly_on_ctrl_c`.
+5. pass: on, 10 % dimmer, 100 % brighter, off; and `torch off` works
+   with the app in the background, so the guide now says so.
+6. pass: "the camera is off (pocket set android-camera on)", exit 2.
+7. not yet: revoking a permission kills the app (and this session),
+   so it's left for the owner after the commit.
+- Tests: pocket 153.
 
 ### 2026-10-05 (37): step 9.5, camera and flashlight
 

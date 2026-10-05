@@ -250,7 +250,8 @@ microphone):
 - `pocket torch on` and `pocket torch off` turn the flashlight on and
   off. `pocket torch on 30` sets a strength
   in percent, on phones whose flashlight has levels (Android 13+).
-  Opening the camera turns it off.
+  Both work with the app in the background. Opening the camera turns
+  it off.
 - **Sharing to Debian:** the app is in Android's share sheet too.
   Files shared to it from other apps are saved in `~/Shared` (the
   `share-folder` setting), keeping their names; shared text is saved

@@ -875,6 +875,20 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(run.returncode, 2)
         self.assertEqual(run.stderr, "pocket: no photo was taken\n")
 
+    def test_camera_stops_quietly_on_ctrl_c(self):
+        self.start_app({"camera-quick": {"ok": True, "_lines": [], "_hold": True}})
+        environ = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
+                   "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1"}
+        proc = subprocess.Popen(["python3", POCKET, "camera", "--quick", "back", "/srv/a.jpg"], env=environ,
+                                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        while not self.app.requests:
+            time.sleep(0.01)
+        time.sleep(0.2)
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, out, err), (130, "", ""))
+        self.assertTrue(self.app.cancelled)
+
     def test_camera_usage(self):
         usage = "usage: pocket camera FILE [--quick front|back]"
         for args in [(), ("a.jpg", "b.jpg"), ("a.jpg", "--quick"), ("a.jpg", "--fast"), ("--quick", "back")]:
