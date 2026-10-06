@@ -23,6 +23,8 @@ Newest entries first. Rules for keeping it up to date: see
   rotation lock` (entry 50) and swiping between tabs (entry 51).
   Landscape with the keyboard up is confirmed (entry 54), and so is
   keeping clear of the camera cutout (entry 55).
+- **Step 10 (*Polish*) is next** (owner's choice, 2026-10-06), planned
+  in outline under "Next".
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -100,11 +102,56 @@ and tab swiping (entries 50-51, confirmed 2026-10-06).
 
 The camera cutout fix is confirmed (entry 55).
 
-**Next: ask the owner what comes next.** Step 8 (*Profiles*) is
-parked by the owner, so the choice is between picking it up again
-(its plan is below, under "Parked") and step 10 (*Polish*: first-run
-experience, settings, icon, signed releases), which isn't planned
-yet. Plan the chosen step with the owner before building it.
+### Roadmap step 10: Polish (chosen 2026-10-06)
+
+The owner picked step 10 over the parked step 8. Build test-first,
+with an owner test after each part.
+
+**Owner's decisions (2026-10-06):**
+- **All four parts:** first-run experience, settings gaps, About +
+  licenses, icon + signed releases.
+- **Welcome in the terminal:** after Debian is set up, the first tab
+  shows a one-time welcome page before the menu (what this is, the
+  key bar, swiping tabs, the menu, asking an AI agent to customize
+  it). No Android intro screens: keyboard-first.
+- **Releases go to GitHub Releases as a signed APK** for now (tag
+  `v0.x` → CI). Play (AAB, listing) waits for the final name.
+
+- **About lives in the terminal:** `pocket about` and an About item
+  in the menu's System submenu (version, credits, licenses in a pager).
+- **The welcome can be reopened:** a "Getting started" menu item and
+  `pocket welcome`.
+- **Settings from Android:** a launcher shortcut (long-press the app
+  icon → Settings) opens `pocket edit` in a new tab. No other entry
+  points.
+- **New name: PC-26** ("personal/portable computer 2026"). The rename
+  goes all the way: display name, paths (`pocket-terminal` →
+  `pc26`), and the command (`pocket` → `pc26`, keeping `pocket` as an
+  alias for a while). **On hold until the owner says go**: don't
+  start it as part of step 10.
+- **Overnight work (2026-10-06):** the owner is away; build as much of
+  step 10 as possible, committing and pushing to `main` as each part
+  is done. Anything that needs the phone goes into a check list for
+  the owner.
+
+**Parts, in order (About must land before the first release,
+because of proot's GPL):**
+- **10.1 First run:** a themed unpack screen (what's happening, rough
+  time), then a one-time welcome page in the first tab before the
+  menu; "Getting started" menu item and `pocket welcome` reopen it.
+- **10.2 Settings gaps:** the optional wakelock the README promises (a
+  `wakelock` setting, off by default, held while the service runs),
+  and the launcher shortcut to the settings editors.
+- **10.3 About + licenses:** `pocket about` and a menu item: version,
+  licenses of proot (GPL-2.0, source link), Termux libraries (Apache
+  2.0), the font (OFL), Debian; texts shipped with the tools.
+- **10.4 Icon + releases:** monochrome layer for themed icons; a
+  release build type signed with a key from GitHub secrets (never
+  committed; **the owner makes it and backs it up**, the agent only
+  writes the steps), a workflow on `v*` tags publishing the APK to
+  GitHub Releases, `versionName` from the tag.
+
+**Next:** build 10.1, then 10.2, 10.3, 10.4.
 
 The step 9 plan below is kept for reference.
 
