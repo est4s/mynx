@@ -17,6 +17,14 @@ list() {
         >"$dir/.inputs" 2>/dev/null && mv -f "$dir/.inputs" "$dir/inputs"
 }
 
+# sound-server starts this just before it execs Pulse, and on a busy
+# phone this can look first: give the exec a few seconds.
+tries=10
+while ! alive && [ -e "/proc/$pulse" ] && [ "$tries" -gt 0 ]; do
+    tries=$((tries - 1))
+    sleep 0.5
+done
+
 while alive; do
     if [ ! -e "$dir/native" ]; then
         sleep 0.2

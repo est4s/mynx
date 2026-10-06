@@ -49,6 +49,22 @@ lists() {
     [ -e "$COUNT" ] && wc -l <"$COUNT" || echo 0
 }
 
+# sound-server starts the watcher with its own pid, then execs Pulse:
+# a busy phone can run the watcher's first check before that exec.
+@test "sound-watch waits for its server to become Pulse" {
+    stub_pactl
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    cp "$(command -v sleep)" "$BATS_TEST_TMPDIR/bin/pulseaudio"
+    printf '#!/bin/sh\nsleep 0.5\nexec "%s" 3\n' "$BATS_TEST_TMPDIR/bin/pulseaudio" >"$BATS_TEST_TMPDIR/bin/server"
+    chmod +x "$BATS_TEST_TMPDIR/bin/server"
+    "$BATS_TEST_TMPDIR/bin/server" &
+    PULSE=$!
+    EVENTS="" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
+    WATCHER=$!
+    sleep 1.5
+    [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"1	mic	module-pipe-source.c"* ]]
+}
+
 @test "sound-watch lists the sources and recording programs once Pulse is up" {
     stub_pactl
     pulse 2
@@ -101,11 +117,11 @@ Event 'remove' on source-output #0" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     [ ! -e "$POCKET_SOUND_DIR/inputs" ]
 }
 
-@test "sound-watch ends at once for a pid that isn't Pulse" {
+@test "sound-watch gives up on a pid that doesn't become Pulse" {
     stub_pactl
-    sleep 5 &
+    sleep 20 &
     other=$!
-    EVENTS="" PATH="$STUBS:$PATH" run timeout 2 "$WATCH" "$other"
+    EVENTS="" PATH="$STUBS:$PATH" run timeout 15 "$WATCH" "$other"
     kill "$other"
     [ "$status" -eq 0 ]
     [ "$(lists)" -eq 0 ]
