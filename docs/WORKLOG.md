@@ -18,9 +18,9 @@ Newest entries first. Rules for keeping it up to date: see
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
   half (`pocket audio play`/`record`) is confirmed (2026-10-05,
   entry 42); the sound device's speaker half is confirmed (2026-10-05,
-  entry 47); the microphone half is built (entry 49), waiting for
-  the phone check. Also built, not yet checked: `pocket rotation
-  lock` (entry 50) and swiping between tabs (entry 51).
+  entry 47); the microphone half is confirmed (2026-10-06, entry
+  52). **Step 9 is done.** Also confirmed 2026-10-06: `pocket
+  rotation lock` (entry 50) and swiping between tabs (entry 51).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -92,46 +92,17 @@ owner test after each part.
 **9.6 sound device, speaker half is done** (confirmed on the phone
 2026-10-05, entries 45-47).
 
-**Next: phone checks for three features built 2026-10-05 night**
-(entries 49-51; none run on the phone yet). Install the newest build
-first (`scripts/deliver.sh` with the app on screen, or open
-Download/pocket-terminal-build.apk).
+**9.6 sound device, microphone half is done** (confirmed on the phone
+2026-10-06, entry 52). **Step 9 is done**, and so are rotation lock
+and tab swiping (entries 50-51, confirmed 2026-10-06).
 
-**A. The sound device's microphone** (entry 49; plan in entry 48).
-With the app on screen, in a new tab:
-1. Nothing records: no microphone indicator, the notification says
-   "N terminals running".
-2. `arecord -f S16_LE -r 48000 -c 1 -d 5 /tmp/m.wav` and speak:
-   the first time Android asks to allow the microphone (if `pocket
-   audio record` hasn't already). The indicator shows while it
-   records, the notification says "Microphone: arecord", and both
-   go away when it ends. `aplay /tmp/m.wav` plays the voice back.
-3. `pocket set android-microphone off`, record again: the file is
-   silent, the notification says blocked and why; `on` again.
-4. `sleep 5; arecord -d 5 /tmp/b.wav` then leave the app at once:
-   silence and the "open the app" notice; opening the app within the
-   5 s starts the microphone (the rest of the file has sound).
-5. Start `arecord -d 20 /tmp/c.wav` on screen, then leave the app:
-   it keeps recording in the background (indicator stays).
-If something fails: `cat /tmp/.pocket-terminal/sound/inputs` (who
-Pulse says records) and `server.log`.
+**Next: ask the owner what comes next.** Step 8 (*Profiles*) is
+parked by the owner, so the choice is between picking it up again
+(its plan is below, under "Parked") and step 10 (*Polish*: first-run
+experience, settings, icon, signed releases), which isn't planned
+yet. Plan the chosen step with the owner before building it.
 
-**B. Rotation lock** (entry 50), with auto-rotate on in Android:
-1. `pocket rotation lock`, turn the phone: the screen stays.
-   `pocket rotation` says "locked as it is".
-2. `pocket rotation unlock`: it turns again.
-3. `pocket rotation lock landscape` in portrait: the screen turns to
-   landscape and stays.
-4. `bash -c 'pocket rotation lock; sleep 5'`: locked for 5 s, then
-   it turns again within a second (the lock ends with its process).
-5. The owner's inclinometer: `pocket rotation lock` at its start.
-
-**C. Swiping between tabs** (entry 51), with 3 tabs open:
-1. A quick swipe left on the terminal goes to the next tab, right to
-   the one before; nothing past the first or last.
-2. Scrolling up and down, pinching, long-press selecting, and typing
-   still work as before; a slow sideways drag doesn't switch.
-3. `pocket set tab-swipe off`: swipes do nothing; `on` again.
+The step 9 plan below is kept for reference.
 
 **Owner's decisions (2026-10-04):**
 - **Camera: both ways.** `pocket camera FILE` opens the phone's camera
@@ -316,6 +287,25 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (52): microphone, rotation lock and tab swiping confirmed on the phone
+
+Build 69 (b05309b). The owner ran every check from entries 49-51 on
+the phone and all passed:
+- **A. Sound device's microphone** (entry 49): no indicator while
+  idle; `arecord` records the voice with the indicator and the
+  "Microphone: arecord" notification; silence and the "blocked"
+  notice with `android-microphone off`; silence and the "open the app"
+  notice when it starts in the background, sound once the app opens;
+  a recording started on screen keeps going in the background.
+- **B. Rotation lock** (entry 50): lock as it is, unlock, lock
+  landscape from portrait, and the lock ending with its process.
+- **C. Tab swiping** (entry 51): swipes left and right stop at the
+  ends; scrolling, pinching, selecting and typing work as before;
+  `tab-swipe off` turns it off.
+
+That finishes 9.6, and with it step 9 (*Android integration*). The
+README's status line now says steps 1-7 and 9 work.
 
 ### 2026-10-05 (51): swipe sideways to switch tabs
 
