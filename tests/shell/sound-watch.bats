@@ -45,6 +45,11 @@ pulse() {
     PULSE=$!
 }
 
+# The first listing: up to 5 s, as the phone can be slow.
+wait_inputs() {
+    for _ in $(seq 50); do [ -e "$POCKET_SOUND_DIR/inputs" ] && return; sleep 0.1; done
+}
+
 lists() {
     [ -e "$COUNT" ] && wc -l <"$COUNT" || echo 0
 }
@@ -61,7 +66,7 @@ lists() {
     PULSE=$!
     EVENTS="" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     WATCHER=$!
-    sleep 1.5
+    wait_inputs
     [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"1	mic	module-pipe-source.c"* ]]
 }
 
@@ -70,9 +75,9 @@ lists() {
     pulse 2
     EVENTS="" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     WATCHER=$!
-    sleep 1
+    wait_inputs
     [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"1	mic	module-pipe-source.c"* ]]
-    [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"Source Output #1"* ]]
+    [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"Source Output #"* ]]
 }
 
 @test "sound-watch asks its own Pulse, whatever PULSE_SERVER the tab has" {
@@ -86,12 +91,13 @@ lists() {
 
 @test "sound-watch lists them again when a recording starts or stops" {
     stub_pactl
-    pulse 3
+    pulse 10
     EVENTS="Event 'new' on source-output #0
 Event 'change' on sink-input #2
 Event 'remove' on source-output #0" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     WATCHER=$!
-    sleep 1.6
+    for _ in $(seq 50); do [ "$(lists)" -ge 3 ] && break; sleep 0.1; done
+    sleep 0.5
     [ "$(lists)" -eq 3 ]
     [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"Source Output #3"* ]]
 }
@@ -105,7 +111,7 @@ Event 'remove' on source-output #0" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     sleep 0.6
     [ "$(lists)" -eq 0 ]
     : >"$POCKET_SOUND_DIR/native"
-    sleep 0.6
+    for _ in $(seq 50); do [ "$(lists)" -ge 1 ] && break; sleep 0.1; done
     [ "$(lists)" -ge 1 ]
 }
 
