@@ -22,6 +22,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.system.Os
+import android.system.OsConstants
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Mic
@@ -55,6 +56,7 @@ import io.github.est4s.terminal.core.parseSavedTabs
 import io.github.est4s.terminal.core.restore
 import io.github.est4s.terminal.core.serialize
 import io.github.est4s.terminal.core.snapshot
+import io.github.est4s.terminal.core.killProot
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
@@ -378,7 +380,9 @@ class TerminalService : Service() {
         session.pid,
         signal = Os::kill,
         later = { ms, action -> mainHandler.postDelayed(action, ms) },
-        force = session::finishIfRunning,
+        force = {
+            if (session.isRunning) killProot(session.pid) { Os.kill(it, OsConstants.SIGKILL) }
+        },
     )
 
     private fun newTabs(): Tabs<TerminalSession> = Tabs {

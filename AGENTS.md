@@ -302,7 +302,13 @@ See README "How it works". The details:
   it runs, then exits. It ignores TERM and HUP, and SIGKILL (Termux's
   `finishIfRunning()`) leaves its programs running untraced: proot's
   seccomp filter stays on, every system call it would handle fails
-  with ENOSYS, and they spin at full CPU.
+  with ENOSYS, and they spin at full CPU. A proot can also hang with
+  QUIT blocked while a program it traces sits stopped (seen once
+  after a sound restart), so the force after the grace is
+  `killProot()`: KILL what it traces (`TracerPid`), then proot.
+  **Android's `Process.destroyForcibly()` only sends TERM** (its
+  `UNIXProcess` doesn't override it); its pid comes from `toString()`
+  (`processPid()`).
 - **The host can't see a guest process's working directory:** proot
   tracks it itself, so `/proc/<pid>/cwd` stays at the folder proot was
   started in. Shells report their folder through `PROMPT_COMMAND` instead

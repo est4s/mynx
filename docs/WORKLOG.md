@@ -77,17 +77,23 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Issue #1 fixes: check on the phone (entry 56)
+### Issue #1 fixes: check on the phone (entries 56-57)
 
-Needs a build from main (push first; the owner decides when). Then:
-- Close a tab that runs `menu` (or any program): `ps -eo pid,ppid,stat,args`
-  in another tab shows none of its processes left, nothing in state R
-  with PPid 1.
-- `pocket sound start` returns after a moment, and `parecord --device=mic
-  --raw /tmp/t.raw` straight after connects (no "Connection refused").
-- Recording through `mic` (`parecord`, the tuner) gets data after a few
-  app restarts and `pocket sound start`s: the stall was a race, so try
-  several times, ideally while the phone is busy.
+Checked on build 72 (entry 57): closing a tab leaves nothing; `pocket
+sound start` returns in ~0.8 s and `parecord` connects right after;
+`mic` always gets data, but in 3 of 7 tries only after ~4 s.
+
+Needs a build from main with the entry 57 fix (push first; the owner
+decides when). Then:
+- Run `pocket sound start` 5-10 times in a row, a few seconds apart
+  (or `parecord --device=mic` in between). Afterwards
+  `ps -eo pid,ppid,stat,args` shows one `sound-server` proot, one
+  Pulse and its two `sound-watch`es: no second proot, no `sound-watch`
+  with PPid 1 or state `t`.
+- Then the slow mic start: the first ~4 s of a recording right after
+  `pocket sound start` are sometimes empty. Unexplored; a guess is the
+  first AudioRecord open fails and `MicInput`'s 2 s retry catches it.
+  Find out (a trace file, see AGENTS.md "proot notes") and fix it.
 - Then reply on issue #1 and close it if all hold.
 
 ### Roadmap step 9: Android integration
@@ -304,6 +310,28 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (57): sound restarts left a hung proot behind
+
+Phone check of entry 56 on build 72: tabs close cleanly, `pocket sound
+start` returns and connects, `mic` gets data (sometimes after ~4 s,
+see "Next"). But after 7 restarts one old `sound-server` proot was
+still there 2 h later, in `do_wait` with QUIT blocked, its
+`sound-watch` (PPid 1) stopped in `ptrace_stop`. QUIT did nothing;
+killing the watcher let proot exit by itself.
+- **Why the app didn't kill it:** Android's `UNIXProcess` doesn't
+  override `destroyForcibly()`, so it's `destroy()`: TERM, which proot
+  ignores (checked in libcore's source, and proot's SigIgn has it).
+- **Fix:** `processPid()` reads the pid from `Process.toString()`
+  (`Process[pid=N, …]`); `SoundDevice` stops its proot through
+  `stopProot()` (QUIT, then the force after 2 s), also when it was
+  stopped while starting. The force for tabs and the sound device is
+  `killProot()`: KILL every process whose `TracerPid` is the proot,
+  then proot, so a hung proot ends and nothing it ran spins untraced.
+  The tab force only runs while the session runs, so a reused pid is
+  safe. The proot hang itself is unexplained (seen once).
+- Tests: core 381 green (3 new in `ProotStopTest`). App code only
+  builds in CI.
 
 ### 2026-10-06 (56): issue #1, mic stall and processes left by closed tabs
 

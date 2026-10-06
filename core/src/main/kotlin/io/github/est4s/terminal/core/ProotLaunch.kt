@@ -1,5 +1,7 @@
 package io.github.est4s.terminal.core
 
+import java.io.File
+
 /** Where the app keeps proot and the Debian rootfs on the device. */
 data class ProotPaths(
     /** `libproot.so` in the app's native library dir (the only place Android lets us exec from). */
@@ -89,4 +91,27 @@ private const val SIGQUIT = 3
 fun stopProot(pid: Int?, signal: (Int, Int) -> Unit, later: (Long, () -> Unit) -> Unit, force: () -> Unit) {
     if (pid != null && pid > 0) runCatching { signal(pid, SIGQUIT) }
     later(PROOT_STOP_GRACE_MS, force)
+}
+
+/** The pid in Android's `Process[pid=N, …]`: its Process has no pid(), and destroyForcibly() only sends TERM. */
+fun processPid(description: String): Int? =
+    Regex("""pid=(\d+)""").find(description)?.groupValues?.get(1)?.toInt()
+
+/** The programs proot [pid] traces, from `TracerPid` in [proc]: their parent may be gone. */
+fun prootTracees(pid: Int, proc: File = File("/proc")): List<Int> =
+    proc.listFiles().orEmpty().mapNotNull { dir ->
+        val tracee = dir.name.toIntOrNull() ?: return@mapNotNull null
+        val status = runCatching { File(dir, "status").readText() }.getOrNull() ?: return@mapNotNull null
+        val tracer = Regex("""^TracerPid:\s*(\d+)""", RegexOption.MULTILINE).find(status)?.groupValues?.get(1)
+        tracee.takeIf { tracer == pid.toString() }
+    }
+
+/**
+ * Kills proot [pid] outright, after what it traces: a hung proot can
+ * block QUIT while a program it traces sits stopped, and a program
+ * outliving its proot runs untraced and spins (see [stopProot]).
+ */
+fun killProot(pid: Int, proc: File = File("/proc"), kill: (Int) -> Unit) {
+    prootTracees(pid, proc).forEach { runCatching { kill(it) } }
+    runCatching { kill(pid) }
 }
