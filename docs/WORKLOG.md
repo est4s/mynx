@@ -174,8 +174,11 @@ build over a Pocket Terminal one; entry 60):**
 **10.2 (settings gaps) is built** (entry 61), waiting for the phone
 checks listed there.
 
-**Next:** the rename check above and the 10.2 checks (entry 61),
-then 10.3, 10.4.
+**10.3 (About + licences) is built** (entry 62), waiting for the
+phone checks listed there.
+
+**Next:** the rename check above, the 10.2 checks (entry 61) and the
+10.3 checks (entry 62), then 10.4.
 
 The step 9 plan below is kept for reference.
 
@@ -362,6 +365,48 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (62): 10.3 About and licences
+
+Built test-first, committed locally, not pushed:
+- **`pc26 about`**: the app name, build (the number before `-` in the
+  tools' `.version`; there's no version name in Debian yet, 10.4 can
+  add one), what the app bundles with licence and source link, then
+  the licence texts. In `less` when stdout is a terminal, plain text
+  otherwise (credits fit 56 columns); `--json` gives `name`,
+  `version`, `build` and `components` (`name`, `version`, `license`,
+  `source`, `note`). Components: proot v5.1.107.96 (GPL-2.0-or-later,
+  github.com/termux/proot, a separate program; the note names our
+  one-line `#include` patch), talloc 2.5.0 (LGPL-3.0-or-later, static
+  in proot, samba.org tarball), Termux terminal-emulator/-view v0.118.3
+  (Apache-2.0), JetBrains Mono Nerd Font v3.5.1 (OFL-1.1), Debian
+  (per-package `/usr/share/doc/*/copyright`, PulseAudio etc.).
+- **`tools/licenses/`** (`/opt/pc26/licenses`, packed with the
+  tools): GPL-2.0, LGPL-3.0 plus GPL-3.0 (LGPL-3 is a supplement to
+  it), Apache-2.0 (from Debian's `/usr/share/common-licenses`, since
+  gnu.org didn't answer; Apache's is byte-identical to apache.org's),
+  and the font's own `OFL.txt` from the pinned release archive
+  (JetBrains copyright line + OFL 1.1).
+- **Menu:** System → About runs `pc26 about` (a failure waits on
+  screen).
+- Docs: `tools/AGENTS.md` (command table, setup table, menu action),
+  README "License", AGENTS.md "Licenses" rule (keep `COMPONENTS` and
+  the texts in step with `build-proot.sh` and the other pins).
+
+Open question for the owner: talloc is LGPL and linked statically, so
+strictly the user should be able to relink proot; the app's repo
+(with `scripts/build-proot.sh`) being public at release covers that.
+
+**Phone checks (10.3):**
+1. `pc26 about` opens in `less`: "PC-26", "build N" matching
+   `pc26 version`, the five components, then the licence texts; `q`
+   returns to the prompt. Nothing wraps at portrait width.
+2. Menu → System → About shows the same; `q` returns to the menu.
+3. `pc26 about | head` prints plain text with no error;
+   `pc26 about --json` is one JSON object.
+4. `ls /opt/pc26/licenses` lists the five `.txt` files.
+
+Tests: pc26 unittest 186, bats 93 (core untouched).
 
 ### 2026-10-07 (61): 10.2 settings gaps: wakelock and the Settings shortcut
 

@@ -241,5 +241,9 @@ Because Debian runs through `proot` rather than a virtual machine:
 ---
 
 ## License
-To be decided. Bundled third-party components keep their own licenses
-(`proot` is GPL-2.0; its source will be linked from the app).
+To be decided. Bundled third-party components keep their own licenses:
+`proot` (GPL-2.0-or-later, run as a separate program) with `talloc`
+(LGPL-3.0-or-later), Termux's terminal libraries (Apache-2.0), the
+JetBrains Mono Nerd Font (OFL-1.1) and Debian's packages. `pc26 about`
+(or the menu's System → About) lists them with their source links and
+shows the license texts, which ship in `/opt/pc26/licenses`.

@@ -49,6 +49,7 @@ and applies them. See "Changing settings" below.
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
 | The app's tools: `pc26`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/pc26/bin` |
 | Built-in key bars and themes, to read or copy | `/opt/pc26/keybars`, `/opt/pc26/themes` |
+| Licence texts of what the app bundles (`pc26 about`) | `/opt/pc26/licenses` |
 
 `/opt/pc26` belongs to the app and is replaced on every app
 update; don't change it. Its `bin` comes first on the PATH. Your changes
@@ -111,6 +112,7 @@ their own.
 | `pc26 hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
 | `pc26 edit` | the settings editors, for people (full screen) |
 | `pc26 welcome` | the welcome page new users see: what's here and how to get around |
+| `pc26 about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
 | `pc26 version` | the version of the app's tools |
 | `pc26 help` | all commands |
 
@@ -364,7 +366,7 @@ line, in order; labels up to 20 characters. Actions:
 | `games` | the Games menu |
 | `settings` | the settings editors (`pc26 edit`) |
 | `agents` | AI agents: start one, or install it (`pc26 agent start`) |
-| `system` | Update all, System info |
+| `system` | Update all, System info, About (`pc26 about`) |
 | `welcome` | the welcome page (`pc26 welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |

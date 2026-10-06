@@ -44,6 +44,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
+  about      version, credits and licences
   version    the app tools' version
   help       this list
 
@@ -912,6 +913,88 @@ def cmd_welcome(args, as_json):
     return 0
 
 
+APP_NAME = "PC-26"
+
+# What the app ships that others wrote. Licence texts are in
+# /opt/pc26/licenses/; proot's GPL needs its source linked.
+COMPONENTS = [
+    {"name": "proot", "version": "v5.1.107.96", "license": "GPL-2.0-or-later",
+     "source": "https://github.com/termux/proot",
+     "note": "Termux's fork of PRoot, which runs Debian. The app runs it as a separate "
+             "program (libproot.so, libproot-loader.so), built from the tagged "
+             "source with one line added so it compiles (#include <string.h> in "
+             "src/extension/ashmem_memfd/ashmem_memfd.c)."},
+    {"name": "talloc", "version": "2.5.0", "license": "LGPL-3.0-or-later",
+     "source": "https://www.samba.org/ftp/talloc/talloc-2.5.0.tar.gz",
+     "note": "Samba's memory allocator, linked into proot statically, with its "
+             "libreplace."},
+    {"name": "Termux terminal-emulator and terminal-view", "version": "v0.118.3",
+     "license": "Apache-2.0", "source": "https://github.com/termux/termux-app",
+     "note": "The terminal on screen (from termux-app, libraries only)."},
+    {"name": "JetBrains Mono Nerd Font", "version": "v3.5.1", "license": "OFL-1.1",
+     "source": "https://github.com/ryanoasis/nerd-fonts",
+     "note": "The terminal font: JetBrains Mono "
+             "(https://github.com/JetBrains/JetBrainsMono) patched by Nerd Fonts."},
+    {"name": "Debian", "version": "13 (trixie)", "license": "many (see each package)",
+     "source": "https://sources.debian.org",
+     "note": "The Linux system in the terminal, with PulseAudio, Python, nnn, "
+             "starship and the other packages in it. Each package's licence is in "
+             "/usr/share/doc/PACKAGE/copyright; apt source PACKAGE fetches its source."},
+]
+
+# The licence files in /opt/pc26/licenses/, in the order they're shown.
+LICENSE_FILES = ["GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
+
+
+def wrap(text, indent="  ", width=56):
+    import textwrap
+    return textwrap.fill(text, width=width, initial_indent=indent, subsequent_indent=indent,
+                         break_long_words=False, break_on_hyphens=False)
+
+
+def about_text(version):
+    build = version.split("-")[0] if version else None
+    lines = [APP_NAME, f"build {build}" if build else "version unknown", "",
+             "A Debian terminal for Android.", "", "Made with:", ""]
+    for c in COMPONENTS:
+        source = f"  Source: {c['source']}"
+        lines += [f"{c['name']} {c['version']}", f"  License: {c['license']}",
+                  *([source] if len(source) <= 56 else ["  Source:", f"  {c['source']}"]),
+                  wrap(c["note"]), ""]
+    lines += [wrap("LGPL-3.0 is GPL-3.0 plus extra permissions, so both texts are "
+                   "below. The full licence texts are also in /opt/pc26/licenses/.", ""), ""]
+    for name in LICENSE_FILES:
+        try:
+            with open(os.path.join(TOOLS, "licenses", name + ".txt")) as f:
+                body = f.read()
+        except OSError:
+            continue
+        lines += ["=" * 56, name, "=" * 56, "", body.rstrip("\n"), ""]
+    return "\n".join(lines) + "\n"
+
+
+def cmd_about(args, as_json):
+    try:
+        version = tools_version()
+    except Failure:
+        version = None
+    if as_json:
+        out(True, {"ok": True, "name": APP_NAME, "version": version,
+                   "build": version.split("-")[0] if version else None,
+                   "components": COMPONENTS}, None)
+        return 0
+    text = about_text(version)
+    if sys.stdout.isatty() and shutil.which("less"):
+        subprocess.run(["less"], input=text, text=True)
+    else:
+        try:
+            sys.stdout.write(text)
+            sys.stdout.flush()
+        except BrokenPipeError:  # pc26 about | head
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+    return 0
+
+
 def cmd_version(args, as_json):
     version = tools_version()
     out(as_json, {"ok": True, "version": version}, version)
@@ -931,7 +1014,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
-    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 
 

@@ -65,8 +65,13 @@ keys() {
 @test "system menu" {
     source "$MENU"
     menu_items system
-    [ "${ITEMS[*]}" = "Update all System info" ]
-    [ "${ACTS[*]}" = "update info" ]
+    [ "${ITEMS[*]}" = "Update all System info About" ]
+    [ "${ACTS[*]}" = "update info about" ]
+}
+
+@test "About shows pc26 about" {
+    run keys 63
+    [[ $output == *"RUN: pc26 about"* ]]
 }
 
 @test "games come from both folders, named after their files" {

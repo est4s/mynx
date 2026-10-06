@@ -197,8 +197,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(pc26 isn't working)"); ACTS=(none); } ;;
     system)
-      ITEMS=("Update all" "System info")
-      ACTS=(update info) ;;
+      ITEMS=("Update all" "System info" About)
+      ACTS=(update info about) ;;
   esac
 }
 
@@ -365,6 +365,8 @@ act_game() { run play "$1"; }
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
   run pc26 agent start "$1" || pause
 }
+
+act_about() { run pc26 about || pause; }  # in less; a failure stays on screen
 
 act_update() {
   run bash -c 'apt update && apt upgrade -y'

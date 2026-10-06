@@ -202,6 +202,95 @@ class Pc26Test(unittest.TestCase):
         self.assertEqual(run.returncode, 2)
         self.assertIn("welcome.txt", run.stderr)
 
+    # --- about -------------------------------------------------------------
+
+    LICENSES = ["GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
+
+    def write_about_files(self):
+        with open(os.path.join(self.tools, ".version"), "w") as f:
+            f.write("57-1700000000000\n")
+        os.mkdir(os.path.join(self.tools, "licenses"))
+        for name in self.LICENSES:
+            with open(os.path.join(self.tools, "licenses", name + ".txt"), "w") as f:
+                f.write(f"full text of {name}\n")
+
+    def test_about_shows_the_version_credits_and_license_texts(self):
+        self.write_about_files()
+        run = self.pc26("about")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        text = run.stdout
+        self.assertIn("PC-26", text)
+        self.assertIn("build 57", text)
+        for part in ["proot", "https://github.com/termux/proot", "GPL-2.0",
+                     "talloc", "LGPL-3.0", "https://www.samba.org/ftp/talloc/",
+                     "terminal-view", "v0.118.3", "https://github.com/termux/termux-app", "Apache-2.0",
+                     "JetBrains Mono Nerd Font", "OFL-1.1",
+                     "Debian", "/usr/share/doc/", "PulseAudio",
+                     "separate program"]:
+            self.assertIn(part, text)
+        for name in self.LICENSES:
+            self.assertIn(f"full text of {name}", text)
+
+    def test_about_fits_the_phone_screen(self):
+        self.write_about_files()
+        lines = self.pc26("about").stdout.splitlines()
+        credits = lines[:lines.index(next(l for l in lines if "full text of" in l))]
+        for line in credits:
+            self.assertLessEqual(len(line), 56, line)
+
+    def test_about_json_lists_the_components(self):
+        self.write_about_files()
+        answer = json.loads(self.pc26("about", "--json").stdout)
+        self.assertTrue(answer["ok"])
+        self.assertEqual(answer["name"], "PC-26")
+        self.assertEqual(answer["version"], "57-1700000000000")
+        self.assertEqual(answer["build"], "57")
+        by_name = {c["name"]: c for c in answer["components"]}
+        self.assertEqual(by_name["proot"]["license"], "GPL-2.0-or-later")
+        self.assertEqual(by_name["proot"]["source"], "https://github.com/termux/proot")
+        self.assertEqual(by_name["talloc"]["license"], "LGPL-3.0-or-later")
+        for c in answer["components"]:
+            self.assertEqual(set(c), {"name", "version", "license", "source", "note"}, c)
+            self.assertTrue(c["license"] and c["source"], c)
+
+    def test_about_without_a_version_file_still_shows_the_credits(self):
+        os.mkdir(os.path.join(self.tools, "licenses"))
+        run = self.pc26("about")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("proot", run.stdout)
+        self.assertIsNone(json.loads(self.pc26("about", "--json").stdout)["version"])
+
+    def test_about_has_every_license_text_it_names(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(PC26), "..", "lib"))
+        from pc26 import cli
+        shipped = os.path.join(os.path.dirname(PC26), "..", "licenses")
+        for name in cli.LICENSE_FILES:
+            self.assertTrue(os.path.getsize(os.path.join(shipped, name + ".txt")) > 1000, name)
+        for c in cli.COMPONENTS:
+            for license in c["license"].replace("-or-later", "").split():
+                if license[0].isupper():
+                    self.assertIn(license, cli.LICENSE_FILES, c["name"])
+
+    def test_about_on_a_terminal_goes_through_the_pager(self):
+        import pty
+        self.write_about_files()
+        paged = os.path.join(self.tmp.name, "paged")
+        pager = os.path.join(self.tmp.name, "less")
+        with open(pager, "w") as f:
+            f.write(f"#!/bin/sh\ncat >{paged}\n")
+        os.chmod(pager, 0o755)
+        main, side = pty.openpty()
+        environ = {"PATH": self.tmp.name + os.pathsep + os.environ["PATH"], "HOME": self.home,
+                   "PC26_TOOLS": self.tools}
+        proc = subprocess.run(["python3", PC26, "about"], stdout=side, stderr=side, env=environ, timeout=20)
+        os.close(side)
+        os.close(main)
+        self.assertEqual(proc.returncode, 0)
+        with open(paged) as f:
+            text = f.read()
+        self.assertIn("https://github.com/termux/proot", text)
+        self.assertIn("full text of GPL-2.0", text)
+
 
     # --- settings ----------------------------------------------------------
 

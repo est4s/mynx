@@ -382,7 +382,12 @@ These come from the README scope and apply to every feature:
   install them with their official installers; users sign in with their own
   accounts.
 - **Licenses:** keep GPL components (proot) as separate executables and link
-  their source from the app's About screen.
+  their source from About (`pc26 about`, the menu's System → About, in
+  the terminal: owner's decision). Its credits are `COMPONENTS` in
+  `tools/lib/pc26/cli.py`; the licence texts ship in `tools/licenses/`
+  (`/opt/pc26/licenses`). When you add, upgrade or patch a bundled
+  component (proot or talloc versions in `scripts/build-proot.sh`, the
+  Termux libraries, the font), update both in the same change.
 
 ---
 
