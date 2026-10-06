@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
 import io.github.est4s.terminal.core.Launch
+import io.github.est4s.terminal.core.PROOT_STOP_GRACE_MS
 import io.github.est4s.terminal.core.PipePlayer
 import io.github.est4s.terminal.core.SOUND_RATE
 import io.github.est4s.terminal.core.ServerRestarts
@@ -77,7 +78,10 @@ class SoundDevice(
             handler.removeCallbacks(idleCheck)
             // Killing proot leaves Pulse running: stop Pulse itself.
             soundServerPid(pidFile)?.let { runCatching { Os.kill(it, OsConstants.SIGTERM) } }
-            process?.destroyForcibly()
+            // Without Pulse, sound-watch ends and so does proot: killing
+            // proot first would leave the watcher spinning untraced.
+            val p = process
+            handler.postDelayed({ p?.destroyForcibly() }, PROOT_STOP_GRACE_MS)
             // A reader waiting for the pipe to open would wait forever:
             // opening it to write lets it through, to the end of the pipe.
             runCatching {

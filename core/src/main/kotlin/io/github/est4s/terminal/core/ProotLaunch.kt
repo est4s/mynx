@@ -74,3 +74,19 @@ fun prootLaunch(
     )
     return Launch(argv, env)
 }
+
+/** How long a proot gets to stop what it runs before it's killed outright. */
+const val PROOT_STOP_GRACE_MS = 2000L
+private const val SIGQUIT = 3
+
+/**
+ * Stops proot [pid] and everything it runs. proot ignores TERM and HUP,
+ * and KILL leaves its programs running untraced, where every system call
+ * it would handle fails and they spin at full CPU. QUIT makes it kill
+ * them all, then exit. [force] (KILL) follows after a grace, through
+ * [later], in case it hasn't; it should do nothing to an ended process.
+ */
+fun stopProot(pid: Int?, signal: (Int, Int) -> Unit, later: (Long, () -> Unit) -> Unit, force: () -> Unit) {
+    if (pid != null && pid > 0) runCatching { signal(pid, SIGQUIT) }
+    later(PROOT_STOP_GRACE_MS, force)
+}

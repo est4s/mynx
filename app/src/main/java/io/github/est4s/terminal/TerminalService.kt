@@ -21,6 +21,7 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.system.Os
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Mic
@@ -54,6 +55,7 @@ import io.github.est4s.terminal.core.parseSavedTabs
 import io.github.est4s.terminal.core.restore
 import io.github.est4s.terminal.core.serialize
 import io.github.est4s.terminal.core.snapshot
+import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
@@ -344,7 +346,7 @@ class TerminalService : Service() {
 
     fun closeTab(session: TerminalSession) {
         tabs.close(session)
-        session.finishIfRunning()
+        stop(session)
         cwdFiles.remove(session)?.delete()
         keyBarFiles.remove(session)?.delete()
         if (tabs.isEmpty) exit()
@@ -368,8 +370,16 @@ class TerminalService : Service() {
     private fun killAll() {
         val sessions = tabs.tabs.map { it.session }
         tabs = newTabs()
-        sessions.forEach { it.finishIfRunning() }
+        sessions.forEach(::stop)
     }
+
+    // finishIfRunning() alone kills just proot, leaving what it ran.
+    private fun stop(session: TerminalSession) = stopProot(
+        session.pid,
+        signal = Os::kill,
+        later = { ms, action -> mainHandler.postDelayed(action, ms) },
+        force = session::finishIfRunning,
+    )
 
     private fun newTabs(): Tabs<TerminalSession> = Tabs {
         if (!tabs.isEmpty && tabs.tabs.size != notifiedCount) updateNotification()
