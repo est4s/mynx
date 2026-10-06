@@ -21,8 +21,8 @@ Newest entries first. Rules for keeping it up to date: see
   entry 47); the microphone half is confirmed (2026-10-06, entry
   52). **Step 9 is done.** Also confirmed 2026-10-06: `pocket
   rotation lock` (entry 50) and swiping between tabs (entry 51).
-  Landscape with the keyboard up is confirmed (entry 54); fixed, not
-  yet checked: the camera cutout in landscape (entry 54).
+  Landscape with the keyboard up is confirmed (entry 54), and so is
+  keeping clear of the camera cutout (entry 55).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -98,13 +98,9 @@ owner test after each part.
 2026-10-06, entry 52). **Step 9 is done**, and so are rotation lock
 and tab swiping (entries 50-51, confirmed 2026-10-06).
 
-**Next: check the cutout fix on the phone** (entry 54; built, not
-run). Install the newest build first. In landscape, keyboard up and
-down, with the camera on either side: the terminal text and key bar
-start clear of the camera, lined up with the keyboard's edge. The
-other side and portrait look as before.
+The camera cutout fix is confirmed (entry 55).
 
-**Then: ask the owner what comes next.** Step 8 (*Profiles*) is
+**Next: ask the owner what comes next.** Step 8 (*Profiles*) is
 parked by the owner, so the choice is between picking it up again
 (its plan is below, under "Parked") and step 10 (*Polish*: first-run
 experience, settings, icon, signed releases), which isn't planned
@@ -295,6 +291,12 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (55): camera cutout confirmed on the phone
+
+The owner checked entry 54: in landscape, with the camera on either
+side, the terminal and key bar keep clear of the cutout; portrait is
+unchanged. No code changes.
 
 ### 2026-10-06 (54): landscape confirmed; keep clear of the camera cutout
 
