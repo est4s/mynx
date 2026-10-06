@@ -77,16 +77,11 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Issue #1 fixes: check on the phone (entries 56-58)
+### Issue #1: reply and close
 
-Restarts are confirmed clean on build 73 (entry 58). The slow mic
-start is found and fixed in `sound-watch` (entry 58), not committed
-yet: the owner decides when to commit and push. Then, on the new
-build:
-- Run `pocket sound start` then at once
-  `parecord --device=mic --raw x.raw` a few times: data should start
-  within ~2 s every time (it took ~5.5 s in 5 of 6 tries on build 73).
-- Then reply on issue #1 and close it if that holds.
+The mic start fix is confirmed on build 74 (entry 59). Left: reply on
+issue #1 with what was fixed (entries 56-59) and close it, when the
+owner says so.
 
 ### Roadmap step 9: Android integration
 
@@ -302,6 +297,14 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (59): mic start after a restart confirmed
+
+Phone check of entry 58 on build 74 (commits b09b61d, 4f3567d), run
+by the agent in the app's Debian: `pocket sound start`, then at once
+`parecord --device=mic --raw`, six times: first data after 1.3, 1.4,
+0.4, 1.3, 1.6 and 1.0 s (build 73: ~5.5 s in 5 of 6). Confirmed.
+Issue #1 is ready to reply to and close.
 
 ### 2026-10-06 (58): restarts clean; mic start after a restart was ~5 s late
 
