@@ -31,10 +31,24 @@ while alive; do
         continue
     fi
     list
-    # "on source" covers source-output too; sink events don't matter.
-    pactl subscribe 2>/dev/null | while read -r line; do
-        case $line in *" on source"*) list ;; esac
-    done
+    # subscribe takes a while to connect (~1 s on a phone), and a
+    # recording started meanwhile sends no event: list again after the
+    # first event, poking Pulse with clients of our own until one comes.
+    pactl subscribe 2>/dev/null | {
+        while :; do pactl stat >/dev/null 2>&1; sleep 0.5; done &
+        poke=$!
+        while read -r line; do
+            if [ -n "$poke" ]; then
+                kill "$poke" 2>/dev/null
+                poke=
+                list
+                continue
+            fi
+            # "on source" covers source-output too; sink events don't matter.
+            case $line in *" on source"*) list ;; esac
+        done
+        [ -z "$poke" ] || kill "$poke" 2>/dev/null
+    }
     alive && sleep 1
 done
 # Nothing records from a Pulse that has stopped.

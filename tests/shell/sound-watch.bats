@@ -37,6 +37,33 @@ EOF
     chmod +x "$STUBS/pactl"
 }
 
+# A fake pactl whose `subscribe` takes a second to connect, as on the
+# phone, and then only reports what happens after: a client connecting
+# (`stat`). `list` shows a recording once $RECORDING exists.
+stub_pactl_connecting() {
+    export RECORDING="$BATS_TEST_TMPDIR/recording" CLIENTS="$BATS_TEST_TMPDIR/clients"
+    : >"$CLIENTS"
+    cat >"$STUBS/pactl" <<'EOF'
+#!/bin/sh
+case "$1" in
+list)
+    [ "$2" = short ] && echo "1	mic	module-pipe-source.c" && exit 0
+    if [ -e "$RECORDING" ]; then echo "Source Output #0"; fi ;;
+stat) echo x >>"$CLIENTS" ;;
+subscribe)
+    sleep 1
+    seen=$(wc -l <"$CLIENTS")
+    for _ in $(seq 40); do
+        sleep 0.1
+        now=$(wc -l <"$CLIENTS")
+        [ "$now" -gt "$seen" ] && echo "Event 'new' on client #$now"
+        seen=$now
+    done ;;
+esac
+EOF
+    chmod +x "$STUBS/pactl"
+}
+
 # A copy of sleep named pulseaudio, as the server the watcher follows.
 pulse() {
     mkdir -p "$BATS_TEST_TMPDIR/bin"
@@ -100,6 +127,20 @@ Event 'remove' on source-output #0" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     sleep 0.5
     [ "$(lists)" -eq 3 ]
     [[ $(cat "$POCKET_SOUND_DIR/inputs") == *"Source Output #3"* ]]
+}
+
+# `pocket sound start` returns once Pulse answers, and a recording
+# started right then came before the watcher's subscription: nothing
+# listed it until the next source event, ~5 s later.
+@test "sound-watch sees a recording that starts while it subscribes" {
+    stub_pactl_connecting
+    pulse 10
+    PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
+    WATCHER=$!
+    for _ in $(seq 30); do [ -e "$POCKET_SOUND_DIR/inputs" ] && break; sleep 0.1; done
+    : >"$RECORDING"
+    for _ in $(seq 50); do grep -q 'Source Output #0' "$POCKET_SOUND_DIR/inputs" && break; sleep 0.1; done
+    grep -q 'Source Output #0' "$POCKET_SOUND_DIR/inputs"
 }
 
 @test "sound-watch waits for Pulse's socket" {

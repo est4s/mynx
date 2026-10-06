@@ -77,24 +77,16 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Issue #1 fixes: check on the phone (entries 56-57)
+### Issue #1 fixes: check on the phone (entries 56-58)
 
-Checked on build 72 (entry 57): closing a tab leaves nothing; `pocket
-sound start` returns in ~0.8 s and `parecord` connects right after;
-`mic` always gets data, but in 3 of 7 tries only after ~4 s.
-
-Needs a build from main with the entry 57 fix (push first; the owner
-decides when). Then:
-- Run `pocket sound start` 5-10 times in a row, a few seconds apart
-  (or `parecord --device=mic` in between). Afterwards
-  `ps -eo pid,ppid,stat,args` shows one `sound-server` proot, one
-  Pulse and its two `sound-watch`es: no second proot, no `sound-watch`
-  with PPid 1 or state `t`.
-- Then the slow mic start: the first ~4 s of a recording right after
-  `pocket sound start` are sometimes empty. Unexplored; a guess is the
-  first AudioRecord open fails and `MicInput`'s 2 s retry catches it.
-  Find out (a trace file, see AGENTS.md "proot notes") and fix it.
-- Then reply on issue #1 and close it if all hold.
+Restarts are confirmed clean on build 73 (entry 58). The slow mic
+start is found and fixed in `sound-watch` (entry 58), not committed
+yet: the owner decides when to commit and push. Then, on the new
+build:
+- Run `pocket sound start` then at once
+  `parecord --device=mic --raw x.raw` a few times: data should start
+  within ~2 s every time (it took ~5.5 s in 5 of 6 tries on build 73).
+- Then reply on issue #1 and close it if that holds.
 
 ### Roadmap step 9: Android integration
 
@@ -310,6 +302,33 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (58): restarts clean; mic start after a restart was ~5 s late
+
+Phone check of entry 57 on build 73: 8 `pocket sound start`s in a
+row leave one `sound-server` proot, one Pulse and its two
+`sound-watch`es, nothing stopped or orphaned. Confirmed.
+- **Slow mic start, cause:** a recording started right after `pocket
+  sound start` got data only after ~5.5 s (5 of 6 tries); started 6 s
+  later, ~0.7 s. `sound-watch` lists, then runs `pactl subscribe`,
+  which takes ~1.3 s to connect on the phone (each `pactl` call takes
+  ~0.8 s here), while `pocket sound start` returns once the socket
+  answers. A recording that starts in between sends no event, so
+  `inputs` stayed without it until the next source event:
+  `module-suspend-on-idle` suspending the idle sink 5 s after start.
+  (No `sound-mic` thread existed in the app during the stall; the
+  main thread answered requests as usual.) Not the microphone opening.
+- **Fix:** the watcher lists again on `subscribe`'s first event, which
+  shows it's live, and pokes Pulse with `pactl stat` every 0.5 s
+  until one comes (a client connecting is an event). Swapping it in
+  by hand on the phone after restarts: data at 1.5-1.7 s.
+- **Tests:** new bats test with a `pactl subscribe` that takes 1 s to
+  connect (red on the old watcher). Four sound-watch tests were
+  timed for a fast machine and flaked here (one failed at HEAD too):
+  they now wait for what they check, up to 5 s, and the fake Pulse of
+  "lists them again" lives long enough. Commit those test fixes on
+  their own, before the fix. sound-watch.bats green 5 runs in a row.
+- Not committed (owner's call).
 
 ### 2026-10-06 (57): sound restarts left a hung proot behind
 
