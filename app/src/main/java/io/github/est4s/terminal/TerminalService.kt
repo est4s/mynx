@@ -18,6 +18,7 @@ import android.os.FileObserver
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -202,6 +203,28 @@ class TerminalService : Service() {
         requests.start()
         watchRequests()
         applySoundSetting()
+        applyWakelockSetting()
+    }
+
+    // Held while the `wakelock` setting is on, so jobs keep running with the screen off.
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private fun applyWakelockSetting() {
+        val on = currentSettings()?.wakelock ?: false
+        if (on == (wakeLock != null)) return
+        if (on) {
+            wakeLock = getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "pc26:service")
+                .apply { setReferenceCounted(false); acquire() }
+        } else {
+            releaseWakeLock()
+        }
+        if (!tabs.isEmpty) updateNotification()
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
 
     // The sound device runs while its setting is on.
@@ -226,6 +249,7 @@ class TerminalService : Service() {
     fun cameOnScreen() {
         clearNoticeOfShownTab()
         mic.update()
+        applyWakelockSetting() // the settings file may have been edited by hand
     }
 
     // Before any shell starts, so none runs old tools while they're replaced,
@@ -265,6 +289,7 @@ class TerminalService : Service() {
                 in RELOADING_REQUESTS -> {
                     activity?.reloadConfig(quiet = true)
                     applySoundSetting()
+                    applyWakelockSetting()
                 }
             }
         }
@@ -326,6 +351,7 @@ class TerminalService : Service() {
         mic.stop()
         sound.stop()
         killAll()
+        releaseWakeLock()
         super.onDestroy()
     }
 
@@ -369,6 +395,7 @@ class TerminalService : Service() {
     fun exit() {
         stateFile.delete()
         killAll()
+        releaseWakeLock()
         activity?.finishAndRemoveTask()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -663,10 +690,10 @@ class TerminalService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(micNotice(micState) ?: runningTerminalsText(tabs.tabs.size))
+            .setContentText(micNotice(micState) ?: runningTerminalsText(tabs.tabs.size, wakeLock != null))
             .apply {
                 micNotice(micState)?.let {
-                    setSubText(runningTerminalsText(tabs.tabs.size))
+                    setSubText(runningTerminalsText(tabs.tabs.size, wakeLock != null))
                     setStyle(Notification.BigTextStyle().bigText(it))
                 }
             }

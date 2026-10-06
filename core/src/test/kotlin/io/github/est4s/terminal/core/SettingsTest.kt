@@ -62,7 +62,7 @@ class SettingsTest {
         assertEquals(
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
-                "android-microphone", "sound-device", "share-folder", "tab-swipe"),
+                "android-microphone", "sound-device", "share-folder", "tab-swipe", "wakelock"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -79,10 +79,12 @@ class SettingsTest {
                 "android-clipboard" to "off", "android-share" to "off", "android-location" to "off",
                 "android-sensors" to "off", "android-camera" to "off", "android-microphone" to "off",
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
+                "wakelock" to "on",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
-                androidCamera = false, androidMicrophone = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false).values(),
+                androidCamera = false, androidMicrophone = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
+                wakelock = true).values(),
         )
     }
 
@@ -202,6 +204,15 @@ class SettingsTest {
         val parsed = parseSettings("tab-swipe = off\ntab-swipe = maybe\n")
         assertFalse(parsed.settings.tabSwipe)
         assertEquals(listOf("line 2: tab-swipe must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `the wakelock is off by default and can be turned on`() {
+        assertFalse(Settings().wakelock)
+        assertEquals("off", SETTINGS.single { it.key == "wakelock" }.default)
+        val parsed = parseSettings("wakelock = on\nwakelock = always\n")
+        assertTrue(parsed.settings.wakelock)
+        assertEquals(listOf("line 2: wakelock must be one of: on, off"), parsed.problems)
     }
 
     @Test

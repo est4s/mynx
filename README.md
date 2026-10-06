@@ -48,8 +48,8 @@ Terminals open in **browser-style tabs**, laid out like Windows Terminal:
 - An **activity dot** on background tabs shows new output, and a bell icon
   marks a terminal bell.
 - Tabs keep running in the background (foreground service with an optional
-  wakelock), so long jobs survive switching apps. Open tabs are restored when
-  you reopen the app.
+  wakelock: the `wakelock` setting), so long jobs survive switching apps.
+  Open tabs are restored when you reopen the app.
 
 ### File manager
 `files` opens [nnn](https://github.com/jarun/nnn), a fast one-pane

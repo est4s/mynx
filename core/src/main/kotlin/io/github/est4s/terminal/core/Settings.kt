@@ -31,6 +31,8 @@ data class Settings(
     val shareFolder: String = "~/Shared",
     /** Whether a quick sideways swipe on the terminal switches tabs. */
     val tabSwipe: Boolean = true,
+    /** Whether the service keeps the CPU awake (a partial wakelock) while it runs. */
+    val wakelock: Boolean = false,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -49,6 +51,7 @@ data class Settings(
         "sound-device" to if (soundDevice) "on" else "off",
         "share-folder" to shareFolder,
         "tab-swipe" to if (tabSwipe) "on" else "off",
+        "wakelock" to if (wakelock) "on" else "off",
     )
 }
 
@@ -171,6 +174,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("tab-swipe", listOf("on", "off")),
         { copy(tabSwipe = it == "on") },
+    ),
+    SettingDef(
+        "wakelock", "Whether the app keeps the phone's CPU awake while terminals run, so long jobs don't pause with the screen off (uses more battery).",
+        "off", listOf("on", "off"),
+        oneOf("wakelock", listOf("on", "off")),
+        { copy(wakelock = it == "on") },
     ),
 )
 

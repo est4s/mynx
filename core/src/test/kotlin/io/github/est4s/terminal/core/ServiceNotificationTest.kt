@@ -18,4 +18,9 @@ class ServiceNotificationTest {
     fun `says so when nothing runs`() {
         assertEquals("No terminals running", runningTerminalsText(0))
     }
+
+    @Test
+    fun `says when the wakelock is held`() {
+        assertEquals("2 terminals running · wakelock held", runningTerminalsText(2, wakelock = true))
+    }
 }

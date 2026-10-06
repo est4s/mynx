@@ -164,6 +164,10 @@ One `key = value` per line; `pc26 settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
+- `wakelock`: `on` or `off` (default): whether the app keeps the
+  phone's CPU awake while it runs, so long jobs (builds, downloads)
+  don't pause when the screen goes off. It uses more battery; the
+  app's notification says "wakelock held" while it's on.
 
 ### Undo
 
