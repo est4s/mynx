@@ -957,16 +957,24 @@ class PocketTest(unittest.TestCase):
     SETTINGS_ON = {"ok": True, "problems": [], "settings": [
         {"key": "sound-device", "value": "on", "default": "on", "choices": ["on", "off"], "description": ""}]}
 
-    def sound(self, *args, stdin="", commands=None, settings=None):
+    def sound(self, *args, stdin="", commands=None, settings=None, restart=0):
         """`pocket sound` with only fake commands on the PATH (this machine
-        may have the real PulseAudio), and the server's socket in the test's folder."""
+        may have the real PulseAudio), and the server's socket in the test's
+        folder. `restart`: seconds after sound-start until sound-server
+        writes its new pid (None: never)."""
         bin_dir = os.path.join(self.tmp.name, "bin")
         os.makedirs(bin_dir, exist_ok=True)
         os.symlink(shutil.which("bash"), os.path.join(bin_dir, "bash"))
         for name, body in (commands or {}).items():
             self.write(os.path.join(bin_dir, name), "#!" + shutil.which("sh") + "\n" + body + "\n", 0o755)
         self.socket_path = os.path.join(self.tmp.name, "native")
-        self.start_app({"settings": settings or self.SETTINGS_ON, "sound-start": {"ok": True}})
+        def start():
+            if restart is not None:
+                timer = threading.Timer(restart, lambda: self.write(os.path.join(self.tmp.name, "pid"), "222\n"))
+                timer.start()
+                self.addCleanup(timer.cancel)
+            return {"ok": True}
+        self.start_app({"settings": settings or self.SETTINGS_ON, "sound-start": start})
         environ = {"PATH": bin_dir, "POCKET_REQUESTS": self.requests, "HOME": self.home,
                    "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "1", "PULSE_SERVER": "unix:" + self.socket_path}
         return subprocess.run([sys.executable, POCKET, "sound", *args], input=stdin, capture_output=True,
@@ -1005,9 +1013,26 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(run.stdout, "Sound device: off (pocket set sound-device on turns it on)\n")
 
     def test_sound_start_asks_the_app(self):
+        self.listen()
         run = self.sound("start")
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(self.app.seen, ["sound-start"])
+
+    def test_sound_start_waits_for_the_new_server_not_the_old_one(self):
+        # The old Pulse answers until it has exited; its pid is in the pid file.
+        self.write(os.path.join(self.tmp.name, "pid"), "111\n")
+        self.listen()
+        started = time.monotonic()
+        run = self.sound("start", restart=1)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertGreaterEqual(time.monotonic() - started, 1)
+        self.assertEqual(run.stdout, "Sound device: started\n")
+
+    def test_sound_start_says_so_when_the_server_doesnt_come_up(self):
+        self.write(os.path.join(self.tmp.name, "pid"), "111\n")
+        run = self.sound("start", restart=None)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("server.log", run.stderr)
 
     def test_sound_install_shows_the_commands_and_asks_first(self):
         run = self.sound("install", stdin="n\n", commands={"apt-get": "echo apt-get $*"})
@@ -1017,6 +1042,7 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(self.app.seen, [])
 
     def test_sound_install_installs_then_starts_the_device(self):
+        self.listen()
         run = self.sound("install", "--yes", commands={"apt-get": "echo ran apt-get $*"})
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
         self.assertIn("ran apt-get update", run.stdout)

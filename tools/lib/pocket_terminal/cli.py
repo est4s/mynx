@@ -13,7 +13,7 @@ import time
 import urllib.parse
 
 from . import agents
-from .client import TOOLS, Failure, record, request, tools_version
+from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
 usage: pocket COMMAND [ARGS] [--json]
@@ -493,7 +493,7 @@ def cmd_sound(args, as_json):
     if sub == "status" and len(args) <= 1:
         return sound_status(as_json)
     if sub == "start" and len(args) == 1:
-        out(as_json, request("sound-start"), "Sound device: started")
+        out(as_json, start_sound(), "Sound device: started")
         return 0
     if sub == "install" and args[1:] in ([], ["--yes"]):
         return install_sound("--yes" in args)
@@ -516,6 +516,30 @@ def sound_status(as_json):
     out(as_json, {"ok": True, "setting": setting, "installed": installed, "running": running, "server": server},
         "Sound device: " + text)
     return 0
+
+
+def start_sound():
+    """Restarts the server and returns once the new one answers: the old
+    one may answer until it has exited. sound-server writes its pid after
+    the old one has gone and before Pulse opens its socket (after `mic`)."""
+    server = os.environ.get("PULSE_SERVER") or SOUND_SERVER
+    folder = os.path.dirname(server[len("unix:"):])
+    old = read_text(os.path.join(folder, "pid"))
+    answer = request("sound-start")
+    deadline = time.monotonic() + 4 * float(os.environ.get("POCKET_TIMEOUT", "5"))
+    while time.monotonic() < deadline:
+        pid = read_text(os.path.join(folder, "pid"))
+        if pid and pid != old and server_answers(server):
+            return answer
+        time.sleep(0.1)
+    raise Failure(f"the sound device didn't start: see {os.path.join(folder, 'server.log')}")
+
+
+def read_text(path):
+    try:
+        return read(path)
+    except OSError:
+        return None
 
 
 def server_answers(server):
@@ -544,7 +568,7 @@ def install_sound(yes):
         code = subprocess.run(["bash", "-c", step]).returncode
         if code != 0:
             raise Failure(f"'{step}' failed (exit {code})")
-    request("sound-start")
+    start_sound()
     print("\nSound device: on. Programs play through the phone's speaker.")
     return 0
 

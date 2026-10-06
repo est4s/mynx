@@ -296,8 +296,9 @@ Commands for the phone itself, and the sound device:
   sends; `PULSE_SERVER` in every tab points programs at it
   (`unix:/tmp/.pocket-terminal/sound/native`). Don't start your own
   `pulseaudio`. `pocket sound` says whether it's on; `pocket sound
-  start` starts it again; Debians set up before the sound device
-  need `pocket sound install` once (it runs `apt-get install
+  start` starts it again and returns once programs can connect;
+  Debians set up before the sound device need `pocket sound
+  install` once (it runs `apt-get install
   pulseaudio …`, asking first; `--yes` skips that). PulseAudio's
   output is in `/tmp/.pocket-terminal/sound/server.log`.
   `sound-device off` turns it off. Programs record through it too
