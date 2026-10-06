@@ -23,8 +23,15 @@ Newest entries first. Rules for keeping it up to date: see
   rotation lock` (entry 50) and swiping between tabs (entry 51).
   Landscape with the keyboard up is confirmed (entry 54), and so is
   keeping clear of the camera cutout (entry 55).
-- **Step 10 (*Polish*) is next** (owner's choice, 2026-10-06), planned
-  in outline under "Next".
+- **Step 10 (*Polish*) is built, not yet confirmed on the phone:**
+  10.1 first run (welcome page; built by CI), the **rename to PC-26**
+  (`pc26` command, `~/.config/pc26`, `/opt/pc26`, with the old names
+  kept working), 10.2 wakelock setting and Settings launcher shortcut,
+  10.3 `pc26 about` and licence texts, 10.4 themed icon and signed
+  GitHub releases. Everything after 10.1 is **local only** (push
+  blocked: the gh token lacks the `workflow` scope), so the `app`
+  module hasn't been compiled with it; it was reviewed by hand
+  (entry 64). "Next" has the morning's ordered list.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -151,40 +158,98 @@ because of proot's GPL):**
   writes the steps), a workflow on `v*` tags publishing the APK to
   GitHub Releases, `versionName` from the tag.
 
-**Rename compatibility check (phone, after installing the first PC-26
-build over a Pocket Terminal one; entry 60):**
-1. The app starts with no error dialog; the theme, font size and
-   key bars are as before.
-2. `ls -la ~/.config ~/.local/state` shows `pc26` folders and
-   `pocket-terminal -> pc26` links.
-3. `pc26 undo --list` still lists the earlier changes; the welcome
-   page doesn't show again.
-4. `ls /opt/pocket-terminal/bin` works; `pocket version` prints the
-   same as `pc26 version`.
-5. `pc26 agent list` shows claude's notifications as on; `pc26 agent
-   notify claude on`, then `grep -c 'hook claude'
-   ~/.claude/settings.json` gives 3 (one per event, all `/opt/pc26`).
-   A long Claude turn with the app in the background still notifies.
-6. Closing all tabs and restarting the app opens the menu in the
-   first tab (the old `~/.bashrc` reads `POCKET_MENU`).
-7. `pc26 sound` says on; `pgrep -c pulseaudio` gives 1.
-8. `/etc/profile.d/pocket-terminal.sh` is gone; `echo $PATH` starts
-   with `/opt/pc26/bin`.
+**Step 10 is built (10.1-10.4 and the rename); none of it is
+confirmed on the phone yet.** 10.1 went through CI (dd14d1a); the
+rename, 10.2, 10.3 and 10.4 (be204c9..a054307 and the docs after) are
+**local only**: the `app` module hasn't been compiled with them.
 
-**10.2 (settings gaps) is built** (entry 61), waiting for the phone
-checks listed there.
+**Morning, in order:**
 
-**10.3 (About + licences) is built** (entry 62), waiting for the
-phone checks listed there.
+1. **Push and let CI compile.** The gh token lost the `workflow`
+   scope, and the push was rejected because `build.yml` changed:
+   - `gh auth refresh -h github.com -s workflow`
+   - `git push origin main`
+   - `gh run watch` (about 10 min). If the build fails, fix what it
+     shows (entry 64 lists what the review couldn't check), commit,
+     push again.
+2. **Install:** `scripts/deliver.sh` with the app on screen. The
+   build on the phone is from before the rename, so the script falls
+   back to `pocket install-apk`; tap Install.
+3. **Phone checks** (one list for entries 60-63 and 10.1):
+   - *Rename (first PC-26 build over a Pocket Terminal one):*
+     1. The app starts with no error dialog, is called PC-26, and the
+        theme, font size and key bars are as before.
+     2. `ls -la ~/.config ~/.local/state` shows `pc26` folders and
+        `pocket-terminal -> pc26` links.
+     3. `pc26 undo --list` still lists the earlier changes; the
+        welcome page doesn't show again.
+     4. `ls /opt/pocket-terminal/bin` works; `pocket version` prints
+        the same as `pc26 version`.
+     5. `pc26 agent list` shows claude's notifications as on;
+        `pc26 agent notify claude on`, then `grep -c 'hook claude'
+        ~/.claude/settings.json` gives 3 (all `/opt/pc26`). A long
+        Claude turn with the app in the background still notifies.
+     6. Closing all tabs and restarting the app opens the menu in the
+        first tab (the old `~/.bashrc` reads `POCKET_MENU`).
+     7. `pc26 sound` says on; `pgrep -c pulseaudio` gives 1.
+     8. `/etc/profile.d/pocket-terminal.sh` is gone; `echo $PATH`
+        starts with `/opt/pc26/bin`.
+   - *10.1 first run:* Menu → Getting started and `pc26 welcome` show
+     the welcome page. (The themed setup screen only shows on a fresh
+     install; check it whenever Debian is next set up from scratch.)
+   - *10.2 wakelock:*
+     9. `pc26 set wakelock on`: the notification says "N terminals
+        running · wakelock held"; `pc26 set wakelock off`: it goes.
+     10. With it on, screen off for a few minutes while
+         `for i in $(seq 600); do date; sleep 1; done` runs: no gaps
+         longer than a few seconds.
+     11. `pc26 edit` → Settings lists `wakelock`; toggling it there
+         updates the notification.
+   - *10.2 Settings shortcut:*
+     12. Long-press the icon: a "Settings" shortcut. With the app
+         running it opens a new tab with the settings editors;
+         quitting them leaves a shell prompt in that tab. From a
+         closed app (Exit in the notification first): the menu tab
+         plus the settings tab. Ctrl+C in the editors also leaves a
+         shell.
+   - *10.3 About:*
+     13. `pc26 about` opens in `less`: "PC-26", "version 0.0.1
+         (build N)" with N matching `pc26 version`, the five
+         components, then the licence texts; `q` returns. Nothing
+         wraps at portrait width.
+     14. Menu → System → About shows the same; `q` returns to the
+         menu.
+     15. `pc26 about | head` is plain text; `pc26 about --json` is one
+         object with `"version_name": "0.0.1"`.
+     16. `ls /opt/pc26/licenses` lists the five `.txt` files.
+   - *10.4 icon:*
+     17. With themed icons on (Wallpaper & style → Themed icons), the
+         icon is a tinted ">_" like the others.
+4. **First release** (`docs/RELEASING.md`): make the key (1), back it
+   up in two places (2), add the four `PC26_RELEASE_*` secrets (3),
+   then `git tag v0.1.0 && git push origin v0.1.0` and `gh run watch`
+   (4). The release page should have `pc26-0.1.0.apk`. That run is the
+   first `assembleRelease`, so it's also the first time lint-vital
+   runs; fix anything fatal it finds and move the tag as RELEASING.md
+   says. Later, on a spare phone (or after uninstalling the debug
+   build, which deletes Debian): the release APK installs, `pc26
+   about` says "version 0.1.0", and `pc26 install-apk` says only debug
+   builds can.
 
-**10.4 (icon + releases) is built** (entry 63): the owner makes the
-release key and adds the secrets (`docs/RELEASING.md`), then tags the
-first release once the phone checks pass.
+**Before Play (not urgent):**
+- **versionCode:** `release.yml` has its own `GITHUB_RUN_NUMBER`
+  counter, so release builds get much lower version codes than debug
+  builds (run ~80+). Harmless on GitHub Releases (the two can't
+  replace each other anyway), but Play needs codes that only go up
+  across everything uploaded: decide on a scheme (e.g. from the tag,
+  or an offset) before the first Play upload.
+- **talloc (LGPL-3.0, linked statically into proot):** users must be
+  able to relink it. Making this repo public at release (it has
+  `scripts/build-proot.sh`) covers that; the owner should decide
+  whether it goes public with `v0.1.0`.
 
-**Next:** the rename check above, the 10.2 checks (entry 61), the
-10.3 checks (entry 62) and the 10.4 checks (entry 63). With those
-done, step 10 is complete: the owner cuts `v0.1.0`, and the next step
-is the owner's choice (the parked step 8, or step 11).
+With all that done, step 10 is complete and the next step is the
+owner's choice (the parked step 8, or step 11).
 
 The step 9 plan below is kept for reference.
 
@@ -361,9 +426,8 @@ in-app keyboard (step 5) can send these combos:
   them (if it does, pick other defaults in `tabShortcut()`)
 
 ### Small open items
-- No wakelock yet (README: "foreground service with an optional
-  wakelock"). The shell survived a few minutes with the screen off without
-  one; add a notification action for it (like Termux) if long jobs stall.
+- The wakelock is a setting (10.2); a notification action to toggle it
+  (like Termux) could come later if people want it.
 - Step 1.4's interrupted-install check (swipe the app away while unpacking,
   reopen) hasn't been tried on the phone.
 - htop's CPU bars are static (fake `/proc/stat`, as in proot-distro).
@@ -371,6 +435,47 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (64): review of the overnight work before the first push
+
+The overnight run (entries 60-63) was done by subagents one after
+another, after the first session crashed partway. Its commits, all
+local (push blocked: the gh token lacks the `workflow` scope, and
+`build.yml` changed):
+- be204c9 Rename to PC-26: pc26 command, paths and package
+- 43dfad8 Keep installs from before the rename working: config, tools path, menu
+- 49e8e88 Keep the old pocket command, hooks, menu and sound working
+- 46b24fa Add the wakelock setting
+- 86d1978 Add a Settings launcher shortcut that opens pc26 edit in a new tab
+- d3e52bb Add pc26 about and the licence texts (step 10.3)
+- a054307 Add a themed icon and signed GitHub releases (step 10.4)
+
+Since no Android SDK runs here, this session read every change to
+`app/`, `app/build.gradle.kts` and `.github/workflows/` since dd14d1a
+as a compile check: every `core` import from `app/` resolves (incl.
+`Pc26Requests`, `SETTINGS_TAB_COMMAND`, `migrateOldNames`,
+`runningTerminalsText(count, wakelock)`, `Settings.wakelock`,
+`prootLaunch(command = …)`); no `Pocket*` symbols or old paths left
+in `app/` (one error message names the old folder on purpose); the
+resources the code, manifest and `shortcuts.xml` use exist
+(`shortcut_settings`, `@mipmap/ic_launcher`, the monochrome drawable);
+the shortcut's `meta-data` sits inside the launcher activity;
+`PowerManager.newWakeLock`/`setReferenceCounted`/`acquire`/`isHeld`/
+`release` exist as used; the signing/buildTypes DSL matches the
+existing debug config's style; the workflows use `tests/pc26` and
+`pc26-debug`, and `deliver.sh` downloads whatever artifact the run has.
+Each pushed commit passes `scripts/check-tdd.sh` (CI's TDD check).
+**Nothing needed fixing.** Still unchecked until CI runs: the AGP 9
+DSL itself (`signingConfigs.findByName` into `signingConfig`), and
+lint-vital on the first `assembleRelease` (it only runs on the tag;
+the acquire-without-timeout wakelock is a lint warning, not fatal).
+
+Docs: "Current status" and "Next" rewritten (an ordered morning list:
+push with the workflow scope, deliver, one merged phone checklist,
+release key and `v0.1.0`; the release versionCode counter and the
+talloc question for later).
+
+Tests: core passes, pc26 unittest 188, bats 93.
 
 ### 2026-10-07 (63): 10.4 themed icon and signed releases
 
