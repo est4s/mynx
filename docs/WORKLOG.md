@@ -21,7 +21,8 @@ Newest entries first. Rules for keeping it up to date: see
   entry 47); the microphone half is confirmed (2026-10-06, entry
   52). **Step 9 is done.** Also confirmed 2026-10-06: `pocket
   rotation lock` (entry 50) and swiping between tabs (entry 51).
-  Fixed, not yet checked: landscape with the keyboard up (entry 53).
+  Landscape with the keyboard up is confirmed (entry 54); fixed, not
+  yet checked: the camera cutout in landscape (entry 54).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -97,16 +98,11 @@ owner test after each part.
 2026-10-06, entry 52). **Step 9 is done**, and so are rotation lock
 and tab swiping (entries 50-51, confirmed 2026-10-06).
 
-**Next: check the landscape fix on the phone** (entry 53; built, not
-run). Install the newest build first. With auto-rotate on:
-1. Tap the terminal (keyboard up), turn to landscape: some terminal
-   rows show; the key bar has one row (and, if the terminal would
-   still get under 4 rows, no tab strip). Typing shows up.
-2. Swipe the one-row bar: its other buttons are on the next pages.
-3. Hide the keyboard in landscape: two rows and the strip come back.
-4. Turn back to portrait with the keyboard up: as before, and typing
-   works with no tap.
-If no terminal row shows: ask which of bar rows and strip are there.
+**Next: check the cutout fix on the phone** (entry 54; built, not
+run). Install the newest build first. In landscape, keyboard up and
+down, with the camera on either side: the terminal text and key bar
+start clear of the camera, lined up with the keyboard's edge. The
+other side and portrait look as before.
 
 **Then: ask the owner what comes next.** Step 8 (*Profiles*) is
 parked by the owner, so the choice is between picking it up again
@@ -299,6 +295,19 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (54): landscape confirmed; keep clear of the camera cutout
+
+The owner checked entry 53 on the phone: terminal rows show in
+landscape with the keyboard up, typing works, hiding the keyboard
+brings back two bar rows and the strip, and portrait works with no
+tap. Swiping the one-row bar couldn't be tried: the shell bar's
+buttons fit on one row in landscape.
+
+New: in landscape the terminal text and key bar ran under the camera
+cutout, while the keyboard keeps clear of it, so they didn't line up.
+The root view's padding now adds `WindowInsets.Type.displayCutout()`
+to the system bars and keyboard (API 30+). App code only; builds in CI.
 
 ### 2026-10-06 (53): landscape with the keyboard up: the terminal had no room
 

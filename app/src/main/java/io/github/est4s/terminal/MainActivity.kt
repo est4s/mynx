@@ -728,10 +728,13 @@ class MainActivity : Activity() {
 
     // Since targetSdk 35 the app draws behind the system bars and adjustResize is
     // ignored, so keep the terminal clear of the bars and the keyboard ourselves.
+    // The cutout too: in landscape the keyboard keeps clear of it, and the bar
+    // should line up with the keyboard.
     private fun applySystemInsets(view: View) {
         view.setOnApplyWindowInsetsListener { v, insets ->
             if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or
+                    WindowInsets.Type.displayCutout() or WindowInsets.Type.ime())
                 v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             } else {
                 @Suppress("DEPRECATION")
