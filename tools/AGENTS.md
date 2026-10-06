@@ -364,7 +364,10 @@ shows "My Game". The menu starts games with `play`.
 ### Key bars
 
 Two rows of buttons above the keyboard, always visible (more than fit
-go on pages: swipe sideways). Holding an arrow (or any button marked
+go on pages: swipe sideways). When the screen is short, as in landscape
+with the keyboard up, the bar shrinks to one row, and if the terminal
+still has too little room the tab strip hides (swiping between tabs
+still works). Holding an arrow (or any button marked
 `Repeat`) repeats it. Which bar shows depends on what's running:
 `keybar NAME[,FALLBACK…] command…` shows the first of those bars that
 exists while the command runs, then the previous one; with no command

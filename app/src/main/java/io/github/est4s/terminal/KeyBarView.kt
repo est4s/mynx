@@ -49,11 +49,12 @@ private val KEY_CODES: Map<String, Int> = mapOf(
 ) + (1..12).associate { "F$it" to KeyEvent.KEYCODE_F1 + it - 1 }
 
 /**
- * The buttons between the terminal and the keyboard: two rows, always
- * visible. Shows the bar the selected tab's program asked for (see the
- * `keybar` command in Debian), else the shell's. Buttons that don't fit
- * in two rows go on more pages; swipe sideways to switch. Buttons aren't
- * focusable, so typing stays on the terminal.
+ * The buttons between the terminal and the keyboard: two rows (one when
+ * the screen is squeezed, see [rows]), always visible. Shows the bar the
+ * selected tab's program asked for (see the `keybar` command in Debian),
+ * else the shell's. Buttons that don't fit go on more pages; swipe
+ * sideways to switch. Buttons aren't focusable, so typing stays on the
+ * terminal.
  */
 class KeyBarView(
     context: Context,
@@ -81,6 +82,16 @@ class KeyBarView(
             postDelayed(this, REPEAT_MS)
         }
     }
+
+    /** 2, or 1 when the terminal needs the room; the same button stays on screen. */
+    var rows = 2
+        set(value) {
+            if (value == field) return
+            keepButton = pages.getOrNull(page)?.flatten()?.firstOrNull()
+            field = value
+            render()
+        }
+    private var keepButton: Int? = null
 
     var colors: StripColors? = null
         set(value) {
@@ -143,12 +154,14 @@ class KeyBarView(
         val buttons = bar?.buttons ?: emptyList()
         removeAllViews()
         if (width == 0) return // laid out later; onSizeChanged renders again
-        pages = keyBarPages(buttons.size, perRow(buttons))
+        pages = keyBarPages(buttons.size, perRow(buttons), rows)
+        keepButton?.let { kept -> page = pages.indexOfFirst { kept in it.flatten() } }
+        keepButton = null
         page = page.coerceIn(0, (pages.size - 1).coerceAtLeast(0))
-        val rows = pages.getOrNull(page) ?: listOf(emptyList(), emptyList())
+        val shown = pages.getOrNull(page) ?: List(rows) { emptyList() }
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            for (row in rows) {
+            for (row in shown) {
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     // An empty row keeps its height, so the bar never changes size.

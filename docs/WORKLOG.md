@@ -21,6 +21,7 @@ Newest entries first. Rules for keeping it up to date: see
   entry 47); the microphone half is confirmed (2026-10-06, entry
   52). **Step 9 is done.** Also confirmed 2026-10-06: `pocket
   rotation lock` (entry 50) and swiping between tabs (entry 51).
+  Fixed, not yet checked: landscape with the keyboard up (entry 53).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -96,7 +97,18 @@ owner test after each part.
 2026-10-06, entry 52). **Step 9 is done**, and so are rotation lock
 and tab swiping (entries 50-51, confirmed 2026-10-06).
 
-**Next: ask the owner what comes next.** Step 8 (*Profiles*) is
+**Next: check the landscape fix on the phone** (entry 53; built, not
+run). Install the newest build first. With auto-rotate on:
+1. Tap the terminal (keyboard up), turn to landscape: some terminal
+   rows show; the key bar has one row (and, if the terminal would
+   still get under 4 rows, no tab strip). Typing shows up.
+2. Swipe the one-row bar: its other buttons are on the next pages.
+3. Hide the keyboard in landscape: two rows and the strip come back.
+4. Turn back to portrait with the keyboard up: as before, and typing
+   works with no tap.
+If no terminal row shows: ask which of bar rows and strip are there.
+
+**Then: ask the owner what comes next.** Step 8 (*Profiles*) is
 parked by the owner, so the choice is between picking it up again
 (its plan is below, under "Parked") and step 10 (*Polish*: first-run
 experience, settings, icon, signed releases), which isn't planned
@@ -287,6 +299,32 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (53): landscape with the keyboard up: the terminal had no room
+
+The owner found: in landscape with the keyboard up, no terminal row
+showed and typing did nothing (`date > /tmp/landscape-test` typed blind
+didn't run); back in portrait, typing still did nothing until the
+terminal was tapped. Cause: the status bar, keyboard (~250 dp), tab
+strip and two-row key bar leave the terminal no height in ~410 dp, and
+Android takes focus from a view with no height and doesn't give it
+back, so the keyboard had nothing to type into. (The library already
+sets `IME_FLAG_NO_FULLSCREEN`, so it wasn't the fullscreen keyboard.)
+- Owner's choice: the key bar drops to one row first; if the terminal
+  still gets too little, the tab strip hides too. Worked out from the
+  height actually there, so other aspect ratios only give up what
+  they must.
+- core: `keyBarPages(count, perRow, rows)` (one row a page with
+  `rows = 1`); `fitAroundTerminal(available, strip, barRow, terminal)`
+  gives `BarFit(rows, strip)`.
+- app: the column's `onMeasure` measures the strip and bar as they'd
+  like to be and asks `fitAroundTerminal` for room for 4 rows (the
+  library's minimum; line height from the terminal's font).
+  `KeyBarView.rows` keeps the first button shown on screen when it
+  changes. Safety net: when the terminal gets its height back and
+  nothing has focus, it takes focus again.
+- Guide: the key bar section says so (`home-docs.bats` checks it).
+- Tests: core green; `home-docs.bats` green. App code only builds in CI.
 
 ### 2026-10-06 (52): microphone, rotation lock and tab swiping confirmed on the phone
 

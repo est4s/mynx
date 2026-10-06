@@ -168,14 +168,31 @@ fun loadKeyBar(names: List<String>, userDir: File): LoadedKeyBar {
 fun loadKeyBar(name: String, userDir: File): LoadedKeyBar = loadKeyBar(listOf(name), userDir)
 
 /**
- * Lays out [count] buttons as pages of two rows of indexes, at most
- * [perRow] to a row. Always two rows, so the terminal keeps its size when
- * the bar changes; the first half of a page goes on top.
+ * Lays out [count] buttons as pages of [rows] rows of indexes, at most
+ * [perRow] to a row. Two rows unless the screen is squeezed (see
+ * [fitAroundTerminal]), so the terminal keeps its size when the bar
+ * changes; the first half of a two-row page goes on top.
  */
-fun keyBarPages(count: Int, perRow: Int): List<List<List<Int>>> {
-    val perPage = 2 * perRow.coerceAtLeast(1)
-    return (0 until count).chunked(perPage).map { page ->
+fun keyBarPages(count: Int, perRow: Int, rows: Int = 2): List<List<List<Int>>> {
+    val perRow = perRow.coerceAtLeast(1)
+    if (rows < 2) return (0 until count).chunked(perRow).map { listOf(it) }
+    return (0 until count).chunked(2 * perRow).map { page ->
         val top = (page.size + 1) / 2
         listOf(page.take(top), page.drop(top))
     }
+}
+
+/** How many rows the key bar gets, and whether the tab strip shows. */
+data class BarFit(val rows: Int, val strip: Boolean)
+
+/**
+ * Makes room for the terminal (e.g. in landscape with the keyboard up),
+ * all sizes in pixels: the terminal needs [terminal] of the [available]
+ * height. The bar gives up its second row first, then the tab strip goes;
+ * the terminal must never get no height, or it loses the keyboard.
+ */
+fun fitAroundTerminal(available: Int, strip: Int, barRow: Int, terminal: Int): BarFit = when {
+    available - strip - 2 * barRow >= terminal -> BarFit(rows = 2, strip = true)
+    available - strip - barRow >= terminal -> BarFit(rows = 1, strip = true)
+    else -> BarFit(rows = 1, strip = false)
 }

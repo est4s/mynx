@@ -9,6 +9,7 @@ import android.content.ServiceConnection
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -40,6 +41,7 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.ColorScheme
+import io.github.est4s.terminal.core.fitAroundTerminal
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
 import io.github.est4s.terminal.core.MIN_FONT_SIZE
 import io.github.est4s.terminal.core.Orientation
@@ -58,6 +60,7 @@ import io.github.est4s.terminal.core.stripColors
 import java.io.File
 import java.util.Properties
 import kotlin.concurrent.thread
+import kotlin.math.ceil
 
 private const val ROOTFS_ASSET = "debian-rootfs.tar.xz"
 private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
@@ -69,6 +72,8 @@ private const val CURSOR_BLINK_MS = 500
 private const val PERMISSION_REQUEST = 2
 private const val RESULT_REQUEST = 3
 private const val KEY_BAR_POLL_MS = 250L
+// Rows the terminal keeps when the screen is squeezed (the library's own minimum).
+private const val TERMINAL_MIN_ROWS = 4
 private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
 
 class MainActivity : Activity() {
@@ -108,6 +113,7 @@ class MainActivity : Activity() {
     // A tapped notification's tab, selected once the service is connected.
     private var shellToShow: Int? = null
     private var appliedFont: String? = null
+    private var terminalTypeface: Typeface? = null
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
@@ -315,6 +321,11 @@ class MainActivity : Activity() {
                 watchSwipe(e)
                 false
             }
+            // A view with no height loses focus, and Android doesn't give it back:
+            // the keyboard would type into nothing until the terminal is tapped.
+            addOnLayoutChangeListener { view, _, top, _, bottom, _, oldTop, _, oldBottom ->
+                if (oldBottom == oldTop && bottom > top) view.post { if (currentFocus == null) view.requestFocus() }
+            }
         }
         // Before attaching: the size decides the first rows and columns.
         appliedFont = null
@@ -330,7 +341,12 @@ class MainActivity : Activity() {
         applyColors()
         // TerminalView ignores its own padding, so it sits inside the inset root.
         root.removeAllViews()
-        root.addView(LinearLayout(this).apply {
+        root.addView(object : LinearLayout(this) {
+            override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+                fitColumn(widthSpec, heightSpec)
+                super.onMeasure(widthSpec, heightSpec)
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
             addView(stripScroll, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(terminalView, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
@@ -626,7 +642,8 @@ class MainActivity : Activity() {
                 hostPath(settings.font, installer.rootfs.absolutePath)?.let { File(it) }?.takeIf { it.isFile }
                     ?.let { runCatching { Typeface.createFromFile(it) }.getOrNull() }
             if (settings.font != "default" && custom == null) problems += "font: can't load ${settings.font}"
-            terminalView.setTypeface(custom ?: font)
+            terminalTypeface = custom ?: font
+            terminalView.setTypeface(terminalTypeface)
             appliedFont = settings.font
         }
         service?.setCursorStyle(settings.cursorStyle)
@@ -691,6 +708,22 @@ class MainActivity : Activity() {
     fun showKeyboard() {
         terminalView.requestFocus()
         getSystemService(InputMethodManager::class.java).showSoftInput(terminalView, 0)
+    }
+
+    // In landscape with the keyboard up there's little height left: the key bar
+    // drops to one row, then the strip hides, so the terminal keeps some rows.
+    // With no height it would lose the keyboard (Android takes its focus).
+    private fun fitColumn(widthSpec: Int, heightSpec: Int) {
+        val available = View.MeasureSpec.getSize(heightSpec)
+        if (available == 0) return
+        val natural = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        stripScroll.measure(widthSpec, natural)
+        keyBar.measure(widthSpec, natural)
+        val line = Paint().apply { typeface = terminalTypeface; textSize = dp(fontSize).toFloat() }.fontSpacing
+        val fit = fitAroundTerminal(available, stripScroll.measuredHeight, keyBar.measuredHeight / keyBar.rows,
+            ceil(line).toInt() * (TERMINAL_MIN_ROWS + 1))
+        stripScroll.visibility = if (fit.strip) View.VISIBLE else View.GONE
+        keyBar.rows = fit.rows
     }
 
     // Since targetSdk 35 the app draws behind the system bars and adjustResize is

@@ -84,3 +84,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF -- "- \`$key\`:" "$GUIDE" || { echo "not in the guide: $key"; false; }
     done
 }
+
+@test "the guide says what makes room for the terminal in landscape" {
+    grep -qF 'one row' "$GUIDE"
+    grep -qF 'tab strip hides' "$GUIDE"
+}

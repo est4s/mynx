@@ -268,6 +268,36 @@ class KeyBarTest {
     }
 
     @Test
+    fun `a one-row bar puts one row on each page`() {
+        assertEquals(listOf(listOf(listOf(0, 1, 2)), listOf(listOf(3, 4))), keyBarPages(count = 5, perRow = 3, rows = 1))
+        assertEquals(listOf(listOf(listOf(0))), keyBarPages(1, 6, rows = 1))
+        assertEquals(emptyList(), keyBarPages(0, 6, rows = 1))
+    }
+
+    @Test
+    fun `with room to spare, the bar has two rows and the strip shows`() {
+        assertEquals(BarFit(rows = 2, strip = true), fitAroundTerminal(available = 1000, strip = 40, barRow = 40, terminal = 100))
+    }
+
+    @Test
+    fun `just enough room counts as room`() {
+        assertEquals(BarFit(rows = 2, strip = true), fitAroundTerminal(available = 220, strip = 40, barRow = 40, terminal = 100))
+    }
+
+    @Test
+    fun `when squeezed, the bar gives up a row first`() {
+        assertEquals(BarFit(rows = 1, strip = true), fitAroundTerminal(available = 219, strip = 40, barRow = 40, terminal = 100))
+        assertEquals(BarFit(rows = 1, strip = true), fitAroundTerminal(available = 180, strip = 40, barRow = 40, terminal = 100))
+    }
+
+    @Test
+    fun `when still squeezed, the strip goes too`() {
+        assertEquals(BarFit(rows = 1, strip = false), fitAroundTerminal(available = 179, strip = 40, barRow = 40, terminal = 100))
+        // Nothing more to give: the terminal gets what's left.
+        assertEquals(BarFit(rows = 1, strip = false), fitAroundTerminal(available = 50, strip = 40, barRow = 40, terminal = 100))
+    }
+
+    @Test
     fun `built-in bar files explain the format`() {
         assertTrue(builtInKeyBarText("shell")!!.startsWith("#"))
     }
