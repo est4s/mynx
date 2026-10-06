@@ -268,6 +268,17 @@ See README "How it works". The details:
   `ShareActivity`, which stays open while it copies (the read grant
   lasts as long as the activity) into the `share-folder` (`Inbox`:
   safe names, never overwrites) and posts a notification.
+- **Wakelock** (`wakelock` setting, off by default): `TerminalService`
+  holds a `PARTIAL_WAKE_LOCK` ("pc26:service") while it runs and the
+  setting is on, re-read with the sound setting (reloading requests)
+  and when the app comes on screen; released on exit and `onDestroy`.
+- **Launcher shortcut** (long-press the icon → Settings):
+  `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
+  to `MainActivity`, which opens a new tab with core's
+  `SETTINGS_TAB_COMMAND` once the service is connected. A tab can run
+  a program first through `prootLaunch(command = runThenShell(…))`:
+  a login bash runs it, then execs the usual login shell, so it works
+  with any `.bashrc`.
 - **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
   apps. The app probes them at each start and binds static stand-ins from
   `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).

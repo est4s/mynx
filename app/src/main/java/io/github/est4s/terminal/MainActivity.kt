@@ -49,6 +49,7 @@ import io.github.est4s.terminal.core.TabSwipe
 import io.github.est4s.terminal.core.swipeTarget
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.SETTINGS_TAB_COMMAND
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
 import io.github.est4s.terminal.core.hostPath
@@ -62,6 +63,8 @@ import java.util.Properties
 import kotlin.concurrent.thread
 import kotlin.math.ceil
 
+// The launcher shortcut's action (res/xml/shortcuts.xml).
+private const val ACTION_SETTINGS = "io.github.est4s.terminal.SETTINGS"
 private const val ROOTFS_ASSET = "debian-rootfs.tar.xz"
 private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
 // Debian path, relative to the rootfs.
@@ -112,6 +115,8 @@ class MainActivity : Activity() {
     val onScreen get() = visible
     // A tapped notification's tab, selected once the service is connected.
     private var shellToShow: Int? = null
+    // The launcher shortcut "Settings": opens the editors in a new tab once the service is connected.
+    private var settingsToOpen = false
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
 
@@ -123,6 +128,7 @@ class MainActivity : Activity() {
             applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
             showShellFromNotification()
+            openSettingsTab()
             s.toolsError?.let { showToolsError(it) }
         }
 
@@ -172,6 +178,8 @@ class MainActivity : Activity() {
         applySystemInsets(root)
 
         shellToShow = shellOf(intent)
+        // Not when Android recreates the activity: that tab is open already.
+        settingsToOpen = savedInstanceState == null && intent?.action == ACTION_SETTINGS
         if (installer.isInstalled) connectService() else installDebian()
         showLastCrash()
     }
@@ -181,6 +189,15 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         shellToShow = shellOf(intent)
         showShellFromNotification()
+        settingsToOpen = intent.action == ACTION_SETTINGS
+        openSettingsTab()
+    }
+
+    private fun openSettingsTab() {
+        if (!settingsToOpen) return
+        val service = service ?: return
+        settingsToOpen = false
+        service.newSession(SETTINGS_TAB_COMMAND)
     }
 
     private fun shellOf(intent: Intent?): Int? =

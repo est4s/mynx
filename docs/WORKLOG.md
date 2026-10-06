@@ -171,7 +171,11 @@ build over a Pocket Terminal one; entry 60):**
 8. `/etc/profile.d/pocket-terminal.sh` is gone; `echo $PATH` starts
    with `/opt/pc26/bin`.
 
-**Next:** the check above, then 10.2, 10.3, 10.4.
+**10.2 (settings gaps) is built** (entry 61), waiting for the phone
+checks listed there.
+
+**Next:** the rename check above and the 10.2 checks (entry 61),
+then 10.3, 10.4.
 
 The step 9 plan below is kept for reference.
 
@@ -358,6 +362,49 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (61): 10.2 settings gaps: wakelock and the Settings shortcut
+
+Built test-first, not pushed (pushing blocked tonight):
+- **`wakelock` setting** (`on`/`off`, default `off`; core `SETTINGS`,
+  so `pc26 settings/get/set/reset`, `pc26 check` and the Settings
+  editor have it). `TerminalService` holds a `PARTIAL_WAKE_LOCK`
+  ("pc26:service") while it's on: applied at service start, after
+  reloading requests (like `sound-device`) and when the app comes on
+  screen (hand edits); released on Exit and `onDestroy`. The service
+  notification adds " · wakelock held" (core `runningTerminalsText`).
+  `WAKE_LOCK` permission in the manifest. Documented in
+  `tools/AGENTS.md`; `home-docs.bats` now expects 17 settings.
+- **Launcher shortcut** (long-press the icon → Settings): static
+  shortcut `res/xml/shortcuts.xml` (action
+  `io.github.est4s.terminal.SETTINGS`), meta-data on `MainActivity`.
+  `MainActivity` (onCreate when not recreated, onNewIntent) opens a
+  new tab with core's `SETTINGS_TAB_COMMAND` once the service is
+  connected. core `runThenShell(cmd)`: `bash --login -c 'trap : INT;
+  cmd; exec bash --login'`, so the editors run first and the tab is a
+  normal shell after; works with old `.bashrc` files.
+  `TerminalService.newSession(command)`.
+
+App code not compiled locally: `TerminalService.kt` (wakelock,
+`newSession(command)`), `MainActivity.kt` (`openSettingsTab()`),
+manifest, `res/xml/shortcuts.xml`. CI will tell.
+
+**Phone checks (10.2):**
+1. `pc26 set wakelock on`: the notification says "N terminals running
+   · wakelock held"; `pc26 set wakelock off`: it goes away.
+2. With `wakelock on`, screen off for a few minutes while
+   `for i in $(seq 600); do date; sleep 1; done` runs: no gaps longer
+   than a few seconds in its output.
+3. `pc26 edit` → Settings lists `wakelock`; toggling it there updates
+   the notification.
+4. Long-press the app icon: a "Settings" shortcut. Tapping it with the
+   app running opens a new tab with the settings editors; quitting
+   them leaves a shell prompt in that tab. Also from a closed app
+   (Exit in the notification first): the menu tab plus the settings
+   tab.
+5. Ctrl+C in that tab's editor (if it gets one) also leaves a shell.
+
+Tests: core 395, pc26 unittest 180, bats 92.
 
 ### 2026-10-07 (60): old names keep working after the PC-26 rename
 

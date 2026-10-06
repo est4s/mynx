@@ -91,7 +91,8 @@ always visible, so the phone's own keyboard is all you need for typing
 - **Launcher menu:** a "PC-26" start menu (Terminal, Files, Games,
   Settings, System, …) that you can edit and reorder, with items that run
   any command.
-- **Editors in the terminal:** `pc26 edit` (or the menu's Settings) for
+- **Editors in the terminal:** `pc26 edit` (or the menu's Settings, or
+  long-press the app icon → Settings, which opens them in a new tab) for
   the theme (with live preview), font and cursor, key bars and the menu.
   Every change is also a `pc26` command, so an AI agent can make it.
 - **Shell:** your own dotfiles, prompt, aliases and packages.

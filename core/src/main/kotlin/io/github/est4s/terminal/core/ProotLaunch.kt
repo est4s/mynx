@@ -83,6 +83,17 @@ fun prootLaunch(
     return Launch(argv, env)
 }
 
+/**
+ * A tab's [prootLaunch] command that runs [command] in a login bash, then
+ * the tab's usual login shell. bash ignores Ctrl+C while [command] runs
+ * (the program still gets it), so stopping it leaves the shell.
+ */
+fun runThenShell(command: String): List<String> =
+    listOf("/bin/bash", "--login", "-c", "trap : INT; $command; exec /bin/bash --login")
+
+/** The tab the launcher shortcut "Settings" opens: the settings editors, then a shell. */
+val SETTINGS_TAB_COMMAND: List<String> = runThenShell("pc26 edit")
+
 /** How long a proot gets to stop what it runs before it's killed outright. */
 const val PROOT_STOP_GRACE_MS = 2000L
 private const val SIGQUIT = 3

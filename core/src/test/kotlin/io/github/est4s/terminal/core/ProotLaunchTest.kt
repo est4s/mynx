@@ -176,6 +176,19 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `a tab can run a program first, then its login shell`() {
+        assertEquals(
+            listOf("/bin/bash", "--login", "-c", "trap : INT; pc26 edit; exec /bin/bash --login"),
+            runThenShell("pc26 edit"),
+        )
+    }
+
+    @Test
+    fun `the settings tab runs the settings editors`() {
+        assertEquals(runThenShell("pc26 edit"), SETTINGS_TAB_COMMAND)
+    }
+
+    @Test
     fun `tells programs where the sound server is`() {
         val argv = prootLaunch(paths, soundSocket = "/tmp/.pc26/sound/native").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

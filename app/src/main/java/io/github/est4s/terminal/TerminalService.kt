@@ -367,7 +367,8 @@ class TerminalService : Service() {
         return tabs.selected!!.session
     }
 
-    fun newSession(): TerminalSession = startShell().also { tabs.open(it) }
+    /** A new tab after the selected one; [command] runs instead of the plain login shell. */
+    fun newSession(command: List<String>? = null): TerminalSession = startShell(command = command).also { tabs.open(it) }
 
     /** Replaces a finished session with a fresh shell in the same tab and folder. */
     fun restart(old: TerminalSession) {
@@ -453,13 +454,13 @@ class TerminalService : Service() {
 
     // TerminalSession delivers its output on the Looper of the thread that
     // created it, so this must run on the main thread.
-    private fun startShell(cwd: String? = null, openMenu: Boolean = false): TerminalSession {
+    private fun startShell(cwd: String? = null, openMenu: Boolean = false, command: List<String>? = null): TerminalSession {
         val workDir = workDirFor(cwd)
         val shellId = nextShellId++
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
