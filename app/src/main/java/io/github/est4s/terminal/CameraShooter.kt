@@ -33,7 +33,7 @@ import java.util.UUID
 private const val QUICK_SHOT_MS = 15_000L
 
 /**
- * Answers `pocket camera` and `pocket torch`. A photo goes to a
+ * Answers `pc26 camera` and `pc26 torch`. A photo goes to a
  * temporary file in the app's cache first; core moves it into Debian.
  * [activity] is the activity while it's on screen: Android only lets the
  * app in front open the camera app or a camera. Called on the main thread.
@@ -109,7 +109,7 @@ class CameraShooter(
                     manager.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL) ?: 1
                 } else 1
                 if (Build.VERSION.SDK_INT < 33 || max <= 1) {
-                    return "the phone's flashlight has no strength levels (pocket torch on)"
+                    return "the phone's flashlight has no strength levels (pc26 torch on)"
                 }
                 manager.turnOnTorchWithStrengthLevel(id, torchLevel(percent, max))
             } else {

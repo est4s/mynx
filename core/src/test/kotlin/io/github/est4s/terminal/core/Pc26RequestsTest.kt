@@ -8,11 +8,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class PocketRequestsTest {
+class Pc26RequestsTest {
     private val base = createTempDirectory("requests").toFile()
     private val dir = File(base, "requests").apply { mkdirs() }
     private val home = File(base, "root").apply { mkdirs() }
-    private val requests = PocketRequests(dir, home)
+    private val requests = Pc26Requests(dir, home)
 
     @AfterTest
     fun cleanup() {
@@ -21,14 +21,14 @@ class PocketRequestsTest {
 
     @Test
     fun `answers a check with the config problems`() {
-        File(home, ".config/pocket-terminal").mkdirs()
-        File(home, ".config/pocket-terminal/colors.properties").writeText("oops\n")
+        File(home, ".config/pc26").mkdirs()
+        File(home, ".config/pc26/colors.properties").writeText("oops\n")
         File(dir, "a1.req").writeText("check\n")
 
         requests.processPending()
 
         assertEquals(
-            """{"ok":true,"problems":[{"file":"~/.config/pocket-terminal/colors.properties","problems":["line 1: expected key=value"]}]}""",
+            """{"ok":true,"problems":[{"file":"~/.config/pc26/colors.properties","problems":["line 1: expected key=value"]}]}""",
             File(dir, "a1.reply").readText(),
         )
     }
@@ -83,8 +83,8 @@ class PocketRequestsTest {
 
     @Test
     fun `escapes text in replies`() {
-        File(home, ".config/pocket-terminal").mkdirs()
-        File(home, ".config/pocket-terminal/colors.properties").writeText("\"quoted\\\"\n")
+        File(home, ".config/pc26").mkdirs()
+        File(home, ".config/pc26/colors.properties").writeText("\"quoted\\\"\n")
         File(dir, "a1.req").writeText("check\n")
 
         requests.processPending()
@@ -101,7 +101,7 @@ class PocketRequestsTest {
     fun `passes the lines after the name as arguments`() {
         File(dir, "a1.req").writeText("set\nfont-size\n14\n")
 
-        assertEquals(listOf(PocketRequest("set", listOf("font-size", "14"))), requests.processPending())
+        assertEquals(listOf(Pc26Request("set", listOf("font-size", "14"))), requests.processPending())
     }
 
     @Test
@@ -156,7 +156,7 @@ class PocketRequestsTest {
 
         assertEquals("""{"ok":true,"key":"font-size","value":"12"}""", ask("reset", "font-size"))
         assertEquals("# mine\ncursor-style = bar\n", File(home, "$CONFIG_DIR/settings.conf").readText())
-        assertEquals("""{"ok":false,"error":"unknown setting 'colour' (pocket settings lists them)"}""", ask("reset", "colour"))
+        assertEquals("""{"ok":false,"error":"unknown setting 'colour' (pc26 settings lists them)"}""", ask("reset", "colour"))
     }
 
     @Test
@@ -178,7 +178,7 @@ class PocketRequestsTest {
         val reply = ask("themes")
 
         assertTrue(reply.startsWith("""{"ok":true,"current":"dracula","themes":[{"name":"neon","source":"built-in"},"""), reply)
-        assertTrue("""{"name":"mine","source":"~/.config/pocket-terminal/themes/mine.colors.properties"}""" in reply, reply)
+        assertTrue("""{"name":"mine","source":"~/.config/pc26/themes/mine.colors.properties"}""" in reply, reply)
     }
 
     @Test
@@ -208,9 +208,9 @@ class PocketRequestsTest {
 
     @Test
     fun `theme-show and theme-set refuse unknown themes`() {
-        assertEquals("""{"ok":false,"error":"no theme 'nope' (pocket theme list shows them)"}""", ask("theme-set", "nope"))
-        assertEquals("""{"ok":false,"error":"no theme 'nope' (pocket theme list shows them)"}""", ask("theme-show", "nope"))
-        assertEquals("""{"ok":false,"error":"no theme '../x' (pocket theme list shows them)"}""", ask("theme-show", "../x"))
+        assertEquals("""{"ok":false,"error":"no theme 'nope' (pc26 theme list shows them)"}""", ask("theme-set", "nope"))
+        assertEquals("""{"ok":false,"error":"no theme 'nope' (pc26 theme list shows them)"}""", ask("theme-show", "nope"))
+        assertEquals("""{"ok":false,"error":"no theme '../x' (pc26 theme list shows them)"}""", ask("theme-show", "../x"))
     }
 
     @Test
@@ -249,8 +249,8 @@ class PocketRequestsTest {
 
         val reply = ask("keybars")
 
-        assertTrue("""{"name":"htop","builtIn":false,"file":"~/.config/pocket-terminal/keybars/htop.conf"}""" in reply, reply)
-        assertTrue("""{"name":"nnn","builtIn":true,"file":"~/.config/pocket-terminal/keybars/nnn.conf"}""" in reply, reply)
+        assertTrue("""{"name":"htop","builtIn":false,"file":"~/.config/pc26/keybars/htop.conf"}""" in reply, reply)
+        assertTrue("""{"name":"nnn","builtIn":true,"file":"~/.config/pc26/keybars/nnn.conf"}""" in reply, reply)
         assertTrue("""{"name":"shell","builtIn":true,"file":null}""" in reply, reply)
         assertTrue(reply.indexOf("\"htop\"") < reply.indexOf("\"nnn\""), reply)
     }
@@ -259,13 +259,13 @@ class PocketRequestsTest {
     fun `keybar-show gives the bar in use, the user's copy first`() {
         assertEquals("""{"ok":true,"name":"nnn","file":null,"text":${json(builtInKeyBarText("nnn")!!)}}""", ask("keybar-show", "nnn"))
         config("keybars/nnn.conf", "Quit = q\n")
-        assertEquals("""{"ok":true,"name":"nnn","file":"~/.config/pocket-terminal/keybars/nnn.conf","text":"Quit = q\n"}""", ask("keybar-show", "nnn"))
-        assertEquals("""{"ok":false,"error":"no key bar 'nope' (pocket keybar list shows them)"}""", ask("keybar-show", "nope"))
+        assertEquals("""{"ok":true,"name":"nnn","file":"~/.config/pc26/keybars/nnn.conf","text":"Quit = q\n"}""", ask("keybar-show", "nnn"))
+        assertEquals("""{"ok":false,"error":"no key bar 'nope' (pc26 keybar list shows them)"}""", ask("keybar-show", "nope"))
     }
 
     @Test
     fun `keybar-edit copies a built-in bar for the user to edit, once`() {
-        assertEquals("""{"ok":true,"file":"~/.config/pocket-terminal/keybars/nnn.conf"}""", ask("keybar-edit", "nnn"))
+        assertEquals("""{"ok":true,"file":"~/.config/pc26/keybars/nnn.conf"}""", ask("keybar-edit", "nnn"))
         val copy = File(home, "$CONFIG_DIR/keybars/nnn.conf")
         assertEquals(builtInKeyBarText("nnn"), copy.readText())
 
@@ -298,7 +298,7 @@ class PocketRequestsTest {
         config("keybars/htop.conf", "Quit = q\n")
 
         assertEquals(
-            """{"ok":false,"error":"htop has no built-in bar to go back to; delete ~/.config/pocket-terminal/keybars/htop.conf to remove it"}""",
+            """{"ok":false,"error":"htop has no built-in bar to go back to; delete ~/.config/pc26/keybars/htop.conf to remove it"}""",
             ask("keybar-reset", "htop"),
         )
         assertTrue(File(home, "$CONFIG_DIR/keybars/htop.conf").exists())

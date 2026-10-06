@@ -1,11 +1,11 @@
-"""Tests for the editors' file models (tools/lib/pocket_terminal/models.py)."""
+"""Tests for the editors' file models (tools/lib/pc26/models.py)."""
 import os
 import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
 
-from pocket_terminal.models import ItemsFile, set_color  # noqa: E402
+from pc26.models import ItemsFile, set_color  # noqa: E402
 
 
 class ItemsFileTest(unittest.TestCase):

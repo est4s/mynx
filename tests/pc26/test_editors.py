@@ -1,4 +1,4 @@
-"""Smoke tests for the settings editors (`pocket edit …`): they run in a
+"""Smoke tests for the settings editors (`pc26 edit …`): they run in a
 pseudo-terminal against a fake app, with keys typed in, and must do the
 right requests and file changes and exit cleanly."""
 import fcntl
@@ -15,7 +15,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from test_pocket import POCKET, FakeApp  # noqa: E402
+from test_pc26 import PC26, FakeApp  # noqa: E402
 
 # Application cursor keys: what terminals (and the key bar) send in keypad mode.
 UP, DOWN, RIGHT, LEFT, ENTER = "\x1bOA", "\x1bOB", "\x1bOC", "\x1bOD", "\r"
@@ -29,7 +29,7 @@ class EditorTest(unittest.TestCase):
         self.tools = os.path.join(self.tmp.name, "tools")
         os.makedirs(os.path.join(self.tools, "bin"))
         self.home = os.path.join(self.tmp.name, "home")
-        self.config = os.path.join(self.home, ".config", "pocket-terminal")
+        self.config = os.path.join(self.home, ".config", "pc26")
         os.makedirs(self.config)
         self.keybar_file = os.path.join(self.tmp.name, "keybar")
         with open(self.keybar_file, "w") as f:
@@ -47,14 +47,14 @@ class EditorTest(unittest.TestCase):
         self.app.thread.start()
 
     def edit(self, args, keys, timeout=15):
-        """Runs `pocket edit ARGS` in a 56x30 terminal, types [keys] (one
+        """Runs `pc26 edit ARGS` in a 56x30 terminal, types [keys] (one
         string per key press); returns (exit code, screen output)."""
-        env = {"PATH": os.environ["PATH"], "POCKET_REQUESTS": self.requests, "HOME": self.home,
-               "POCKET_TOOLS": self.tools, "POCKET_TIMEOUT": "2", "TERM": "xterm-256color",
-               "LANG": "C.UTF-8", "POCKET_KEYBAR_FILE": self.keybar_file, "ESCDELAY": "25"}
+        env = {"PATH": os.environ["PATH"], "PC26_REQUESTS": self.requests, "HOME": self.home,
+               "PC26_TOOLS": self.tools, "PC26_TIMEOUT": "2", "TERM": "xterm-256color",
+               "LANG": "C.UTF-8", "PC26_KEYBAR_FILE": self.keybar_file, "ESCDELAY": "25"}
         pid, fd = pty.fork()
         if pid == 0:
-            os.execvpe("python3", ["python3", POCKET, "edit", *args], env)
+            os.execvpe("python3", ["python3", PC26, "edit", *args], env)
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 30, 56, 0, 0))
         output = b""
 
@@ -118,7 +118,7 @@ class EditorTest(unittest.TestCase):
 
         self.start_app({"settings": settings})
         self.edit(["settings"], ["q"])
-        self.assertEqual(seen[0], "pocket-edit")
+        self.assertEqual(seen[0], "pc26-edit")
         self.assertEqual(self.read(self.keybar_file), "shell")
 
     # --- settings ----------------------------------------------------------
@@ -142,7 +142,7 @@ class EditorTest(unittest.TestCase):
         code, screen = self.edit(["settings"], [DOWN] * 4 + [RIGHT, "q"])
         self.assertEqual(code, 0, screen)
         self.assertIn("Claude Code notifications", screen)
-        self.assertIn("pocket hook claude", self.read(os.path.join(self.home, ".claude", "settings.json")))
+        self.assertIn("pc26 hook claude", self.read(os.path.join(self.home, ".claude", "settings.json")))
 
     def test_a_refused_setting_is_shown(self):
         self.start_app({"settings": SETTINGS, "set": {"ok": False, "error": "font-size must be small"}})
@@ -210,7 +210,7 @@ class EditorTest(unittest.TestCase):
             os.makedirs(os.path.dirname(mine), exist_ok=True)
             with open(mine, "w") as f:
                 f.write("# built-in\nOpen = l\nQuit = q\n")
-            return {"ok": True, "file": "~/.config/pocket-terminal/keybars/nnn.conf"}
+            return {"ok": True, "file": "~/.config/pc26/keybars/nnn.conf"}
 
         self.start_app({
             "keybars": {"ok": True, "keybars": [{"name": "nnn", "builtIn": True, "file": None}]},

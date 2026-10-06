@@ -7,14 +7,14 @@ BIN="$BATS_TEST_DIRNAME/../../tools/bin"
 setup() {
     STUBS="$BATS_TEST_TMPDIR/stubs"
     mkdir -p "$STUBS"
-    printf '#!/bin/sh\necho "pocket $*"\n' >"$STUBS/pocket"
-    chmod +x "$STUBS/pocket"
+    printf '#!/bin/sh\necho "pc26 $*"\n' >"$STUBS/pc26"
+    chmod +x "$STUBS/pc26"
     export PATH="$STUBS:$BIN:$PATH"
 }
 
 @test "xdg-open asks the app to open the link" {
     run xdg-open "https://claude.ai/oauth?x=1&y=2"
-    [ "$output" = "pocket open https://claude.ai/oauth?x=1&y=2" ]
+    [ "$output" = "pc26 open https://claude.ai/oauth?x=1&y=2" ]
 }
 
 @test "xdg-open without a link says how to use it" {

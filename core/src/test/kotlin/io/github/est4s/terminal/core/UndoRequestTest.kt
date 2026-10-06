@@ -10,7 +10,7 @@ class UndoRequestTest {
     private val base = createTempDirectory("undo").toFile()
     private val dir = File(base, "requests").apply { mkdirs() }
     private val home = File(base, "root").apply { mkdirs() }
-    private val requests = PocketRequests(dir, home, now = { 60_000L })
+    private val requests = Pc26Requests(dir, home, now = { 60_000L })
     private val settings = File(home, "$CONFIG_DIR/settings.conf")
 
     @AfterTest

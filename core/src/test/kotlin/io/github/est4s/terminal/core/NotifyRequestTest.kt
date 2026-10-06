@@ -12,7 +12,7 @@ class NotifyRequestTest {
     private val home = File(base, "root").apply { mkdirs() }
     private val posted = mutableListOf<Notice>()
     private var refusal: String? = null
-    private val requests = PocketRequests(dir, home, notify = { notice ->
+    private val requests = Pc26Requests(dir, home, notify = { notice ->
         posted += notice
         refusal
     })
@@ -74,7 +74,7 @@ class NotifyRequestTest {
     fun `agent notifications follow the agent-notify setting`() {
         config("agent-notify = off\n")
         assertEquals(
-            """{"ok":true,"shown":false,"reason":"agent-notify is off (pocket set agent-notify on)"}""",
+            """{"ok":true,"shown":false,"reason":"agent-notify is off (pc26 set agent-notify on)"}""",
             ask("notify", "Claude Code", "Your turn", "agent"),
         )
         assertEquals(emptyList(), posted)
@@ -98,7 +98,7 @@ class NotifyRequestTest {
 
     @Test
     fun `without an app to show it, nothing is shown`() {
-        val plain = PocketRequests(dir, home)
+        val plain = Pc26Requests(dir, home)
         File(dir, "q.req").writeText("notify\nHi\n")
         plain.processPending()
         assertEquals("""{"ok":true,"shown":false,"reason":"notifications aren't available"}""", File(dir, "q.reply").readText())
@@ -107,7 +107,7 @@ class NotifyRequestTest {
     @Test
     fun `opens web links in the phone's browser`() {
         val opened = mutableListOf<String>()
-        val app = PocketRequests(dir, home, openUrl = { opened += it; null })
+        val app = Pc26Requests(dir, home, openUrl = { opened += it; null })
         File(dir, "q.req").writeText("open-url\nhttps://claude.ai/login\n")
         app.processPending()
         assertEquals("""{"ok":true}""", File(dir, "q.reply").readText())
@@ -121,7 +121,7 @@ class NotifyRequestTest {
 
     @Test
     fun `says why a link didn't open`() {
-        val app = PocketRequests(dir, home, openUrl = { "no browser" })
+        val app = Pc26Requests(dir, home, openUrl = { "no browser" })
         File(dir, "q.req").writeText("open-url\nhttps://x.io\n")
         app.processPending()
         assertEquals("""{"ok":false,"error":"no browser"}""", File(dir, "q.reply").readText())

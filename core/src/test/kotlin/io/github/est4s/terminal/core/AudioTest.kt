@@ -18,7 +18,7 @@ class AudioRequestTest {
     private val played = mutableListOf<Pair<PlayQuery, PlayReport>>()
     private val recorded = mutableListOf<Pair<RecordQuery, RecordReport>>()
     private val gone = mutableSetOf<Int>()
-    private val requests = PocketRequests(
+    private val requests = Pc26Requests(
         dir, home,
         later = audioRequests(home, { q, r -> played += q to r }, { q, r -> recorded += q to r }),
         alive = { it !in gone },
@@ -41,7 +41,7 @@ class AudioRequestTest {
     }
 
     @Test
-    fun `playing stops when pocket stops waiting`() {
+    fun `playing stops when pc26 stops waiting`() {
         File(home, "a.mp3").writeText("mp3")
         send("8-1", "audio-play", "/root/a.mp3")
         var stopped = false
@@ -119,7 +119,7 @@ class AudioRequestTest {
     }
 
     @Test
-    fun `a recording whose pocket has gone is still saved`() {
+    fun `a recording whose pc26 has gone is still saved`() {
         send("77-1", "audio-record", "/root/a.wav")
         val (query, report) = recorded.single()
         report.onStop {
@@ -174,7 +174,7 @@ class AudioRequestTest {
         send("8-2", "audio-play", "/root/a.mp3")
         assertTrue(recorded.isEmpty())
         assertEquals(
-            """{"ok":false,"error":"the microphone is off (pocket set android-microphone on)"}""",
+            """{"ok":false,"error":"the microphone is off (pc26 set android-microphone on)"}""",
             file("8-1.reply").readText(),
         )
         assertEquals(1, played.size)

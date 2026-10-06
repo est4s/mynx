@@ -25,12 +25,12 @@ stub() {
 
 @test "tab title is the folder name" {
     mkdir -p "$HOME/src/app"
-    run in_shell "cd '$HOME/src/app' && pocket_set_title"
+    run in_shell "cd '$HOME/src/app' && pc26_set_title"
     [ "$output" = $'\e]0;app\a' ]
 }
 
 @test "tab title is ~ at home and / at the root" {
-    run in_shell "cd ~ && pocket_set_title && cd / && pocket_set_title"
+    run in_shell "cd ~ && pc26_set_title && cd / && pc26_set_title"
     [ "$output" = $'\e]0;~\a\e]0;/\a' ]
 }
 
@@ -80,11 +80,11 @@ stub() {
 
 @test "opens the menu with the splash when the app asks, once" {
     stub keybar 'shift; exec "$@"'
-    stub menu 'echo "menu $*"; echo "POCKET_MENU=$POCKET_MENU"'
-    export POCKET_MENU=1
-    run in_shell 'echo "after: [$POCKET_MENU]"'
+    stub menu 'echo "menu $*"; echo "PC26_MENU=$PC26_MENU"'
+    export PC26_MENU=1
+    run in_shell 'echo "after: [$PC26_MENU]"'
     [ "${lines[0]}" = "menu --boot" ]
-    [ "${lines[1]}" = "POCKET_MENU=" ]
+    [ "${lines[1]}" = "PC26_MENU=" ]
     [ "${lines[2]}" = "after: []" ]
 }
 
@@ -97,7 +97,7 @@ stub() {
 @test "Exit in the opening menu closes the shell" {
     stub keybar 'shift; exec "$@"'
     stub menu 'exit 10'
-    export POCKET_MENU=1
+    export PC26_MENU=1
     run in_shell 'echo still here'
     [ "$output" = "" ]
 }

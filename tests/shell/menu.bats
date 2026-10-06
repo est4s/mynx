@@ -29,8 +29,8 @@ keys() {
 }
 
 @test "the user's menu file replaces the built-in one" {
-    mkdir -p "$HOME/.config/pocket-terminal"
-    printf '# mine\nShell = shell\n\n  Top = run htop -d 10\nBye = exit\n' >"$HOME/.config/pocket-terminal/menu.conf"
+    mkdir -p "$HOME/.config/pc26"
+    printf '# mine\nShell = shell\n\n  Top = run htop -d 10\nBye = exit\n' >"$HOME/.config/pc26/menu.conf"
     source "$MENU"
     menu_items main
     [ "${ITEMS[*]}" = "Shell Top Bye" ]
@@ -39,8 +39,8 @@ keys() {
 }
 
 @test "a menu file with nothing usable falls back to the built-in items" {
-    mkdir -p "$HOME/.config/pocket-terminal"
-    printf 'oops\n' >"$HOME/.config/pocket-terminal/menu.conf"
+    mkdir -p "$HOME/.config/pc26"
+    printf 'oops\n' >"$HOME/.config/pc26/menu.conf"
     source "$MENU"
     menu_items main
     [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Getting started Exit" ]
@@ -96,7 +96,7 @@ keys() {
     unset ST; declare -A ST
     load_state
     [ "${ST[sel_main]}" = 2 ]
-    [ -f "$HOME/.local/state/pocket-terminal/menu" ]
+    [ -f "$HOME/.local/state/pc26/menu" ]
 }
 
 @test "colours come from the terminal's theme (the 16 basic colours)" {
@@ -108,10 +108,10 @@ keys() {
 @test "the boot splash names the theme" {
     source "$MENU"
     [ "$(theme_name)" = neon ]
-    mkdir -p "$HOME/.config/pocket-terminal"
-    printf '# theme: nord\nbackground=#000000\n' >"$HOME/.config/pocket-terminal/colors.properties"
+    mkdir -p "$HOME/.config/pc26"
+    printf '# theme: nord\nbackground=#000000\n' >"$HOME/.config/pc26/colors.properties"
     [ "$(theme_name)" = nord ]
-    printf 'background=#000000\n' >"$HOME/.config/pocket-terminal/colors.properties"
+    printf 'background=#000000\n' >"$HOME/.config/pc26/colors.properties"
     [ "$(theme_name)" = custom ]
 }
 
@@ -144,19 +144,19 @@ keys() {
 
 @test "Settings opens the settings editor" {
     run keys 4
-    [[ $output == *"RUN: pocket edit"* ]]
+    [[ $output == *"RUN: pc26 edit"* ]]
 }
 
-fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
+fake_pc26() { # a pc26 that lists Claude Code as installed, Codex not
     mkdir -p "$BATS_TEST_TMPDIR/bin"
     printf '#!/bin/sh\n[ "$*" = "agent list --tsv" ] && printf "claude\\tClaude Code\\tinstalled\\ncodex\\tCodex\\t\\n"\n' \
-        >"$BATS_TEST_TMPDIR/bin/pocket"
-    chmod +x "$BATS_TEST_TMPDIR/bin/pocket"
+        >"$BATS_TEST_TMPDIR/bin/pc26"
+    chmod +x "$BATS_TEST_TMPDIR/bin/pc26"
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
 @test "AI agents lists the agents, marking those to install" {
-    fake_pocket
+    fake_pc26
     source "$MENU"
     menu_items agents
     [ "${ITEMS[0]}" = "Claude Code" ]
@@ -165,20 +165,20 @@ fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
 }
 
 @test "picking an agent starts it (or offers to install it)" {
-    fake_pocket
+    fake_pc26
     run keys 52
-    [[ $output == *"RUN: pocket agent start codex"* ]]
+    [[ $output == *"RUN: pc26 agent start codex"* ]]
 }
 
-@test "moving through AI agents doesn't ask pocket again on each key" {
-    fake_pocket
-    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pocket"
+@test "moving through AI agents doesn't ask pc26 again on each key" {
+    fake_pc26
+    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pc26"
     run keys 5jjjkqq
     [ "$status" -eq 0 ]
     [ "$(wc -l <"$BATS_TEST_TMPDIR/calls")" -eq 1 ]
 }
 
-@test "AI agents without a working pocket says so" {
+@test "AI agents without a working pc26 says so" {
     export PATH="$BATS_TEST_TMPDIR/empty:/usr/bin:/bin"
     source "$MENU"
     menu_items agents
@@ -186,8 +186,8 @@ fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
 }
 
 @test "a run item runs its command in bash" {
-    mkdir -p "$HOME/.config/pocket-terminal"
-    printf 'Top = run htop -d 10\n' >"$HOME/.config/pocket-terminal/menu.conf"
+    mkdir -p "$HOME/.config/pc26"
+    printf 'Top = run htop -d 10\n' >"$HOME/.config/pc26/menu.conf"
     run keys 1
     [[ $output == *"RUN: bash -c htop -d 10"* ]]
 }
@@ -233,7 +233,7 @@ fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
     output=$(welcome_page <<<x)  # the menu's own run() replaces bats' run
     [[ $output == *"Getting started"* ]]
     [[ $output == *"A real Debian on your phone"* ]]
-    [[ $output == *"pocket welcome."* ]]
+    [[ $output == *"pc26 welcome."* ]]
 }
 
 @test "a welcome page taller than the screen comes in pages" {
@@ -242,13 +242,13 @@ fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
     output=$(welcome_page <<<"xx")
     [[ $output == *"A real Debian on your phone"* ]]
     [[ $output == *"more"* ]]
-    [[ $output == *"pocket welcome."* ]]
+    [[ $output == *"pc26 welcome."* ]]
 }
 
 @test "the first boot shows the welcome page, later ones don't" {
     run bash -c "(sleep 2; printf x; sleep 0.5; printf q) | bash '$MENU' --boot"
     [[ $output == *"A real Debian on your phone"* ]]
-    grep -qx 'welcomed=1' "$HOME/.local/state/pocket-terminal/menu"
+    grep -qx 'welcomed=1' "$HOME/.local/state/pc26/menu"
     run bash -c "(sleep 2; printf q) | bash '$MENU' --boot"
     [[ $output != *"A real Debian on your phone"* ]]
 }

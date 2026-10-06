@@ -1,2 +1,2 @@
 @AGENTS.md
-@/opt/pocket-terminal/AGENTS.md
+@/opt/pc26/AGENTS.md

@@ -3,7 +3,7 @@ package io.github.est4s.terminal.core
 import java.io.File
 
 /** The user's settings folder, relative to root's home in Debian. */
-const val CONFIG_DIR = ".config/pocket-terminal"
+const val CONFIG_DIR = ".config/pc26"
 
 /** What's wrong in one config file; [file] is its Debian path, as users see it. */
 data class ConfigProblems(val file: String, val problems: List<String>)

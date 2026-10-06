@@ -4,7 +4,7 @@
 # every source or recording event it writes Pulse's sources and source
 # outputs to $dir/inputs (the app watches the folder and reads it).
 pulse=$1
-dir=${POCKET_SOUND_DIR:-/tmp/.pocket-terminal/sound}
+dir=${PC26_SOUND_DIR:-/tmp/.pc26/sound}
 export PULSE_SERVER="unix:$dir/native"
 
 alive() {

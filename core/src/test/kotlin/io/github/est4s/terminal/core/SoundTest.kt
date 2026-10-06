@@ -139,7 +139,7 @@ class SoundRequestTest {
     private val home = File(base, "root").apply { mkdirs() }
     private var starts = 0
     private var refusal: String? = null
-    private val requests = PocketRequests(dir, home, startSound = { starts++; refusal })
+    private val requests = Pc26Requests(dir, home, startSound = { starts++; refusal })
 
     @AfterTest
     fun cleanup() {
@@ -164,13 +164,13 @@ class SoundRequestTest {
 
     @Test
     fun `doesn't start the sound server while the setting is off`() {
-        File(home, ".config/pocket-terminal").mkdirs()
-        File(home, ".config/pocket-terminal/settings.conf").writeText("sound-device = off\n")
+        File(home, ".config/pc26").mkdirs()
+        File(home, ".config/pc26/settings.conf").writeText("sound-device = off\n")
         send("8-1", "sound-start")
 
         assertEquals(0, starts)
         assertEquals(
-            """{"ok":false,"error":"the sound device is off (pocket set sound-device on)"}""",
+            """{"ok":false,"error":"the sound device is off (pc26 set sound-device on)"}""",
             File(dir, "8-1.reply").readText(),
         )
     }

@@ -51,8 +51,8 @@ jobs:
           sudo apt-get install -y -qq bats >/dev/null
           bats tests/shell
 
-      - name: pocket tests
-        run: python3 -m unittest discover -s tests/pocket -v
+      - name: pc26 tests
+        run: python3 -m unittest discover -s tests/pc26 -v
 
       # proot is built from source with the NDK and cached; the binaries are
       # never committed. The cache key changes with the script (which pins the
@@ -90,7 +90,7 @@ jobs:
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets
 
-      - name: Add the app's tools (pocket, editors, themes)
+      - name: Add the app's tools (pc26, editors, themes)
         run: scripts/pack-tools.sh app/src/main/assets
 
       - name: Add the terminal font
@@ -101,7 +101,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: pocket-terminal-debug
+          name: pc26-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           # The APK is mostly the xz rootfs; zipping it again gains nothing.

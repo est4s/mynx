@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pocket: control the app from Debian. `pocket help` lists the commands."""
+"""pc26: control the app from Debian. `pc26 help` lists the commands."""
 import os
 import sys
 
@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..
 
 if __name__ == "__main__":
     try:
-        from pocket_terminal.cli import main
+        from pc26.cli import main
 
         sys.exit(main(sys.argv[1:]))
     except KeyboardInterrupt:

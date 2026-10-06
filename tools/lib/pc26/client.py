@@ -1,4 +1,4 @@
-"""Talks to the app through request files in $POCKET_REQUESTS (the app
+"""Talks to the app through request files in $PC26_REQUESTS (the app
 sets it in every tab): ID.req holds the request name and one argument
 per line, the app answers in ID.reply as JSON. Both are renamed into
 place when complete.
@@ -10,11 +10,11 @@ import signal
 import threading
 import time
 
-TOOLS = os.environ.get("POCKET_TOOLS", "/opt/pocket-terminal")
+TOOLS = os.environ.get("PC26_TOOLS", "/opt/pc26")
 
 
 class Failure(Exception):
-    """Something to tell the user; `pocket` prints it and exits with 2."""
+    """Something to tell the user; `pc26` prints it and exits with 2."""
 
 
 def request(name, *args, on_line=None, answer_on_interrupt=False):
@@ -27,9 +27,9 @@ def request(name, *args, on_line=None, answer_on_interrupt=False):
     ID.cancel so the app stops too. With [answer_on_interrupt], Ctrl+C
     returns the app's answer to that (a recording says what it saved).
     """
-    folder = os.environ.get("POCKET_REQUESTS")
+    folder = os.environ.get("PC26_REQUESTS")
     if not folder or not os.path.isdir(folder):
-        raise Failure("pocket only works inside the app's terminal")
+        raise Failure("pc26 only works inside the app's terminal")
     if any("\n" in a for a in args):
         raise Failure("values can't contain line breaks")
     ident = f"{os.getpid()}-{time.time_ns()}"
@@ -37,7 +37,7 @@ def request(name, *args, on_line=None, answer_on_interrupt=False):
     with open(base + ".req.tmp", "w") as f:
         f.write("".join(line + "\n" for line in (name, *args)))
     os.rename(base + ".req.tmp", base + ".req")
-    timeout = float(os.environ.get("POCKET_TIMEOUT", "5"))
+    timeout = float(os.environ.get("PC26_TIMEOUT", "5"))
     deadline = time.monotonic() + timeout
     waiting = False
     stream = Lines(base + ".stream", on_line)
@@ -131,7 +131,7 @@ def touch(path):
 
 
 def record(reason):
-    """Tells the app the config changed (for `pocket undo`, which names
+    """Tells the app the config changed (for `pc26 undo`, which names
     the change [reason]) and applies it. Changes made with no app
     answering still count; the app sees them at its next start."""
     try:

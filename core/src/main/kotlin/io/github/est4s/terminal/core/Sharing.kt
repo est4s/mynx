@@ -5,11 +5,11 @@ import java.security.SecureRandom
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-/** What `pocket share` sends to other apps: [files] (host files), or [text]. */
+/** What `pc26 share` sends to other apps: [files] (host files), or [text]. */
 data class Share(val files: List<File>, val text: String?)
 
 const val MAX_SHARE_FILES = 100
-/** The longest text `pocket share --text` sends (it goes through Binder, like the clipboard). */
+/** The longest text `pc26 share --text` sends (it goes through Binder, like the clipboard). */
 const val MAX_SHARE_TEXT = 100_000
 const val MAX_SHARED_NAME = 120
 

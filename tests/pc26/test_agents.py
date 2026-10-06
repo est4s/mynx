@@ -1,5 +1,5 @@
 """Tests for the AI agents' hook entries and install steps
-(tools/lib/pocket_terminal/agents.py)."""
+(tools/lib/pc26/agents.py)."""
 import json
 import os
 import sys
@@ -7,13 +7,13 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
 
-from pocket_terminal.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,
+from pc26.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,
                                     missing_steps,  # noqa: E402
                                     remove_hooks)
-from pocket_terminal.client import Failure  # noqa: E402
+from pc26.client import Failure  # noqa: E402
 
 CLAUDE = AGENTS["claude"]
-HOOK = "/opt/pocket-terminal/bin/pocket hook claude"
+HOOK = "/opt/pc26/bin/pc26 hook claude"
 
 
 def ours(command):
@@ -61,7 +61,7 @@ class HooksTest(unittest.TestCase):
         self.assertFalse(has_hooks(text, CLAUDE))  # only some events
 
     def test_recognises_its_hook_by_any_path(self):
-        text = json.dumps({"hooks": {e: [ours("pocket hook claude")] for e in CLAUDE.events}})
+        text = json.dumps({"hooks": {e: [ours("pc26 hook claude")] for e in CLAUDE.events}})
         self.assertTrue(has_hooks(text, CLAUDE))
         self.assertEqual(json.loads(remove_hooks(text, CLAUDE)), {})
 
@@ -115,7 +115,7 @@ class InstallStepsTest(unittest.TestCase):
 
 
 class DownloadProgressTest(unittest.TestCase):
-    """The official installers download silently; pocket shows what has arrived."""
+    """The official installers download silently; pc26 shows what has arrived."""
 
     def test_shows_the_size_while_it_grows(self):
         self.assertEqual(download_progress("Claude Code", 0, 87_400_000, showing=False),

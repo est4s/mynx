@@ -13,7 +13,7 @@ class LocationRequestTest {
     private val dir = File(base, "requests").apply { mkdirs() }
     private val home = File(base, "root").apply { mkdirs() }
     private val asked = mutableListOf<Pair<LocationQuery, LocationReport>>()
-    private val requests = PocketRequests(
+    private val requests = Pc26Requests(
         dir, home,
         later = locationRequests(home) { query, report -> asked += query to report },
         alive = { true },
@@ -101,7 +101,7 @@ class LocationRequestTest {
         send("7-1", "location")
         send("7-2", "location-stream")
         assertTrue(asked.isEmpty())
-        val off = """{"ok":false,"error":"location is off (pocket set android-location on)"}"""
+        val off = """{"ok":false,"error":"location is off (pc26 set android-location on)"}"""
         assertEquals(off, file("7-1.reply").readText())
         assertEquals(off, file("7-2.reply").readText())
     }

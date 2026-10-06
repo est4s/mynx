@@ -16,7 +16,7 @@ import io.github.est4s.terminal.core.LocationReport
 import io.github.est4s.terminal.core.locationProviders
 
 /**
- * Answers `pocket location` from Android's LocationManager, on the main
+ * Answers `pc26 location` from Android's LocationManager, on the main
  * thread. [onScreen] says whether the app is in use; Android only gives
  * "while in use" location to it, or to a service already locating in
  * the foreground. [askPermission] shows Android's dialog and calls back

@@ -8,17 +8,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- pocket location, only while the app is in use (never background location). -->
+    <!-- pc26 location, only while the app is in use (never background location). -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- A location stream started on screen keeps going in the background. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <!-- pocket sensor step-counter and step-detector (Android 10+). -->
+    <!-- pc26 sensor step-counter and step-detector (Android 10+). -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
-    <!-- Quick photos (pocket camera, quick option). Declaring it also makes Android require it
-         for the camera app (pocket camera). -->
+    <!-- Quick photos (pc26 camera, quick option). Declaring it also makes Android require it
+         for the camera app (pc26 camera). -->
     <uses-permission android:name="android.permission.CAMERA" />
-    <!-- pocket audio record; a recording started on screen keeps going in the background. -->
+    <!-- pc26 audio record; a recording started on screen keeps going in the background. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- The camera and microphone permissions would otherwise hide the app from phones without one. -->
@@ -62,14 +62,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Serves the files `pocket share` shares, only to the apps granted them. -->
+        <!-- Serves the files `pc26 share` shares, only to the apps granted them. -->
         <provider
             android:name=".ShareProvider"
             android:authorities="io.github.est4s.terminal.share"
             android:exported="false"
             android:grantUriPermissions="true" />
 
-        <!-- The camera app writes the photo `pocket camera` asked for here. -->
+        <!-- The camera app writes the photo `pc26 camera` asked for here. -->
         <provider
             android:name=".PhotoProvider"
             android:authorities="io.github.est4s.terminal.photo"
@@ -77,7 +77,7 @@
             android:grantUriPermissions="true" />
 
         <!-- specialUse: the time-limited types (dataSync, …) don't fit a terminal.
-             location, microphone: added while `pocket location` or `pocket audio record` runs. -->
+             location, microphone: added while `pc26 location` or `pc26 audio record` runs. -->
         <service
             android:name=".TerminalService"
             android:exported="false"

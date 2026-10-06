@@ -80,11 +80,11 @@ class ProotLaunchTest {
 
     @Test
     fun `has the shell write its folder to a file after each prompt`() {
-        val argv = prootLaunch(paths, cwdFile = "/tmp/.pocket-terminal/cwd-3").argv
+        val argv = prootLaunch(paths, cwdFile = "/tmp/.pc26/cwd-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
         assertTrue(
-            "PROMPT_COMMAND={ printf '%s' \"\$PWD\" > /tmp/.pocket-terminal/cwd-3; } 2>/dev/null" in shellEnv,
+            "PROMPT_COMMAND={ printf '%s' \"\$PWD\" > /tmp/.pc26/cwd-3; } 2>/dev/null" in shellEnv,
             shellEnv.toString(),
         )
     }
@@ -99,25 +99,25 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, openMenu = true).argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("POCKET_MENU=1" in shellEnv, shellEnv.toString())
+        assertTrue("PC26_MENU=1" in shellEnv, shellEnv.toString())
     }
 
     @Test
     fun `opens no menu unless asked`() {
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_MENU=") })
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_MENU=") })
     }
 
     @Test
     fun `tells the shell where to report its key bar`() {
-        val argv = prootLaunch(paths, keyBarFile = "/tmp/.pocket-terminal/keybar-3").argv
+        val argv = prootLaunch(paths, keyBarFile = "/tmp/.pc26/keybar-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("POCKET_KEYBAR_FILE=/tmp/.pocket-terminal/keybar-3" in shellEnv, shellEnv.toString())
+        assertTrue("PC26_KEYBAR_FILE=/tmp/.pc26/keybar-3" in shellEnv, shellEnv.toString())
     }
 
     @Test
     fun `sets no key bar file unless asked`() {
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_KEYBAR_FILE=") })
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_KEYBAR_FILE=") })
     }
 
     @Test
@@ -125,17 +125,17 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("/data/files/tools:/opt/pocket-terminal" in argv.valuesAfter("-b"))
+        assertTrue("/data/files/tools:/opt/pc26" in argv.valuesAfter("-b"))
         val path = shellEnv.single { it.startsWith("PATH=") }.removePrefix("PATH=").split(':')
-        assertEquals("/opt/pocket-terminal/bin", path.first())
+        assertEquals("/opt/pc26/bin", path.first())
     }
 
     @Test
     fun `tells programs where to send requests to the app`() {
-        val argv = prootLaunch(paths, requestDir = "/tmp/.pocket-terminal/requests").argv
+        val argv = prootLaunch(paths, requestDir = "/tmp/.pc26/requests").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("POCKET_REQUESTS=/tmp/.pocket-terminal/requests" in shellEnv, shellEnv.toString())
+        assertTrue("PC26_REQUESTS=/tmp/.pc26/requests" in shellEnv, shellEnv.toString())
     }
 
     @Test
@@ -143,7 +143,7 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("BROWSER=/opt/pocket-terminal/bin/xdg-open" in shellEnv, shellEnv.toString())
+        assertTrue("BROWSER=/opt/pc26/bin/xdg-open" in shellEnv, shellEnv.toString())
     }
 
     @Test
@@ -151,25 +151,25 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, shellId = 7).argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("POCKET_SHELL=7" in shellEnv, shellEnv.toString())
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("POCKET_SHELL=") })
+        assertTrue("PC26_SHELL=7" in shellEnv, shellEnv.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_SHELL=") })
     }
 
     @Test
     fun `can run a command instead of a login shell`() {
-        val argv = prootLaunch(paths, command = listOf("/bin/sh", "/opt/pocket-terminal/lib/sound-server")).argv
+        val argv = prootLaunch(paths, command = listOf("/bin/sh", "/opt/pc26/lib/sound-server")).argv
 
-        assertEquals(listOf("/bin/sh", "/opt/pocket-terminal/lib/sound-server"), argv.takeLast(2))
+        assertEquals(listOf("/bin/sh", "/opt/pc26/lib/sound-server"), argv.takeLast(2))
         assertTrue("/bin/bash" !in argv)
         assertEquals("-i", argv[argv.indexOf("/usr/bin/env") + 1])
     }
 
     @Test
     fun `tells programs where the sound server is`() {
-        val argv = prootLaunch(paths, soundSocket = "/tmp/.pocket-terminal/sound/native").argv
+        val argv = prootLaunch(paths, soundSocket = "/tmp/.pc26/sound/native").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("PULSE_SERVER=unix:/tmp/.pocket-terminal/sound/native" in shellEnv, shellEnv.toString())
+        assertTrue("PULSE_SERVER=unix:/tmp/.pc26/sound/native" in shellEnv, shellEnv.toString())
         assertTrue(prootLaunch(paths).argv.none { it.startsWith("PULSE_SERVER=") })
     }
 

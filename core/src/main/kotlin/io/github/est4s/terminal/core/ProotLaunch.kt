@@ -26,8 +26,8 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * [openMenu] has the shell open the launcher menu first. [keyBarFile] (a
  * Debian path) is where programs report the key bar they want.
  * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
- * on the PATH. [requestDir] (a Debian path) is where `pocket` sends requests.
- * [shellId] tells programs which tab they run in (`pocket notify`).
+ * on the PATH. [requestDir] (a Debian path) is where `pc26` sends requests.
+ * [shellId] tells programs which tab they run in (`pc26 notify`).
  * [soundSocket] (a Debian path) is the sound server's socket. [command]
  * runs instead of the login bash.
  */
@@ -62,11 +62,11 @@ fun prootLaunch(
         // Silent if the file can't be written (e.g. its folder was deleted).
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         // Root's .bashrc opens the launcher menu when this is set.
-        if (openMenu) add("POCKET_MENU=1")
+        if (openMenu) add("PC26_MENU=1")
         // The keybar command writes the bar to show here (a Debian path).
-        keyBarFile?.let { add("POCKET_KEYBAR_FILE=$it") }
-        requestDir?.let { add("POCKET_REQUESTS=$it") }
-        shellId?.let { add("POCKET_SHELL=$it") }
+        keyBarFile?.let { add("PC26_KEYBAR_FILE=$it") }
+        requestDir?.let { add("PC26_REQUESTS=$it") }
+        shellId?.let { add("PC26_SHELL=$it") }
         soundSocket?.let { add("PULSE_SERVER=unix:$it") }
         addAll(command)
     }

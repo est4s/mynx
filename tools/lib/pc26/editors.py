@@ -1,10 +1,10 @@
-"""The settings editors: `pocket edit [settings|theme|keybars [NAME]|menu]`.
+"""The settings editors: `pc26 edit [settings|theme|keybars [NAME]|menu]`.
 
 Terminal programs on purpose: everything they change goes through the
-same requests and files as the `pocket` commands, so an agent can do
+same requests and files as the `pc26` commands, so an agent can do
 whatever a person does here. Keys: ↑ ↓ (or j k) move, Enter opens or
 changes, ← → change a value, q or Esc goes back; the app shows the
-`pocket-edit` key bar while an editor is open.
+`pc26-edit` key bar while an editor is open.
 """
 import curses
 import locale
@@ -17,13 +17,13 @@ from . import agents
 from .client import TOOLS, Failure, record, request
 from .models import ItemsFile, set_color
 
-KEY_BAR = "pocket-edit"
+KEY_BAR = "pc26-edit"
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 COLOR_KEYS = ["background", "foreground", "cursor"] + [f"color{i}" for i in range(16)]
 MENU_ACTIONS = ["shell", "files", "games", "settings", "agents", "system", "welcome", "exit"]
 NUMBER_STEPS = {"font-size": 1, "agent-notify-after": 5, "undo-keep": 1}  # ←→ change these by this much
 FONT_DIRS = ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts", "~/.local/share/fonts",
-             "~/.config/pocket-terminal/fonts"]
+             "~/.config/pc26/fonts"]
 
 
 def main(args):
@@ -33,7 +33,7 @@ def main(args):
     }
     which = args[0] if args else None
     if which is not None and which not in editors:
-        raise Failure("usage: pocket edit [settings|theme|keybars [NAME]|menu]")
+        raise Failure("usage: pc26 edit [settings|theme|keybars [NAME]|menu]")
     editor = editors.get(which, hub)
     os.environ.setdefault("ESCDELAY", "25")  # Esc alone shouldn't wait a second
     locale.setlocale(locale.LC_ALL, "")
@@ -45,7 +45,7 @@ def main(args):
 @contextmanager
 def key_bar(name):
     """Shows the app's key bar [name] while the editor runs, like `keybar`."""
-    file = os.environ.get("POCKET_KEYBAR_FILE")
+    file = os.environ.get("PC26_KEYBAR_FILE")
     previous = None
     if file:
         try:
@@ -228,7 +228,7 @@ def hub(ui):
              ("Launcher menu", menu_editor), ("Check config", check_screen), ("Undo last change", undo_screen)]
     sel = 0
     while True:
-        key, sel = ui.list("Settings", "Everything here is also a pocket command.",
+        key, sel = ui.list("Settings", "Everything here is also a pc26 command.",
                            [label for label, _ in items], sel, "↑↓ move  Enter: open  q: quit")
         if key == "back":
             return
@@ -253,7 +253,7 @@ def check_screen(ui):
     for file in answer["problems"] + menu_problems():
         lines.append(file["file"])
         lines += ["  " + p for p in file["problems"]]
-    ui.message("Check config", lines or ["No problems in ~/.config/pocket-terminal"])
+    ui.message("Check config", lines or ["No problems in ~/.config/pc26"])
 
 
 # --- settings --------------------------------------------------------------------
@@ -381,7 +381,7 @@ def theme_editor(ui):
 
 
 def colours_editor(ui):
-    path = os.path.expanduser("~/.config/pocket-terminal/colors.properties")
+    path = os.path.expanduser("~/.config/pc26/colors.properties")
     try:
         with open(path) as f:
             saved = f.read()
@@ -393,7 +393,7 @@ def colours_editor(ui):
         values = dict(re.findall(r"^\s*([a-z0-9]+)\s*=\s*(\S+)", draft, re.M))
         rows = [(f"{k:<12}{values.get(k, '(Neon)')}", int(k[5:]) if k.startswith("color") else None)
                 for k in COLOR_KEYS]
-        key, sel = ui.list("Colours", "~/.config/pocket-terminal/colors.properties", rows, sel,
+        key, sel = ui.list("Colours", "~/.config/pc26/colors.properties", rows, sel,
                            "Enter: change  r: theme's colour  s: save", "s r")
         if key == "back":
             if draft != saved and not ui.confirm("Discard unsaved colours?"):
@@ -470,7 +470,7 @@ def bar_editor(ui, name):
         path = os.path.expanduser(request("keybar-edit", name)["file"])
         with open(path, "w") as f:
             f.write(rendered)
-        mine = f"~/.config/pocket-terminal/keybars/{name}.conf"
+        mine = f"~/.config/pc26/keybars/{name}.conf"
         return [p for f in request("check", f"key bar {name} edited")["problems"] if f["file"] == mine
                 for p in f["problems"]]
 

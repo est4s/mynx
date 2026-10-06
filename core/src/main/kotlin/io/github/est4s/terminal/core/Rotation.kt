@@ -8,7 +8,7 @@ enum class Orientation(val word: String) {
 }
 
 /**
- * The screen's rotation locks (`pocket rotation lock`), each held by a
+ * The screen's rotation locks (`pc26 rotation lock`), each held by a
  * process: the lock ends when it does, so a program that crashes can't
  * leave the screen stuck. A process is its pid and start time, read from
  * [proc], since an ended process's pid can be given to another. Debian's

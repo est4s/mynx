@@ -41,14 +41,14 @@ trap 'rm -rf "$tmp"' EXIT
 gh run download "$run" -D "$tmp"
 # Not the name Termux used: Android won't let this app overwrite
 # another app's file in Download.
-apk=/storage/emulated/0/Download/pocket-terminal-build.apk
+apk=/storage/emulated/0/Download/pc26-build.apk
 cp "$tmp"/*/*.apk "$apk"
 echo "Copied to $apk"
 
 [[ $open == 1 ]] || exit 0
 # Debug builds of the app answer this; older or release builds can't.
-if ! pocket install-apk "$apk"; then
+if ! pc26 install-apk "$apk"; then
     echo "Open Download/$(basename "$apk") in the Files app to install it,"
-    echo "or try again: pocket install-apk $apk"
+    echo "or try again: pc26 install-apk $apk"
     exit 1
 fi

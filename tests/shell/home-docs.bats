@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# The agent guide (tools/AGENTS.md → /opt/pocket-terminal/AGENTS.md, so
+# The agent guide (tools/AGENTS.md → /opt/pc26/AGENTS.md, so
 # it updates with the app) must keep up with the setup it describes. Root's
 # home (rootfs/root/) has short AGENTS.md / CLAUDE.md files pointing to it.
 
@@ -8,11 +8,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the home's CLAUDE.md imports its AGENTS.md and the guide" {
     grep -qx '@AGENTS.md' "$ROOT/CLAUDE.md"
-    grep -qx '@/opt/pocket-terminal/AGENTS.md' "$ROOT/CLAUDE.md"
+    grep -qx '@/opt/pc26/AGENTS.md' "$ROOT/CLAUDE.md"
 }
 
 @test "the home's AGENTS.md points to the guide" {
-    grep -qF '/opt/pocket-terminal/AGENTS.md' "$ROOT/AGENTS.md"
+    grep -qF '/opt/pc26/AGENTS.md' "$ROOT/AGENTS.md"
 }
 
 @test "the guide mentions every file shipped in the home folder" {
@@ -28,18 +28,18 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the guide mentions the other things users can change" {
     for path in \
-        "~/.config/pocket-terminal/colors.properties" \
-        "~/.config/pocket-terminal/settings.conf" \
-        "~/.config/pocket-terminal/menu.conf" \
-        "~/.config/pocket-terminal/themes" \
-        "/opt/pocket-terminal/menu.conf" \
-        "/opt/pocket-terminal/themes" \
-        "~/.local/state/pocket-terminal/menu" \
+        "~/.config/pc26/colors.properties" \
+        "~/.config/pc26/settings.conf" \
+        "~/.config/pc26/menu.conf" \
+        "~/.config/pc26/themes" \
+        "/opt/pc26/menu.conf" \
+        "/opt/pc26/themes" \
+        "~/.local/state/pc26/menu" \
         "~/games" \
-        "/opt/pocket-terminal/bin" \
+        "/opt/pc26/bin" \
         "\`menu\`" "\`files\`" "\`keybar\`" "\`play\`" \
         "NNN_BMS" \
-        "/opt/pocket-terminal/keybars" \
+        "/opt/pc26/keybars" \
         "/opt/neon-games"; do
         grep -qF "$path" "$GUIDE" || { echo "not in the guide: $path"; false; }
     done
@@ -67,12 +67,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
-@test "the guide documents every pocket command" {
-    pocket="$BATS_TEST_DIRNAME/../../tools/bin/pocket"
-    commands=$(python3 "$pocket" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
+@test "the guide documents every pc26 command" {
+    pc26="$BATS_TEST_DIRNAME/../../tools/bin/pc26"
+    commands=$(python3 "$pc26" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
     [ -n "$commands" ]
     for name in $commands; do
-        grep -qF "pocket $name" "$GUIDE" || { echo "not in the guide: pocket $name"; false; }
+        grep -qF "pc26 $name" "$GUIDE" || { echo "not in the guide: pc26 $name"; false; }
     done
 }
 

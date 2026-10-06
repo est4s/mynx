@@ -10,7 +10,7 @@ import java.io.FileNotFoundException
 import java.util.UUID
 
 /**
- * Lets the camera app write the photo `pocket camera` asked for: one
+ * Lets the camera app write the photo `pc26 camera` asked for: one
  * temporary file at a time, under a fresh random name, so the camera app
  * can reach nothing else.
  */

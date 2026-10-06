@@ -23,8 +23,10 @@ to do next.
 
 ## Naming
 
-"Pocket Terminal" is a **working name**. It is already taken on the Play Store
-and will change before release.
+The app is called **PC-26** (owner's decision, 2026-10-06; it replaced
+the working name "Pocket Terminal", which was taken on the Play Store).
+Its command is `pc26`, and its paths use `pc26` too: `/opt/pc26`,
+`~/.config/pc26`, `/tmp/.pc26`, the `PC26_*` variables.
 - Keep the display name in one place: `app/src/main/res/values/strings.xml`
   (`app_name`). Don't hardcode it elsewhere in code.
 - The application ID `io.github.est4s.terminal` is deliberately name-neutral,
@@ -61,11 +63,11 @@ Consequences:
    Markdown files skip the build.
 2. Run `scripts/deliver.sh` in the app's Debian, with the app on screen.
    It waits for HEAD's run, downloads the APK, copies it to the phone's
-   Download folder and opens Android's installer with `pocket install-apk`.
+   Download folder and opens Android's installer with `pc26 install-apk`.
    The owner just taps **Install** (the app restarts as the new build).
 
 Notes on why the script does what it does:
-- `pocket install-apk FILE` (left out of `pocket help` and the user guide)
+- `pc26 install-apk FILE` (left out of `pc26 help` and the user guide)
   asks the app to open the installer. Only **debug builds** can:
   `app/src/debug/AndroidManifest.xml` adds `REQUEST_INSTALL_PACKAGES` and
   `ApkProvider`, which serves just that one file to the installer. Release
@@ -138,48 +140,48 @@ See README "How it works". The details:
   `core/src/main/resources/.../themes/NAME.colors.properties`, listed in
   `BUILT_IN_THEMES` (Android can't list resources; a test checks the list
   matches the files). Each sets background, foreground, cursor and
-  colours 0-15. A user's `~/.config/pocket-terminal/colors.properties` is
-  laid over Neon; `pocket theme set` writes a theme into it, marked
+  colours 0-15. A user's `~/.config/pc26/colors.properties` is
+  laid over Neon; `pc26 theme set` writes a theme into it, marked
   `# theme: NAME`. The launcher menu uses the 16 basic colours, so it
   follows the theme.
-- **Settings:** `~/.config/pocket-terminal/settings.conf`, `key = value`
+- **Settings:** `~/.config/pc26/settings.conf`, `key = value`
   (`core/.../Settings.kt`: `SETTINGS` describes each; `setSetting()`
   changes one line and keeps the rest). Font size in dp (pinch saves it),
   a font file from Debian, cursor style and blink.
-- **The app's tools** (`tools/` → `/opt/pocket-terminal`): `pocket` and
-  the settings editors (`tools/lib/pocket_terminal/`), `menu` and its
+- **The app's tools** (`tools/` → `/opt/pc26`): `pc26` and
+  the settings editors (`tools/lib/pc26/`), `menu` and its
   `menu.conf`, `files`, `keybar`, `play`, the game commands, and the
   agent guide `AGENTS.md`; `scripts/pack-tools.sh` adds core's built-in
   key bars and themes (to read and copy) and the home folder's
   `AGENTS.md`/`CLAUDE.md` pointers (`home/`). They belong to the app, not
   the user's Debian: CI packs them into `assets/tools.tar.xz`, and `TerminalService` unpacks them into
   `filesDir/tools` whenever the app version changes (`core/.../ToolsInstaller.kt`),
-  then proot mounts that folder at `/opt/pocket-terminal`. Its `bin` goes
-  first on the PATH (so it beats older copies left in a rootfs) through `/etc/profile.d/pocket-terminal.sh`, which the app
+  then proot mounts that folder at `/opt/pc26`. Its `bin` goes
+  first on the PATH (so it beats older copies left in a rootfs) through `/etc/profile.d/pc26.sh`, which the app
   rewrites at start (`writeToolsProfile()`): Debian's `/etc/profile`
   resets root's PATH, so the PATH the app passes in doesn't survive a
   login shell. So fixes to them reach installed Debians without a
   migration. Put new app-owned commands there, not in the rootfs.
 - **Who checks what:** the program that reads a file checks it. The app
   (`core`) checks colours, themes, settings and key bars (`checkConfig`);
-  the menu checks `menu.conf` (`menu --check FILE`); `pocket check`
+  the menu checks `menu.conf` (`menu --check FILE`); `pc26 check`
   merges both.
-- **`pocket` ↔ app:** request files, no sockets. `pocket` writes
-  `ID.req` (renamed into place) to `$POCKET_REQUESTS`
-  (`/tmp/.pocket-terminal/requests`); the service answers in `ID.reply`
-  as JSON (`core/.../PocketRequests.kt`), woken by a `FileObserver`, with
+- **`pc26` ↔ app:** request files, no sockets. `pc26` writes
+  `ID.req` (renamed into place) to `$PC26_REQUESTS`
+  (`/tmp/.pc26/requests`); the service answers in `ID.reply`
+  as JSON (`core/.../Pc26Requests.kt`), woken by a `FileObserver`, with
   the activity's 250 ms poll as a fallback. Logic (checking, answers)
-  stays in `core`; `pocket` only sends, waits and prints. Requests
-  `pocket` triggers apply quietly (no dialogs: `pocket` prints the
+  stays in `core`; `pc26` only sends, waits and prints. Requests
+  `pc26` triggers apply quietly (no dialogs: `pc26` prints the
   problems).
 - **Requests answered later, and streams** (`core/.../LaterRequests.kt`,
   for GPS fixes, permission dialogs, sensor readings): a request named
-  in `PocketRequests(later = …)` gets `ID.wait` at once (seconds to
+  in `Pc26Requests(later = …)` gets `ID.wait` at once (seconds to
   wait, or `stream`) and a `PendingReply` that answers in `ID.reply`
   when ready, appending stream readings to `ID.stream` (one JSON object
-  per line). `pocket` cancels with `ID.cancel` (Ctrl+C, closed pipe);
+  per line). `pc26` cancels with `ID.cancel` (Ctrl+C, closed pipe);
   the service calls `sweep()` on that and every 2 s while requests are
-  open, which also stops those whose `pocket` process (the number
+  open, which also stops those whose `pc26` process (the number
   before `-` in the id) has gone. Values with line breaks (clipboard
   text) are sent percent-encoded.
 - **Location** (`core/.../Location.kt`, `app/.../Locator.kt`):
@@ -216,13 +218,13 @@ See README "How it works". The details:
 - **Sound files** (`core/.../Audio.kt`, `app/.../AudioPlayer.kt`,
   `app/.../AudioRecorder.kt`): `audioRequests()` gives `audio-play`
   and `audio-record`, both [Later] streams that run until they end or
-  `pocket` stops them. The file's ending picks the format
+  `pc26` stops them. The file's ending picks the format
   (`AudioFormat`): MediaRecorder for AAC and Opus, AudioRecord for
   WAV (header from core's `wavHeader()`). A recording goes to
   `.NAME.part` next to the target and core renames it when complete.
   Ctrl+C is the normal end of a recording, so a [Later]'s `onCancel`
   may still answer (`RecordReport.onStop` stops and reports before it
-  returns), and `pocket` reads that answer (`answer_on_interrupt`).
+  returns), and `pc26` reads that answer (`answer_on_interrupt`).
   RECORD_AUDIO is asked through the activity; recording starts on
   screen and the service adds the `microphone` foreground type while
   anything records, like location.
@@ -232,11 +234,11 @@ See README "How it works". The details:
   ~5.5 MB and no CPU, and it refuses to autospawn as root, so not on
   demand). It runs in a proot of its own (`prootLaunch(command = …)`),
   restarted with backoff (`ServerRestarts`), except exit 3: not
-  installed (`pocket sound install` for Debians from before). Killing
+  installed (`pc26 sound install` for Debians from before). Killing
   proot leaves Pulse running, so `sound-server` writes its pid to
   `sound/pid`: the app stops Pulse by it (`soundServerPid()` checks
   it's still `pulseaudio`), and so does the next start. Pulse
-  plays into `module-pipe-sink` at `/tmp/.pocket-terminal/sound/out`
+  plays into `module-pipe-sink` at `/tmp/.pc26/sound/out`
   (48 kHz s16 stereo); `PipePlayer` reads it in 20 ms chunks into a
   blocking AudioTrack, which paces the clockless pipe, pauses the
   track after 500 ms quiet and reopens the pipe when Pulse restarts.
@@ -255,11 +257,11 @@ See README "How it works". The details:
   `pulseaudio`. The service adds the `microphone` type and names the
   programs in its notification (`micNotice()`).
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
-  each `pocket rotation lock` for a process (pid + start time from
-  `/proc/PID/stat`, so a reused pid doesn't count); `pocket` sends its
+  each `pc26 rotation lock` for a process (pid + start time from
+  `/proc/PID/stat`, so a reused pid doesn't count); `pc26` sends its
   parent's pid. The service sweeps every second while locked and the
   activity sets `requestedOrientation` (LOCKED for "as it is").
-- **Sharing** (`core/.../Sharing.kt`): `pocket share` files are served
+- **Sharing** (`core/.../Sharing.kt`): `pc26 share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only
   reach the files they were granted. Incoming shares go to
@@ -333,18 +335,18 @@ These come from the README scope and apply to every feature:
   2026-10-05): swiping between tabs (`tab-swipe`) is on by default.
 - **Plain-text config.** Every setting lives in a readable, commented text
   file inside Debian, so users and AI agents can edit it.
-- **A `pocket` command for everything** the settings UI can do, with `--json`
+- **A `pc26` command for everything** the settings UI can do, with `--json`
   output. Settings editors are terminal programs (owner's decision,
-  2026-10-04), built on `pocket`, so an AI agent can change everything a
-  person can. `tests/shell/home-docs.bats` fails if a `pocket` command
+  2026-10-04), built on `pc26`, so an AI agent can change everything a
+  person can. `tests/shell/home-docs.bats` fails if a `pc26` command
   isn't in the home `AGENTS.md`.
 - **Agent docs ship with the app.** The guide to the setup is
-  `tools/AGENTS.md` (`/opt/pocket-terminal/AGENTS.md`, updated with the
+  `tools/AGENTS.md` (`/opt/pc26/AGENTS.md`, updated with the
   app); root's home gets short `AGENTS.md` / `CLAUDE.md` files pointing
   to it (`rootfs/root/`), which are then the user's. When you add a
   feature that users can configure, update the guide in the same change;
   `tests/shell/home-docs.bats` fails if a home file, a built-in key bar
-  or theme, or a `pocket` command isn't in it.
+  or theme, or a `pc26` command isn't in it.
 - **Don't bundle third-party agent CLIs** (Claude Code, Codex, …). Offer to
   install them with their official installers; users sign in with their own
   accounts.
@@ -383,10 +385,10 @@ does this automatically through `.claude/settings.json`.)
   services, permissions, USB, camera). Keep logic out of it. When Android
   code needs tests, add Robolectric tests in `app/src/test/`; they only run
   in CI.
-- **`pocket` and the editors** (`tools/lib/pocket_terminal/`, Python 3
+- **`pc26` and the editors** (`tools/lib/pc26/`, Python 3
   from Debian, standard library only): tests with `unittest` in
-  `tests/pocket/` (`python3 -m unittest discover -s tests/pocket`, about
-  1.5 min on the phone). They run `pocket` against a fake app that
+  `tests/pc26/` (`python3 -m unittest discover -s tests/pc26`, about
+  1.5 min on the phone). They run `pc26` against a fake app that
   answers requests; `test_editors.py` drives the curses editors in a
   pseudo-terminal (send application cursor keys, `\x1bOA`, not
   `\x1b[A`). Keep file logic in `models.py`, unit-tested.

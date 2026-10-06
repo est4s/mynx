@@ -2,7 +2,7 @@
 
 The app's side is core's PendingReply: next to ID.req it writes ID.wait
 (seconds, or "stream"), appends readings to ID.stream, and answers in
-ID.reply; pocket cancels a stream by writing ID.cancel.
+ID.reply; pc26 cancels a stream by writing ID.cancel.
 """
 import json
 import os
@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
-from pocket_terminal import client  # noqa: E402
+from pc26 import client  # noqa: E402
 
 
 class LaterApp:
@@ -73,7 +73,7 @@ class ClientTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.folder = self.tmp.name
-        patch = mock.patch.dict(os.environ, {"POCKET_REQUESTS": self.folder, "POCKET_TIMEOUT": "0.3"})
+        patch = mock.patch.dict(os.environ, {"PC26_REQUESTS": self.folder, "PC26_TIMEOUT": "0.3"})
         patch.start()
         self.addCleanup(patch.stop)
         self.addCleanup(self.tmp.cleanup)
@@ -82,7 +82,7 @@ class ClientTest(unittest.TestCase):
         return sorted(os.listdir(self.folder))
 
     def test_waits_as_long_as_the_app_says(self):
-        # Longer than POCKET_TIMEOUT, within what the app asked for.
+        # Longer than PC26_TIMEOUT, within what the app asked for.
         LaterApp(self.folder, "2", answer={"ok": True, "fix": 1}, delay=0.6)
         self.assertEqual(client.request("slow"), {"ok": True, "fix": 1})
         self.assertEqual(self.left_behind(), [])

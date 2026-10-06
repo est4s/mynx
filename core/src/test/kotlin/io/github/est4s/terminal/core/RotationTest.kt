@@ -113,7 +113,7 @@ class RotationRequestTest {
     private val proc = File(base, "proc")
     private val locks = RotationLocks(proc)
     private val changes = mutableListOf<Orientation?>()
-    private val requests = PocketRequests(dir, home, rotation = locks, rotationChanged = { changes += it })
+    private val requests = Pc26Requests(dir, home, rotation = locks, rotationChanged = { changes += it })
 
     @AfterTest
     fun cleanup() {

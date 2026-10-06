@@ -11,7 +11,7 @@ import com.termux.view.TerminalViewClient
 import io.github.est4s.terminal.core.KeyPress
 import io.github.est4s.terminal.core.tabShortcut
 
-private const val TAG = "PocketTerminal"
+private const val TAG = "PC26"
 
 // Owned by the service, so it never keeps a closed activity alive: it forwards
 // to whichever activity is attached right now, if any.

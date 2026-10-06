@@ -15,7 +15,7 @@ class PhoneRequestsTest {
     private var clipboard: Result<String> = Result.success("")
     private var refusal: String? = null
     private val shared = mutableListOf<Share>()
-    private val requests = PocketRequests(
+    private val requests = Pc26Requests(
         dir, home,
         vibrate = { ms -> vibrations += ms; refusal },
         setClipboard = { text -> copied += text; refusal },
@@ -51,7 +51,7 @@ class PhoneRequestsTest {
         assertEquals("""{"ok":false,"error":"the phone has no vibrator"}""", ask("vibrate"))
     }
 
-    // pocket sends the text percent-encoded, so it can hold line breaks.
+    // pc26 sends the text percent-encoded, so it can hold line breaks.
     @Test
     fun `copies text to the clipboard, line breaks and all`() {
         assertEquals("""{"ok":true}""", ask("clipboard-set", "two%0Alines%20%2B%20%C3%A9%0D%0A"))
@@ -92,10 +92,10 @@ class PhoneRequestsTest {
 
     @Test
     fun `android-clipboard off keeps programs away from the clipboard`() {
-        File(home, ".config/pocket-terminal").mkdirs()
-        File(home, ".config/pocket-terminal/settings.conf").writeText("android-clipboard = off\n")
+        File(home, ".config/pc26").mkdirs()
+        File(home, ".config/pc26/settings.conf").writeText("android-clipboard = off\n")
         clipboard = Result.success("secret")
-        val off = """{"ok":false,"error":"clipboard access is off (pocket set android-clipboard on)"}"""
+        val off = """{"ok":false,"error":"clipboard access is off (pc26 set android-clipboard on)"}"""
         assertEquals(off, ask("clipboard-get"))
         assertEquals(off, ask("clipboard-set", "x"))
         assertEquals(emptyList(), copied)
@@ -152,10 +152,10 @@ class PhoneRequestsTest {
 
     @Test
     fun `android-share off keeps programs from sharing`() {
-        File(home, ".config/pocket-terminal").mkdirs()
-        File(home, ".config/pocket-terminal/settings.conf").writeText("android-share = off\n")
+        File(home, ".config/pc26").mkdirs()
+        File(home, ".config/pc26/settings.conf").writeText("android-share = off\n")
         File(home, "a").writeText("a")
-        val off = """{"ok":false,"error":"sharing is off (pocket set android-share on)"}"""
+        val off = """{"ok":false,"error":"sharing is off (pc26 set android-share on)"}"""
         assertEquals(off, ask("share", "/root/a"))
         assertEquals(off, ask("share-text", "x"))
         assertEquals(emptyList(), shared)
@@ -163,7 +163,7 @@ class PhoneRequestsTest {
 
     @Test
     fun `without a phone to ask, nothing happens`() {
-        val plain = PocketRequests(dir, home)
+        val plain = Pc26Requests(dir, home)
         fun ask(vararg lines: String): String {
             File(dir, "q.req").writeText(lines.joinToString("\n", postfix = "\n"))
             plain.processPending()

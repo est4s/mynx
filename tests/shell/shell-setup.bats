@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 # tools/shell.bash: the app's setup for interactive bash (loaded by
-# /etc/profile.d/pocket-terminal.sh, which the app writes).
+# /etc/profile.d/pc26.sh, which the app writes).
 
 SETUP="$BATS_TEST_DIRNAME/../../tools/shell.bash"
 
@@ -32,5 +32,5 @@ agent() { # agent NAME: a fake installed agent
     source "$SETUP"
     run claude
     [ "$status" -eq 127 ]
-    [ "$output" = "claude isn't installed; pocket agent install claude installs it" ]
+    [ "$output" = "claude isn't installed; pc26 agent install claude installs it" ]
 }

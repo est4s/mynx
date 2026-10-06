@@ -6,7 +6,7 @@ val BUILT_IN_THEMES = listOf(
     "solarized-dark", "solarized-light", "catppuccin-mocha", "tokyo-night",
 )
 
-/** A user's themes: `~/.config/pocket-terminal/themes/NAME.colors.properties`. */
+/** A user's themes: `~/.config/pc26/themes/NAME.colors.properties`. */
 const val THEMES_DIR = "$CONFIG_DIR/themes"
 const val THEME_SUFFIX = ".colors.properties"
 
@@ -19,6 +19,6 @@ fun builtInThemeText(name: String): String? =
 fun themeNameOf(colorsFile: String): String? =
     THEME_LINE.matchEntire(colorsFile.lineSequence().firstOrNull().orEmpty())?.groupValues?.get(1)
 
-/** What `pocket theme set` writes into the colours file. */
+/** What `pc26 theme set` writes into the colours file. */
 internal fun colorsFileFor(theme: String, text: String) =
-    "# theme: $theme\n# Set by `pocket theme set $theme`; edit freely.\n$text"
+    "# theme: $theme\n# Set by `pc26 theme set $theme`; edit freely.\n$text"

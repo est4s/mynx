@@ -5,7 +5,7 @@
 BIN="$BATS_TEST_DIRNAME/../../tools/bin"
 
 setup() {
-    export POCKET_KEYBAR_FILE="$BATS_TEST_TMPDIR/keybar"
+    export PC26_KEYBAR_FILE="$BATS_TEST_TMPDIR/keybar"
     STUBS="$BATS_TEST_TMPDIR/stubs"
     mkdir -p "$STUBS"
     export PATH="$STUBS:$BIN:$PATH"
@@ -17,41 +17,41 @@ stub() {
 }
 
 @test "keybar shows the bar while the command runs" {
-    run keybar nnn cat "$POCKET_KEYBAR_FILE"
+    run keybar nnn cat "$PC26_KEYBAR_FILE"
     [ "$output" = nnn ]
 }
 
 @test "keybar puts the previous bar back afterwards" {
-    echo menu >"$POCKET_KEYBAR_FILE"
+    echo menu >"$PC26_KEYBAR_FILE"
     keybar nnn true
-    [ "$(cat "$POCKET_KEYBAR_FILE")" = menu ]
+    [ "$(cat "$PC26_KEYBAR_FILE")" = menu ]
 }
 
 @test "keybar goes back to no bar (the shell's) if there was none" {
     keybar nnn true
-    [ "$(cat "$POCKET_KEYBAR_FILE")" = "" ]
+    [ "$(cat "$PC26_KEYBAR_FILE")" = "" ]
 }
 
 @test "keybar nests" {
-    run keybar menu keybar nnn cat "$POCKET_KEYBAR_FILE"
+    run keybar menu keybar nnn cat "$PC26_KEYBAR_FILE"
     [ "$output" = nnn ]
-    [ "$(cat "$POCKET_KEYBAR_FILE")" = "" ]
+    [ "$(cat "$PC26_KEYBAR_FILE")" = "" ]
 }
 
 @test "keybar passes on the command's exit code" {
     run keybar nnn sh -c 'exit 3'
     [ "$status" -eq 3 ]
-    [ "$(cat "$POCKET_KEYBAR_FILE")" = "" ]
+    [ "$(cat "$PC26_KEYBAR_FILE")" = "" ]
 }
 
 @test "keybar just runs the command outside the app" {
-    unset POCKET_KEYBAR_FILE
+    unset PC26_KEYBAR_FILE
     run keybar nnn echo hi
     [ "$output" = hi ]
 }
 
 @test "files runs nnn in detail mode with the nnn key bar" {
-    stub nnn 'echo "nnn $* [$(cat "$POCKET_KEYBAR_FILE")]"'
+    stub nnn 'echo "nnn $* [$(cat "$PC26_KEYBAR_FILE")]"'
     run files /tmp
     [ "$output" = "nnn -de /tmp [nnn]" ]
 }

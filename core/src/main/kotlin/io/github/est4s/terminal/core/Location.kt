@@ -4,14 +4,14 @@ import java.io.File
 import java.math.BigDecimal
 import java.math.RoundingMode
 
-/** The longest `pocket location` waits for one fix. */
+/** The longest `pc26 location` waits for one fix. */
 const val MAX_LOCATION_TIMEOUT = 300
 private const val DEFAULT_TIMEOUT = 60
 private const val DEFAULT_INTERVAL = 5
 private const val MAX_INTERVAL = 3600
 
 /**
- * What `pocket location` asks for. Unless [gpsOnly], the first fix from
+ * What `pc26 location` asks for. Unless [gpsOnly], the first fix from
  * GPS or the network wins. A [stream] sends a fix about every
  * [intervalSeconds]; one fix gives up after [timeoutSeconds].
  */
@@ -34,13 +34,13 @@ interface LocationReport {
     /** The fix (one request), or one more reading (a stream). */
     fun fix(fix: Fix)
     fun fail(message: String)
-    /** Stop listening: `pocket` stopped, or has gone. */
+    /** Stop listening: `pc26` stopped, or has gone. */
     fun onCancel(block: () -> Unit)
 }
 
 /**
  * The `location` and `location-stream` requests, for
- * [PocketRequests]'s `later`. Option lines: `gps`, `interval=SECONDS`,
+ * [Pc26Requests]'s `later`. Option lines: `gps`, `interval=SECONDS`,
  * `timeout=SECONDS`. [locate] starts listening and must not block.
  */
 fun locationRequests(home: File, locate: (LocationQuery, LocationReport) -> Unit): Map<String, Later> {
@@ -51,7 +51,7 @@ fun locationRequests(home: File, locate: (LocationQuery, LocationReport) -> Unit
             return@Later
         }
         if (!loadSettings(settings).settings.androidLocation) {
-            reply.refuse("location is off (pocket set android-location on)")
+            reply.refuse("location is off (pc26 set android-location on)")
             return@Later
         }
         locate(query, object : LocationReport {

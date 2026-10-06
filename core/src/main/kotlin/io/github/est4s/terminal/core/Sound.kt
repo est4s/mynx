@@ -4,7 +4,7 @@ import java.io.File
 import java.io.InputStream
 
 /** Where Debian's sound server (PulseAudio) and the app meet, in Debian's /tmp. */
-const val SOUND_DIR = "/tmp/.pocket-terminal/sound"
+const val SOUND_DIR = "/tmp/.pc26/sound"
 /** The server's socket: programs find it through PULSE_SERVER. */
 const val SOUND_SOCKET = "$SOUND_DIR/native"
 /** The pipe the server plays into and the app reads: s16le, [SOUND_RATE] Hz, stereo. */

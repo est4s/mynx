@@ -4,8 +4,8 @@ import java.io.File
 
 /**
  * A request the app answers later (a GPS fix, a permission dialog), or a
- * stream of readings. [seconds] is how long `pocket` waits for the
- * answer; null makes it a stream, which runs until `pocket` cancels it.
+ * stream of readings. [seconds] is how long `pc26` waits for the
+ * answer; null makes it a stream, which runs until `pc26` cancels it.
  * [start] begins the work and must not block: it answers through the
  * [PendingReply], now or later.
  */
@@ -15,9 +15,9 @@ class Later(val seconds: Int?, val start: (args: List<String>, reply: PendingRep
  * The answer to a [Later] request; any thread may use it. Next to
  * `ID.req`, the app writes `ID.wait` (the seconds to wait, or `stream`)
  * at once, appends each [line] of a stream to `ID.stream`, and puts the
- * answer in `ID.reply`; only the first answer counts. `pocket` cancels a
+ * answer in `ID.reply`; only the first answer counts. `pc26` cancels a
  * stream by writing `ID.cancel`; [onCancel] then runs, as it does when
- * `pocket` has gone (see [PocketRequests.sweep]).
+ * `pc26` has gone (see [Pc26Requests.sweep]).
  */
 class PendingReply internal constructor(
     private val dir: File,
@@ -44,7 +44,7 @@ class PendingReply internal constructor(
     }
 
     /**
-     * What to do when `pocket` cancels the request: stop listening, mainly.
+     * What to do when `pc26` cancels the request: stop listening, mainly.
      * It may still answer (a recording says what it saved); else the
      * answer is a plain `{"ok":true}`.
      */
@@ -63,7 +63,7 @@ class PendingReply internal constructor(
         closed(this)
     }
 
-    // A pocket still [listening] gets an answer, so it can finish; else
+    // A pc26 still [listening] gets an answer, so it can finish; else
     // nothing of the request is left behind.
     internal fun cancel(listening: Boolean) {
         val block = synchronized(this) {
@@ -85,7 +85,7 @@ class PendingReply internal constructor(
 
 private val PID_OF_ID = Regex("^(\\d+)-")
 
-/** The process number `pocket` puts at the start of a request's id, if any. */
+/** The process number `pc26` puts at the start of a request's id, if any. */
 internal fun pidOfRequest(id: String): Int? = PID_OF_ID.find(id)?.groupValues?.get(1)?.toIntOrNull()
 
 internal fun writeReply(dir: File, id: String, json: String) {

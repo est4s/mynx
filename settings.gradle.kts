@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pocket-terminal"
+rootProject.name = "pc26"
 
 // Plain Kotlin logic, testable anywhere (including on the phone).
 include(":core")

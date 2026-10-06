@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Pocket Terminal launcher menu.
+# PC-26 launcher menu.
 # Keys: arrows / j k move, Enter / → pick, ← / Esc / q back, 1-9 jump.
-# Items: ~/.config/pocket-terminal/menu.conf, else menu.conf next to this
-#   folder (/opt/pocket-terminal/menu.conf); format in that file.
+# Items: ~/.config/pc26/menu.conf, else menu.conf next to this
+#   folder (/opt/pc26/menu.conf); format in that file.
 #   menu --check FILE lists problems in a menu file (exit 1 if any).
 # Colours: the terminal theme's 16 basic colours, so the menu follows it.
 # Games: every executable in /opt/neon-games and ~/games shows up under
@@ -14,9 +14,9 @@
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS
 # (colon-separated) overrides where games are found (both for testing).
 
-STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pocket-terminal
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pc26
 STATE=$STATE_DIR/menu
-CONFIG_DIR=$HOME/.config/pocket-terminal
+CONFIG_DIR=$HOME/.config/pc26
 DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
 WELCOME=${DEFAULT_MENU%/*}/welcome.txt
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
@@ -54,11 +54,11 @@ save_state() {
 }
 
 # --- colours ---------------------------------------------------------------
-# The 16 basic colours, which every theme sets (pocket theme set …).
+# The 16 basic colours, which every theme sets (pc26 theme set …).
 C_TITLE=$'\e[95m' C_ITEM=$'\e[96m' C_SUB=$'\e[35m' C_DIM=$'\e[90m'
 C_SEL=$'\e[1;30;105m' C_OK=$'\e[92m' C_BAD=$'\e[91m' C_OFF=$'\e[0m'
 
-theme_name() { # the theme the colours file was set from (see pocket theme)
+theme_name() { # the theme the colours file was set from (see pc26 theme)
   local first
   [[ -f $CONFIG_DIR/colors.properties ]] || { echo neon; return; }
   IFS= read -r first <"$CONFIG_DIR/colors.properties"
@@ -189,13 +189,13 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       ((${#ITEMS[@]})) || { ITEMS=("(no games yet)"); ACTS=(none); } ;;
     agents)
       local list name title installed
-      list=$(pocket agent list --tsv 2>/dev/null) || list=
+      list=$(pc26 agent list --tsv 2>/dev/null) || list=
       while IFS=$'\t' read -r name title installed; do
         [[ -n $name ]] || continue
         [[ -n $installed ]] || title+=" (install)"
         ITEMS+=("$title") ACTS+=("agent:$name")
       done <<<"$list"
-      ((${#ITEMS[@]})) || { ITEMS=("(pocket isn't working)"); ACTS=(none); } ;;
+      ((${#ITEMS[@]})) || { ITEMS=("(pc26 isn't working)"); ACTS=(none); } ;;
     system)
       ITEMS=("Update all" "System info")
       ACTS=(update info) ;;
@@ -210,7 +210,7 @@ center_len() { # center_len <visible-length> <string>: center a string with colo
   local pad=$(((COLS - $1) / 2)); ((pad < 0)) && pad=0
   printf '%*s%s\n' $pad '' "$2"
 }
-TITLE_TEXT="▓▒░ P O C K E T  T E R M I N A L ░▒▓"
+TITLE_TEXT="▓▒░ P C - 2 6 ░▒▓"
 
 draw() { # draw <menu> <selected-index> <breadcrumb>
   local i n=${#ITEMS[@]} row
@@ -283,7 +283,7 @@ boot() {
   menu_items games; [[ ${ACTS[0]} == none ]] || games=${#ITEMS[@]}
   local debian; debian=$(debian_version)
   local -a log=(
-    "OK|pocket terminal online"
+    "OK|pc-26 online"
     "$([[ -n $debian ]] && echo OK || echo FAIL)|debian ${debian:-missing}"
     "OK|games: ${games:-0} found"
     "OK|theme: $(theme_name)"
@@ -347,7 +347,7 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
 act_none() { :; }
 act_welcome() { welcome_page; }
 act_files() { run files; }
-act_settings() { run pocket edit; }
+act_settings() { run pc26 edit; }
 act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   run bash -c "$1"
   local rc=$?
@@ -363,7 +363,7 @@ act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
 }
 act_game() { run play "$1"; }
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
-  run pocket agent start "$1" || pause
+  run pc26 agent start "$1" || pause
 }
 
 act_update() {
@@ -435,7 +435,7 @@ show() { # show <menu> <breadcrumb>
     term_cols
     update_status && drawn=
     if [[ $drawn != "$sel:$COLS" ]]; then
-      # Items only on a full redraw: some menus ask pocket (slow) for them.
+      # Items only on a full redraw: some menus ask pc26 (slow) for them.
       if [[ -z $drawn ]]; then
         menu_items "$name"; n=${#ITEMS[@]}
         ((sel < n)) || sel=0
