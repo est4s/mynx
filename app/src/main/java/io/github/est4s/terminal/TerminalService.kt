@@ -61,6 +61,7 @@ import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
+import io.github.est4s.terminal.core.migrateOldNames
 import io.github.est4s.terminal.core.writeToolsProfile
 import java.io.File
 import java.util.WeakHashMap
@@ -227,13 +228,19 @@ class TerminalService : Service() {
         mic.update()
     }
 
-    // Before any shell starts, so none runs old tools while they're replaced.
+    // Before any shell starts, so none runs old tools while they're replaced,
+    // and before anything reads the config (under its old name in old installs).
     private fun updateTools() {
         val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}"
-        toolsError = runCatching {
-            tools.update(version) { assets.open(TOOLS_ASSET) }
-            writeToolsProfile(File(rootfs))
-        }.exceptionOrNull()?.stackTraceToString()
+        val failures = listOfNotNull(
+            runCatching { migrateOldNames(File(rootfs)) }.exceptionOrNull()
+                ?.let { "Moving ~/.config/pocket-terminal to ~/.config/pc26 failed:\n" + it.stackTraceToString() },
+            runCatching {
+                tools.update(version) { assets.open(TOOLS_ASSET) }
+                writeToolsProfile(File(rootfs))
+            }.exceptionOrNull()?.stackTraceToString(),
+        )
+        toolsError = failures.joinToString("\n").ifEmpty { null }
     }
 
     @Suppress("DEPRECATION") // the File constructor needs API 29

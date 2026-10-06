@@ -100,11 +100,13 @@ class ProotLaunchTest {
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
         assertTrue("PC26_MENU=1" in shellEnv, shellEnv.toString())
+        // A .bashrc from before the rename checks the old name.
+        assertTrue("POCKET_MENU=1" in shellEnv, shellEnv.toString())
     }
 
     @Test
     fun `opens no menu unless asked`() {
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_MENU=") })
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_MENU=") || it.startsWith("POCKET_MENU=") })
     }
 
     @Test
@@ -128,6 +130,15 @@ class ProotLaunchTest {
         assertTrue("/data/files/tools:/opt/pc26" in argv.valuesAfter("-b"))
         val path = shellEnv.single { it.startsWith("PATH=") }.removePrefix("PATH=").split(':')
         assertEquals("/opt/pc26/bin", path.first())
+    }
+
+    @Test
+    fun `also mounts the tools at their path from before the rename`() {
+        // Users' own notes and agent hooks name /opt/pocket-terminal.
+        val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
+
+        assertTrue("/data/files/tools:/opt/pocket-terminal" in argv.valuesAfter("-b"))
+        assertTrue(prootLaunch(paths).argv.none { it.endsWith(":/opt/pocket-terminal") })
     }
 
     @Test

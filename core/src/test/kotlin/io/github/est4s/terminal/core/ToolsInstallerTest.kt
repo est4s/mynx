@@ -116,6 +116,17 @@ class ToolsInstallerTest {
         assertTrue("/opt/pc26/bin" in script.readText())
     }
 
+    @Test
+    fun `deletes the profile script from before the rename`() {
+        val rootfs = File(base, "debian").apply { mkdirs() }
+        val old = File(rootfs, "etc/profile.d/pocket-terminal.sh").apply { parentFile.mkdirs(); writeText("old") }
+
+        writeToolsProfile(rootfs)
+
+        assertFalse(old.exists())
+        assertTrue(File(rootfs, "etc/profile.d/pc26.sh").isFile)
+    }
+
     private fun sourced(script: File, path: String): String {
         val process = ProcessBuilder("/bin/sh", "-c", ". \"$1\"; printf '%s\\n' \"\$PATH\"", "sh", script.path)
             .apply { environment()["PATH"] = path }

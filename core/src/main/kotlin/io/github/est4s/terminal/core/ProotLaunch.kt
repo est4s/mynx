@@ -26,7 +26,7 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * [openMenu] has the shell open the launcher menu first. [keyBarFile] (a
  * Debian path) is where programs report the key bar they want.
  * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
- * on the PATH. [requestDir] (a Debian path) is where `pc26` sends requests.
+ * on the PATH, and at [OLD_TOOLS_MOUNT]. [requestDir] (a Debian path) is where `pc26` sends requests.
  * [shellId] tells programs which tab they run in (`pc26 notify`).
  * [soundSocket] (a Debian path) is the sound server's socket. [command]
  * runs instead of the login bash.
@@ -53,7 +53,10 @@ fun prootLaunch(
         add("-w"); add(workDir)
         HOST_BINDS.forEach { add("-b"); add(it) }
         fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
-        toolsDir?.let { add("-b"); add("$it:$TOOLS_MOUNT") }
+        toolsDir?.let {
+            add("-b"); add("$it:$TOOLS_MOUNT")
+            add("-b"); add("$it:$OLD_TOOLS_MOUNT")
+        }
         // env -i: the shell must not inherit Android's environment (PATH, LD_*, ANDROID_*).
         addAll(listOf("/usr/bin/env", "-i", "HOME=/root", "TERM=xterm-256color", "LANG=C.UTF-8"))
         add("PATH=" + (if (toolsDir != null) "$TOOLS_MOUNT/bin:" else "") + DEBIAN_PATH)
@@ -62,7 +65,10 @@ fun prootLaunch(
         // Silent if the file can't be written (e.g. its folder was deleted).
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         // Root's .bashrc opens the launcher menu when this is set.
-        if (openMenu) add("PC26_MENU=1")
+        if (openMenu) {
+            add("PC26_MENU=1")
+            add("POCKET_MENU=1") // a .bashrc from before the rename reads this
+        }
         // The keybar command writes the bar to show here (a Debian path).
         keyBarFile?.let { add("PC26_KEYBAR_FILE=$it") }
         requestDir?.let { add("PC26_REQUESTS=$it") }
