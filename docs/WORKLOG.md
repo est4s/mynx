@@ -77,12 +77,6 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Issue #1: reply and close
-
-The mic start fix is confirmed on build 74 (entry 59). Left: reply on
-issue #1 with what was fixed (entries 56-59) and close it, when the
-owner says so.
-
 ### Roadmap step 9: Android integration
 
 README section "Android integration". Planned with the owner
@@ -304,7 +298,7 @@ Phone check of entry 58 on build 74 (commits b09b61d, 4f3567d), run
 by the agent in the app's Debian: `pocket sound start`, then at once
 `parecord --device=mic --raw`, six times: first data after 1.3, 1.4,
 0.4, 1.3, 1.6 and 1.0 s (build 73: ~5.5 s in 5 of 6). Confirmed.
-Issue #1 is ready to reply to and close.
+Replied on issue #1 with the fixes (entries 56-59) and closed it.
 
 ### 2026-10-06 (58): restarts clean; mic start after a restart was ~5 s late
 
