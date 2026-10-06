@@ -188,6 +188,20 @@ class PocketTest(unittest.TestCase):
         self.assertEqual(self.pocket("version").stdout, "57\n")
         self.assertEqual(json.loads(self.pocket("version", "--json").stdout), {"ok": True, "version": "57"})
 
+    def test_welcome_prints_the_welcome_page(self):
+        with open(os.path.join(self.tools, "welcome.txt"), "w") as f:
+            f.write("Hello.\n\nMenu  type menu\n")
+        run = self.pocket("welcome")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Hello.\n\nMenu  type menu\n")
+        self.assertEqual(json.loads(self.pocket("welcome", "--json").stdout),
+                         {"ok": True, "text": "Hello.\n\nMenu  type menu\n"})
+
+    def test_welcome_without_its_page_fails(self):
+        run = self.pocket("welcome")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("welcome.txt", run.stderr)
+
 
     # --- settings ----------------------------------------------------------
 

@@ -105,6 +105,7 @@ their own.
 | `pocket agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
 | `pocket hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
 | `pocket edit` | the settings editors, for people (full screen) |
+| `pocket welcome` | the welcome page new users see: what's here and how to get around |
 | `pocket version` | the version of the app's tools |
 | `pocket help` | all commands |
 
@@ -342,7 +343,8 @@ Neon.
 ### Launcher menu
 
 `menu` opens it (the app opens it in the first tab when it starts
-fresh). Its items come from `~/.config/pocket-terminal/menu.conf` if it
+fresh; the very first time, it shows the welcome page,
+`/opt/pocket-terminal/welcome.txt`, after the boot splash). Its items come from `~/.config/pocket-terminal/menu.conf` if it
 exists, else `/opt/pocket-terminal/menu.conf`. One `Label = action` per
 line, in order; labels up to 20 characters. Actions:
 
@@ -354,6 +356,7 @@ line, in order; labels up to 20 characters. Actions:
 | `settings` | the settings editors (`pocket edit`) |
 | `agents` | AI agents: start one, or install it (`pocket agent start`) |
 | `system` | Update all, System info |
+| `welcome` | the welcome page (`pocket welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
 

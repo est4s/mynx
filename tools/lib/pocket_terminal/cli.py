@@ -43,6 +43,7 @@ Commands:
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
+  welcome    the welcome page: what's here and how to get around
   version    the app tools' version
   help       this list
 
@@ -897,6 +898,20 @@ def pick_and_install():
     return pick_agent("Install an AI agent:", install)
 
 
+def cmd_welcome(args, as_json):
+    path = os.path.join(TOOLS, "welcome.txt")
+    try:
+        with open(path) as f:
+            text = f.read()
+    except OSError:
+        raise Failure(f"no {path}")
+    if as_json:
+        out(True, {"ok": True, "text": text}, None)
+    else:
+        print(text, end="")
+    return 0
+
+
 def cmd_version(args, as_json):
     version = tools_version()
     out(as_json, {"ok": True, "version": version}, version)
@@ -916,7 +931,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
-    "install-apk": cmd_install_apk, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "version": cmd_version, "help": cmd_help,
 }
 
 

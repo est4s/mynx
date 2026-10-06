@@ -1,0 +1,19 @@
+A real Debian on your phone: bash, apt and
+thousands of programs. What you install stays.
+
+Menu      type menu to come back to it.
+Key bar   the buttons above the keyboard: Esc,
+          Ctrl, Tab, arrows. Programs and games
+          get their own bars. Swipe it for more.
+Tabs      + opens one. Swipe across the text to
+          change tabs; long-press one to rename.
+Text size pinch the terminal.
+Settings  menu → Settings: theme, font, key
+          bars, the menu.
+Files     menu → Files, or type files. Phone
+          storage is /storage/emulated/0.
+AI agents menu → AI agents installs Claude Code,
+          Codex or Gemini CLI. Ask one to change
+          your setup; it reads ~/AGENTS.md.
+Again     menu → Getting started, or type
+          pocket welcome.

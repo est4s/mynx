@@ -8,7 +8,7 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.graphics.Color
+import android.content.res.ColorStateList
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Build
@@ -544,15 +544,35 @@ class MainActivity : Activity() {
     // First launch: unpack the Debian rootfs from the APK. An interrupted
     // install is simply redone next time (see RootfsInstaller).
     private fun installDebian() {
-        val status = TextView(this).apply { text = "Setting up Debian…"; styleText() }
-        val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
+        val title = TextView(this).apply {
+            text = "▓▒░ ${getString(R.string.app_name).uppercase()} ░▒▓"
+            styleText(NEON.palette.getValue(13))
+            textSize = 16f
+            gravity = Gravity.CENTER
+        }
+        val status = TextView(this).apply {
+            text = "Setting up Debian…"
+            styleText(NEON.palette.getValue(14))
+        }
+        val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progressTintList = ColorStateList.valueOf(NEON.palette.getValue(13))
+            progressBackgroundTintList = ColorStateList.valueOf(NEON.palette.getValue(8))
+        }
+        val note = TextView(this).apply {
+            text = "This happens once: Debian is unpacked from the app " +
+                "into its own storage. It takes a minute or two; keep the app open."
+            styleText(NEON.palette.getValue(7))
+        }
         root.removeAllViews()
         root.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(dp(32), 0, dp(32), 0)
+            addView(title, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(32) })
             addView(status)
-            addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(bar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+            addView(note, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(24) })
         })
 
         thread(name = "rootfs-install") {
@@ -594,9 +614,9 @@ class MainActivity : Activity() {
         retry.requestFocus()
     }
 
-    private fun TextView.styleText() {
-        typeface = Typeface.MONOSPACE
-        setTextColor(Color.parseColor("#FF2BD6"))
+    private fun TextView.styleText(color: Int = NEON.palette.getValue(13)) {
+        typeface = font
+        setTextColor(color)
     }
 
     fun restartShell(old: TerminalSession) {

@@ -8,7 +8,8 @@
 # Games: every executable in /opt/neon-games and ~/games shows up under
 #   Games, named after the file (neon-flap.py → "Neon Flap"). Add your own:
 #   ln -s /path/to/game ~/games/my-game
-# menu --boot plays the boot splash first (the app does this on a fresh start).
+# menu --boot plays the boot splash first (the app does this on a fresh start),
+#   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
 # Exit closes the tab: the menu exits with 10 and ~/.bashrc exits the shell.
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS
 # (colon-separated) overrides where games are found (both for testing).
@@ -17,6 +18,7 @@ STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pocket-terminal
 STATE=$STATE_DIR/menu
 CONFIG_DIR=$HOME/.config/pocket-terminal
 DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
+WELCOME=${DEFAULT_MENU%/*}/welcome.txt
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
 export LC_COLLATE=C       # games in the same order whatever the locale
@@ -31,6 +33,11 @@ term_cols() { # sets COLS to the terminal width (fallback 56, the phone portrait
   local size
   size=$(stty size 2>/dev/null </dev/tty) && COLS=${size#* } || COLS=56
   [[ $COLS =~ ^[0-9]+$ ]] && ((COLS > 0)) || COLS=56
+}
+term_rows() { # sets ROWS to the terminal height (fallback 24)
+  local size
+  size=$(stty size 2>/dev/null </dev/tty) && ROWS=${size% *} || ROWS=24
+  [[ $ROWS =~ ^[0-9]+$ ]] && ((ROWS > 0)) || ROWS=24
 }
 
 # --- state (last choice per menu, theme) -----------------------------------
@@ -63,7 +70,7 @@ theme_name() { # the theme the colours file was set from (see pocket theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, games, settings, agents, system, exit or run COMMAND"
+MENU_ACTIONS="shell, files, games, settings, agents, system, welcome, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -89,6 +96,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       settings) action=settings ;;
       agents) action=menu:agents ;;
       system) action=menu:system ;;
+      welcome) action=welcome ;;
       exit) action=quit_session ;;
       run) PROBLEMS+=("line $n: run needs a command"); continue ;;
       run\ *) action="cmd:${action#run }" ;;
@@ -168,8 +176,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         read_menu_file "$file"
         ((${#ITEMS[@]})) && return
       done
-      ITEMS=(Terminal Files Games Settings "AI agents" System Exit)
-      ACTS=(exit files menu:games settings menu:agents menu:system quit_session) ;;
+      ITEMS=(Terminal Files Games Settings "AI agents" System "Getting started" Exit)
+      ACTS=(exit files menu:games settings menu:agents menu:system welcome quit_session) ;;
     games)
       local dir f
       for dir in "${GAME_DIRS[@]}"; do
@@ -293,6 +301,37 @@ boot() {
   boot_wait 0.35
 }
 
+# --- welcome page ----------------------------------------------------------
+welcome_page() { # welcome.txt in pages that fit the screen
+  local -a lines; local i per pad line intro=1
+  mapfile -t lines <"$WELCOME" 2>/dev/null || return 0
+  term_rows
+  per=$((ROWS - 7)); ((per < 3)) && per=3
+  for ((i = 0; i < ${#lines[@]}; i += per)); do
+    page "Getting started"
+    pad=$(((COLS - 48) / 2)); ((pad < 0)) && pad=0
+    for line in "${lines[@]:i:per}"; do
+      [[ -z $line ]] && intro=
+      if [[ -n $intro ]]; then   # the first paragraph, then "Label     text" rows
+        printf '%*s%s%s%s\n' $pad '' "$C_ITEM" "$line" "$C_OFF"
+      else
+        printf '%*s%s%s%s%s%s\n' $pad '' "$C_SUB" "${line:0:10}" "$C_ITEM" "${line:10}" "$C_OFF"
+      fi
+    done
+    if ((i + per < ${#lines[@]})); then
+      printf '\n'; center "$C_DIM" "any key: more"
+      IFS= read -rsn1 _; flush_input
+    else
+      pause
+    fi
+  done
+}
+first_welcome() { # the welcome page, once ever
+  [[ ${ST[welcomed]} == 1 ]] && return
+  welcome_page
+  ST[welcomed]=1; save_state
+}
+
 # --- actions ---------------------------------------------------------------
 RAN=
 run() { # run <cmd...>: hand the terminal to a program, then come back to the menu
@@ -306,6 +345,7 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
 }
 
 act_none() { :; }
+act_welcome() { welcome_page; }
 act_files() { run files; }
 act_settings() { run pocket edit; }
 act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
@@ -439,7 +479,7 @@ load_state
 trap 'cursor_show; printf "\e[0m"' EXIT
 printf '\e]0;Menu\a'  # tab title
 
-[[ $1 == --boot ]] && boot
+[[ $1 == --boot ]] && { boot; first_welcome; }
 show main ""
 rc=$?
 cursor_show; clear_screen

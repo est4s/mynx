@@ -24,8 +24,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Exit" ]
-    [ "${ACTS[*]}" = "exit files menu:games settings menu:agents menu:system quit_session" ]
+    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Getting started Exit" ]
+    [ "${ACTS[*]}" = "exit files menu:games settings menu:agents menu:system welcome quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -43,7 +43,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/pocket-terminal/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Exit" ]
+    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Getting started Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -51,7 +51,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, games, settings, agents, system, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, games, settings, agents, system, welcome, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -127,7 +127,7 @@ keys() {
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 7
+    run keys 8
     [ "$status" -eq 10 ]
 }
 
@@ -216,4 +216,39 @@ fake_pocket() { # a pocket that lists Claude Code as installed, Codex not
     run bash -c "(sleep 3; printf q) | bash '$MENU' --boot"
     [[ $output == *"debian"* ]]
     [[ $output == *"games: 1 found"* ]]
+}
+
+@test "the welcome page fits the phone's width" {
+    local line n=0
+    export LC_ALL=C.UTF-8
+    while IFS= read -r line; do
+        n=$((n + 1))
+        (( ${#line} <= 48 )) || { echo "line $n is ${#line} wide"; false; }
+    done <"$BATS_TEST_DIRNAME/../../tools/welcome.txt"
+}
+
+@test "Getting started shows the welcome page" {
+    source "$MENU"
+    term_rows() { ROWS=60; }
+    output=$(welcome_page <<<x)  # the menu's own run() replaces bats' run
+    [[ $output == *"Getting started"* ]]
+    [[ $output == *"A real Debian on your phone"* ]]
+    [[ $output == *"pocket welcome."* ]]
+}
+
+@test "a welcome page taller than the screen comes in pages" {
+    source "$MENU"
+    term_rows() { ROWS=12; }
+    output=$(welcome_page <<<"xx")
+    [[ $output == *"A real Debian on your phone"* ]]
+    [[ $output == *"more"* ]]
+    [[ $output == *"pocket welcome."* ]]
+}
+
+@test "the first boot shows the welcome page, later ones don't" {
+    run bash -c "(sleep 2; printf x; sleep 0.5; printf q) | bash '$MENU' --boot"
+    [[ $output == *"A real Debian on your phone"* ]]
+    grep -qx 'welcomed=1' "$HOME/.local/state/pocket-terminal/menu"
+    run bash -c "(sleep 2; printf q) | bash '$MENU' --boot"
+    [[ $output != *"A real Debian on your phone"* ]]
 }
