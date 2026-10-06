@@ -248,8 +248,11 @@ See README "How it works". The details:
   core's `micUsers()`/`micState()` (`Mic.kt`), opens an AudioRecord
   only while a program records from `mic` (owner's decision: the
   indicator shows only then). It feeds paced zeros (`Silence`) when
-  it can't record: with no writer, Pulse gives recorders nothing and
-  they hang. The service adds the `microphone` type and names the
+  it can't record, or the microphone fails (`MicInput` tries it
+  again every 2 s): with no writer, Pulse gives recorders nothing and
+  they hang. `sound-server` starts `sound-watch` just before it
+  execs Pulse, so the watcher waits for its pid to become
+  `pulseaudio`. The service adds the `microphone` type and names the
   programs in its notification (`micNotice()`).
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `pocket rotation lock` for a process (pid + start time from
@@ -295,6 +298,11 @@ See README "How it works". The details:
   `setTerminalCursorBlinkerState(true, true)`; stop it in `onStop`.
 
 ### proot notes
+- **Stop a proot with SIGQUIT** (`stopProot()`): it kills everything
+  it runs, then exits. It ignores TERM and HUP, and SIGKILL (Termux's
+  `finishIfRunning()`) leaves its programs running untraced: proot's
+  seccomp filter stays on, every system call it would handle fails
+  with ENOSYS, and they spin at full CPU.
 - **The host can't see a guest process's working directory:** proot
   tracks it itself, so `/proc/<pid>/cwd` stays at the folder proot was
   started in. Shells report their folder through `PROMPT_COMMAND` instead

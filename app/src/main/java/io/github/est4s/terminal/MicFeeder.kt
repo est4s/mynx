@@ -15,6 +15,8 @@ import android.system.Os
 import android.system.OsConstants
 import io.github.est4s.terminal.core.MIC_CHUNK
 import io.github.est4s.terminal.core.Mic
+import io.github.est4s.terminal.core.MicInput
+import io.github.est4s.terminal.core.MicRecord
 import io.github.est4s.terminal.core.SOUND_INPUTS_NAME
 import io.github.est4s.terminal.core.SOUND_RATE
 import io.github.est4s.terminal.core.Silence
@@ -99,15 +101,13 @@ class MicFeeder(
 
         fun start() {
             thread = thread(name = "sound-mic", isDaemon = true) {
-                val record = if (live) runCatching { newRecord() }.getOrNull() else null
                 val silence = Silence(SystemClock::elapsedRealtime)
+                val input = if (live) MicInput(::openMic, silence, SystemClock::elapsedRealtime) else null
                 val buffer = ByteArray(MIC_CHUNK)
                 var out: FileDescriptor? = null
                 try {
-                    record?.startRecording()
                     while (!stopped) {
-                        val read = record?.read(buffer, 0, MIC_CHUNK) ?: silence.read(buffer)
-                        if (read <= 0) break
+                        val read = input?.read(buffer) ?: silence.read(buffer)
                         out = out ?: open() ?: continue
                         if (!write(out, buffer, read)) {
                             runCatching { Os.close(out) }
@@ -116,7 +116,7 @@ class MicFeeder(
                     }
                 } finally {
                     out?.let { runCatching { Os.close(it) } }
-                    record?.let { runCatching { it.stop() }; it.release() }
+                    input?.close()
                 }
             }
         }
@@ -146,6 +146,23 @@ class MicFeeder(
                 }
             }
             return true
+        }
+    }
+
+    private fun openMic(): MicRecord {
+        val record = newRecord()
+        try {
+            record.startRecording()
+        } catch (e: IllegalStateException) {
+            record.release()
+            throw e
+        }
+        return object : MicRecord {
+            override fun read(buffer: ByteArray, length: Int) = record.read(buffer, 0, length)
+            override fun close() {
+                runCatching { record.stop() }
+                record.release()
+            }
         }
     }
 

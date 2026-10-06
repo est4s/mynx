@@ -7,6 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class MicTest {
     private val base = createTempDirectory("mic").toFile()
@@ -149,5 +150,72 @@ class MicTest {
 
         assertEquals(listOf(15L), slept)
         assertEquals(1920, MIC_CHUNK)
+    }
+
+    // A microphone that hands out [chunks] (a read's result each), then fails.
+    private class FakeRecord(vararg chunks: Int) : MicRecord {
+        val left = chunks.toMutableList()
+        var closed = false
+        override fun read(buffer: ByteArray, length: Int): Int {
+            val n = left.removeFirstOrNull() ?: -6 // ERROR_DEAD_OBJECT
+            if (n > 0) buffer.fill(1, 0, n)
+            return n
+        }
+        override fun close() { closed = true }
+    }
+
+    private var clock = 0L
+    private val buffer = ByteArray(MIC_CHUNK)
+    private fun input(open: () -> MicRecord?) =
+        MicInput(open, Silence(now = { clock }, sleep = { clock += it }), now = { clock }, retryMs = 2000)
+
+    @Test
+    fun `the feed reads the microphone while it delivers`() {
+        val mic = input { FakeRecord(MIC_CHUNK, 100) }
+        assertEquals(MIC_CHUNK, mic.read(buffer))
+        assertEquals(100, mic.read(buffer))
+        assertEquals(1, buffer[0])
+    }
+
+    @Test
+    fun `a microphone that stops delivering is closed and zeros follow, never the end`() {
+        val record = FakeRecord(MIC_CHUNK, 0)
+        val mic = input { record }
+        mic.read(buffer)
+        assertEquals(MIC_CHUNK, mic.read(buffer))
+        assertContentEquals(ByteArray(MIC_CHUNK), buffer)
+        assertTrue(record.closed)
+    }
+
+    @Test
+    fun `the microphone is opened again a while after it failed`() {
+        var opened = 0
+        val mic = input { opened++; FakeRecord(-3) }
+        mic.read(buffer)
+        assertEquals(1, opened)
+        repeat(50) { assertEquals(MIC_CHUNK, mic.read(buffer)) } // 1 s of zeros
+        assertEquals(1, opened)
+        repeat(60) { mic.read(buffer) }
+        assertEquals(2, opened)
+    }
+
+    @Test
+    fun `a microphone that can't open gives zeros`() {
+        var opened = 0
+        val mic = input { opened++; null }
+        assertEquals(MIC_CHUNK, mic.read(buffer))
+        assertContentEquals(ByteArray(MIC_CHUNK), buffer)
+        clock += 2000
+        mic.read(buffer)
+        assertEquals(2, opened)
+    }
+
+    @Test
+    fun `closing the feed closes the microphone`() {
+        val record = FakeRecord(MIC_CHUNK)
+        val mic = input { record }
+        mic.read(buffer)
+        mic.close()
+        assertTrue(record.closed)
     }
 }

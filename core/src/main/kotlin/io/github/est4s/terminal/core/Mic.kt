@@ -78,3 +78,44 @@ class Silence(private val now: () -> Long, private val sleep: (Long) -> Unit = T
         return MIC_CHUNK
     }
 }
+
+/** The phone's microphone as [MicInput] reads it: a read's result is bytes, or an error below 1. */
+interface MicRecord {
+    fun read(buffer: ByteArray, length: Int): Int
+    fun close()
+}
+
+/**
+ * What the feed writes while programs record: the microphone [open]s,
+ * while it delivers, else [silence], so they never wait on nothing. A
+ * microphone that fails or won't open is tried again after [retryMs].
+ */
+class MicInput(
+    private val open: () -> MicRecord?,
+    private val silence: Silence,
+    private val now: () -> Long,
+    private val retryMs: Long = 2000,
+) {
+    private var record: MicRecord? = null
+    private var retryAt: Long? = null
+
+    /** Always some bytes, at most [MIC_CHUNK]. */
+    fun read(buffer: ByteArray): Int {
+        if (record == null && now() >= (retryAt ?: now())) {
+            record = runCatching { open() }.getOrNull()
+            if (record == null) retryAt = now() + retryMs
+        }
+        record?.let {
+            val read = runCatching { it.read(buffer, MIC_CHUNK) }.getOrDefault(-1)
+            if (read > 0) return read
+            close()
+            retryAt = now() + retryMs
+        }
+        return silence.read(buffer)
+    }
+
+    fun close() {
+        record?.let { runCatching { it.close() } }
+        record = null
+    }
+}
