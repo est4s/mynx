@@ -151,7 +151,27 @@ because of proot's GPL):**
   writes the steps), a workflow on `v*` tags publishing the APK to
   GitHub Releases, `versionName` from the tag.
 
-**Next:** build 10.1, then 10.2, 10.3, 10.4.
+**Rename compatibility check (phone, after installing the first PC-26
+build over a Pocket Terminal one; entry 60):**
+1. The app starts with no error dialog; the theme, font size and
+   key bars are as before.
+2. `ls -la ~/.config ~/.local/state` shows `pc26` folders and
+   `pocket-terminal -> pc26` links.
+3. `pc26 undo --list` still lists the earlier changes; the welcome
+   page doesn't show again.
+4. `ls /opt/pocket-terminal/bin` works; `pocket version` prints the
+   same as `pc26 version`.
+5. `pc26 agent list` shows claude's notifications as on; `pc26 agent
+   notify claude on`, then `grep -c 'hook claude'
+   ~/.claude/settings.json` gives 3 (one per event, all `/opt/pc26`).
+   A long Claude turn with the app in the background still notifies.
+6. Closing all tabs and restarting the app opens the menu in the
+   first tab (the old `~/.bashrc` reads `POCKET_MENU`).
+7. `pc26 sound` says on; `pgrep -c pulseaudio` gives 1.
+8. `/etc/profile.d/pocket-terminal.sh` is gone; `echo $PATH` starts
+   with `/opt/pc26/bin`.
+
+**Next:** the check above, then 10.2, 10.3, 10.4.
 
 The step 9 plan below is kept for reference.
 
@@ -338,6 +358,29 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (60): old names keep working after the PC-26 rename
+
+The rename (be204c9) changed every name; installed Debians still had
+the old ones. Added, test-first (AGENTS.md "Old names from before the
+rename"):
+- core `migrateOldNames()` (8 tests), run by the service at start
+  before anything reads config: `~/.config/pocket-terminal` and
+  `~/.local/state/pocket-terminal` move to `pc26`, with relative
+  links back; `pocket-edit.conf` → `pc26-edit.conf`. Both names
+  present: left alone. Failures go to the tools error dialog.
+- proot also binds the tools at `/opt/pocket-terminal`; the app sets
+  `POCKET_MENU` with `PC26_MENU`; `writeToolsProfile()` deletes
+  `/etc/profile.d/pocket-terminal.sh` (core tests).
+- `tools/bin/pocket` execs `pc26` (`tests/shell/pocket.bats`).
+- `agents.py`: `pocket hook NAME` hooks count as ours; `notify on`
+  rewrites them in place to the pc26 path, without duplicates.
+- New `.bashrc` unsets both menu variables; `sound-server` also stops
+  a Pulse from `/tmp/.pocket-terminal/sound/pid`; `deliver.sh` falls
+  back to `pocket install-apk`.
+
+Tests: core 391, pc26 unittest 180, bats 92. Not pushed. Needs the
+phone check under "Next" (rename compatibility).
 
 ### 2026-10-06 (59): mic start after a restart confirmed
 

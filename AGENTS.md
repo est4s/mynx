@@ -274,6 +274,26 @@ See README "How it works". The details:
 - **Updates never overwrite the user's Debian.** The rootfs is unpacked once.
   App updates may only apply additive, versioned migrations. This is a hard
   rule: users' files and installed packages must survive every update.
+- **Old names from before the rename to PC-26** (2026-10-06) keep
+  working in installed Debians; don't drop these:
+  - At each start, before anything reads the config, the service runs
+    `migrateOldNames()` (`core/.../OldNames.kt`): it moves
+    `~/.config/pocket-terminal` and `~/.local/state/pocket-terminal`
+    to the `pc26` names, leaves relative links `pocket-terminal -> pc26`,
+    and renames the `pocket-edit.conf` key bar. If both names exist,
+    neither is touched. Failures show in the tools error dialog.
+  - proot binds the tools at `/opt/pocket-terminal` too
+    (`OLD_TOOLS_MOUNT`): users' own notes and agent hooks name it.
+  - `tools/bin/pocket` execs `pc26` (exec: same parent pid, for
+    `rotation lock`); agent hooks call `pocket hook NAME`. `agents.py`
+    counts those hooks as ours: `notify on` updates them in place,
+    `off` removes them.
+  - `writeToolsProfile()` deletes `/etc/profile.d/pocket-terminal.sh`.
+  - The app sets `POCKET_MENU` with `PC26_MENU`: old `~/.bashrc` files
+    open the menu by it.
+  - `sound-server` also stops a Pulse whose pid is in
+    `/tmp/.pocket-terminal/sound/pid`.
+  - `scripts/deliver.sh` falls back to `pocket install-apk`.
 
 ### Termux library notes (v0.118.3, checked in their source)
 - **Create `TerminalSession`s on the main thread:** each makes a `Handler`

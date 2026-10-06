@@ -47,8 +47,11 @@ echo "Copied to $apk"
 
 [[ $open == 1 ]] || exit 0
 # Debug builds of the app answer this; older or release builds can't.
-if ! pc26 install-apk "$apk"; then
+# Builds from before the rename to PC-26 only have `pocket`.
+pc26=pc26
+command -v pc26 >/dev/null || pc26=pocket
+if ! "$pc26" install-apk "$apk"; then
     echo "Open Download/$(basename "$apk") in the Files app to install it,"
-    echo "or try again: pc26 install-apk $apk"
+    echo "or try again: $pc26 install-apk $apk"
     exit 1
 fi

@@ -1,0 +1,3 @@
+#!/bin/sh
+# pc26's name before the rename to PC-26, kept for old scripts and agent hooks.
+exec "${0%/*}/pc26" "$@"

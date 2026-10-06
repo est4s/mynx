@@ -54,6 +54,11 @@ and applies them. See "Changing settings" below.
 update; don't change it. Its `bin` comes first on the PATH. Your changes
 go in your home folder (`~/.local/bin` comes before it).
 
+Old names from before the app was called PC-26 still work: `pocket`
+runs `pc26`, `/opt/pocket-terminal` is the same folder as `/opt/pc26`,
+and in a Debian set up before then `~/.config/pocket-terminal` links to
+`~/.config/pc26`. Use the new names in anything you write.
+
 ## Changing settings: `pc26`
 
 **After editing any file in `~/.config/pc26/` by hand, run

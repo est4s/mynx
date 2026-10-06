@@ -74,10 +74,20 @@ def hook_command(agent):
     return f"{os.path.join(TOOLS, 'bin', 'pc26')} hook {agent.name}"
 
 
+# pc26 was called pocket before the rename to PC-26; hooks set up then
+# run `pocket hook NAME` (/opt/pocket-terminal/bin/pocket, still there).
+COMMAND_NAMES = ("pc26", "pocket")
+
+
 def is_ours(handler, agent):
     command = handler.get("command") if isinstance(handler, dict) else None
-    return isinstance(command, str) and (command == f"pc26 hook {agent.name}"
-                                         or command.endswith(f"/pc26 hook {agent.name}"))
+    return isinstance(command, str) and any(
+        command == f"{name} hook {agent.name}" or command.endswith(f"/{name} hook {agent.name}")
+        for name in COMMAND_NAMES)
+
+
+def is_old(handler):
+    return not handler["command"].split()[0].endswith("pc26")
 
 
 def load(text, agent):
@@ -106,14 +116,32 @@ def has_hooks(text, agent):
 
 
 def add_hooks(text, agent):
-    """Config [text] (None: no file yet) with our hook on each event."""
+    """Config [text] (None: no file yet) with our hook on each event, once:
+    one from before the rename is brought up to date in place."""
     config = load(text, agent)
     hooks = config.setdefault("hooks", {})
     for event in agent.events:
         groups = hooks.setdefault(event, [])
-        if not any(is_ours(h, agent) for group in groups if isinstance(group, dict)
-                   for h in group.get("hooks", [])):
-            groups.append({"hooks": [{"type": "command", "command": hook_command(agent)}]})
+        found = False
+        kept = []
+        for group in groups:
+            if isinstance(group, dict) and isinstance(group.get("hooks"), list):
+                handlers = []
+                for h in group["hooks"]:
+                    if is_ours(h, agent):
+                        if found:
+                            continue
+                        found = True
+                        if is_old(h):
+                            h = {**h, "command": hook_command(agent)}
+                    handlers.append(h)
+                if not handlers and group["hooks"]:
+                    continue
+                group = {**group, "hooks": handlers}
+            kept.append(group)
+        if not found:
+            kept.append({"hooks": [{"type": "command", "command": hook_command(agent)}]})
+        hooks[event] = kept
     return dump(config)
 
 

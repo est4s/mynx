@@ -8,16 +8,25 @@ dir=${PC26_SOUND_DIR:-/tmp/.pc26/sound}
 command -v pulseaudio >/dev/null 2>&1 || exit 3
 mkdir -p "$dir"
 # A Pulse outlives the proot that ran it, so the app stops it by the pid
-# left here, and so does the next start (after the app was killed).
-old=$(cat "$dir/pid" 2>/dev/null)
-if [ -n "$old" ] && [ "$(cat "/proc/$old/comm" 2>/dev/null)" = pulseaudio ]; then
-    kill "$old" 2>/dev/null
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-        [ -e "/proc/$old" ] && ! grep -q '^State:.*Z' "/proc/$old/status" 2>/dev/null || break
-        sleep 0.2
-    done
-    kill -9 "$old" 2>/dev/null
+# left here, and so does the next start (after the app was killed). Before
+# the rename to PC-26 the pid was left in /tmp/.pocket-terminal/sound.
+stop_old() {
+    old=$(cat "$1" 2>/dev/null)
+    if [ -n "$old" ] && [ "$(cat "/proc/$old/comm" 2>/dev/null)" = pulseaudio ]; then
+        kill "$old" 2>/dev/null
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            [ -e "/proc/$old" ] && ! grep -q '^State:.*Z' "/proc/$old/status" 2>/dev/null || break
+            sleep 0.2
+        done
+        kill -9 "$old" 2>/dev/null
+    fi
+}
+old_dir=${PC26_OLD_SOUND_DIR:-/tmp/.pocket-terminal/sound}
+if [ -e "$old_dir/pid" ]; then
+    stop_old "$old_dir/pid"
+    rm -f "$old_dir/pid"
 fi
+stop_old "$dir/pid"
 echo $$ >"$dir/pid"
 # exec keeps the pid: the watcher follows Pulse by it.
 "$(dirname "$0")/sound-watch" $$ </dev/null >/dev/null 2>&1 &
