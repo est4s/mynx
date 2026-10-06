@@ -17,7 +17,8 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
-        versionName = "0.0.1"
+        // The release workflow sets it from the tag (v0.1.0 → 0.1.0).
+        versionName = System.getenv("PC26_VERSION_NAME") ?: "0.0.1"
 
         // proot and the Debian rootfs will be arm64-only, so ship nothing else.
         ndk { abiFilters += "arm64-v8a" }
@@ -31,6 +32,30 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        // The release key never touches the repo: the release workflow decodes
+        // it from a GitHub secret and passes it in through these variables.
+        // Without them (debug CI builds, the phone) there's no release key and
+        // release builds come out unsigned.
+        val releaseKeystore = System.getenv("PC26_RELEASE_KEYSTORE")
+        if (!releaseKeystore.isNullOrEmpty()) {
+            fun required(name: String) = System.getenv(name)?.takeIf { it.isNotEmpty() }
+                ?: error("$name must be set with PC26_RELEASE_KEYSTORE")
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = required("PC26_RELEASE_STORE_PASSWORD")
+                keyAlias = required("PC26_RELEASE_KEY_ALIAS")
+                keyPassword = required("PC26_RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            // Off: the Termux libraries and our own code are small, and an R8
+            // mistake would only show on the phone.
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

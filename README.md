@@ -210,7 +210,7 @@ Because Debian runs through `proot` rather than a virtual machine:
 ---
 
 ## Distribution
-- **APK downloads** from GitHub Releases.
+- **APK downloads** from GitHub Releases, signed, built by CI from version tags.
 - **Google Play** later, once the app is stable.
 
 ---

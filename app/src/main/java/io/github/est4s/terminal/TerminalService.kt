@@ -255,7 +255,8 @@ class TerminalService : Service() {
     // Before any shell starts, so none runs old tools while they're replaced,
     // and before anything reads the config (under its old name in old installs).
     private fun updateTools() {
-        val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}"
+        // BUILD-INSTALLTIME-NAME: `pc26 about` shows the build and the name.
+        val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}-${BuildConfig.VERSION_NAME}"
         val failures = listOfNotNull(
             runCatching { migrateOldNames(File(rootfs)) }.exceptionOrNull()
                 ?.let { "Moving ~/.config/pocket-terminal to ~/.config/pc26 failed:\n" + it.stackTraceToString() },

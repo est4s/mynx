@@ -89,12 +89,30 @@ Notes on why the script does what it does:
 | JDK | 21 in CI; Java/Kotlin target 17 |
 | SDK | `compileSdk`/`targetSdk` 36, `minSdk` 26 |
 | Version code | `GITHUB_RUN_NUMBER`, so every CI build installs as an update |
-| Signing | Shared debug key in `signing/debug.keystore` (password `android`) |
+| Version name | `PC26_VERSION_NAME` (the release workflow sets it from the tag, `v0.1.0` → `0.1.0`), else `0.0.1` |
+| Signing | Debug: shared key in `signing/debug.keystore` (password `android`). Release: the owner's key from GitHub secrets |
 
 **Signing:** the debug key is committed on purpose, so every CI build installs
 over the previous one and keeps the app's data. It's only for development.
-Release builds will use a separate key stored as a GitHub secret. That key
-must never be committed, and losing it means the app can never be updated.
+Release builds use a separate key: `.github/workflows/release.yml` decodes it
+from the `PC26_RELEASE_*` secrets into a temp file and passes it to Gradle in
+`PC26_RELEASE_KEYSTORE`, `PC26_RELEASE_STORE_PASSWORD`,
+`PC26_RELEASE_KEY_ALIAS` and `PC26_RELEASE_KEY_PASSWORD`; without them a
+release build is unsigned and debug builds don't notice. That key must never
+be committed (`.gitignore` blocks `*.jks`, `*.keystore` but the debug one),
+and losing it means the app can never be updated. The owner makes and keeps
+it: `docs/RELEASING.md`. Debug and release builds have the same application
+ID but different keys, so one can't install over the other (uninstall
+first, which deletes Debian).
+
+**Releases:** push a tag `vX.Y.Z` → `release.yml` runs the tests, builds
+the same assets as `build.yml` (its steps are copied: change both),
+`assembleRelease`, checks the signature and publishes `pc26-X.Y.Z.apk` on
+GitHub Releases with generated notes (a `-suffix` tag makes a pre-release).
+Release builds have no `REQUEST_INSTALL_PACKAGES`/`ApkProvider` (debug
+manifest only) and no minify (R8 problems would only show on the phone).
+The version name reaches Debian in the tools' `.version`
+(`BUILD-INSTALLTIME-NAME`), which `pc26 about` shows.
 
 **Dependencies:** prefer few, well-maintained ones. Plain Android views, no
 Jetpack Compose (smaller APK, faster CI, and the terminal library is
@@ -474,6 +492,8 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
 
 - **Commits:** short imperative subject line, with a body explaining why when
   it isn't obvious. Commit and push only when the owner asks.
+- **Releases:** only the owner tags a release (`docs/RELEASING.md`); an
+  agent never creates or pushes `v*` tags.
 - **README:** it's the product scope. When the owner changes scope, update the
   README and its roadmap in the same commit.
 - Don't describe in user-facing docs how this app itself is developed.

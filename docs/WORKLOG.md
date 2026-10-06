@@ -177,8 +177,14 @@ checks listed there.
 **10.3 (About + licences) is built** (entry 62), waiting for the
 phone checks listed there.
 
-**Next:** the rename check above, the 10.2 checks (entry 61) and the
-10.3 checks (entry 62), then 10.4.
+**10.4 (icon + releases) is built** (entry 63): the owner makes the
+release key and adds the secrets (`docs/RELEASING.md`), then tags the
+first release once the phone checks pass.
+
+**Next:** the rename check above, the 10.2 checks (entry 61), the
+10.3 checks (entry 62) and the 10.4 checks (entry 63). With those
+done, step 10 is complete: the owner cuts `v0.1.0`, and the next step
+is the owner's choice (the parked step 8, or step 11).
 
 The step 9 plan below is kept for reference.
 
@@ -365,6 +371,67 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (63): 10.4 themed icon and signed releases
+
+Built, committed locally, not pushed:
+- **Themed icon:** `drawable/ic_launcher_monochrome.xml` (the
+  foreground's ">_" paths in one colour) as the adaptive icon's
+  `<monochrome>` layer, for Android 13+ themed icons.
+- **Release build:** `app/build.gradle.kts` creates a `release`
+  signing config only when `PC26_RELEASE_KEYSTORE` is set (the other
+  three `PC26_RELEASE_*` variables are then required, with an error
+  naming the missing one); otherwise release builds are unsigned and
+  debug builds and `:core:test` don't notice. Minify off (R8 problems
+  would only show on the phone). `versionName` from
+  `PC26_VERSION_NAME`, else `0.0.1`. Same application ID as debug (no
+  suffix: the Settings shortcut's `targetPackage` names it), so a
+  release and a debug build can't replace each other (different keys).
+  `REQUEST_INSTALL_PACKAGES`/`ApkProvider` stay in the debug manifest
+  only; `installApk()` also refuses when `!BuildConfig.DEBUG`.
+- **`.github/workflows/release.yml`** on `v*` tags: checks the four
+  secrets and the tag first (an `::error::` per missing secret), then
+  the same tests and asset steps as `build.yml` (copied: keep them in
+  step), decodes the keystore into `$RUNNER_TEMP` (deleted after),
+  `assembleRelease`, `apksigner verify`, and `gh release create TAG
+  pc26-X.Y.Z.apk --generate-notes` (`-suffix` tags: pre-release).
+  YAML checked with PyYAML.
+- **`pc26 about` shows the version name:** the service now writes the
+  tools' `.version` as `BUILD-INSTALLTIME-NAME`; `about` shows
+  "version 0.1.0 (build 57)", `--json` adds `version_name` (null from
+  older apps). The tools reinstall once because the string changed.
+- **`docs/RELEASING.md`:** making the key (keytool, RSA 4096, 50
+  years, PKCS12 so one password), backing it up (two offline places),
+  the four `gh secret set` commands, cutting a release, debug vs
+  release on one phone, Play later. `.gitignore` blocks `*.jks`,
+  `*.p12`, `*.keystore` (not the debug one).
+- AGENTS.md: Build setup (version name, signing, releases), a
+  Conventions line (only the owner tags releases). README: Distribution.
+
+Not sure without a CI run: the Gradle DSL in `app/build.gradle.kts`
+(`signingConfigs.create`/`findByName`, `buildTypes.getByName`) and
+whether `assembleRelease`'s lint-vital step finds anything fatal. The
+next push's debug build checks the first; the first tag checks the
+second.
+
+**Owner steps:**
+1. Make and back up the release key, add the four secrets
+   (`docs/RELEASING.md` 1-3).
+2. After the phone checks below: `git tag v0.1.0 && git push origin
+   v0.1.0`, then `gh run watch`; the release page should have
+   `pc26-0.1.0.apk`.
+
+**Phone checks (10.4):**
+1. With the phone's themed icons on (Wallpaper & style → Themed
+   icons), the app's icon is a tinted ">_" like the others.
+2. `pc26 about` (debug build) says "version 0.0.1 (build N)";
+   `pc26 about --json` has `"version_name": "0.0.1"`.
+3. Long-press the icon → Settings still opens `pc26 edit`.
+4. Later, on a spare phone (or after uninstalling the debug build,
+   which deletes Debian): the release APK installs, `pc26 about` says
+   "version 0.1.0", and `pc26 install-apk` says only debug builds can.
+
+Tests: pc26 unittest 188, bats 93, core unchanged (passes).
 
 ### 2026-10-07 (62): 10.3 About and licences
 

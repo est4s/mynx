@@ -253,6 +253,19 @@ class Pc26Test(unittest.TestCase):
             self.assertEqual(set(c), {"name", "version", "license", "source", "note"}, c)
             self.assertTrue(c["license"] and c["source"], c)
 
+    def test_about_shows_the_version_name_when_the_app_wrote_one(self):
+        self.write_about_files()
+        with open(os.path.join(self.tools, ".version"), "w") as f:
+            f.write("57-1700000000000-0.1.0\n")
+        self.assertIn("version 0.1.0 (build 57)", self.pc26("about").stdout)
+        answer = json.loads(self.pc26("about", "--json").stdout)
+        self.assertEqual(answer["version_name"], "0.1.0")
+        self.assertEqual(answer["build"], "57")
+
+    def test_about_json_has_no_version_name_from_older_apps(self):
+        self.write_about_files()
+        self.assertIsNone(json.loads(self.pc26("about", "--json").stdout)["version_name"])
+
     def test_about_without_a_version_file_still_shows_the_credits(self):
         os.mkdir(os.path.join(self.tools, "licenses"))
         run = self.pc26("about")

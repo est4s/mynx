@@ -952,9 +952,20 @@ def wrap(text, indent="  ", width=56):
                          break_long_words=False, break_on_hyphens=False)
 
 
+def version_parts(version):
+    """The build number and version name in the tools' `.version`
+    (`BUILD-INSTALLTIME-NAME`; apps before 10.4 wrote no name)."""
+    if not version:
+        return None, None
+    parts = version.split("-", 2)
+    return parts[0], parts[2] if len(parts) == 3 and parts[2] else None
+
+
 def about_text(version):
-    build = version.split("-")[0] if version else None
-    lines = [APP_NAME, f"build {build}" if build else "version unknown", "",
+    build, name = version_parts(version)
+    heading = (f"version {name} (build {build})" if name else
+               f"build {build}" if build else "version unknown")
+    lines = [APP_NAME, heading, "",
              "A Debian terminal for Android.", "", "Made with:", ""]
     for c in COMPONENTS:
         source = f"  Source: {c['source']}"
@@ -979,8 +990,9 @@ def cmd_about(args, as_json):
     except Failure:
         version = None
     if as_json:
+        build, name = version_parts(version)
         out(True, {"ok": True, "name": APP_NAME, "version": version,
-                   "build": version.split("-")[0] if version else None,
+                   "version_name": name, "build": build,
                    "components": COMPONENTS}, None)
         return 0
     text = about_text(version)

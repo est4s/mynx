@@ -1,0 +1,137 @@
+name: Release APK
+
+# Push a tag like v0.1.0 to build a signed release APK and publish it on
+# GitHub Releases. The key comes from the repo's secrets (docs/RELEASING.md).
+# The test and asset steps are copied from build.yml: keep them in step.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the release secrets and the tag
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PC26_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.PC26_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.PC26_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.PC26_RELEASE_KEY_PASSWORD }}
+        run: |
+          missing=0
+          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The secret PC26_RELEASE_$name is not set (see docs/RELEASING.md)."
+              missing=1
+            fi
+          done
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME isn't a version like v0.1.0."
+            missing=1
+          fi
+          exit $missing
+
+      - name: Version name from the tag
+        id: version
+        run: echo "name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Test
+        run: ./gradlew --no-daemon test
+
+      - name: Shell tests
+        run: |
+          sudo apt-get install -y -qq bats >/dev/null
+          bats tests/shell
+
+      - name: pc26 tests
+        run: python3 -m unittest discover -s tests/pc26 -v
+
+      - name: NDK version
+        id: ndk
+        run: |
+          echo "home=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_OUTPUT"
+          echo "version=$(grep Pkg.Revision "$ANDROID_NDK_LATEST_HOME/source.properties" | cut -d' ' -f3)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        id: proot-cache
+        with:
+          path: build/proot
+          key: proot-${{ hashFiles('scripts/build-proot.sh') }}-ndk-${{ steps.ndk.outputs.version }}
+
+      - name: Build proot
+        if: steps.proot-cache.outputs.cache-hit != 'true'
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.home }}
+        run: scripts/build-proot.sh build/proot
+
+      - name: Add proot to the APK
+        run: |
+          mkdir -p app/src/main/jniLibs/arm64-v8a
+          cp build/proot/*.so app/src/main/jniLibs/arm64-v8a/
+
+      - uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build Debian rootfs
+        run: scripts/build-rootfs.sh app/src/main/assets
+
+      - name: Add the app's tools (pc26, editors, themes)
+        run: scripts/pack-tools.sh app/src/main/assets
+
+      - name: Add the terminal font
+        run: scripts/fetch-font.sh app/src/main/assets/fonts
+
+      - name: Build the signed release APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PC26_RELEASE_KEYSTORE_BASE64 }}
+          PC26_RELEASE_STORE_PASSWORD: ${{ secrets.PC26_RELEASE_STORE_PASSWORD }}
+          PC26_RELEASE_KEY_ALIAS: ${{ secrets.PC26_RELEASE_KEY_ALIAS }}
+          PC26_RELEASE_KEY_PASSWORD: ${{ secrets.PC26_RELEASE_KEY_PASSWORD }}
+          PC26_VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          export PC26_RELEASE_KEYSTORE="$RUNNER_TEMP/release.keystore"
+          trap 'rm -f "$PC26_RELEASE_KEYSTORE"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$PC26_RELEASE_KEYSTORE"
+          ./gradlew --no-daemon assembleRelease
+
+      # An unsigned build would be named app-release-unsigned.apk, so this
+      # also fails if signing didn't happen.
+      - name: Check the signature and name the APK
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          "$apksigner" verify --print-certs "$apk"
+          mkdir -p dist
+          cp "$apk" "dist/pc26-${{ steps.version.outputs.name }}.apk"
+
+      - name: Publish on GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A tag like v0.2.0-beta.1 makes a pre-release.
+          prerelease=
+          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" "dist/pc26-${{ steps.version.outputs.name }}.apk" \
+            --generate-notes $prerelease
+
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"
