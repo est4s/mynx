@@ -77,6 +77,19 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
+### Issue #1 fixes: check on the phone (entry 56)
+
+Needs a build from main (push first; the owner decides when). Then:
+- Close a tab that runs `menu` (or any program): `ps -eo pid,ppid,stat,args`
+  in another tab shows none of its processes left, nothing in state R
+  with PPid 1.
+- `pocket sound start` returns after a moment, and `parecord --device=mic
+  --raw /tmp/t.raw` straight after connects (no "Connection refused").
+- Recording through `mic` (`parecord`, the tuner) gets data after a few
+  app restarts and `pocket sound start`s: the stall was a race, so try
+  several times, ideally while the phone is busy.
+- Then reply on issue #1 and close it if all hold.
+
 ### Roadmap step 9: Android integration
 
 README section "Android integration". Planned with the owner
@@ -291,6 +304,44 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-06 (56): issue #1, mic stall and processes left by closed tabs
+
+GitHub issue #1 (the owner's): recording through the sound device's
+`mic` got no data until `pocket sound start`; that command returned
+before the server answered; `keybar` spun at ~48% CPU.
+- **Mic stall, cause:** `sound-server` starts `sound-watch` with its
+  pid, then execs Pulse. Under load the watcher's first check ran
+  before the exec (29 of 60 under CPU load, 0 of 40 idle, with a stub
+  of the pattern), decided Pulse had gone and exited, so the app never
+  saw a recording and never fed `in`. Fix: the watcher waits up to ~5 s
+  for the pid to become `pulseaudio` (def4748). The test "ends at
+  once for a pid that isn't Pulse" encoded the bug; it now gives up
+  after a few seconds. "lists them again when a recording starts or
+  stops" is a timing flake under load (fails on HEAD too).
+- **Spinning keybar, cause:** not keybar. Closing a tab called Termux's
+  `finishIfRunning()`, SIGKILL to proot only; its programs lived on
+  untraced (`TracerPid: 0`) under proot's seccomp filter, where every
+  syscall proot would handle fails with ENOSYS, so they spin. Five such
+  orphans (two closed tabs' bash/keybar/menu) were each using a full
+  core; killed them. proot (v5.1.107.96 source) ignores TERM and HUP
+  and on QUIT kills all tracees and exits. Fix: `stopProot()` (core)
+  sends QUIT, then `finishIfRunning()` after 2 s; used for closing
+  tabs and `killAll()`. `SoundDevice.stop()` now waits the same 2 s
+  before `destroyForcibly()` (Pulse's TERM ends that proot by itself)
+  (0ead9ba). App code only builds in CI.
+- **`pocket sound start`** now returns once `sound/pid` holds a new
+  pid and the socket answers (written after the old Pulse has gone,
+  before the new socket, which comes after `mic`); fails pointing at
+  `server.log` after 4 × `POCKET_TIMEOUT`. `pocket sound install`
+  waits the same way. Guide updated (30f54a2).
+- **Feeder:** a microphone read of 0 or an error ended the feed thread
+  while the state stayed On. `MicInput` (core) closes it, writes zeros
+  and opens it again every 2 s (8da66e4).
+- Not done from the issue: `pocket sound` reporting the mic's state
+  (feeding, silent and why); the notification says it already.
+- Tests: core green, pocket 176 green, sound-watch.bats green,
+  home-docs green.
 
 ### 2026-10-06 (55): camera cutout confirmed on the phone
 
