@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">PC-26</string>
+    <string name="app_name">Mynx</string>
     <!-- The launcher shortcut (long-press the app icon) that opens the settings editors. -->
     <string name="shortcut_settings">Settings</string>
 </resources>

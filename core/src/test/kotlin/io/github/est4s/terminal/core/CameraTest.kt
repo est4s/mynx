@@ -14,7 +14,7 @@ class CameraRequestTest {
     private val rootfs = File(base, "debian")
     private val home = File(rootfs, "root").apply { mkdirs() }
     private val asked = mutableListOf<Pair<PhotoQuery, PhotoReport>>()
-    private val requests = Pc26Requests(
+    private val requests = MynxRequests(
         dir, home,
         later = cameraRequests(home) { query, report -> asked += query to report },
         alive = { true },
@@ -61,7 +61,7 @@ class CameraRequestTest {
     }
 
     @Test
-    fun `a photo after pocket stopped waiting is thrown away`() {
+    fun `a photo after mynx stopped waiting is thrown away`() {
         send("7-1", "camera", "/root/a.jpg")
         var stopped = false
         asked.single().second.onCancel { stopped = true }
@@ -97,7 +97,7 @@ class CameraRequestTest {
         send("7-1", "camera", "/root/a.jpg")
         send("7-2", "camera-quick", "/root/a.jpg", "back")
         assertTrue(asked.isEmpty())
-        val off = """{"ok":false,"error":"the camera is off (pocket set android-camera on)"}"""
+        val off = """{"ok":false,"error":"the camera is off (mynx set android-camera on)"}"""
         assertEquals(off, file("7-1.reply").readText())
         assertEquals(off, file("7-2.reply").readText())
     }
@@ -116,7 +116,7 @@ class TorchRequestTest {
     private val home = File(base, "root").apply { mkdirs() }
     private val asked = mutableListOf<Pair<Boolean, Int?>>()
     private var refusal: String? = null
-    private val requests = Pc26Requests(dir, home, torch = { on, percent -> asked += on to percent; refusal })
+    private val requests = MynxRequests(dir, home, torch = { on, percent -> asked += on to percent; refusal })
 
     @AfterTest
     fun cleanup() {

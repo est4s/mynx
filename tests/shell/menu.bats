@@ -30,8 +30,8 @@ keys() {
 }
 
 @test "the user's menu file replaces the built-in one" {
-    mkdir -p "$HOME/.config/pc26"
-    printf '# mine\nShell = shell\n\n  Top = run htop -d 10\nBye = exit\n' >"$HOME/.config/pc26/menu.conf"
+    mkdir -p "$HOME/.config/mynx"
+    printf '# mine\nShell = shell\n\n  Top = run htop -d 10\nBye = exit\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
     [ "${ITEMS[*]}" = "Shell Top Bye" ]
@@ -40,8 +40,8 @@ keys() {
 }
 
 @test "a menu file with nothing usable falls back to the built-in items" {
-    mkdir -p "$HOME/.config/pc26"
-    printf 'oops\n' >"$HOME/.config/pc26/menu.conf"
+    mkdir -p "$HOME/.config/mynx"
+    printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
     [ "${ITEMS[*]}" = "Terminal Files Apps Games Settings AI agents System Getting started Exit" ]
@@ -70,9 +70,9 @@ keys() {
     [ "${ACTS[*]}" = "update info about" ]
 }
 
-@test "About shows pocket about" {
+@test "About shows mynx about" {
     run keys 73
-    [[ $output == *"RUN: pocket about"* ]]
+    [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "games come from both folders, named after their files" {
@@ -150,7 +150,7 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     unset ST; declare -A ST
     load_state
     [ "${ST[sel_main]}" = 2 ]
-    [ -f "$HOME/.local/state/pc26/menu" ]
+    [ -f "$HOME/.local/state/mynx/menu" ]
 }
 
 @test "colours come from the terminal's theme (the 16 basic colours)" {
@@ -162,10 +162,10 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 @test "the boot splash names the theme" {
     source "$MENU"
     [ "$(theme_name)" = neon ]
-    mkdir -p "$HOME/.config/pc26"
-    printf '# theme: nord\nbackground=#000000\n' >"$HOME/.config/pc26/colors.properties"
+    mkdir -p "$HOME/.config/mynx"
+    printf '# theme: nord\nbackground=#000000\n' >"$HOME/.config/mynx/colors.properties"
     [ "$(theme_name)" = nord ]
-    printf 'background=#000000\n' >"$HOME/.config/pc26/colors.properties"
+    printf 'background=#000000\n' >"$HOME/.config/mynx/colors.properties"
     [ "$(theme_name)" = custom ]
 }
 
@@ -198,19 +198,19 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 
 @test "Settings opens the settings editor" {
     run keys 5
-    [[ $output == *"RUN: pocket edit"* ]]
+    [[ $output == *"RUN: mynx edit"* ]]
 }
 
-fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
+fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
     mkdir -p "$BATS_TEST_TMPDIR/bin"
     printf '#!/bin/sh\n[ "$*" = "agent list --tsv" ] && printf "claude\\tClaude Code\\tinstalled\\ncodex\\tCodex\\t\\n"\n' \
-        >"$BATS_TEST_TMPDIR/bin/pocket"
-    chmod +x "$BATS_TEST_TMPDIR/bin/pocket"
+        >"$BATS_TEST_TMPDIR/bin/mynx"
+    chmod +x "$BATS_TEST_TMPDIR/bin/mynx"
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
 @test "AI agents lists the agents, marking those to install" {
-    fake_pc26
+    fake_mynx
     source "$MENU"
     menu_items agents
     [ "${ITEMS[0]}" = "Claude Code" ]
@@ -219,20 +219,20 @@ fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
 }
 
 @test "picking an agent starts it (or offers to install it)" {
-    fake_pc26
+    fake_mynx
     run keys 62
-    [[ $output == *"RUN: pocket agent start codex"* ]]
+    [[ $output == *"RUN: mynx agent start codex"* ]]
 }
 
-@test "moving through AI agents doesn't ask pocket again on each key" {
-    fake_pc26
-    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pocket"
+@test "moving through AI agents doesn't ask mynx again on each key" {
+    fake_mynx
+    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/mynx"
     run keys 6jjjkqq
     [ "$status" -eq 0 ]
     [ "$(wc -l <"$BATS_TEST_TMPDIR/calls")" -eq 1 ]
 }
 
-@test "AI agents without a working pocket says so" {
+@test "AI agents without a working mynx says so" {
     export PATH="$BATS_TEST_TMPDIR/empty:/usr/bin:/bin"
     source "$MENU"
     menu_items agents
@@ -240,8 +240,8 @@ fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
 }
 
 @test "a run item runs its command in bash" {
-    mkdir -p "$HOME/.config/pc26"
-    printf 'Top = run htop -d 10\n' >"$HOME/.config/pc26/menu.conf"
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Top = run htop -d 10\n' >"$HOME/.config/mynx/menu.conf"
     run keys 1
     [[ $output == *"RUN: bash -c htop -d 10"* ]]
 }
@@ -287,7 +287,7 @@ fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
     output=$(welcome_page <<<x)  # the menu's own run() replaces bats' run
     [[ $output == *"Getting started"* ]]
     [[ $output == *"A real Debian on your phone"* ]]
-    [[ $output == *"pocket welcome."* ]]
+    [[ $output == *"mynx welcome."* ]]
 }
 
 @test "a welcome page taller than the screen comes in pages" {
@@ -296,13 +296,13 @@ fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
     output=$(welcome_page <<<"xx")
     [[ $output == *"A real Debian on your phone"* ]]
     [[ $output == *"more"* ]]
-    [[ $output == *"pocket welcome."* ]]
+    [[ $output == *"mynx welcome."* ]]
 }
 
 @test "the first boot shows the welcome page, later ones don't" {
     run bash -c "(sleep 2; printf x; sleep 0.5; printf q) | bash '$MENU' --boot"
     [[ $output == *"A real Debian on your phone"* ]]
-    grep -qx 'welcomed=1' "$HOME/.local/state/pc26/menu"
+    grep -qx 'welcomed=1' "$HOME/.local/state/mynx/menu"
     run bash -c "(sleep 2; printf q) | bash '$MENU' --boot"
     [[ $output != *"A real Debian on your phone"* ]]
 }

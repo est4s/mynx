@@ -9,7 +9,7 @@ import kotlin.test.assertEquals
 class ConfigCheckTest {
     private val rootfs = createTempDirectory("rootfs").toFile()
     private val home = File(rootfs, "root")
-    private val config = File(home, ".config/pc26").apply { mkdirs() }
+    private val config = File(home, ".config/mynx").apply { mkdirs() }
 
     @AfterTest
     fun cleanup() {
@@ -34,7 +34,7 @@ class ConfigCheckTest {
         File(config, "colors.properties").writeText("background=black\n")
 
         assertEquals(
-            listOf(ConfigProblems("~/.config/pc26/colors.properties",
+            listOf(ConfigProblems("~/.config/mynx/colors.properties",
                 listOf("line 1: 'black' is not a #rrggbb colour"))),
             checkConfig(home),
         )
@@ -46,7 +46,7 @@ class ConfigCheckTest {
         write("keybars/nnn.conf", "Quit = q\nbad\n")
 
         assertEquals(
-            listOf("~/.config/pc26/keybars/nnn.conf", "~/.config/pc26/keybars/shell.conf"),
+            listOf("~/.config/mynx/keybars/nnn.conf", "~/.config/mynx/keybars/shell.conf"),
             checkConfig(home).map { it.file },
         )
         assertEquals(1, checkConfig(home).first().problems.size)
@@ -57,7 +57,7 @@ class ConfigCheckTest {
         write("keybars/my bar.conf", "Quit = q\n")
 
         assertEquals(
-            listOf(ConfigProblems("~/.config/pc26/keybars/my bar.conf",
+            listOf(ConfigProblems("~/.config/mynx/keybars/my bar.conf",
                 listOf("not a usable bar name: use letters, digits, - and _"))),
             checkConfig(home),
         )
@@ -76,7 +76,7 @@ class ConfigCheckTest {
         File(config, "settings.conf").writeText("font = /usr/share/fonts/Hack.ttf\n")
 
         assertEquals(
-            listOf(ConfigProblems("~/.config/pc26/settings.conf", listOf("font: no such file /usr/share/fonts/Hack.ttf"))),
+            listOf(ConfigProblems("~/.config/mynx/settings.conf", listOf("font: no such file /usr/share/fonts/Hack.ttf"))),
             checkConfig(home),
         )
         File(home.parentFile, "usr/share/fonts").mkdirs()

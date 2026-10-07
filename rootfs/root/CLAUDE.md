@@ -1,2 +1,2 @@
 @AGENTS.md
-@/opt/pc26/AGENTS.md
+@/opt/mynx/AGENTS.md

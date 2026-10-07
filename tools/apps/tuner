@@ -241,8 +241,8 @@ def play_tone(freq):
 
 
 def vibrate(ms):
-    if shutil.which("pocket"):
-        subprocess.Popen(["pocket", "vibrate", str(ms)], stdin=subprocess.DEVNULL,
+    if shutil.which("mynx"):
+        subprocess.Popen(["mynx", "vibrate", str(ms)], stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 

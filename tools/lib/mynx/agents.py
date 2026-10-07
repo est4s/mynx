@@ -1,5 +1,5 @@
 """AI agent CLIs: how to install them with their official installers, and
-the hook entries that make them call `pocket hook NAME`.
+the hook entries that make them call `mynx hook NAME`.
 
 Whether an agent notifies is only stored in the agent's own config (the
 hook entries are there or not), so the two can't disagree.
@@ -11,7 +11,7 @@ from collections import namedtuple
 
 from .client import TOOLS, Failure
 
-# events: the agent's hook event -> what it means for `pocket hook`
+# events: the agent's hook event -> what it means for `mynx hook`
 # downloads: where its installer downloads silently (None: it shows progress)
 # needs: commands it runs that a fresh Debian may lack -> their package
 Agent = namedtuple("Agent", "name title command config events installer downloads needs",
@@ -71,12 +71,12 @@ def download_progress(title, before, size, showing):
 
 def hook_command(agent):
     # The full path: an agent may run hooks without the app's PATH.
-    return f"{os.path.join(TOOLS, 'bin', 'pocket')} hook {agent.name}"
+    return f"{os.path.join(TOOLS, 'bin', 'mynx')} hook {agent.name}"
 
 
 def is_ours(handler, agent):
     command = handler.get("command") if isinstance(handler, dict) else None
-    ours = f"pocket hook {agent.name}"
+    ours = f"mynx hook {agent.name}"
     return isinstance(command, str) and (command == ours or command.endswith("/" + ours))
 
 
@@ -168,7 +168,7 @@ def read_config(agent):
 
 
 def status(agent):
-    """What `pocket agent list` shows about [agent]."""
+    """What `mynx agent list` shows about [agent]."""
     installed = bool(shutil.which(agent.command)) or os.path.exists(
         os.path.expanduser(f"~/.local/bin/{agent.command}"))
     try:

@@ -3,7 +3,7 @@ package io.github.est4s.terminal.core
 import java.io.File
 
 /** The user's settings folder, relative to root's home in Debian. */
-const val CONFIG_DIR = ".config/pc26"
+const val CONFIG_DIR = ".config/mynx"
 
 /** What's wrong in one config file; [file] is its Debian path, as users see it. */
 data class ConfigProblems(val file: String, val problems: List<String>)

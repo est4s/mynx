@@ -15,7 +15,7 @@ if command -v eza >/dev/null; then
 fi
 
 # Names the tab after the current folder.
-pc26_set_title() {
+mynx_set_title() {
     local title=${PWD##*/}
     [[ $PWD == "$HOME" ]] && title='~'
     printf '\e]0;%s\a' "${title:-/}"
@@ -24,21 +24,21 @@ pc26_set_title() {
 # Prompt: starship (~/.config/starship.toml). Both branches keep any
 # PROMPT_COMMAND already set; the app uses it to remember each tab's folder.
 if command -v starship >/dev/null; then
-    starship_precmd_user_func=pc26_set_title
+    starship_precmd_user_func=mynx_set_title
     eval "$(starship init bash)"
 else
-    PROMPT_COMMAND="pc26_set_title${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
+    PROMPT_COMMAND="mynx_set_title${PROMPT_COMMAND:+; $PROMPT_COMMAND}"
 fi
 
 # Launcher menu (/usr/local/bin/menu). Its Exit item returns 10: close
-# the tab. The app sets PC26_MENU in the first tab of a fresh start.
+# the tab. The app sets MYNX_MENU in the first tab of a fresh start.
 menu() {
     keybar menu menu "$@"
     local rc=$?
     ((rc == 10)) && exit 0
     return $rc
 }
-if [[ -n ${PC26_MENU-} ]]; then
-    unset PC26_MENU
+if [[ -n ${MYNX_MENU-} ]]; then
+    unset MYNX_MENU
     menu --boot
 fi

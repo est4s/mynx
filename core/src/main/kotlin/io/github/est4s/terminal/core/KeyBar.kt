@@ -139,7 +139,7 @@ internal fun isKeyBarName(name: String) = BAR_NAME.matches(name)
 
 /** The bars shipped in the app (resources can't be listed on Android). */
 val BUILT_IN_KEY_BARS = listOf(
-    "shell", "nnn", "menu", "pocket-edit", "game", "neon-rogue", "neon-drive", "neon-flap", "agent",
+    "shell", "nnn", "menu", "mynx-edit", "game", "neon-rogue", "neon-drive", "neon-flap", "agent",
     "compass", "incline", "torch", "spectrum", "dbmeter", "tuner", "metronome",
 )
 

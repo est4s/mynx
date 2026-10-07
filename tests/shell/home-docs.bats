@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# The agent guide (tools/AGENTS.md → /opt/pc26/AGENTS.md, so
+# The agent guide (tools/AGENTS.md → /opt/mynx/AGENTS.md, so
 # it updates with the app) must keep up with the setup it describes. Root's
 # home (rootfs/root/) has short AGENTS.md / CLAUDE.md files pointing to it.
 
@@ -8,11 +8,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the home's CLAUDE.md imports its AGENTS.md and the guide" {
     grep -qx '@AGENTS.md' "$ROOT/CLAUDE.md"
-    grep -qx '@/opt/pc26/AGENTS.md' "$ROOT/CLAUDE.md"
+    grep -qx '@/opt/mynx/AGENTS.md' "$ROOT/CLAUDE.md"
 }
 
 @test "the home's AGENTS.md points to the guide" {
-    grep -qF '/opt/pc26/AGENTS.md' "$ROOT/AGENTS.md"
+    grep -qF '/opt/mynx/AGENTS.md' "$ROOT/AGENTS.md"
 }
 
 @test "the guide mentions every file shipped in the home folder" {
@@ -28,20 +28,20 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the guide mentions the other things users can change" {
     for path in \
-        "~/.config/pc26/colors.properties" \
-        "~/.config/pc26/settings.conf" \
-        "~/.config/pc26/menu.conf" \
-        "~/.config/pc26/themes" \
-        "/opt/pc26/menu.conf" \
-        "/opt/pc26/themes" \
-        "~/.local/state/pc26/menu" \
+        "~/.config/mynx/colors.properties" \
+        "~/.config/mynx/settings.conf" \
+        "~/.config/mynx/menu.conf" \
+        "~/.config/mynx/themes" \
+        "/opt/mynx/menu.conf" \
+        "/opt/mynx/themes" \
+        "~/.local/state/mynx/menu" \
         "~/games" \
         "~/apps" \
-        "/opt/pc26/apps" \
-        "/opt/pc26/bin" \
+        "/opt/mynx/apps" \
+        "/opt/mynx/bin" \
         "\`menu\`" "\`files\`" "\`keybar\`" "\`play\`" \
         "NNN_BMS" \
-        "/opt/pc26/keybars" \
+        "/opt/mynx/keybars" \
         "/opt/neon-games"; do
         grep -qF "$path" "$GUIDE" || { echo "not in the guide: $path"; false; }
     done
@@ -69,12 +69,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
-@test "the guide documents every pocket command" {
-    pocket="$BATS_TEST_DIRNAME/../../tools/bin/pocket"
-    commands=$(python3 "$pocket" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
+@test "the guide documents every mynx command" {
+    mynx="$BATS_TEST_DIRNAME/../../tools/bin/mynx"
+    commands=$(python3 "$mynx" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
     [ -n "$commands" ]
     for name in $commands; do
-        grep -qF "pocket $name" "$GUIDE" || { echo "not in the guide: pocket $name"; false; }
+        grep -qF "mynx $name" "$GUIDE" || { echo "not in the guide: mynx $name"; false; }
     done
 }
 

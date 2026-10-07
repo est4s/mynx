@@ -13,7 +13,7 @@ fun writeFakeProc(dir: File, cpus: Int, canRead: (String) -> Boolean): Map<Strin
         "loadavg" to "0.12 0.07 0.02 2/165 765\n",
         "stat" to fakeStat(cpus),
         "uptime" to "124.08 932.80\n",
-        "version" to "Linux version 6.1.0 (pc26@localhost) #1 SMP PREEMPT\n",
+        "version" to "Linux version 6.1.0 (mynx@localhost) #1 SMP PREEMPT\n",
         "vmstat" to FAKE_VMSTAT,
     )
     dir.mkdirs()

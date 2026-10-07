@@ -15,7 +15,7 @@ import io.github.est4s.terminal.core.SensorReading
 import io.github.est4s.terminal.core.SensorReport
 
 /**
- * Answers `pocket sensor` from Android's SensorManager. Readings arrive
+ * Answers `mynx sensor` from Android's SensorManager. Readings arrive
  * on a thread of their own (up to 200 a second); [read] is called on
  * the main thread. [askPermission] shows Android's dialog for the
  * permissions a sensor needs beyond the app's own (step counting), and
@@ -85,7 +85,7 @@ class SensorReader(
 
         override fun onSensorChanged(event: SensorEvent) {
             if (stopped) return
-            // Event times count from boot; pocket shows the clock time.
+            // Event times count from boot; mynx shows the clock time.
             val ago = (SystemClock.elapsedRealtimeNanos() - event.timestamp) / 1_000_000
             report.reading(SensorReading(event.values.toList(), event.accuracy, System.currentTimeMillis() - ago))
             if (!query.stream) stop()

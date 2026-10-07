@@ -18,7 +18,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "pc26"
+rootProject.name = "mynx"
 
 // Plain Kotlin logic, testable anywhere (including on the phone).
 include(":core")

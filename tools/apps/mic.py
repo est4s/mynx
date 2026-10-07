@@ -3,9 +3,9 @@ spectrum and dbmeter.
 
 It streams from the app's sound device (PulseAudio, through `parec`). The
 device can stall: parec stays connected but no audio arrives, not even
-silence. Mic notices that, restarts the device with `pocket sound start`
+silence. Mic notices that, restarts the device with `mynx sound start`
 and reconnects; if that doesn't help, or there's no sound device, it reads
-a `pocket audio record` WAV as it grows. `status` says what it's doing,
+a `mynx audio record` WAV as it grows. `status` says what it's doing,
 for the screen; read() raises MicError when nothing works. Exact silence
 (the device sends zeros while the app is in the background, or the mic is
 off or not allowed) isn't a fault: `status` only says to open the app.
@@ -31,7 +31,7 @@ MUTE = 2.0                    # seconds of exact zeros before saying so
 RESTARTS = 2                  # device restarts before recording directly
 HEALTHY = 10.0                # seconds of audio that make restarts count from 0
 READY_WAIT = 10.0             # seconds for the device to come back up
-RECORD_FIRST = 8.0            # seconds for `pocket audio record` to start writing
+RECORD_FIRST = 8.0            # seconds for `mynx audio record` to start writing
 RECORD_STALL = 3.0
 RECORD_RESTART = 20 * 60      # a fresh recording every 20 min keeps the file small
 
@@ -54,7 +54,7 @@ def run(cmd, timeout):
 def device_on():
     """Whether the sound device is running and parec is there to read it."""
     return (bool(shutil.which("parec")) and bool(shutil.which("pactl"))
-            and b": on" in run(["pocket", "sound"], 10))
+            and b": on" in run(["mynx", "sound"], 10))
 
 
 def device_ready():
@@ -105,13 +105,13 @@ class Parec:
 
 
 class Recorder:
-    """Runs `pocket audio record` and reads its WAV as it grows."""
+    """Runs `mynx audio record` and reads its WAV as it grows."""
 
     def __init__(self, rate):
         self.folder = tempfile.mkdtemp(prefix="mic-")
         self.part = os.path.join(self.folder, ".mic.wav.part")
         self.proc = subprocess.Popen(
-            ["pocket", "audio", "record", "--rate", str(rate),
+            ["mynx", "audio", "record", "--rate", str(rate),
              os.path.join(self.folder, "mic.wav")],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             start_new_session=True)
@@ -242,7 +242,7 @@ class Mic:
         return array.array("h")
 
     def _fix(self):
-        run(["pocket", "sound", "start"], 30)
+        run(["mynx", "sound", "start"], 30)
         end = time.monotonic() + READY_WAIT
         while not (ok := device_ready()) and time.monotonic() < end:
             time.sleep(0.5)

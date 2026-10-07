@@ -335,7 +335,7 @@ class KeyBarTest {
 
     @Test
     fun `the editors' bar sends the keys the editors use`() {
-        val bar = loadKeyBar("pocket-edit", File("/nonexistent"))
+        val bar = loadKeyBar("mynx-edit", File("/nonexistent"))
 
         assertEquals(emptyList(), bar.problems)
         val sent = bar.buttons.flatMap { it.strokes }

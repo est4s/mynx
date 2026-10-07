@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NEON ROGUE - a pocket roguelike for narrow phone terminals.
+"""NEON ROGUE - a mynx roguelike for narrow phone terminals.
 
 Descend 10 levels, slay the Neon Wyrm, grab the amulet.
 """

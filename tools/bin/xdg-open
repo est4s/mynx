@@ -3,4 +3,4 @@
 # in through a browser (AI agents) call this, or $BROWSER, which the app
 # points here.
 [ $# -ge 1 ] || { echo "usage: xdg-open URL" >&2; exit 1; }
-exec pocket open "$1"
+exec mynx open "$1"

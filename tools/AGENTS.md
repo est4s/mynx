@@ -4,12 +4,12 @@ Notes for AI agents (and people) working in this terminal. You're root in
 a Debian 13 (trixie) arm64 system that runs inside an Android app on a
 phone, through proot. The screen is narrow: about 56 columns in portrait.
 
-This guide is `/opt/pc26/AGENTS.md`. It belongs to the app and
+This guide is `/opt/mynx/AGENTS.md`. It belongs to the app and
 is updated with it; `~/AGENTS.md` is yours for your own notes.
 
 **People will ask you to customize their setup** (theme, font, key bars,
 the menu). Every setting is a plain-text file in
-`~/.config/pc26/`, and the `pocket` command changes, checks
+`~/.config/mynx/`, and the `mynx` command changes, checks
 and applies them. See "Changing settings" below.
 
 ## How it runs
@@ -38,28 +38,28 @@ and applies them. See "Changing settings" below.
 
 | What | Where |
 |---|---|
-| Settings: font size, font, cursor | `~/.config/pc26/settings.conf` |
-| Terminal colours | `~/.config/pc26/colors.properties` |
-| Your own themes | `~/.config/pc26/themes/` |
-| Key bars above the keyboard | `~/.config/pc26/keybars/` |
-| Launcher menu items | `~/.config/pc26/menu.conf` (else `/opt/pc26/menu.conf`) |
+| Settings: font size, font, cursor | `~/.config/mynx/settings.conf` |
+| Terminal colours | `~/.config/mynx/colors.properties` |
+| Your own themes | `~/.config/mynx/themes/` |
+| Key bars above the keyboard | `~/.config/mynx/keybars/` |
+| Launcher menu items | `~/.config/mynx/menu.conf` (else `/opt/mynx/menu.conf`) |
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
-| Menu state (last choices) | `~/.local/state/pc26/menu` |
-| Apps | `/opt/pc26/apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`), yours in `~/apps` |
+| Menu state (last choices) | `~/.local/state/mynx/menu` |
+| Apps | `/opt/mynx/apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`), yours in `~/apps` |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
-| The app's tools: `pocket`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/pc26/bin` |
-| Built-in key bars and themes, to read or copy | `/opt/pc26/keybars`, `/opt/pc26/themes` |
-| Licence texts of what the app bundles (`pocket about`) | `/opt/pc26/licenses` |
+| The app's tools: `mynx`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/mynx/bin` |
+| Built-in key bars and themes, to read or copy | `/opt/mynx/keybars`, `/opt/mynx/themes` |
+| Licence texts of what the app bundles (`mynx about`) | `/opt/mynx/licenses` |
 
-`/opt/pc26` belongs to the app and is replaced on every app
+`/opt/mynx` belongs to the app and is replaced on every app
 update; don't change it. Its `bin` comes first on the PATH. Your changes
 go in your home folder (`~/.local/bin` comes before it).
 
-## Changing settings: `pocket`
+## Changing settings: `mynx`
 
-**After editing any file in `~/.config/pc26/` by hand, run
-`pocket check`**: the app applies the change right away (no need to
+**After editing any file in `~/.config/mynx/` by hand, run
+`mynx check`**: the app applies the change right away (no need to
 leave the app) and lists problems by file and line. Bad lines are
 skipped, never fatal. Exit codes: 0 no problems, 1 problems found, 2 an
 error (for example not running inside the app). Fix what it lists and
@@ -68,54 +68,54 @@ their own.
 
 | Command | Does |
 |---|---|
-| `pocket check` | apply the config now and list problems |
-| `pocket settings` | list the settings with values, defaults and descriptions |
-| `pocket get KEY` | one setting's value |
-| `pocket set KEY VALUE` | change a setting, e.g. `pocket set font-size 14` |
-| `pocket reset KEY` | a setting back to its default; `pocket reset all` for all of them |
-| `pocket theme list` | the themes (`*` marks the one in use) |
-| `pocket theme set NAME` | switch theme, e.g. `pocket theme set nord` |
-| `pocket theme show NAME` | a theme's colours file |
-| `pocket theme reset` | back to the default theme (deletes the colours file) |
-| `pocket keybar list` | key bars: built-in, edited (your copy) or yours |
-| `pocket keybar show NAME` | the bar file in use |
-| `pocket keybar edit NAME` | copy a built-in bar (or start a new one) in `~/.config/pc26/keybars/` to edit |
-| `pocket keybar reset NAME` | delete your copy of a built-in bar |
-| `pocket menu show` | the launcher menu file in use |
-| `pocket menu edit` | copy the built-in menu to `~/.config/pc26/menu.conf` to edit |
-| `pocket menu reset` | delete your menu file (back to the built-in one) |
-| `pocket notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
-| `pocket undo` | take back the last config change (`pocket undo --list` shows what it can take back) |
-| `pocket open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
-| `pocket vibrate [MS]` | vibrate the phone, 300 ms unless given (1 to 5000) |
-| `pocket clipboard get` | print the phone's clipboard (the app must be on screen) |
-| `pocket clipboard set [TEXT]` | copy TEXT to the phone's clipboard, or stdin when there's no TEXT |
-| `pocket share FILE…` | send files to another app through Android's share sheet (the app must be on screen) |
-| `pocket share --text [TEXT]` | send TEXT, or stdin when there's no TEXT, to another app |
-| `pocket location` | where the phone is: one fix; `--stream` keeps printing them (see "The phone") |
-| `pocket sensor list` | the phone's sensors, with their values and units |
-| `pocket sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
-| `pocket camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
-| `pocket torch on [PERCENT]\|off` | the phone's flashlight |
-| `pocket rotation lock [portrait\|landscape]` | stop the screen turning while the program that ran it runs; `unlock`, `status` |
-| `pocket audio play FILE` | play a sound file through the phone's speaker, until it ends |
-| `pocket audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
-| `pocket sound` | whether the sound device is on; `pocket sound start` starts it again, `pocket sound install` installs it (see "The phone") |
-| `pocket agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
-| `pocket agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
-| `pocket agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
-| `pocket agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
-| `pocket hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
-| `pocket edit` | the settings editors, for people (full screen) |
-| `pocket welcome` | the welcome page new users see: what's here and how to get around |
-| `pocket about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
-| `pocket version` | the version of the app's tools |
-| `pocket help` | all commands |
+| `mynx check` | apply the config now and list problems |
+| `mynx settings` | list the settings with values, defaults and descriptions |
+| `mynx get KEY` | one setting's value |
+| `mynx set KEY VALUE` | change a setting, e.g. `mynx set font-size 14` |
+| `mynx reset KEY` | a setting back to its default; `mynx reset all` for all of them |
+| `mynx theme list` | the themes (`*` marks the one in use) |
+| `mynx theme set NAME` | switch theme, e.g. `mynx theme set nord` |
+| `mynx theme show NAME` | a theme's colours file |
+| `mynx theme reset` | back to the default theme (deletes the colours file) |
+| `mynx keybar list` | key bars: built-in, edited (your copy) or yours |
+| `mynx keybar show NAME` | the bar file in use |
+| `mynx keybar edit NAME` | copy a built-in bar (or start a new one) in `~/.config/mynx/keybars/` to edit |
+| `mynx keybar reset NAME` | delete your copy of a built-in bar |
+| `mynx menu show` | the launcher menu file in use |
+| `mynx menu edit` | copy the built-in menu to `~/.config/mynx/menu.conf` to edit |
+| `mynx menu reset` | delete your menu file (back to the built-in one) |
+| `mynx notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
+| `mynx undo` | take back the last config change (`mynx undo --list` shows what it can take back) |
+| `mynx open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
+| `mynx vibrate [MS]` | vibrate the phone, 300 ms unless given (1 to 5000) |
+| `mynx clipboard get` | print the phone's clipboard (the app must be on screen) |
+| `mynx clipboard set [TEXT]` | copy TEXT to the phone's clipboard, or stdin when there's no TEXT |
+| `mynx share FILE…` | send files to another app through Android's share sheet (the app must be on screen) |
+| `mynx share --text [TEXT]` | send TEXT, or stdin when there's no TEXT, to another app |
+| `mynx location` | where the phone is: one fix; `--stream` keeps printing them (see "The phone") |
+| `mynx sensor list` | the phone's sensors, with their values and units |
+| `mynx sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
+| `mynx camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
+| `mynx torch on [PERCENT]\|off` | the phone's flashlight |
+| `mynx rotation lock [portrait\|landscape]` | stop the screen turning while the program that ran it runs; `unlock`, `status` |
+| `mynx audio play FILE` | play a sound file through the phone's speaker, until it ends |
+| `mynx audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
+| `mynx sound` | whether the sound device is on; `mynx sound start` starts it again, `mynx sound install` installs it (see "The phone") |
+| `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
+| `mynx agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
+| `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
+| `mynx agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
+| `mynx hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
+| `mynx edit` | the settings editors, for people (full screen) |
+| `mynx welcome` | the welcome page new users see: what's here and how to get around |
+| `mynx about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
+| `mynx version` | the version of the app's tools |
+| `mynx help` | all commands |
 
 `--json` on any command prints `{"ok": true, ...}` or
 `{"ok": false, "error": "..."}`, for scripts.
 
-`pocket edit` (also the menu's Settings item) opens editors for people:
+`mynx edit` (also the menu's Settings item) opens editors for people:
 theme (moving through the list previews each theme live), settings
 (font, cursor, agent notifications, undo), key bars, the launcher menu,
 a config check and "Undo last change". In each, `r` puts things back
@@ -124,14 +124,14 @@ commands above.
 
 ### Settings (`settings.conf`)
 
-One `key = value` per line; `pocket settings` describes each.
+One `key = value` per line; `mynx settings` describes each.
 
 - `font-size`: 6 to 40 (default 12). Pinching the terminal changes it
   and saves it here.
 - `font`: `default` (JetBrains Mono Nerd Font, which has the icons the
   prompt and `ls` use) or the full path of a `.ttf`/`.otf` file in
   Debian, e.g. after `apt install fonts-hack`:
-  `pocket set font /usr/share/fonts/truetype/hack/Hack-Regular.ttf`.
+  `mynx set font /usr/share/fonts/truetype/hack/Hack-Regular.ttf`.
   Other fonts don't show Nerd Font icons.
 - `cursor-style`: `block`, `underline` or `bar`.
 - `cursor-blink`: `on` or `off`.
@@ -139,20 +139,20 @@ One `key = value` per line; `pocket settings` describes each.
   agents (see "AI agents").
 - `agent-notify-after`: 0 to 3600 seconds (default 30). A finished
   agent turn only notifies if it took at least this long.
-- `undo-keep`: 0 to 20 (default 1): how many changes `pocket undo` can
+- `undo-keep`: 0 to 20 (default 1): how many changes `mynx undo` can
   take back. 0 turns undo off.
 - `android-clipboard`: `on` (default) or `off`: whether programs here
   can read and change the phone's clipboard (see "The phone").
 - `android-share`: `on` (default) or `off`: whether programs here can
-  open Android's share sheet (`pocket share`).
+  open Android's share sheet (`mynx share`).
 - `android-location`: `on` (default) or `off`: whether programs here
-  can ask for the phone's location (`pocket location`).
+  can ask for the phone's location (`mynx location`).
 - `android-sensors`: `on` (default) or `off`: whether programs here
-  can read the phone's sensors (`pocket sensor`).
+  can read the phone's sensors (`mynx sensor`).
 - `android-camera`: `on` (default) or `off`: whether programs here
-  can take photos (`pocket camera`).
+  can take photos (`mynx camera`).
 - `android-microphone`: `on` (default) or `off`: whether programs
-  here can record from the microphone (`pocket audio record`, and
+  here can record from the microphone (`mynx audio record`, and
   the sound device: they get silence while it's off).
 - `sound-device`: `on` (default) or `off`: whether the app runs the
   sound device, so programs here play through the phone's speaker.
@@ -169,21 +169,21 @@ One `key = value` per line; `pocket settings` describes each.
 
 ### Undo
 
-Every change to `~/.config/pc26/` is recorded so `pocket
-undo` can take it back, however it was made: `pocket` commands, the
+Every change to `~/.config/mynx/` is recorded so `mynx
+undo` can take it back, however it was made: `mynx` commands, the
 settings editors, the app (pinching the font size), or by hand. Edits by
-hand are recorded at the next `pocket check`, app start or `pocket
+hand are recorded at the next `mynx check`, app start or `mynx
 undo`, so a file you broke by hand can be undone even if you never
-checked it. `pocket undo` takes back one change at a time, newest first,
-as far back as `undo-keep` allows; `pocket undo --list` names them.
+checked it. `mynx undo` takes back one change at a time, newest first,
+as far back as `undo-keep` allows; `mynx undo --list` names them.
 Fonts in `fonts/` and files over 256 KB aren't recorded. The copies live
-in `~/.local/state/pc26/undo/`.
+in `~/.local/state/mynx/undo/`.
 
 ### AI agents
 
 The menu's **AI agents** item lists them: picking an installed one
 starts it, picking one marked "(install)" offers to install it first
-(`pocket agent start NAME` does the same). `pocket agent install NAME`
+(`mynx agent start NAME` does the same). `mynx agent install NAME`
 installs an agent CLI with its own official installer, never a copy bundled with
 the app; the user signs in with their own account:
 
@@ -196,18 +196,18 @@ the app; the user signs in with their own account:
 `curl` is installed first if it's missing. Afterwards it asks whether
 to turn on the agent's notifications.
 
-**Notifications:** with them on, the agent's hooks run `pocket hook
+**Notifications:** with them on, the agent's hooks run `mynx hook
 NAME`, which posts a phone notification when a turn that took
 `agent-notify-after` seconds or more ends ("Your turn"), and whenever
 the agent needs permission or input. Nothing is shown while you're
 looking at that agent's tab, and tapping a notification opens it. The
-hook never fails, so it can't disturb the agent. `pocket agent notify
+hook never fails, so it can't disturb the agent. `mynx agent notify
 NAME on|off` (or the Settings editor) adds or removes the hook entries
 in the agent's config file and leaves everything else in it alone;
 that file is the only record of whether they're on. `agent-notify off`
 silences all agents at once.
 
-Your own scripts can notify too: `long-job && pocket notify "Done" "long-job finished"`.
+Your own scripts can notify too: `long-job && mynx notify "Done" "long-job finished"`.
 
 **Signing in:** `BROWSER` points at `xdg-open`, which opens links in the
 phone's browser, so an agent that opens a browser to sign in just works
@@ -218,18 +218,18 @@ it too, even one spread over several rows.
 
 Commands for the phone itself, and the sound device:
 
-- `pocket vibrate [MS]`: a buzz, e.g. `make && pocket vibrate`.
-- `pocket clipboard set [TEXT]` copies TEXT, or what's piped in, line
-  breaks and all: `git log -1 | pocket clipboard set`.
-  `pocket clipboard get` prints it as it is, with no line break added
+- `mynx vibrate [MS]`: a buzz, e.g. `make && mynx vibrate`.
+- `mynx clipboard set [TEXT]` copies TEXT, or what's piped in, line
+  breaks and all: `git log -1 | mynx clipboard set`.
+  `mynx clipboard get` prints it as it is, with no line break added
   unless it goes to the terminal. Android only lets the app on screen
   read the clipboard, so `get` fails while the app is in the
   background; `set` works anyway. `android-clipboard off` blocks both.
-- `pocket share FILE…` opens Android's share sheet to send files to
-  another app (mail, chat, …): `pocket share report.pdf photo.jpg`.
-  `pocket share --text TEXT` sends text, or what's piped in. The app
+- `mynx share FILE…` opens Android's share sheet to send files to
+  another app (mail, chat, …): `mynx share report.pdf photo.jpg`.
+  `mynx share --text TEXT` sends text, or what's piped in. The app
   must be on screen. `android-share off` blocks it.
-- `pocket location` prints one fix: `60.1695213, 24.9354471 ±12 m
+- `mynx location` prints one fix: `60.1695213, 24.9354471 ±12 m
   network 08:41:02` (latitude, longitude, accuracy, where it came
   from, time). It takes the first fix from GPS or the network;
   `--gps` waits for GPS only. It gives up after 60 s (`--timeout
@@ -241,11 +241,11 @@ Commands for the phone itself, and the sound device:
   (only while the app is in use), so the app must be on screen to
   start it; a stream keeps going in the background. `android-location
   off` blocks it.
-- `pocket sensor list` names the phone's sensors: `accelerometer`,
+- `mynx sensor list` names the phone's sensors: `accelerometer`,
   `gyroscope`, `magnetic-field`, `light`, `proximity`, `pressure`,
   `gravity`, `rotation-vector`, `step-counter`, … as the phone has
   them, and `compass` (azimuth clockwise from magnetic north, pitch
-  and roll, in degrees, worked out from `rotation-vector`). `pocket
+  and roll, in degrees, worked out from `rotation-vector`). `mynx
   sensor NAME` prints one reading: `x=0.1235 y=9.8067 z=-0.5 m/s²`,
   or `108 lx` for one value; it gives up after 10 s (`--timeout
   SECONDS`, up to 60). `--stream` prints up to 10 readings a second
@@ -257,8 +257,8 @@ Commands for the phone itself, and the sound device:
   step sensors need Android's "physical activity" permission, asked
   the first time (app on screen). Readings keep coming in the
   background. `android-sensors off` blocks it.
-- `pocket camera FILE` opens the phone's camera app; the photo you
-  take is saved to FILE as a JPEG (replacing it), and `pocket` prints
+- `mynx camera FILE` opens the phone's camera app; the photo you
+  take is saved to FILE as a JPEG (replacing it), and `mynx` prints
   `Saved /root/photo.jpg (2.3 MB)`. Backing out of the camera app
   leaves FILE alone ("no photo was taken"). `--quick back` (or
   `front`) takes the photo straight away with no screen, for scripts
@@ -267,31 +267,31 @@ Commands for the phone itself, and the sound device:
   to allow the camera the first time (for both ways), and only lets
   the app on screen use it, so the app must be on screen.
   `android-camera off` blocks it.
-- `pocket torch on` and `pocket torch off` turn the flashlight on and
-  off. `pocket torch on 30` sets a strength
+- `mynx torch on` and `mynx torch off` turn the flashlight on and
+  off. `mynx torch on 30` sets a strength
   in percent, on phones whose flashlight has levels (Android 13+).
   Both work with the app in the background. Opening the camera turns
   it off.
-- `pocket rotation lock` stops the screen turning with the phone,
+- `mynx rotation lock` stops the screen turning with the phone,
   e.g. for a program that reads the tilt sensors: it stays as it is,
-  or `pocket rotation lock portrait` (`landscape`) turns it to that
-  side. The lock belongs to the program that ran `pocket` (the shell,
+  or `mynx rotation lock portrait` (`landscape`) turns it to that
+  side. The lock belongs to the program that ran `mynx` (the shell,
   when you type it) and ends when that program ends, so a crash
   can't leave the screen stuck; `--pid PID` gives it to another
-  process. `pocket rotation unlock` ends every lock; `pocket rotation`
+  process. `mynx rotation unlock` ends every lock; `mynx rotation`
   says whether it's locked (`--json`: `locked` is `no`, `current`,
-  `portrait` or `landscape`). From a program: run `pocket rotation
+  `portrait` or `landscape`). From a program: run `mynx rotation
   lock` once at start.
-- `pocket audio play FILE` plays a sound file (mp3, ogg, wav, m4a,
+- `mynx audio play FILE` plays a sound file (mp3, ogg, wav, m4a,
   flac, … whatever Android can play) and returns when it ends; Ctrl+C
   stops it. It works with the app in the background. `--json` gives
   `file` and `seconds`.
-- `pocket audio record FILE` records from the microphone until Ctrl+C,
+- `mynx audio record FILE` records from the microphone until Ctrl+C,
   or for `--seconds N`, then prints `Saved /root/memo.m4a (240 KB,
   15 s)`. The file's ending picks the format: `.m4a` or `.aac` (AAC),
   `.ogg` or `.opus` (Opus, Android 10+), `.wav` (16-bit PCM, for
   tools like whisper.cpp). Mono; `--rate HZ` (8000 to 48000) sets the
-  sample rate, e.g. `pocket audio record --rate 16000 note.wav`. FILE
+  sample rate, e.g. `mynx audio record --rate 16000 note.wav`. FILE
   only changes once the recording is complete. `--json` gives `file`,
   `bytes` and `seconds`. Android asks to allow the microphone the
   first time, and only lets the app on screen start recording; a
@@ -302,13 +302,13 @@ Commands for the phone itself, and the sound device:
   games, anything that uses PulseAudio or ALSA. The app runs
   PulseAudio in the background (outside the tabs) and plays what it
   sends; `PULSE_SERVER` in every tab points programs at it
-  (`unix:/tmp/.pc26/sound/native`). Don't start your own
-  `pulseaudio`. `pocket sound` says whether it's on; `pocket sound
+  (`unix:/tmp/.mynx/sound/native`). Don't start your own
+  `pulseaudio`. `mynx sound` says whether it's on; `mynx sound
   start` starts it again and returns once programs can connect;
-  Debians set up before the sound device need `pocket sound
+  Debians set up before the sound device need `mynx sound
   install` once (it runs `apt-get install
   pulseaudio …`, asking first; `--yes` skips that). PulseAudio's
-  output is in `/tmp/.pc26/sound/server.log`.
+  output is in `/tmp/.mynx/sound/server.log`.
   `sound-device off` turns it off. Programs record through it too
   (`arecord`, `parecord`, `sox`'s `rec`, whisper.cpp, …): the app
   opens the phone's microphone only while a program records, and
@@ -324,25 +324,25 @@ Commands for the phone itself, and the sound device:
   as a `.txt` file there, named after its subject (a page's title) or
   the time. A name that's taken gets ` (2)`, so nothing is overwritten.
   A notification says what was saved where.
-- `pocket notify` and `pocket open`: see "AI agents" above.
+- `mynx notify` and `mynx open`: see "AI agents" above.
 
 ### Themes and colours
 
 Built-in themes: `neon` (the default), `amber`, `phosphor`, `dracula`,
 `nord`, `gruvbox-dark`, `solarized-dark`, `solarized-light`,
-`catppuccin-mocha`, `tokyo-night`. `pocket theme set NAME` writes the
-theme into `~/.config/pc26/colors.properties`, with
+`catppuccin-mocha`, `tokyo-night`. `mynx theme set NAME` writes the
+theme into `~/.config/mynx/colors.properties`, with
 `# theme: NAME` on its first line; with no colours file the app shows
 Neon.
 
 - **Colours file:** one `key=#rrggbb` per line: `background`,
   `foreground`, `cursor`, `color0` to `color255` (0-7 normal, 8-15
   bright). Keys left out keep the Neon colour. Edit it, then
-  `pocket check`.
+  `mynx check`.
 - **Your own theme:** write
-  `~/.config/pc26/themes/NAME.colors.properties` (same
-  format; start from `pocket theme show neon`), then
-  `pocket theme set NAME`. Yours wins over a built-in one with the same
+  `~/.config/mynx/themes/NAME.colors.properties` (same
+  format; start from `mynx theme show neon`), then
+  `mynx theme set NAME`. Yours wins over a built-in one with the same
   name.
 - The tab strip, key bar and launcher menu take their colours from the
   theme (the menu uses the 16 basic colours).
@@ -351,8 +351,8 @@ Neon.
 
 `menu` opens it (the app opens it in the first tab when it starts
 fresh; the very first time, it shows the welcome page,
-`/opt/pc26/welcome.txt`, after the boot splash). Its items come from `~/.config/pc26/menu.conf` if it
-exists, else `/opt/pc26/menu.conf`. One `Label = action` per
+`/opt/mynx/welcome.txt`, after the boot splash). Its items come from `~/.config/mynx/menu.conf` if it
+exists, else `/opt/mynx/menu.conf`. One `Label = action` per
 line, in order; labels up to 20 characters. Actions:
 
 | Action | Does |
@@ -361,18 +361,18 @@ line, in order; labels up to 20 characters. Actions:
 | `files` | the file manager |
 | `apps` | the Apps menu (see "Apps") |
 | `games` | the Games menu |
-| `settings` | the settings editors (`pocket edit`) |
-| `agents` | AI agents: start one, or install it (`pocket agent start`) |
-| `system` | Update all, System info, About (`pocket about`) |
-| `welcome` | the welcome page (`pocket welcome` prints it) |
+| `settings` | the settings editors (`mynx edit`) |
+| `agents` | AI agents: start one, or install it (`mynx agent start`) |
+| `system` | Update all, System info, About (`mynx about`) |
+| `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
 
-To change it: `pocket menu edit`, edit the file, `pocket check` (it
+To change it: `mynx menu edit`, edit the file, `mynx check` (it
 checks the menu file too). Any executable file in `~/games` shows up
 under Games, named after the file: `ln -s /path/to/game ~/games/my-game`
 shows "My Game". The menu starts games with `play`. Apps work the same
-way from `/opt/pc26/apps` and `~/apps`, named by a `# label: Name` line
+way from `/opt/mynx/apps` and `~/apps`, named by a `# label: Name` line
 near the top of the file.
 
 ### Key bars
@@ -386,20 +386,20 @@ still works). Holding an arrow (or any button marked
 `keybar NAME[,FALLBACK…] command…` shows the first of those bars that
 exists while the command runs, then the previous one; with no command
 running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`,
-the editors use `pocket-edit`.
+the editors use `mynx-edit`.
 
-Built-in bars: `shell`, `nnn`, `menu`, `pocket-edit`, the games'
+Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
 apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
 `metronome`, and
 `agent` for AI agents (`claude`, `codex` and `gemini` typed in the shell,
-or started with `pocket agent start`; an agent's own bar, e.g. `claude`,
+or started with `mynx agent start`; an agent's own bar, e.g. `claude`,
 wins when it exists). Typing them by name works through bash functions
-from `/opt/pc26/shell.bash`; `unset -f claude` in `~/.bashrc`
+from `/opt/mynx/shell.bash`; `unset -f claude` in `~/.bashrc`
 turns that off.
-A file `~/.config/pc26/keybars/NAME.conf` replaces or adds
-one. To change a built-in bar: `pocket keybar edit NAME`, edit the copy,
-`pocket check`. Buttons fill two rows in file order, the first half on
+A file `~/.config/mynx/keybars/NAME.conf` replaces or adds
+one. To change a built-in bar: `mynx keybar edit NAME`, edit the copy,
+`mynx check`. Buttons fill two rows in file order, the first half on
 top. Format, one button per line:
 
 ```
@@ -421,8 +421,8 @@ Ctrl   = Ctrl
   as soon as they're touched; others on release.
 
 **Giving a program or game its own bar** (also what an installer or an
-agent setting up a program should do): `pocket keybar edit NAME`, write
-the buttons, `pocket check`, then run it under that bar:
+agent setting up a program should do): `mynx keybar edit NAME`, write
+the buttons, `mynx check`, then run it under that bar:
 `keybar NAME program`, or `play my-game` for a game (bar named after
 the file). An alias in `~/.bashrc` makes it stick:
 `alias htop='keybar htop htop'`. Fallbacks: `keybar my-tool,game …`
@@ -440,20 +440,20 @@ shows the generic game bar until `my-tool.conf` exists.
 
   | Command | What it is | Uses |
   |---|---|---|
-  | `compass` | a compass card with a bearing to follow | `pocket sensor compass` |
-  | `incline` | a spirit level for flat or on an edge | `pocket sensor accelerometer` |
-  | `torch` | the flashlight: strobe, SOS, Morse, … | `pocket torch` |
+  | `compass` | a compass card with a bearing to follow | `mynx sensor compass` |
+  | `incline` | a spirit level for flat or on an edge | `mynx sensor accelerometer` |
+  | `torch` | the flashlight: strobe, SOS, Morse, … | `mynx torch` |
   | `spectrum` | a live sound spectrum (`--demo` without a mic) | the microphone |
   | `dbmeter` | a sound level meter | the microphone |
   | `tuner` | a guitar tuner (`--demo`) | the microphone, the speaker, numpy |
   | `metronome` | a metronome with tap and clap tempo | the speaker, the flashlight, vibration, numpy |
 
   The microphone apps read it through the sound device with `parec`
-  (`/opt/pc26/apps/mic.py`). `tuner` and `metronome` need numpy and
+  (`/opt/mynx/apps/mic.py`). `tuner` and `metronome` need numpy and
   offer to install it (`apt install python3-numpy`) the first time.
   Settings they keep go in `~/.config/NAME/`. **Your own app:** put an
   executable in `~/apps` (or link one there) with a `# label: Name`
-  line near the top, and give it a bar: `pocket keybar edit NAME`; the
+  line near the top, and give it a bar: `mynx keybar edit NAME`; the
   menu runs it as `keybar NAME,shell FILE`.
 - **Games:** `play GAME [args]` runs a game with the bar named after its
   file (`my-game.py` → `my-game`), else the generic `game` bar. `rogue`,

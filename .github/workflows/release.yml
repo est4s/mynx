@@ -17,15 +17,15 @@ jobs:
     steps:
       - name: Check the release secrets and the tag
         env:
-          KEYSTORE_BASE64: ${{ secrets.PC26_RELEASE_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.PC26_RELEASE_STORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.PC26_RELEASE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.PC26_RELEASE_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.MYNX_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.MYNX_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.MYNX_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.MYNX_RELEASE_KEY_PASSWORD }}
         run: |
           missing=0
           for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
             if [ -z "${!name}" ]; then
-              echo "::error::The secret PC26_RELEASE_$name is not set (see docs/RELEASING.md)."
+              echo "::error::The secret MYNX_RELEASE_$name is not set (see docs/RELEASING.md)."
               missing=1
             fi
           done
@@ -56,8 +56,8 @@ jobs:
           sudo apt-get install -y -qq bats >/dev/null
           bats tests/shell
 
-      - name: pocket tests
-        run: python3 -m unittest discover -s tests/pc26 -v
+      - name: mynx tests
+        run: python3 -m unittest discover -s tests/mynx -v
 
       - name: NDK version
         id: ndk
@@ -91,7 +91,7 @@ jobs:
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets
 
-      - name: Add the app's tools (pocket, editors, themes)
+      - name: Add the app's tools (mynx, editors, themes)
         run: scripts/pack-tools.sh app/src/main/assets
 
       - name: Add the terminal font
@@ -99,15 +99,15 @@ jobs:
 
       - name: Build the signed release APK
         env:
-          KEYSTORE_BASE64: ${{ secrets.PC26_RELEASE_KEYSTORE_BASE64 }}
-          PC26_RELEASE_STORE_PASSWORD: ${{ secrets.PC26_RELEASE_STORE_PASSWORD }}
-          PC26_RELEASE_KEY_ALIAS: ${{ secrets.PC26_RELEASE_KEY_ALIAS }}
-          PC26_RELEASE_KEY_PASSWORD: ${{ secrets.PC26_RELEASE_KEY_PASSWORD }}
-          PC26_VERSION_NAME: ${{ steps.version.outputs.name }}
+          KEYSTORE_BASE64: ${{ secrets.MYNX_RELEASE_KEYSTORE_BASE64 }}
+          MYNX_RELEASE_STORE_PASSWORD: ${{ secrets.MYNX_RELEASE_STORE_PASSWORD }}
+          MYNX_RELEASE_KEY_ALIAS: ${{ secrets.MYNX_RELEASE_KEY_ALIAS }}
+          MYNX_RELEASE_KEY_PASSWORD: ${{ secrets.MYNX_RELEASE_KEY_PASSWORD }}
+          MYNX_VERSION_NAME: ${{ steps.version.outputs.name }}
         run: |
-          export PC26_RELEASE_KEYSTORE="$RUNNER_TEMP/release.keystore"
-          trap 'rm -f "$PC26_RELEASE_KEYSTORE"' EXIT
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$PC26_RELEASE_KEYSTORE"
+          export MYNX_RELEASE_KEYSTORE="$RUNNER_TEMP/release.keystore"
+          trap 'rm -f "$MYNX_RELEASE_KEYSTORE"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$MYNX_RELEASE_KEYSTORE"
           ./gradlew --no-daemon assembleRelease
 
       # An unsigned build would be named app-release-unsigned.apk, so this
@@ -118,7 +118,7 @@ jobs:
           apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
           "$apksigner" verify --print-certs "$apk"
           mkdir -p dist
-          cp "$apk" "dist/pc26-${{ steps.version.outputs.name }}.apk"
+          cp "$apk" "dist/mynx-${{ steps.version.outputs.name }}.apk"
 
       - name: Publish on GitHub Releases
         env:
@@ -127,7 +127,7 @@ jobs:
           # A tag like v0.2.0-beta.1 makes a pre-release.
           prerelease=
           case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
-          gh release create "$GITHUB_REF_NAME" "dist/pc26-${{ steps.version.outputs.name }}.apk" \
+          gh release create "$GITHUB_REF_NAME" "dist/mynx-${{ steps.version.outputs.name }}.apk" \
             --generate-notes $prerelease
 
       - uses: actions/upload-artifact@v7

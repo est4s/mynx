@@ -35,10 +35,10 @@ from collections import deque
 
 import needs
 
-# the app's own library, next to the apps folder (/opt/pc26/lib)
+# the app's own library, next to the apps folder (/opt/mynx/lib)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
 try:
-    from pc26.client import request  # noqa: E402
+    from mynx.client import request  # noqa: E402
 except ImportError:
     request = None
 
@@ -910,7 +910,7 @@ def main():
     eng = Engine(st)
     eng.start()
     sig_torch = sig_vib = None
-    if request and os.environ.get("PC26_REQUESTS"):
+    if request and os.environ.get("MYNX_REQUESTS"):
         sig_torch, sig_vib = Signal(), Signal()
         sig_torch.start()
         sig_vib.start()

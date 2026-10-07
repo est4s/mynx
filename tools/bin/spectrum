@@ -1,3 +1,3 @@
 #!/bin/sh
-# The spectrum example app, with its key bar. Source: /opt/pc26/apps/spectrum
+# The spectrum example app, with its key bar. Source: /opt/mynx/apps/spectrum
 exec keybar spectrum,shell "$(dirname "$0")/../apps/spectrum" "$@"

@@ -14,7 +14,7 @@ class SensorRequestTest {
     private val home = File(base, "root").apply { mkdirs() }
     private val asked = mutableListOf<Pair<SensorQuery, SensorReport>>()
     private var types = setOf(1, 4, 5, 11, 19)
-    private val requests = Pc26Requests(
+    private val requests = MynxRequests(
         dir, home,
         later = sensorRequests(home, { it in types }) { query, report -> asked += query to report },
         alive = { true },
@@ -84,14 +84,14 @@ class SensorRequestTest {
         send("7-6", "sensor-stream", "light", "rate=0")
         send("7-7", "sensor")
         assertTrue(asked.isEmpty())
-        assertEquals("""{"ok":false,"error":"no sensor called 'smell' (pocket sensor list)"}""", file("7-1.reply").readText())
+        assertEquals("""{"ok":false,"error":"no sensor called 'smell' (mynx sensor list)"}""", file("7-1.reply").readText())
         assertEquals("""{"ok":false,"error":"the phone has no pressure sensor"}""", file("7-2.reply").readText())
         assertEquals("""{"ok":false,"error":"unknown sensor option 'fast'"}""", file("7-3.reply").readText())
         assertEquals("""{"ok":false,"error":"the timeout is 1 to 60 seconds"}""", file("7-4.reply").readText())
         val rate = """{"ok":false,"error":"the rate is 1 to 200 per second"}"""
         assertEquals(rate, file("7-5.reply").readText())
         assertEquals(rate, file("7-6.reply").readText())
-        assertEquals("""{"ok":false,"error":"which sensor? (pocket sensor list)"}""", file("7-7.reply").readText())
+        assertEquals("""{"ok":false,"error":"which sensor? (mynx sensor list)"}""", file("7-7.reply").readText())
     }
 
     @Test
@@ -176,7 +176,7 @@ class SensorRequestTest {
         send("7-2", "sensor-stream", "light")
         send("7-3", "sensor-list")
         assertTrue(asked.isEmpty())
-        val off = """{"ok":false,"error":"sensors are off (pocket set android-sensors on)"}"""
+        val off = """{"ok":false,"error":"sensors are off (mynx set android-sensors on)"}"""
         listOf("7-1", "7-2", "7-3").forEach { assertEquals(off, file("$it.reply").readText()) }
     }
 

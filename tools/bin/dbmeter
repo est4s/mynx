@@ -1,3 +1,3 @@
 #!/bin/sh
-# The dbmeter example app, with its key bar. Source: /opt/pc26/apps/dbmeter
+# The dbmeter example app, with its key bar. Source: /opt/mynx/apps/dbmeter
 exec keybar dbmeter,shell "$(dirname "$0")/../apps/dbmeter" "$@"

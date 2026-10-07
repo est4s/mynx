@@ -35,7 +35,7 @@ import io.github.est4s.terminal.core.audioRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
-import io.github.est4s.terminal.core.Pc26Requests
+import io.github.est4s.terminal.core.MynxRequests
 import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
 import io.github.est4s.terminal.core.ProotPaths
@@ -69,14 +69,14 @@ import java.util.WeakHashMap
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
 private const val NOTICE_CHANNEL_ID = "notices"
-// `pocket notify` notifications: one per tab, so a new one replaces the last.
+// `mynx notify` notifications: one per tab, so a new one replaces the last.
 private const val NOTICE_ID_BASE = 1000
 const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
-private const val CWD_DIR = "/tmp/.pc26"
+private const val CWD_DIR = "/tmp/.mynx"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
-// How often to check whether waiting requests' `pocket`s have gone.
+// How often to check whether waiting requests' `mynx`s have gone.
 private const val SWEEP_MS = 2000L
 private const val ROTATION_SWEEP_MS = 1000L
 private val LOCATION_PERMISSIONS = arrayOf(
@@ -116,7 +116,7 @@ class TerminalService : Service() {
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
     private val requests by lazy {
-        Pc26Requests(
+        MynxRequests(
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
@@ -169,7 +169,7 @@ class TerminalService : Service() {
     private var recording = false
     private var micState: Mic = Mic.Off
     private val rotation = RotationLocks()
-    /** How `pocket rotation lock` holds the screen; null: free. */
+    /** How `mynx rotation lock` holds the screen; null: free. */
     var rotationLock: Orientation? = null
         private set
     // A lock ends with its process: check now and then while one is held.
@@ -184,7 +184,7 @@ class TerminalService : Service() {
         sweepDue = false
         sweepRequests()
     }
-    // The PC26_SHELL number of each session, for `pocket notify`.
+    // The MYNX_SHELL number of each session, for `mynx notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     // Kept in a field: a FileObserver stops when it's garbage collected.
@@ -213,7 +213,7 @@ class TerminalService : Service() {
         if (on == (wakeLock != null)) return
         if (on) {
             wakeLock = getSystemService(PowerManager::class.java)
-                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "pc26:service")
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mynx:service")
                 .apply { setReferenceCounted(false); acquire() }
         } else {
             releaseWakeLock()
@@ -253,7 +253,7 @@ class TerminalService : Service() {
 
     // Before any shell starts, so none runs old tools while they're replaced.
     private fun updateTools() {
-        // BUILD-INSTALLTIME-NAME: `pocket about` shows the build and the name.
+        // BUILD-INSTALLTIME-NAME: `mynx about` shows the build and the name.
         val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}-${BuildConfig.VERSION_NAME}"
         toolsError = runCatching {
             tools.update(version) { assets.open(TOOLS_ASSET) }
@@ -274,7 +274,7 @@ class TerminalService : Service() {
         }.also { it.startWatching() }
     }
 
-    /** Answers waiting `pocket` requests, then applies what they changed. */
+    /** Answers waiting `mynx` requests, then applies what they changed. */
     fun processRequests() {
         val handled = runCatching { requests.processPending() }.getOrDefault(emptyList())
         for (request in handled) {
@@ -290,7 +290,7 @@ class TerminalService : Service() {
         scheduleSweep()
     }
 
-    // Stops waiting requests that `pocket` cancelled or whose `pocket` has gone.
+    // Stops waiting requests that `mynx` cancelled or whose `mynx` has gone.
     private fun sweepRequests() {
         runCatching { requests.sweep() }
         scheduleSweep()
@@ -510,7 +510,7 @@ class TerminalService : Service() {
         }
     }
 
-    // Answers `pocket vibrate`: null when it vibrated, else why not.
+    // Answers `mynx vibrate`: null when it vibrated, else why not.
     private fun vibrate(ms: Long): String? {
         val vibrator = if (Build.VERSION.SDK_INT >= 31) {
             getSystemService(VibratorManager::class.java).defaultVibrator
@@ -524,15 +524,15 @@ class TerminalService : Service() {
 
     private val clipboard by lazy { getSystemService(ClipboardManager::class.java) }
 
-    // Answers `pocket clipboard set`: null when copied, else why not.
+    // Answers `mynx clipboard set`: null when copied, else why not.
     private fun setClipboard(text: String): String? = try {
-        clipboard.setPrimaryClip(ClipData.newPlainText("pocket clipboard", text))
+        clipboard.setPrimaryClip(ClipData.newPlainText("mynx clipboard", text))
         null
     } catch (e: RuntimeException) {
         "couldn't copy to the clipboard: ${e.message ?: e.javaClass.simpleName}"
     }
 
-    // Answers `pocket clipboard get`. Android only lets the app in front read
+    // Answers `mynx clipboard get`. Android only lets the app in front read
     // the clipboard (it gives others nothing), so say that instead.
     private fun readClipboard(): Result<String> {
         if (activity?.onScreen != true) {
@@ -543,7 +543,7 @@ class TerminalService : Service() {
         return Result.success(text)
     }
 
-    // Answers `pocket share`: null when the share sheet opened, else why not.
+    // Answers `mynx share`: null when the share sheet opened, else why not.
     private fun share(share: Share): String? {
         val shown = activity?.takeIf { it.onScreen }
             ?: return "the app must be on screen to share (Android only lets the app in front open the share sheet)"
@@ -569,7 +569,7 @@ class TerminalService : Service() {
         }
     }
 
-    // Answers `pocket install-apk`: null when the installer opened, else why not.
+    // Answers `mynx install-apk`: null when the installer opened, else why not.
     private fun installApk(apk: File): String? {
         if (!BuildConfig.DEBUG) return "only debug builds of the app can install apps"
         val shown = activity?.takeIf { it.onScreen }
@@ -593,7 +593,7 @@ class TerminalService : Service() {
         }
     }
 
-    // Answers `pocket notify`: null when shown, else why not.
+    // Answers `mynx notify`: null when shown, else why not.
     private fun showNotice(notice: Notice): String? {
         val manager = getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return "the app's notifications are off in Android's settings"

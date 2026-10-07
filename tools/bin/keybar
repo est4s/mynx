@@ -1,13 +1,13 @@
 #!/bin/bash
 # keybar NAME COMMAND [ARGS...]: run COMMAND with the app's key bar NAME
-# (~/.config/pc26/keybars/NAME.conf) above the keyboard, then
+# (~/.config/mynx/keybars/NAME.conf) above the keyboard, then
 # put the previous bar back. The app tells each tab's shell where to write
-# the name in PC26_KEYBAR_FILE; empty means the shell's bar. Outside the
+# the name in MYNX_KEYBAR_FILE; empty means the shell's bar. Outside the
 # app it just runs COMMAND.
 
 name=${1:?usage: keybar NAME COMMAND [ARGS...]}
 shift
-file=${PC26_KEYBAR_FILE-}
+file=${MYNX_KEYBAR_FILE-}
 [[ -n $file ]] || exec "$@"
 
 prev=$(cat "$file" 2>/dev/null)

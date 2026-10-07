@@ -16,37 +16,39 @@ Newest entries first. Rules for keeping it up to date: see
   (2026-10-05); **9.3 (location) is confirmed** (2026-10-05). **9.4
   (sensors) is confirmed** (2026-10-05). **9.5 (camera and
   flashlight) is confirmed** (2026-10-05). **9.6 (sound)**: the files
-  half (`pocket audio play`/`record`) is confirmed (2026-10-05,
+  half (`mynx audio play`/`record`) is confirmed (2026-10-05,
   entry 42); the sound device's speaker half is confirmed (2026-10-05,
   entry 47); the microphone half is confirmed (2026-10-06, entry
-  52). **Step 9 is done.** Also confirmed 2026-10-06: `pocket
+  52). **Step 9 is done.** Also confirmed 2026-10-06: `mynx
   rotation lock` (entry 50) and swiping between tabs (entry 51).
   Landscape with the keyboard up is confirmed (entry 54), and so is
   keeping clear of the camera cutout (entry 55).
 - **Step 10 (*Polish*) is confirmed on the phone** (2026-10-07,
-  entry 65): 10.1 first run (welcome page), the **rename to PC-26**
-  (`pc26` command, `~/.config/pc26`, `/opt/pc26`, with the old names
-  kept working), 10.2 wakelock setting and Settings launcher shortcut,
-  10.3 `pocket about` and licence texts, 10.4 themed icon. Since
-  entry 66 the one command is `pocket` (no `pc26` command); paths keep
-  `pc26`. Left: the first signed release (`v0.1.0`), see "Next".
+  entry 65): 10.1 first run (welcome page), 10.2 wakelock setting
+  and Settings launcher shortcut, 10.3 `mynx about` and licence
+  texts, 10.4 themed icon. Left: the first signed release
+  (`v0.1.0`), see "Next".
+- **Renamed to Mynx** (entry 70, 2026-10-07): app name, command
+  `mynx`, paths `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`,
+  `MYNX_*`, repo `est4s/mynx`. **Pushed, not yet on the phone**: see
+  "Next", *Morning: install the Mynx build*.
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
-  notifications from agents' hooks (`pocket notify`, `pocket hook`),
-  `pocket agent` installs Claude Code, Codex and Gemini CLI with their
+  notifications from agents' hooks (`mynx notify`, `mynx hook`),
+  `mynx agent` installs Claude Code, Codex and Gemini CLI with their
   official installers and toggles their notifications, the AI agents
-  submenu, the `agent` key bar, undo for config changes (`pocket undo`,
-  `undo-keep`), and links that open in the phone's browser (`pocket
+  submenu, the `agent` key bar, undo for config changes (`mynx undo`,
+  `undo-keep`), and links that open in the phone's browser (`mynx
   open`, `xdg-open` as `BROWSER`, tappable links). Debug builds install
-  new builds from the app's Debian (`pocket install-apk`).
+  new builds from the app's Debian (`mynx install-apk`).
 - **Step 6 (*Customization*), confirmed 2026-10-04:** every setting is a
-  plain-text file in `~/.config/pocket-terminal/`, changed with the
-  `pocket` CLI (`check`, `settings`/`get`/`set`/`reset`, `theme`,
-  `keybar`, `menu`, `--json`) and the curses editors `pocket edit`
+  plain-text file in `~/.config/mynx/`, changed with the
+  `mynx` CLI (`check`, `settings`/`get`/`set`/`reset`, `theme`,
+  `keybar`, `menu`, `--json`) and the curses editors `mynx edit`
   (menu → Settings): theme with live preview and a colour editor, font
   & cursor, key bars, launcher menu (`menu.conf`, `run COMMAND` items),
   `r` resets to default everywhere. Ten built-in themes; strip and key
   bar colours chosen by contrast. The app's commands and the agent
-  guide live in the app's tools at `/opt/pocket-terminal` (replaced on
+  guide live in the app's tools at `/opt/mynx` (replaced on
   each app update, first on the PATH); `~/AGENTS.md` points to the guide.
 - **Step 5 (*Game and program key bars*):** game bars, `play`, `keybar
   NAME,FALLBACK`, bars any program can bring, hold-to-repeat. The owner
@@ -66,23 +68,56 @@ Newest entries first. Rules for keeping it up to date: see
   below it; sessions live in `TerminalService` (foreground service with
   an Exit action), saved to `filesDir/state/tabs`. First launch unpacks
   the rootfs into `filesDir/debian`; every start updates the tools in
-  `filesDir/tools` and answers `pocket` requests from
-  `/tmp/.pocket-terminal/requests`. Crashes are shown on the next
+  `filesDir/tools` and answers `mynx` requests from
+  `/tmp/.mynx/requests`. Crashes are shown on the next
   launch.
 - **Build:** GitHub Actions runs the TDD check and all tests, builds
   proot (cached), the rootfs and the tools archive, then a debug APK.
   `scripts/deliver.sh` installs it on the phone.
 - **Code and tests:** `core/` (plain Kotlin: proot launch, rootfs and
   tools installers, tabs, key bars, colours/themes, settings, config
-  check, `pocket` requests, undo, links, waiting and streaming
+  check, `mynx` requests, undo, links, waiting and streaming
   requests, sharing, location; 312 tests), `app/` (thin Android layer),
-  `tools/` (`pocket` and editors in Python, `menu` and other commands,
+  `tools/` (`mynx` and editors in Python, `menu` and other commands,
   the agent guide; 160 unittest tests incl. editors driven in a pty),
   `rootfs/` (Dockerfile, home dotfiles, games), `tests/shell/` (63 bats
   tests).
 
 
 ## Next
+
+### Morning: install the Mynx build (entry 70)
+
+The rename is pushed; the phone still runs the old build, whose
+command is `pocket` and whose paths are `/opt/pc26`, `~/.config/pc26`.
+In this order:
+1. **Install the build.** `scripts/deliver.sh` calls `mynx
+   install-apk`, which the old build doesn't have: let it download
+   (it fails at the install step), then run
+   `pocket install-apk /storage/emulated/0/Download/mynx-build.apk`,
+   or open that file from the Files app.
+2. **Move the owner's Debian over:** `bash ~/mynx-migrate.sh` (written
+   2026-10-07, outside the repo). It refuses to run before the new
+   build is in (`/opt/mynx/bin/mynx` must exist), backs up what it
+   touches to `~/.cache/mynx-migrate-backup.tar.gz`, then: moves
+   `~/.config/pc26` → `~/.config/mynx` and `~/.local/state/pc26` →
+   `~/.local/state/mynx` (it replaces the links made the night
+   before), deletes `/etc/profile.d/pc26.sh`, and rewrites the old
+   names in `~/.bashrc`, `~/AGENTS.md`, `~/CLAUDE.md`,
+   `~/.claude/settings.json` (hooks → `/opt/mynx/bin/mynx hook
+   claude`), `~/.local/bin/{brush,flog,apps-menu}` and
+   `~/games/termdoom.py`. Then open a new tab.
+3. **The local clone** was copied to `~/mynx` the night before (with
+   `cp -rL`, see AGENTS.md's proot notes), with Claude's project data.
+   Work from `~/mynx`; delete `~/PC-26` once `git -C ~/mynx status`
+   is clean and matches `origin/main`.
+4. **Check on the phone:** the app is named Mynx; theme, font, key
+   bars and the owner's menu kept; `mynx check` clean; `pocket` is
+   "command not found"; `ls /opt/pc26` fails; closing all tabs and
+   restarting opens the menu (`MYNX_MENU`); a long Claude turn with
+   the app in the background notifies; `mynx edit` shows its key bar
+   (`mynx-edit`); `mynx sound` is on; `mynx about` links
+   `github.com/est4s/mynx`.
 
 ### Roadmap step 9: Android integration
 
@@ -122,18 +157,13 @@ with an owner test after each part.
 - **Releases go to GitHub Releases as a signed APK** for now (tag
   `v0.x` → CI). Play (AAB, listing) waits for the final name.
 
-- **About lives in the terminal:** `pocket about` and an About item
+- **About lives in the terminal:** `mynx about` and an About item
   in the menu's System submenu (version, credits, licenses in a pager).
 - **The welcome can be reopened:** a "Getting started" menu item and
-  `pocket welcome`.
+  `mynx welcome`.
 - **Settings from Android:** a launcher shortcut (long-press the app
-  icon → Settings) opens `pocket edit` in a new tab. No other entry
+  icon → Settings) opens `mynx edit` in a new tab. No other entry
   points.
-- **New name: PC-26** ("personal/portable computer 2026"). The rename
-  goes all the way: display name, paths (`pocket-terminal` →
-  `pc26`), and the command (`pocket` → `pc26`, keeping `pocket` as an
-  alias for a while). **On hold until the owner says go**: don't
-  start it as part of step 10.
 - **Overnight work (2026-10-06):** the owner is away; build as much of
   step 10 as possible, committing and pushing to `main` as each part
   is done. Anything that needs the phone goes into a check list for
@@ -143,11 +173,11 @@ with an owner test after each part.
 because of proot's GPL):**
 - **10.1 First run:** a themed unpack screen (what's happening, rough
   time), then a one-time welcome page in the first tab before the
-  menu; "Getting started" menu item and `pocket welcome` reopen it.
+  menu; "Getting started" menu item and `mynx welcome` reopen it.
 - **10.2 Settings gaps:** the optional wakelock the README promises (a
   `wakelock` setting, off by default, held while the service runs),
   and the launcher shortcut to the settings editors.
-- **10.3 About + licenses:** `pocket about` and a menu item: version,
+- **10.3 About + licenses:** `mynx about` and a menu item: version,
   licenses of proot (GPL-2.0, source link), Termux libraries (Apache
   2.0), the font (OFL), Debian; texts shipped with the tools.
 - **10.4 Icon + releases:** monochrome layer for themed icons; a
@@ -156,16 +186,8 @@ because of proot's GPL):**
   writes the steps), a workflow on `v*` tags publishing the APK to
   GitHub Releases, `versionName` from the tag.
 
-**10.1-10.4 and the rename are confirmed on the phone** (build 76,
-2026-10-07, entry 65). Then the command became `pocket` only (entry
-66). Check on the phone after installing that build:
-- `pocket version` works, `pc26` is "command not found", `ls
-  /opt/pocket-terminal` fails; no error dialog at start.
-- Closing all tabs and restarting opens the menu (`PC26_MENU`).
-- A long Claude turn with the app in the background notifies
-  (hooks run `/opt/pc26/bin/pocket hook claude`).
-- `pocket edit` shows its key bar; `pocket sound` is on.
-- The owner's `torch` and `metronome` run again.
+**10.1-10.4 are confirmed on the phone** (build 76, 2026-10-07,
+entry 65).
 
 **Make the repo user ready** (before `v0.1.0`, see entry 68):
 - **Screenshots:** the owner takes them later, guided by an agent:
@@ -180,14 +202,14 @@ because of proot's GPL):**
 What's left of step 10 is the first release:
 
 1. **First release** (`docs/RELEASING.md`): make the key (1), back it
-   up in two places (2), add the four `PC26_RELEASE_*` secrets (3),
+   up in two places (2), add the four `MYNX_RELEASE_*` secrets (3),
    then `git tag v0.1.0 && git push origin v0.1.0` and `gh run watch`
-   (4). The release page should have `pc26-0.1.0.apk`. That run is the
+   (4). The release page should have `mynx-0.1.0.apk`. That run is the
    first `assembleRelease`, so it's also the first time lint-vital
    runs; fix anything fatal it finds and move the tag as RELEASING.md
    says. Later, on a spare phone (or after uninstalling the debug
-   build, which deletes Debian): the release APK installs, `pocket
-   about` says "version 0.1.0", and `pocket install-apk` says only debug
+   build, which deletes Debian): the release APK installs, `mynx
+   about` says "version 0.1.0", and `mynx install-apk` says only debug
    builds can.
 
 **Before Play (not urgent):**
@@ -208,14 +230,14 @@ owner's choice (the parked step 8, or step 11).
 The step 9 plan below is kept for reference.
 
 **Owner's decisions (2026-10-04):**
-- **Camera: both ways.** `pocket camera FILE` opens the phone's camera
+- **Camera: both ways.** `mynx camera FILE` opens the phone's camera
   app to frame the shot (no camera permission needed); `--quick
   front|back` snaps straight to the file with no screen, for scripts
   and agents (camera permission, app on screen).
 - **Location: "while using the app" only**, never background location.
   A stream started with the app on screen keeps running in the
   background through the service.
-- **Sharing both ways:** `pocket share` sends files or text to other
+- **Sharing both ways:** `mynx share` sends files or text to other
   apps, and the app is a target in Android's share sheet (files land
   in `~/Shared`).
 - **Order:** 9.1 groundwork + vibration + clipboard, 9.2 sharing,
@@ -223,12 +245,12 @@ The step 9 plan below is kept for reference.
   (added 2026-10-05).
 
 **Owner's decisions (2026-10-05):**
-- **Flashlight** joins the camera part (`pocket torch`, through the
+- **Flashlight** joins the camera part (`mynx torch`, through the
   camera service; no permission).
-- **Speaker: both, files first.** `pocket audio play FILE` (Android
+- **Speaker: both, files first.** `mynx audio play FILE` (Android
   decodes it), then a real sound device: PulseAudio in Debian writes
   raw audio to a pipe the app plays, so mpv, sox, games make sound.
-- **Microphone: both, files first.** `pocket audio record FILE` (until
+- **Microphone: both, files first.** `mynx audio record FILE` (until
   Ctrl+C or `--seconds`), then a PulseAudio source so arecord, sox,
   whisper.cpp hear the mic live.
 - **Recording may keep going in the background**, like a location
@@ -237,10 +259,10 @@ The step 9 plan below is kept for reference.
 
 **Design (agent's proposal, change it if the owner objects):**
 - **Waiting and streaming requests.** Today a request is answered at
-  once and `pocket` gives up after 5 s. New: the app may answer later
+  once and `mynx` gives up after 5 s. New: the app may answer later
   (a GPS fix, a permission dialog, the camera app), and the client
   waits as long as that request allows. A stream request gets lines
-  appended to `ID.stream` until `pocket` writes `ID.cancel` (on Ctrl+C
+  appended to `ID.stream` until `mynx` writes `ID.cancel` (on Ctrl+C
   or exit) or its process is gone (pid sent in the request). Answering
   must never block the main thread.
 - **Permissions** are asked through the activity the first time a
@@ -249,7 +271,7 @@ The step 9 plan below is kept for reference.
 - **On/off per feature:** settings `android-clipboard`,
   `android-share`, `android-location`, `android-sensors`,
   `android-camera` (`on` by default; the Android permission is still
-  the real gate), shown in `pocket settings` and the Settings editor.
+  the real gate), shown in `mynx settings` and the Settings editor.
   Per profile once step 8 exists.
 - **Output:** plain text by default, `--json` like every command;
   streams print one line per reading (one JSON object per line with
@@ -260,29 +282,29 @@ The step 9 plan below is kept for reference.
 
 **Parts:**
 1. **9.1 Groundwork, vibration, clipboard:** waiting/streaming
-   requests in `core` and `client.py`; `pocket vibrate [MS]`; `pocket clipboard get` and `pocket clipboard
+   requests in `core` and `client.py`; `mynx vibrate [MS]`; `mynx clipboard get` and `mynx clipboard
    set [TEXT]` (stdin when no TEXT). Android only lets the app on
    screen read the clipboard: `get` says so when it's not.
-2. **9.2 Sharing:** `pocket share FILE…` and `pocket share --text
+2. **9.2 Sharing:** `mynx share FILE…` and `mynx share --text
    TEXT` open Android's share sheet (through a provider like
    `ApkProvider`, serving just the shared files). Share-sheet target:
    `ACTION_SEND`/`SEND_MULTIPLE` for any type; files go to `~/Shared`
    (`share-folder` setting), text to a `.txt` file there; a
    notification says where.
 3. **9.3 Location:** the permission flow (moved here from 9.1: it's
-   the first part that needs a permission); `pocket location` (one fix, with a timeout) and
+   the first part that needs a permission); `mynx location` (one fix, with a timeout) and
    `--stream [--interval S]`; `--coarse`. Fine/coarse permission; the
    service gains the `location` foreground-service type (and its
    Android 14 permission) for streams.
-4. **9.4 Sensors:** `pocket sensor list`, `pocket sensor NAME` (one
+4. **9.4 Sensors:** `mynx sensor list`, `mynx sensor NAME` (one
    reading) and `--stream [--rate HZ]` (up to 200 Hz, so no special
    permission). Names like `accelerometer`, `gyroscope`, `light`.
-5. **9.5 Camera:** `pocket camera FILE` (`ACTION_IMAGE_CAPTURE`, the
+5. **9.5 Camera:** `mynx camera FILE` (`ACTION_IMAGE_CAPTURE`, the
    photo copied into Debian) and `--quick front|back` (Camera2, camera
-   permission). `pocket torch on|off` (`CameraManager.setTorchMode`,
+   permission). `mynx torch on|off` (`CameraManager.setTorchMode`,
    no permission; maybe a strength level on API 33+).
-6. **9.6 Sound:** `pocket audio play FILE` (MediaPlayer; `play` is
-   taken by the games) and `pocket audio record FILE` (RECORD_AUDIO,
+6. **9.6 Sound:** `mynx audio play FILE` (MediaPlayer; `play` is
+   taken by the games) and `mynx audio record FILE` (RECORD_AUDIO,
    app on screen to start, `microphone` foreground type, Ctrl+C or
    `--seconds` ends it). Then the sound device: PulseAudio's
    `module-pipe-sink`/`module-pipe-source` on FIFOs in `/tmp`, the app
@@ -319,7 +341,7 @@ in step 7.
   dotfiles stay theirs.
 
 **Design (agent's proposal, change it if the owner objects):**
-- A profile is `~/.config/pocket-terminal/profiles/NAME/`, with the
+- A profile is `~/.config/mynx/profiles/NAME/`, with the
   same layout as the config folder (`settings.conf`,
   `colors.properties`, `keybars/`, `menu.conf`) plus `profile.conf`
   (label, tab colour, icon), `packages` (apt names), `setup.sh` and
@@ -330,35 +352,35 @@ in step 7.
 - `default-profile = NAME` in the top-level `settings.conf`.
 - Each saved tab records its profile (`profile = NAME` in
   `filesDir/state/tabs`). The tab's shell gets `POCKET_PROFILE`;
-  `pocket` commands act on that profile unless given `--profile NAME`
+  `mynx` commands act on that profile unless given `--profile NAME`
   (`--profile default` for the top level).
-- Undo and `pocket check` cover the profile folders too.
+- Undo and `mynx check` cover the profile folders too.
 
 **Parts:**
 1. **8.1 Model and commands:** layering in `core` (tested);
-   `pocket profile list/show/new/copy/rename/delete/default`, `--json`;
-   `--profile` on the config commands; `pocket check` per profile.
+   `mynx profile list/show/new/copy/rename/delete/default`, `--json`;
+   `--profile` on the config commands; `mynx check` per profile.
 2. **8.2 Profiles in the app:** tabs remember their profile and use
    its theme, font and key bars; the strip shows its colour; **⌄**
    opens a tab in a chosen profile; `POCKET_PROFILE` in the shell.
 3. **8.3 Recipe:** `packages`, `setup.sh`, `bashrc` snippet (sourced
-   via `/opt/pocket-terminal/shell.bash`); `pocket profile apply NAME`
+   via `/opt/mynx/shell.bash`); `mynx profile apply NAME`
    installs the packages and runs the script after showing them and
    asking.
-4. **8.4 Export/import:** `pocket profile export NAME [FILE]` writes
-   the text file; `pocket profile import FILE` shows everything it
+4. **8.4 Export/import:** `mynx profile export NAME [FILE]` writes
+   the text file; `mynx profile import FILE` shows everything it
    will write, install and run, asks, then adds the profile (applying
    it is a separate yes). Name clashes ask for a new name.
-5. **8.5 Editors and docs:** a Profiles editor in `pocket edit`, a
+5. **8.5 Editors and docs:** a Profiles editor in `mynx edit`, a
    menu item, the agent guide (`tools/AGENTS.md`) and README.
 
 ### Regression checks (steps 4-6)
-- **Step 6:** `pocket theme set` for a dark and a light theme (strip
+- **Step 6:** `mynx theme set` for a dark and a light theme (strip
   and key bar readable); the theme editor's live preview and `r` reset;
   font size from the editor and from pinch (kept after a restart);
   cursor style and blink; editing and resetting a key bar; editing and
   resetting the menu (`run` items, and a failing command explains
-  itself); `pocket check` lists problems without dialogs.
+  itself); `mynx check` lists problems without dialogs.
 - **Steps 4-5:** `files` (nnn bar, two rows, pages to swipe), game bars
   for `rogue`/`drive`/`flap` and the generic `game` bar, hold-to-repeat
   on arrows, each tab keeping its own bar.
@@ -389,6 +411,33 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (70): renamed to Mynx
+
+**Owner's decision:** the app is **Mynx**, everywhere: display name,
+command (`pocket` → `mynx`), paths (`/opt/mynx`, `~/.config/mynx`,
+`~/.local/state/mynx`, `/tmp/.mynx`, `/etc/profile.d/mynx.sh`),
+variables (`MYNX_*`, incl. the release secrets, none of which were
+set yet), the editors' bar (`mynx-edit`), the Python package
+(`tools/lib/mynx`, `tests/mynx`), `MynxRequests`, the APK names and
+the GitHub repo (`est4s/PC-26` → `est4s/mynx`, still private). The
+application ID stays `io.github.est4s.terminal`. No compatibility
+shims: no release has shipped, and the owner's Debian is moved by
+hand (`~/mynx-migrate.sh`, see "Next").
+
+A mechanical replacement over every file but this log's history
+(older entries keep the names they were written with). Two tests
+only guarded against the previous names and became contradictions,
+so they went: a Python test that `cli.py` had no `"mynx: "` literal
+(the prefix is now right; another test checks errors start with
+`mynx: `), and a core check that no `POCKET_MENU` was set.
+
+Prepared on the owner's phone for the morning (the old build keeps
+working): `~/.config/mynx` and `~/.local/state/mynx` as links to the
+`pc26` folders, so the new build finds the settings at its first
+start; `~/mynx-migrate.sh`; the clone copied to `~/mynx`.
+
+Tests: core green, 200 unittest, 92 bats.
 
 ### 2026-10-07 (69): example apps ship with the app
 

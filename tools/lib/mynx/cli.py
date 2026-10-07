@@ -1,4 +1,4 @@
-"""The `pocket` command. `pocket help` lists the commands."""
+"""The `mynx` command. `mynx help` lists the commands."""
 import contextlib
 import json
 import os
@@ -16,7 +16,7 @@ from . import agents
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
-usage: pocket COMMAND [ARGS] [--json]
+usage: mynx COMMAND [ARGS] [--json]
 
 Commands:
   check      apply config changes now and list problems in them
@@ -52,7 +52,7 @@ Commands:
 {"ok": false, "error": "..."}. Exit codes: 0 fine, 1 problems found,
 2 error.
 
-Settings live in ~/.config/pc26/ (see ~/AGENTS.md).
+Settings live in ~/.config/mynx/ (see ~/AGENTS.md).
 """
 
 
@@ -69,7 +69,7 @@ def out(as_json, answer, text):
 
 
 def config_dir():
-    return os.path.join(os.path.expanduser("~"), ".config", "pc26")
+    return os.path.join(os.path.expanduser("~"), ".config", "mynx")
 
 
 def user_menu():
@@ -85,7 +85,7 @@ def menu_problems():
     problems = run.stdout.splitlines()
     if run.returncode != 0 and not problems:
         problems = [run.stderr.strip() or "menu --check failed"]
-    return [{"file": "~/.config/pc26/menu.conf", "problems": problems}] if problems else []
+    return [{"file": "~/.config/mynx/menu.conf", "problems": problems}] if problems else []
 
 
 def cmd_check(args, as_json):
@@ -95,7 +95,7 @@ def cmd_check(args, as_json):
     for file in answer["problems"]:
         lines.append(file["file"])
         lines += ["  " + p for p in file["problems"]]
-    out(as_json, answer, "\n".join(lines) or "No problems in ~/.config/pc26")
+    out(as_json, answer, "\n".join(lines) or "No problems in ~/.config/mynx")
     return 1 if answer["problems"] else 0
 
 
@@ -112,17 +112,17 @@ def cmd_settings(args, as_json):
 
 def cmd_get(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pocket get KEY")
+        raise Usage("usage: mynx get KEY")
     for s in request("settings")["settings"]:
         if s["key"] == args[0]:
             out(as_json, {"ok": True, "key": s["key"], "value": s["value"]}, s["value"])
             return 0
-    raise Failure(f"unknown setting '{args[0]}' (pocket settings lists them)")
+    raise Failure(f"unknown setting '{args[0]}' (mynx settings lists them)")
 
 
 def cmd_set(args, as_json):
     if len(args) < 2:
-        raise Usage("usage: pocket set KEY VALUE")
+        raise Usage("usage: mynx set KEY VALUE")
     answer = request("set", args[0], " ".join(args[1:]))
     out(as_json, answer, f"{answer['key']} = {answer['value']}")
     return 0
@@ -130,7 +130,7 @@ def cmd_set(args, as_json):
 
 def cmd_reset(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pocket reset KEY|all")
+        raise Usage("usage: mynx reset KEY|all")
     answer = request("reset", args[0])
     if args[0] == "all":
         out(as_json, answer, "All settings back to their defaults")
@@ -165,7 +165,7 @@ def cmd_theme(args, as_json):
         answer = request("theme-reset")
         out(as_json, answer, f"Theme: {answer['name']} (the default)")
         return 0
-    raise Usage("usage: pocket theme [list] | show NAME | set NAME | reset")
+    raise Usage("usage: mynx theme [list] | show NAME | set NAME | reset")
 
 
 def cmd_keybar(args, as_json):
@@ -189,14 +189,14 @@ def cmd_keybar(args, as_json):
         return 0
     if sub == "edit" and len(args) == 2:
         answer = request("keybar-edit", args[1])
-        out(as_json, answer, f"Edit {answer['file']}, then run pocket check.\n"
-                             f"(pocket edit keybars is an editor for it.)")
+        out(as_json, answer, f"Edit {answer['file']}, then run mynx check.\n"
+                             f"(mynx edit keybars is an editor for it.)")
         return 0
     if sub == "reset" and len(args) == 2:
         answer = request("keybar-reset", args[1])
         out(as_json, answer, f"{args[1]}: back to the built-in bar")
         return 0
-    raise Usage("usage: pocket keybar [list] | show NAME | edit NAME | reset NAME")
+    raise Usage("usage: mynx keybar [list] | show NAME | edit NAME | reset NAME")
 
 
 def cmd_menu(args, as_json):
@@ -206,7 +206,7 @@ def cmd_menu(args, as_json):
         mine = os.path.isfile(user_menu())
         with open(user_menu() if mine else built_in) as f:
             text = f.read()
-        file = "~/.config/pc26/menu.conf" if mine else None
+        file = "~/.config/mynx/menu.conf" if mine else None
         if as_json:
             out(as_json, {"ok": True, "file": file, "text": text}, None)
         else:
@@ -217,9 +217,9 @@ def cmd_menu(args, as_json):
             os.makedirs(config_dir(), exist_ok=True)
             shutil.copyfile(built_in, user_menu())
             record("menu edit")
-        out(as_json, {"ok": True, "file": "~/.config/pc26/menu.conf"},
-            "Edit ~/.config/pc26/menu.conf, then run pocket check.\n"
-            "(pocket edit menu is an editor for it.)")
+        out(as_json, {"ok": True, "file": "~/.config/mynx/menu.conf"},
+            "Edit ~/.config/mynx/menu.conf, then run mynx check.\n"
+            "(mynx edit menu is an editor for it.)")
         return 0
     if sub == "reset" and len(args) == 1:
         if not os.path.isfile(user_menu()):
@@ -228,12 +228,12 @@ def cmd_menu(args, as_json):
         record("menu reset")
         out(as_json, {"ok": True}, "Menu: back to the built-in one")
         return 0
-    raise Usage("usage: pocket menu [show] | edit | reset")
+    raise Usage("usage: mynx menu [show] | edit | reset")
 
 
 def cmd_open(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pocket open URL")
+        raise Usage("usage: mynx open URL")
     answer = request("open-url", args[0])
     out(as_json, answer, None)
     return 0
@@ -241,7 +241,7 @@ def cmd_open(args, as_json):
 
 def cmd_vibrate(args, as_json):
     if len(args) > 1:
-        raise Usage("usage: pocket vibrate [MS]")
+        raise Usage("usage: mynx vibrate [MS]")
     answer = request("vibrate", *args)
     out(as_json, answer, None)
     return 0
@@ -265,7 +265,7 @@ def cmd_clipboard(args, as_json):
         answer = request("clipboard-set", urllib.parse.quote(text, safe=""))
         out(as_json, answer, f"Copied {len(text)} character{'' if len(text) == 1 else 's'}")
         return 0
-    raise Usage("usage: pocket clipboard get | set [TEXT]")
+    raise Usage("usage: mynx clipboard get | set [TEXT]")
 
 
 def cmd_share(args, as_json):
@@ -275,7 +275,7 @@ def cmd_share(args, as_json):
         out(as_json, answer, f"Sharing {len(text)} character{'' if len(text) == 1 else 's'}: pick an app on the phone")
         return 0
     if not args:
-        raise Usage("usage: pocket share FILE... | --text [TEXT]")
+        raise Usage("usage: mynx share FILE... | --text [TEXT]")
     # A request holds one value per line.
     if any("\n" in a for a in args):
         raise Failure("can't share a file whose name has a line break")
@@ -285,7 +285,7 @@ def cmd_share(args, as_json):
     return 0
 
 
-LOCATION_USAGE = "usage: pocket location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
+LOCATION_USAGE = "usage: mynx location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
 
 
 def cmd_location(args, as_json):
@@ -328,7 +328,7 @@ def fix_text(fix):
     return f"{fix['latitude']}, {fix['longitude']}{accuracy} {fix['provider']} {when}"
 
 
-SENSOR_USAGE = "usage: pocket sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
+SENSOR_USAGE = "usage: mynx sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
 
 
 def cmd_sensor(args, as_json):
@@ -386,7 +386,7 @@ def reading_text(reading):
     return f"{text} {reading['unit']}".rstrip()
 
 
-CAMERA_USAGE = "usage: pocket camera FILE [--quick front|back]"
+CAMERA_USAGE = "usage: mynx camera FILE [--quick front|back]"
 
 
 def cmd_camera(args, as_json):
@@ -418,17 +418,17 @@ def size_text(size):
 
 def cmd_torch(args, as_json):
     if not (args[:1] == ["on"] and len(args) <= 2 or args == ["off"]):
-        raise Usage("usage: pocket torch on [PERCENT] | off")
+        raise Usage("usage: mynx torch on [PERCENT] | off")
     answer = request("torch", *args)
     out(as_json, answer, None)
     return 0
 
 
-ROTATION_USAGE = "usage: pocket rotation [status] | lock [portrait|landscape] [--pid PID] | unlock"
+ROTATION_USAGE = "usage: mynx rotation [status] | lock [portrait|landscape] [--pid PID] | unlock"
 
 
 def cmd_rotation(args, as_json):
-    """The lock is held by the program that ran pocket (or --pid): it ends
+    """The lock is held by the program that ran mynx (or --pid): it ends
     when that program does, so a crash can't leave the screen stuck."""
     sub, rest = (args[0], list(args[1:])) if args else ("status", [])
     if sub == "lock":
@@ -452,7 +452,7 @@ def cmd_rotation(args, as_json):
     return 0
 
 
-AUDIO_USAGE = "usage: pocket audio play FILE | record FILE [--seconds N] [--rate HZ]"
+AUDIO_USAGE = "usage: mynx audio play FILE | record FILE [--seconds N] [--rate HZ]"
 
 
 def cmd_audio(args, as_json):
@@ -484,10 +484,10 @@ def cmd_audio(args, as_json):
     return 0
 
 
-SOUND_USAGE = "usage: pocket sound [status] | start | install [--yes]"
+SOUND_USAGE = "usage: mynx sound [status] | start | install [--yes]"
 # Keep in step with rootfs/Dockerfile, which puts them in new Debians.
 SOUND_PACKAGES = "pulseaudio pulseaudio-utils libasound2-plugins alsa-utils"
-SOUND_SERVER = "unix:/tmp/.pc26/sound/native"
+SOUND_SERVER = "unix:/tmp/.mynx/sound/native"
 
 
 def cmd_sound(args, as_json):
@@ -510,11 +510,11 @@ def sound_status(as_json):
     if running:
         text = "on. Programs play through the phone's speaker."
     elif setting == "off":
-        text = "off (pocket set sound-device on turns it on)"
+        text = "off (mynx set sound-device on turns it on)"
     elif not installed:
-        text = "not installed (pocket sound install installs it)"
+        text = "not installed (mynx sound install installs it)"
     else:
-        text = "not running (pocket sound start starts it)"
+        text = "not running (mynx sound start starts it)"
     out(as_json, {"ok": True, "setting": setting, "installed": installed, "running": running, "server": server},
         "Sound device: " + text)
     return 0
@@ -528,7 +528,7 @@ def start_sound():
     folder = os.path.dirname(server[len("unix:"):])
     old = read_text(os.path.join(folder, "pid"))
     answer = request("sound-start")
-    deadline = time.monotonic() + 4 * float(os.environ.get("PC26_TIMEOUT", "5"))
+    deadline = time.monotonic() + 4 * float(os.environ.get("MYNX_TIMEOUT", "5"))
     while time.monotonic() < deadline:
         pid = read_text(os.path.join(folder, "pid"))
         if pid and pid != old and server_answers(server):
@@ -579,7 +579,7 @@ def install_sound(yes):
 # debug builds of the app answer it.
 def cmd_install_apk(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pocket install-apk FILE")
+        raise Usage("usage: mynx install-apk FILE")
     answer = request("install-apk", os.path.abspath(args[0]))
     out(as_json, answer, "Installer opened on the phone.")
     return 0
@@ -591,11 +591,11 @@ def cmd_undo(args, as_json):
         keeps = f"keeps {answer['keep']}: undo-keep"
         lines = [f"{i}. {s['reason']}  ({time.strftime('%H:%M', time.localtime(s['time'] / 1000))})"
                  for i, s in enumerate(answer["steps"], 1)]
-        text = "\n".join(lines + [f"pocket undo takes back 1. ({keeps})"]) if lines else f"Nothing to undo ({keeps})"
+        text = "\n".join(lines + [f"mynx undo takes back 1. ({keeps})"]) if lines else f"Nothing to undo ({keeps})"
         out(as_json, answer, text)
         return 0
     if args:
-        raise Usage("usage: pocket undo [--list]")
+        raise Usage("usage: mynx undo [--list]")
     answer = request("undo")
     if answer["undone"] is None:
         out(as_json, answer, "Nothing to undo")
@@ -613,7 +613,7 @@ def cmd_notify(args, as_json):
     if_away = "--if-away" in args
     words = [a.replace("\n", " ") for a in args if a != "--if-away"]
     if not words:
-        raise Usage("usage: pocket notify [--if-away] TITLE [TEXT]")
+        raise Usage("usage: mynx notify [--if-away] TITLE [TEXT]")
     answer = request("notify", words[0], " ".join(words[1:]), *notify_options(if_away))
     if answer["shown"]:
         out(as_json, answer, "Notification shown")
@@ -624,7 +624,7 @@ def cmd_notify(args, as_json):
 
 def notify_options(if_away):
     """The tab the notification comes from, so tapping it opens that tab."""
-    shell = os.environ.get("PC26_SHELL", "")
+    shell = os.environ.get("MYNX_SHELL", "")
     return ([f"shell={shell}"] if shell.isdigit() else []) + (["if-away"] if if_away else [])
 
 
@@ -636,7 +636,7 @@ def cmd_hook(args, as_json):
     "keep working", and Gemini CLI wants JSON on stdout.
     """
     if len(args) != 1 or args[0] not in agents.AGENTS:
-        raise Usage("usage: pocket hook claude|codex|gemini (reads the hook's JSON on stdin)")
+        raise Usage("usage: mynx hook claude|codex|gemini (reads the hook's JSON on stdin)")
     agent = agents.AGENTS[args[0]]
     try:
         agent_hook(agent, json.load(sys.stdin))
@@ -649,7 +649,7 @@ def cmd_hook(args, as_json):
 
 def agent_hook(agent, event):
     session = "".join(c for c in str(event.get("session_id") or "default") if c.isalnum() or c in "-_")
-    turns = os.path.join(tempfile.gettempdir(), "pc26-agent-turns")
+    turns = os.path.join(tempfile.gettempdir(), "mynx-agent-turns")
     started = os.path.join(turns, f"{agent.name}-{session}")
     kind = agent.events.get(event.get("hook_event_name"))
     options = notify_options(if_away=True) + ["agent"]
@@ -675,7 +675,7 @@ def agent_hook(agent, event):
         request("notify", agent.title, text, *options)
 
 
-AGENT_USAGE = ("usage: pocket agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify]"
+AGENT_USAGE = ("usage: mynx agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify]"
                " | notify NAME on|off")
 
 
@@ -753,7 +753,7 @@ def start_agent(agent):
         raise Failure(f"can't find {agent.command} after installing it; open a new tab and run {agent.command}")
     get_what_it_needs(agent)
     sys.stdout.flush()
-    bar_file = os.environ.get("PC26_KEYBAR_FILE")
+    bar_file = os.environ.get("MYNX_KEYBAR_FILE")
     if not bar_file:
         os.execv(binary, [agent.command])
     # Like the keybar command: the agent's bar (else the generic one) while
@@ -864,9 +864,9 @@ def install_agent(agent, yes, notify, then=None):
         notify = ask(f"Also set up notifications for {agent.title} (when it finishes or needs you)? [y/N]")
     if notify:
         agents.set_notify(agent, True)
-        print(f"Notifications: on (pocket agent notify {agent.name} off turns them off)")
+        print(f"Notifications: on (mynx agent notify {agent.name} off turns them off)")
     else:
-        print(f"Notifications: off (pocket agent notify {agent.name} on turns them on)")
+        print(f"Notifications: off (mynx agent notify {agent.name} on turns them on)")
     print(then if then is not None else f"\nStart it with: {agent.command}  (sign in with your own account)")
     return 0
 
@@ -891,7 +891,7 @@ def pick_and_install():
         try:
             code = install_agent(agent, yes=False, notify=None)
         except Failure as e:
-            print(f"pocket: {e}", file=sys.stderr)
+            print(f"mynx: {e}", file=sys.stderr)
             code = 2
         print("\nPress Enter to go back.", end=" ", flush=True)
         sys.stdin.readline()
@@ -913,12 +913,12 @@ def cmd_welcome(args, as_json):
     return 0
 
 
-APP_NAME = "PC-26"
+APP_NAME = "Mynx"
 
 # What the app ships that others wrote. Licence texts are in
-# /opt/pc26/licenses/; proot's GPL needs its source linked.
+# /opt/mynx/licenses/; proot's GPL needs its source linked.
 APP_LICENSE = "GPL-3.0-only"
-APP_SOURCE = "https://github.com/est4s/PC-26"
+APP_SOURCE = "https://github.com/est4s/mynx"
 
 COMPONENTS = [
     {"name": "proot", "version": "v5.1.107.96", "license": "GPL-2.0-or-later",
@@ -945,7 +945,7 @@ COMPONENTS = [
              "/usr/share/doc/PACKAGE/copyright; apt source PACKAGE fetches its source."},
 ]
 
-# The licence files in /opt/pc26/licenses/, in the order they're shown.
+# The licence files in /opt/mynx/licenses/, in the order they're shown.
 LICENSE_FILES = ["GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
 
 
@@ -979,7 +979,7 @@ def about_text(version):
                   *([source] if len(source) <= 56 else ["  Source:", f"  {c['source']}"]),
                   wrap(c["note"]), ""]
     lines += [wrap("LGPL-3.0 is GPL-3.0 plus extra permissions, so both texts are "
-                   "below. The full licence texts are also in /opt/pc26/licenses/.", ""), ""]
+                   "below. The full licence texts are also in /opt/mynx/licenses/.", ""), ""]
     for name in LICENSE_FILES:
         try:
             with open(os.path.join(TOOLS, "licenses", name + ".txt")) as f:
@@ -1009,7 +1009,7 @@ def cmd_about(args, as_json):
         try:
             sys.stdout.write(text)
             sys.stdout.flush()
-        except BrokenPipeError:  # pocket about | head
+        except BrokenPipeError:  # mynx about | head
             os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
     return 0
 
@@ -1045,11 +1045,11 @@ def main(argv):
         name = "help"
     try:
         if name not in COMMANDS:
-            raise Failure(f"unknown command '{name}' (pocket help lists them)")
+            raise Failure(f"unknown command '{name}' (mynx help lists them)")
         return COMMANDS[name](args[1:], as_json)
     except Failure as e:
         if as_json:
             print(json.dumps({"ok": False, "error": str(e)}))
         else:
-            print(f"pocket: {e}", file=sys.stderr)
+            print(f"mynx: {e}", file=sys.stderr)
         return 2

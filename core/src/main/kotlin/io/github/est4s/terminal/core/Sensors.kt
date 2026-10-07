@@ -5,7 +5,7 @@ import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.sqrt
 
-/** The longest `pocket sensor` waits for one reading. */
+/** The longest `mynx sensor` waits for one reading. */
 const val MAX_SENSOR_TIMEOUT = 60
 /** Faster needs Android's HIGH_SAMPLING_RATE_SENSORS permission. */
 const val MAX_SENSOR_RATE = 200
@@ -14,7 +14,7 @@ private const val DEFAULT_RATE = 10
 private const val ACTIVITY = "android.permission.ACTIVITY_RECOGNITION"
 
 /**
- * A kind of sensor `pocket sensor` reads: Android's sensor [type], what
+ * A kind of sensor `mynx sensor` reads: Android's sensor [type], what
  * its [values] are, their [unit], and a runtime [permission] it needs
  * beyond the app's own. [derived] turns Android's values into this
  * kind's (the compass).
@@ -32,7 +32,7 @@ data class SensorKind(
 private val XYZ = listOf("x", "y", "z")
 private val QUATERNION = listOf("x", "y", "z", "w")
 
-/** The sensors `pocket sensor` knows, by Android's type number; the derived ones last. */
+/** The sensors `mynx sensor` knows, by Android's type number; the derived ones last. */
 val SENSOR_KINDS: List<SensorKind> = listOf(
     SensorKind("accelerometer", 1, XYZ, "m/s²"),
     SensorKind("magnetic-field", 2, XYZ, "µT"),
@@ -58,7 +58,7 @@ val SENSOR_KINDS: List<SensorKind> = listOf(
 )
 
 /**
- * What `pocket sensor` asks for: one reading of [kind] within
+ * What `mynx sensor` asks for: one reading of [kind] within
  * [timeoutSeconds], or a [stream] of at most [rateHz] readings a second.
  */
 data class SensorQuery(val kind: SensorKind, val stream: Boolean, val rateHz: Int, val timeoutSeconds: Int) {
@@ -73,13 +73,13 @@ data class SensorReading(val values: List<Float>, val accuracy: Int, val time: L
 interface SensorReport {
     fun reading(reading: SensorReading)
     fun fail(message: String)
-    /** Stop listening: `pocket` stopped, or has gone. */
+    /** Stop listening: `mynx` stopped, or has gone. */
     fun onCancel(block: () -> Unit)
 }
 
 /**
  * The `sensor-list`, `sensor` and `sensor-stream` requests, for
- * [Pc26Requests]'s `later`. [hasType] says whether the phone has a
+ * [MynxRequests]'s `later`. [hasType] says whether the phone has a
  * sensor of an Android type; [read] starts listening and must not block.
  * Request lines: the sensor's name, then `timeout=SECONDS` or
  * `rate=PER_SECOND`.
@@ -91,7 +91,7 @@ fun sensorRequests(
 ): Map<String, Later> {
     val settings = File(home, "$CONFIG_DIR/settings.conf")
     fun on(reply: PendingReply) = loadSettings(settings).settings.androidSensors.also {
-        if (!it) reply.refuse("sensors are off (pocket set android-sensors on)")
+        if (!it) reply.refuse("sensors are off (mynx set android-sensors on)")
     }
 
     val list = Later(MAX_SENSOR_TIMEOUT) { _, reply ->
@@ -135,9 +135,9 @@ fun sensorRequests(
 private fun parseSensorQuery(args: List<String>, stream: Boolean, hasType: (Int) -> Boolean): Result<SensorQuery> =
     runCatching {
         val words = args.map { it.trim() }.filter { it.isNotEmpty() }
-        val name = words.firstOrNull() ?: throw IllegalArgumentException("which sensor? (pocket sensor list)")
+        val name = words.firstOrNull() ?: throw IllegalArgumentException("which sensor? (mynx sensor list)")
         val kind = SENSOR_KINDS.firstOrNull { it.name == name }
-            ?: throw IllegalArgumentException("no sensor called '$name' (pocket sensor list)")
+            ?: throw IllegalArgumentException("no sensor called '$name' (mynx sensor list)")
         var query = SensorQuery(kind, stream, DEFAULT_RATE, DEFAULT_TIMEOUT)
         for (option in words.drop(1)) {
             val value = option.substringAfter('=', "").toIntOrNull()

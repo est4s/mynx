@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# PC-26 launcher menu.
+# Mynx launcher menu.
 # Keys: arrows / j k move, Enter / → pick, ← / Esc / q back, 1-9 jump.
-# Items: ~/.config/pc26/menu.conf, else menu.conf next to this
-#   folder (/opt/pc26/menu.conf); format in that file.
+# Items: ~/.config/mynx/menu.conf, else menu.conf next to this
+#   folder (/opt/mynx/menu.conf); format in that file.
 #   menu --check FILE lists problems in a menu file (exit 1 if any).
 # Colours: the terminal theme's 16 basic colours, so the menu follows it.
 # Games: every executable in /opt/neon-games and ~/games shows up under
 #   Games, named after the file (neon-flap.py → "Neon Flap"). Add your own:
 #   ln -s /path/to/game ~/games/my-game
-# Apps: the same for /opt/pc26/apps and ~/apps; a "# label: Name" line near
+# Apps: the same for /opt/mynx/apps and ~/apps; a "# label: Name" line near
 #   the top of the file names it in the menu. Each runs with its own key bar
 #   (the file's name without its ending), else the shell's.
 # menu --boot plays the boot splash first (the app does this on a fresh start),
@@ -18,9 +18,9 @@
 # MENU_APP_DIRS (colon-separated) override where games and apps are found
 # (all for testing).
 
-STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pc26
+STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/mynx
 STATE=$STATE_DIR/menu
-CONFIG_DIR=$HOME/.config/pc26
+CONFIG_DIR=$HOME/.config/mynx
 DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
 WELCOME=${DEFAULT_MENU%/*}/welcome.txt
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
@@ -59,11 +59,11 @@ save_state() {
 }
 
 # --- colours ---------------------------------------------------------------
-# The 16 basic colours, which every theme sets (pocket theme set …).
+# The 16 basic colours, which every theme sets (mynx theme set …).
 C_TITLE=$'\e[95m' C_ITEM=$'\e[96m' C_SUB=$'\e[35m' C_DIM=$'\e[90m'
 C_SEL=$'\e[1;30;105m' C_OK=$'\e[92m' C_BAD=$'\e[91m' C_OFF=$'\e[0m'
 
-theme_name() { # the theme the colours file was set from (see pocket theme)
+theme_name() { # the theme the colours file was set from (see mynx theme)
   local first
   [[ -f $CONFIG_DIR/colors.properties ]] || { echo neon; return; }
   IFS= read -r first <"$CONFIG_DIR/colors.properties"
@@ -215,13 +215,13 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       ((${#ITEMS[@]})) || { ITEMS=("(no games yet)"); ACTS=(none); } ;;
     agents)
       local list name title installed
-      list=$(pocket agent list --tsv 2>/dev/null) || list=
+      list=$(mynx agent list --tsv 2>/dev/null) || list=
       while IFS=$'\t' read -r name title installed; do
         [[ -n $name ]] || continue
         [[ -n $installed ]] || title+=" (install)"
         ITEMS+=("$title") ACTS+=("agent:$name")
       done <<<"$list"
-      ((${#ITEMS[@]})) || { ITEMS=("(pocket isn't working)"); ACTS=(none); } ;;
+      ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
     system)
       ITEMS=("Update all" "System info" About)
       ACTS=(update info about) ;;
@@ -309,7 +309,7 @@ boot() {
   menu_items games; [[ ${ACTS[0]} == none ]] || games=${#ITEMS[@]}
   local debian; debian=$(debian_version)
   local -a log=(
-    "OK|pc-26 online"
+    "OK|mynx online"
     "$([[ -n $debian ]] && echo OK || echo FAIL)|debian ${debian:-missing}"
     "OK|games: ${games:-0} found"
     "OK|theme: $(theme_name)"
@@ -373,7 +373,7 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
 act_none() { :; }
 act_welcome() { welcome_page; }
 act_files() { run files; }
-act_settings() { run pocket edit; }
+act_settings() { run mynx edit; }
 act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   run bash -c "$1"
   local rc=$?
@@ -393,10 +393,10 @@ act_app() { # under the bar named after the file (tuner, my-tool), else the shel
   run keybar "${name%.*},shell" "$1"
 }
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
-  run pocket agent start "$1" || pause
+  run mynx agent start "$1" || pause
 }
 
-act_about() { run pocket about || pause; }  # in less; a failure stays on screen
+act_about() { run mynx about || pause; }  # in less; a failure stays on screen
 
 act_update() {
   run bash -c 'apt update && apt upgrade -y'
@@ -467,7 +467,7 @@ show() { # show <menu> <breadcrumb>
     term_cols
     update_status && drawn=
     if [[ $drawn != "$sel:$COLS" ]]; then
-      # Items only on a full redraw: some menus ask pocket (slow) for them.
+      # Items only on a full redraw: some menus ask mynx (slow) for them.
       if [[ -z $drawn ]]; then
         menu_items "$name"; n=${#ITEMS[@]}
         ((sel < n)) || sel=0

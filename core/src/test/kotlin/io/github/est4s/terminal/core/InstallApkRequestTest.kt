@@ -8,11 +8,11 @@ import kotlin.test.assertEquals
 
 class InstallApkRequestTest {
     private val rootfs = createTempDirectory("install").toFile()
-    private val dir = File(rootfs, "tmp/.pc26/requests").apply { mkdirs() }
+    private val dir = File(rootfs, "tmp/.mynx/requests").apply { mkdirs() }
     private val home = File(rootfs, "root").apply { mkdirs() }
     private val installed = mutableListOf<File>()
     private var refusal: String? = null
-    private val requests = Pc26Requests(dir, home, installApk = { apk ->
+    private val requests = MynxRequests(dir, home, installApk = { apk ->
         installed += apk
         refusal
     })
@@ -49,7 +49,7 @@ class InstallApkRequestTest {
     @Test
     fun `without an installer, nothing is installed`() {
         File(rootfs, "tmp/app.apk").writeText("apk")
-        val plain = Pc26Requests(dir, home)
+        val plain = MynxRequests(dir, home)
         File(dir, "q.req").writeText("install-apk\n/tmp/app.apk\n")
         plain.processPending()
         assertEquals("""{"ok":false,"error":"apps can't be installed here"}""", File(dir, "q.reply").readText())

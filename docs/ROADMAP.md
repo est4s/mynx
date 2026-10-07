@@ -1,4 +1,4 @@
-# PC-26 roadmap and scope
+# Mynx roadmap and scope
 
 The full scope of the app: what's built and what's planned. The
 [README](../README.md) describes what ships today. Not built yet:
@@ -78,13 +78,13 @@ always visible, so the phone's own keyboard is all you need for typing
 - **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
   cursor style.
 - **Key bars:** edit the built-in bars or add your own, for any program.
-- **Launcher menu:** a "PC-26" start menu (Terminal, Files, Games,
+- **Launcher menu:** a "Mynx" start menu (Terminal, Files, Games,
   Settings, System, …) that you can edit and reorder, with items that run
   any command.
-- **Editors in the terminal:** `pocket edit` (or the menu's Settings, or
+- **Editors in the terminal:** `mynx edit` (or the menu's Settings, or
   long-press the app icon → Settings, which opens them in a new tab) for
   the theme (with live preview), font and cursor, key bars and the menu.
-  Every change is also a `pocket` command, so an AI agent can make it.
+  Every change is also a `mynx` command, so an AI agent can make it.
 - **Shell:** your own dotfiles, prompt, aliases and packages.
 
 ### Profiles: share your setup
@@ -134,20 +134,20 @@ written for agents, kept in sync with the app version and the active profile:
 - Where everything lives: profile, theme, key bars, launcher menu,
   file manager settings, dotfiles.
 - The file formats, with examples, and what each setting does.
-- Every `pocket` command, including the Android ones (notifications, camera,
+- Every `mynx` command, including the Android ones (notifications, camera,
   location, sensors, clipboard, share).
 - How to apply a change, check it and undo it.
 
 **An agent-friendly setup:**
 - **Plain-text config.** Everything you can change in the settings screens
   is stored in readable, commented files that an agent can edit directly.
-- **A `pocket` command for everything.** Anything the app can do, a script
-  can do: `pocket theme set neon`, `pocket set font-size 14`,
-  `pocket profile export`, … with `--json` output for scripts and agents.
+- **A `mynx` command for everything.** Anything the app can do, a script
+  can do: `mynx theme set neon`, `mynx set font-size 14`,
+  `mynx profile export`, … with `--json` output for scripts and agents.
 - **Live reload.** Config changes apply without restarting the app.
-- **Checks before applying.** `pocket check` validates edits and
+- **Checks before applying.** `mynx check` validates edits and
   explains mistakes, so a broken edit never breaks the app.
-- **Undo.** Config is snapshotted before each change; `pocket undo` rolls
+- **Undo.** Config is snapshotted before each change; `mynx undo` rolls
   back the last one.
 - **Agent notifications.** A phone notification when an agent finishes or
   needs your input, so you can switch apps while it works.
@@ -170,7 +170,7 @@ cable, using standard tools.
   drive.
 - **Raw USB** devices (STM32 DFU, …) for tools that support it via `libusb`.
 - **Serial monitor tab**, a "board connected" notification and a
-  `pocket usb` command; covered by the agent docs, so an agent can write,
+  `mynx usb` command; covered by the agent docs, so an agent can write,
   build and flash firmware.
 
 ### Included extras
@@ -214,9 +214,9 @@ Because Debian runs through `proot` rather than a virtual machine:
 5. **Game and program key bars:** game controls, hold to repeat, bars for
    any program or game (replaces the in-app keyboard).
 6. **Customization:** theme, key bar and menu editors (terminal programs),
-   and the first `pocket` commands they're built on.
+   and the first `mynx` commands they're built on.
 7. **Agent support:** undo for config changes, agent notifications,
-   one-tap install of agent CLIs. (The agent guide, the `pocket` CLI and
+   one-tap install of agent CLIs. (The agent guide, the `mynx` CLI and
    config checks came with step 6.) The agent docs are updated with
    every later feature.
 8. **Profiles:** multiple profiles, switching, export/import.

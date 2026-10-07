@@ -17,7 +17,7 @@ import java.io.RandomAccessFile
 import io.github.est4s.terminal.core.AudioFormat as Format
 
 /**
- * Answers `pocket audio record`: MediaRecorder for compressed formats,
+ * Answers `mynx audio record`: MediaRecorder for compressed formats,
  * AudioRecord for WAV (raw PCM, written on a thread of its own). Android
  * only lets the app in use start recording, so [onScreen] must be true
  * to start, unless something is recording already (the service then
@@ -53,7 +53,7 @@ class AudioRecorder(
         synchronized(jobs) { jobs.toList() }.forEach { it.stop() }
     }
 
-    // `pocket` may stop before recording starts (while Android asks to
+    // `mynx` may stop before recording starts (while Android asks to
     // allow the microphone): then it never starts.
     private inner class Request(private val query: RecordQuery, private val report: RecordReport) {
         private var stopped = false

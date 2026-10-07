@@ -1,11 +1,11 @@
-"""Tests for the editors' file models (tools/lib/pc26/models.py)."""
+"""Tests for the editors' file models (tools/lib/mynx/models.py)."""
 import os
 import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
 
-from pc26.models import ItemsFile, set_color  # noqa: E402
+from mynx.models import ItemsFile, set_color  # noqa: E402
 
 
 class ItemsFileTest(unittest.TestCase):

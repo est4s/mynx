@@ -80,11 +80,11 @@ class ProotLaunchTest {
 
     @Test
     fun `has the shell write its folder to a file after each prompt`() {
-        val argv = prootLaunch(paths, cwdFile = "/tmp/.pc26/cwd-3").argv
+        val argv = prootLaunch(paths, cwdFile = "/tmp/.mynx/cwd-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
         assertTrue(
-            "PROMPT_COMMAND={ printf '%s' \"\$PWD\" > /tmp/.pc26/cwd-3; } 2>/dev/null" in shellEnv,
+            "PROMPT_COMMAND={ printf '%s' \"\$PWD\" > /tmp/.mynx/cwd-3; } 2>/dev/null" in shellEnv,
             shellEnv.toString(),
         )
     }
@@ -99,26 +99,25 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, openMenu = true).argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("PC26_MENU=1" in shellEnv, shellEnv.toString())
-        assertTrue(shellEnv.none { it.startsWith("POCKET_MENU=") }, shellEnv.toString())
+        assertTrue("MYNX_MENU=1" in shellEnv, shellEnv.toString())
     }
 
     @Test
     fun `opens no menu unless asked`() {
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_MENU=") })
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("MYNX_MENU=") })
     }
 
     @Test
     fun `tells the shell where to report its key bar`() {
-        val argv = prootLaunch(paths, keyBarFile = "/tmp/.pc26/keybar-3").argv
+        val argv = prootLaunch(paths, keyBarFile = "/tmp/.mynx/keybar-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("PC26_KEYBAR_FILE=/tmp/.pc26/keybar-3" in shellEnv, shellEnv.toString())
+        assertTrue("MYNX_KEYBAR_FILE=/tmp/.mynx/keybar-3" in shellEnv, shellEnv.toString())
     }
 
     @Test
     fun `sets no key bar file unless asked`() {
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_KEYBAR_FILE=") })
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("MYNX_KEYBAR_FILE=") })
     }
 
     @Test
@@ -126,17 +125,17 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertEquals(listOf("/data/files/tools:/opt/pc26"), argv.valuesAfter("-b").filter { it.startsWith("/data/files/tools:") })
+        assertEquals(listOf("/data/files/tools:/opt/mynx"), argv.valuesAfter("-b").filter { it.startsWith("/data/files/tools:") })
         val path = shellEnv.single { it.startsWith("PATH=") }.removePrefix("PATH=").split(':')
-        assertEquals("/opt/pc26/bin", path.first())
+        assertEquals("/opt/mynx/bin", path.first())
     }
 
     @Test
     fun `tells programs where to send requests to the app`() {
-        val argv = prootLaunch(paths, requestDir = "/tmp/.pc26/requests").argv
+        val argv = prootLaunch(paths, requestDir = "/tmp/.mynx/requests").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("PC26_REQUESTS=/tmp/.pc26/requests" in shellEnv, shellEnv.toString())
+        assertTrue("MYNX_REQUESTS=/tmp/.mynx/requests" in shellEnv, shellEnv.toString())
     }
 
     @Test
@@ -144,7 +143,7 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("BROWSER=/opt/pc26/bin/xdg-open" in shellEnv, shellEnv.toString())
+        assertTrue("BROWSER=/opt/mynx/bin/xdg-open" in shellEnv, shellEnv.toString())
     }
 
     @Test
@@ -152,15 +151,15 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, shellId = 7).argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("PC26_SHELL=7" in shellEnv, shellEnv.toString())
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_SHELL=") })
+        assertTrue("MYNX_SHELL=7" in shellEnv, shellEnv.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("MYNX_SHELL=") })
     }
 
     @Test
     fun `can run a command instead of a login shell`() {
-        val argv = prootLaunch(paths, command = listOf("/bin/sh", "/opt/pc26/lib/sound-server")).argv
+        val argv = prootLaunch(paths, command = listOf("/bin/sh", "/opt/mynx/lib/sound-server")).argv
 
-        assertEquals(listOf("/bin/sh", "/opt/pc26/lib/sound-server"), argv.takeLast(2))
+        assertEquals(listOf("/bin/sh", "/opt/mynx/lib/sound-server"), argv.takeLast(2))
         assertTrue("/bin/bash" !in argv)
         assertEquals("-i", argv[argv.indexOf("/usr/bin/env") + 1])
     }
@@ -168,22 +167,22 @@ class ProotLaunchTest {
     @Test
     fun `a tab can run a program first, then its login shell`() {
         assertEquals(
-            listOf("/bin/bash", "--login", "-c", "trap : INT; pocket edit; exec /bin/bash --login"),
-            runThenShell("pocket edit"),
+            listOf("/bin/bash", "--login", "-c", "trap : INT; mynx edit; exec /bin/bash --login"),
+            runThenShell("mynx edit"),
         )
     }
 
     @Test
     fun `the settings tab runs the settings editors`() {
-        assertEquals(runThenShell("pocket edit"), SETTINGS_TAB_COMMAND)
+        assertEquals(runThenShell("mynx edit"), SETTINGS_TAB_COMMAND)
     }
 
     @Test
     fun `tells programs where the sound server is`() {
-        val argv = prootLaunch(paths, soundSocket = "/tmp/.pc26/sound/native").argv
+        val argv = prootLaunch(paths, soundSocket = "/tmp/.mynx/sound/native").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("PULSE_SERVER=unix:/tmp/.pc26/sound/native" in shellEnv, shellEnv.toString())
+        assertTrue("PULSE_SERVER=unix:/tmp/.mynx/sound/native" in shellEnv, shellEnv.toString())
         assertTrue(prootLaunch(paths).argv.none { it.startsWith("PULSE_SERVER=") })
     }
 

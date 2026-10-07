@@ -1,7 +1,7 @@
-"""Tests for the example apps (tools/apps, /opt/pc26/apps) and their
+"""Tests for the example apps (tools/apps, /opt/mynx/apps) and their
 commands in tools/bin.
 
-Run: python3 -m unittest discover -s tests/pc26
+Run: python3 -m unittest discover -s tests/mynx
 """
 import contextlib
 import importlib.util
@@ -29,7 +29,7 @@ def load_needs():
 def run_app(name, *args):
     return subprocess.run([sys.executable, os.path.join(APPS, name), *args],
                           stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                          timeout=30, env={**os.environ, "PC26_REQUESTS": "/nonexistent"})
+                          timeout=30, env={**os.environ, "MYNX_REQUESTS": "/nonexistent"})
 
 
 class AppsTest(unittest.TestCase):
@@ -51,7 +51,7 @@ class AppsTest(unittest.TestCase):
         # Not at the installed path: that would test the installed copy, or nothing.
         for name in NAMES:
             with open(os.path.join(APPS, name)) as f:
-                self.assertNotIn('"/opt/pc26/lib"', f.read(), name)
+                self.assertNotIn('"/opt/mynx/lib"', f.read(), name)
 
     def test_help_prints_what_the_app_does(self):
         for name in NAMES:
@@ -78,7 +78,7 @@ class AppsTest(unittest.TestCase):
         run = subprocess.run([os.path.join(BIN, "compass"), "--help"], capture_output=True,
                              text=True, timeout=30,
                              env={**os.environ, "PATH": BIN + os.pathsep + os.environ["PATH"],
-                                  "PC26_KEYBAR_FILE": ""})
+                                  "MYNX_KEYBAR_FILE": ""})
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("compass", run.stdout)
 
@@ -146,7 +146,7 @@ class NeedsNumpyTest(unittest.TestCase):
 class MenuActionsTest(unittest.TestCase):
     def test_the_menu_editor_offers_every_menu_action(self):
         sys.path.insert(0, os.path.join(ROOT, "tools", "lib"))
-        from pc26 import editors
+        from mynx import editors
         with open(os.path.join(BIN, "menu")) as f:
             line = next(l for l in f if l.startswith("MENU_ACTIONS="))
         actions = line.split('"')[1].replace(" or run COMMAND", "").split(", ")

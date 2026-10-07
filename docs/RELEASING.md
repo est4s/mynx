@@ -2,7 +2,7 @@
 
 Release APKs are built by `.github/workflows/release.yml` when a tag like
 `v0.1.0` is pushed, signed with the release key from the repo's secrets,
-and published on GitHub Releases as `pc26-0.1.0.apk`.
+and published on GitHub Releases as `mynx-0.1.0.apk`.
 
 The release key is the app's identity. **Every update must be signed with
 the same key: if it's lost, the app can never be updated again** (people
@@ -16,9 +16,9 @@ In the app's Debian (`keytool` comes with the JDK) or on a computer:
 
 ```sh
 keytool -genkeypair -v \
-  -keystore pc26-release.jks -storetype PKCS12 \
-  -alias pc26 -keyalg RSA -keysize 4096 -validity 18250 \
-  -dname "CN=PC-26"
+  -keystore mynx-release.jks -storetype PKCS12 \
+  -alias mynx -keyalg RSA -keysize 4096 -validity 18250 \
+  -dname "CN=Mynx"
 ```
 
 - RSA 4096, valid for 50 years (Android wants at least 25).
@@ -27,7 +27,7 @@ keytool -genkeypair -v \
   same. Use a long random one and keep it in your password manager.
 - `-dname` only goes into the certificate; change it as you like.
 
-Check it: `keytool -list -v -keystore pc26-release.jks` (alias `pc26`,
+Check it: `keytool -list -v -keystore mynx-release.jks` (alias `mynx`,
 RSA 4096, the dates).
 
 ## 2. Back it up (before anything else)
@@ -46,11 +46,11 @@ Then remove any copy you don't need (e.g. in `Download`).
 From the folder with the keystore, in this repo (`gh` is logged in):
 
 ```sh
-base64 -w0 pc26-release.jks | gh secret set PC26_RELEASE_KEYSTORE_BASE64
-gh secret set PC26_RELEASE_STORE_PASSWORD   # paste the password when asked
-gh secret set PC26_RELEASE_KEY_PASSWORD     # the same password
-gh secret set PC26_RELEASE_KEY_ALIAS --body pc26
-gh secret list                              # the four PC26_RELEASE_* names
+base64 -w0 mynx-release.jks | gh secret set MYNX_RELEASE_KEYSTORE_BASE64
+gh secret set MYNX_RELEASE_STORE_PASSWORD   # paste the password when asked
+gh secret set MYNX_RELEASE_KEY_PASSWORD     # the same password
+gh secret set MYNX_RELEASE_KEY_ALIAS --body mynx
+gh secret list                              # the four MYNX_RELEASE_* names
 ```
 
 Typing the passwords at the prompt keeps them out of the shell history.
@@ -66,7 +66,7 @@ git push origin v0.1.0
 ```
 
 - The tag gives the version name (`v0.1.0` → `0.1.0`, shown by
-  `pocket about`); the version code is the workflow's run number.
+  `mynx about`); the version code is the workflow's run number.
 - A tag with a suffix (`v0.2.0-beta.1`) makes a pre-release.
 - The workflow runs all tests, builds the APK (about the same time as a
   debug build), checks its signature and creates the release with notes

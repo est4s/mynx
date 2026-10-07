@@ -26,8 +26,8 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * [openMenu] has the shell open the launcher menu first. [keyBarFile] (a
  * Debian path) is where programs report the key bar they want.
  * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
- * on the PATH. [requestDir] (a Debian path) is where `pocket` sends requests.
- * [shellId] tells programs which tab they run in (`pocket notify`).
+ * on the PATH. [requestDir] (a Debian path) is where `mynx` sends requests.
+ * [shellId] tells programs which tab they run in (`mynx notify`).
  * [soundSocket] (a Debian path) is the sound server's socket. [command]
  * runs instead of the login bash.
  */
@@ -64,11 +64,11 @@ fun prootLaunch(
         // Silent if the file can't be written (e.g. its folder was deleted).
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         // Root's .bashrc opens the launcher menu when this is set.
-        if (openMenu) add("PC26_MENU=1")
+        if (openMenu) add("MYNX_MENU=1")
         // The keybar command writes the bar to show here (a Debian path).
-        keyBarFile?.let { add("PC26_KEYBAR_FILE=$it") }
-        requestDir?.let { add("PC26_REQUESTS=$it") }
-        shellId?.let { add("PC26_SHELL=$it") }
+        keyBarFile?.let { add("MYNX_KEYBAR_FILE=$it") }
+        requestDir?.let { add("MYNX_REQUESTS=$it") }
+        shellId?.let { add("MYNX_SHELL=$it") }
         soundSocket?.let { add("PULSE_SERVER=unix:$it") }
         addAll(command)
     }
@@ -88,7 +88,7 @@ fun runThenShell(command: String): List<String> =
     listOf("/bin/bash", "--login", "-c", "trap : INT; $command; exec /bin/bash --login")
 
 /** The tab the launcher shortcut "Settings" opens: the settings editors, then a shell. */
-val SETTINGS_TAB_COMMAND: List<String> = runThenShell("pocket edit")
+val SETTINGS_TAB_COMMAND: List<String> = runThenShell("mynx edit")
 
 /** How long a proot gets to stop what it runs before it's killed outright. */
 const val PROOT_STOP_GRACE_MS = 2000L

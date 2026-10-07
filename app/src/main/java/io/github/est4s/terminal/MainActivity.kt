@@ -68,9 +68,9 @@ private const val ACTION_SETTINGS = "io.github.est4s.terminal.SETTINGS"
 private const val ROOTFS_ASSET = "debian-rootfs.tar.xz"
 private const val FONT_ASSET = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
 // Debian path, relative to the rootfs.
-private const val COLORS_FILE = "root/.config/pc26/colors.properties"
-private const val KEY_BARS_DIR = "root/.config/pc26/keybars"
-private const val SETTINGS_FILE = "root/.config/pc26/settings.conf"
+private const val COLORS_FILE = "root/.config/mynx/colors.properties"
+private const val KEY_BARS_DIR = "root/.config/mynx/keybars"
+private const val SETTINGS_FILE = "root/.config/mynx/settings.conf"
 private const val CURSOR_BLINK_MS = 500
 private const val PERMISSION_REQUEST = 2
 private const val RESULT_REQUEST = 3
@@ -137,7 +137,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** `pocket rotation lock`: hold the screen as it is, or turned to a side; null frees it. */
+    /** `mynx rotation lock`: hold the screen as it is, or turned to a side; null frees it. */
     fun applyRotation(lock: Orientation?) {
         requestedOrientation = when (lock) {
             null -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -184,7 +184,7 @@ class MainActivity : Activity() {
         showLastCrash()
     }
 
-    // A tapped `pocket notify` notification, while the activity exists.
+    // A tapped `mynx notify` notification, while the activity exists.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         shellToShow = shellOf(intent)
@@ -485,7 +485,7 @@ class MainActivity : Activity() {
         if (!quiet && parsed.problems.isNotEmpty() && parsed.problems != shownColorProblems) {
             AlertDialog.Builder(this)
                 .setTitle("Problems in colors.properties")
-                .setMessage("~/.config/pc26/colors.properties\n\n" + parsed.problems.joinToString("\n"))
+                .setMessage("~/.config/mynx/colors.properties\n\n" + parsed.problems.joinToString("\n"))
                 .setPositiveButton("OK", null)
                 .show()
         }
@@ -658,7 +658,7 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Applies the config files now: `pocket check` asked. [quiet]: `pocket`
+     * Applies the config files now: `mynx check` asked. [quiet]: `mynx`
      * reports the problems itself, so no dialogs pop up over the terminal.
      */
     fun reloadConfig(quiet: Boolean) {
@@ -691,7 +691,7 @@ class MainActivity : Activity() {
         if (!quiet && problems.isNotEmpty() && problems != shownSettingsProblems) {
             AlertDialog.Builder(this)
                 .setTitle("Problems in settings.conf")
-                .setMessage("~/.config/pc26/settings.conf\n\n" + problems.joinToString("\n"))
+                .setMessage("~/.config/mynx/settings.conf\n\n" + problems.joinToString("\n"))
                 .setPositiveButton("OK", null)
                 .show()
         }
@@ -782,11 +782,11 @@ class MainActivity : Activity() {
         }
     }
 
-    // The terminal works without the tools; only `pocket` and the editors are missing.
+    // The terminal works without the tools; only `mynx` and the editors are missing.
     private fun showToolsError(trace: String) {
         AlertDialog.Builder(this)
             .setTitle("Couldn't update the app's tools")
-            .setMessage("pocket and the editors may be missing or old.\n\n$trace")
+            .setMessage("mynx and the editors may be missing or old.\n\n$trace")
             .setPositiveButton("OK", null)
             .show()
     }

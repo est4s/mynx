@@ -7,7 +7,7 @@ SERVER="$BATS_TEST_DIRNAME/../../tools/lib/sound-server"
 setup() {
     STUBS="$BATS_TEST_TMPDIR/stubs"
     mkdir -p "$STUBS"
-    export PC26_SOUND_DIR="$BATS_TEST_TMPDIR/sound"
+    export MYNX_SOUND_DIR="$BATS_TEST_TMPDIR/sound"
 }
 
 teardown() {
@@ -36,15 +36,15 @@ stub_pulseaudio() {
 @test "sound-server plays into the pipe and listens on the socket" {
     stub_pulseaudio
     PATH="$STUBS:$PATH" run "$SERVER"
-    [[ $output == *"module-pipe-sink file=$PC26_SOUND_DIR/out format=s16le rate=48000 channels=2"* ]]
-    [[ $output == *"module-native-protocol-unix auth-anonymous=1 socket=$PC26_SOUND_DIR/native"* ]]
-    [ -d "$PC26_SOUND_DIR" ]
+    [[ $output == *"module-pipe-sink file=$MYNX_SOUND_DIR/out format=s16le rate=48000 channels=2"* ]]
+    [[ $output == *"module-native-protocol-unix auth-anonymous=1 socket=$MYNX_SOUND_DIR/native"* ]]
+    [ -d "$MYNX_SOUND_DIR" ]
 }
 
 @test "sound-server leaves Pulse's pid in the pid file, for the app to stop it" {
     stub_pulseaudio
     PATH="$STUBS:$PATH" run "$SERVER"
-    [ "${lines[-1]}" = "pid=$(cat "$PC26_SOUND_DIR/pid")" ]
+    [ "${lines[-1]}" = "pid=$(cat "$MYNX_SOUND_DIR/pid")" ]
 }
 
 # Ended: the test shell hasn't reaped it, so a zombie counts.
@@ -54,17 +54,17 @@ gone() {
 
 # A copy of sleep named pulseaudio, as an older server left running.
 old_server() {
-    mkdir -p "$BATS_TEST_TMPDIR/old" "$PC26_SOUND_DIR"
+    mkdir -p "$BATS_TEST_TMPDIR/old" "$MYNX_SOUND_DIR"
     cp "$(command -v sleep)" "$BATS_TEST_TMPDIR/old/$1"
     "$BATS_TEST_TMPDIR/old/$1" 30 &
     OLD=$!
-    echo $! >"$PC26_SOUND_DIR/pid"
+    echo $! >"$MYNX_SOUND_DIR/pid"
 }
 
 @test "sound-server stops an older Pulse left running first" {
     stub_pulseaudio
     old_server pulseaudio
-    old=$(cat "$PC26_SOUND_DIR/pid")
+    old=$(cat "$MYNX_SOUND_DIR/pid")
     PATH="$STUBS:$PATH" run "$SERVER"
     [ "$status" -eq 0 ]
     gone "$old"
@@ -73,7 +73,7 @@ old_server() {
 @test "sound-server leaves alone another program with the old pid" {
     stub_pulseaudio
     old_server not-pulse
-    old=$(cat "$PC26_SOUND_DIR/pid")
+    old=$(cat "$MYNX_SOUND_DIR/pid")
     PATH="$STUBS:$PATH" run "$SERVER"
     kill -0 "$old"
 }
@@ -81,7 +81,7 @@ old_server() {
 @test "sound-server records from a pipe the app writes the microphone into" {
     stub_pulseaudio
     PATH="$STUBS:$PATH" run "$SERVER"
-    [[ $output == *"module-pipe-source file=$PC26_SOUND_DIR/in format=s16le rate=48000 channels=1 source_name=mic"* ]]
+    [[ $output == *"module-pipe-source file=$MYNX_SOUND_DIR/in format=s16le rate=48000 channels=1 source_name=mic"* ]]
 }
 
 @test "sound-server starts the watcher with Pulse's pid" {

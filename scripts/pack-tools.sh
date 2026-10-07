@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Packs the app's tools for the APK into OUT_DIR/tools.tar.xz: tools/
-# (pocket, menu, the editors, …) plus core's built-in key bars and
+# (mynx, menu, the editors, …) plus core's built-in key bars and
 # themes, for reading and copying. The app unpacks it on each update;
-# Debian sees it at /opt/pc26.
+# Debian sees it at /opt/mynx.
 #
 #   scripts/pack-tools.sh app/src/main/assets
 set -euo pipefail

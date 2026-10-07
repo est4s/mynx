@@ -5,7 +5,7 @@
 It streams the microphone live from the app's sound device (PulseAudio,
 through `parec`, see mic.py), so the levels update about 20 times a second
 with no recordings in between. Without the sound device it falls back to
-reading a `pocket audio record` WAV as it grows. Keys: q quit, r reset, s fast/slow, + and - calibrate,
+reading a `mynx audio record` WAV as it grows. Keys: q quit, r reset, s fast/slow, + and - calibrate,
 space pause.
 """
 import array

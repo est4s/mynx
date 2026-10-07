@@ -4,7 +4,7 @@
 
 Modes: Steady, Strobe, SOS, Beacon, Breathe, Flicker (a candle) and Morse
 (flashes a message of your own). It talks to the app straight through its
-request folder (the same way `pocket torch` does), about 35 ms a change,
+request folder (the same way `mynx torch` does), about 35 ms a change,
 so strobes keep up. The light goes off when it quits.
 
 Keys: space on/off, Up/Down or +/- brightness, 1-9 and 0 brightness
@@ -25,9 +25,9 @@ import threading
 import time
 import tty
 
-# the app's own library, next to the apps folder (/opt/pc26/lib)
+# the app's own library, next to the apps folder (/opt/mynx/lib)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
-from pc26.client import Failure, request  # noqa: E402
+from mynx.client import Failure, request  # noqa: E402
 
 STATE = os.path.expanduser("~/.config/torch/state.json")
 
@@ -61,8 +61,8 @@ def hex_rgb(h):
 
 
 def theme_background():
-    for path in ("~/.config/pc26/colors.properties",
-                 "/opt/pc26/themes/neon.colors.properties"):
+    for path in ("~/.config/mynx/colors.properties",
+                 "/opt/mynx/themes/neon.colors.properties"):
         try:
             with open(os.path.expanduser(path)) as f:
                 for line in f:

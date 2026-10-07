@@ -4,7 +4,7 @@
 # PulseAudio through PULSE_SERVER, which the app sets in every tab; ALSA
 # programs go through it too (Debian's pulse plugin). Exits 3 when
 # PulseAudio isn't installed (Debians from before it was in the image).
-dir=${PC26_SOUND_DIR:-/tmp/.pc26/sound}
+dir=${MYNX_SOUND_DIR:-/tmp/.mynx/sound}
 command -v pulseaudio >/dev/null 2>&1 || exit 3
 mkdir -p "$dir"
 # A Pulse outlives the proot that ran it, so the app stops it by the pid

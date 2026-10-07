@@ -26,54 +26,54 @@ class ToolsInstallerTest {
     @Test
     fun `unpacks the tools with their executable bits`() {
         update("1", archive {
-            file("bin/pocket", "#!/usr/bin/python3\n", mode = "755")
+            file("bin/mynx", "#!/usr/bin/python3\n", mode = "755")
             file("themes/neon.colors.properties", "background=#000000\n")
         })
 
         assertEquals("background=#000000\n", File(tools, "themes/neon.colors.properties").readText())
-        assertTrue(OWNER_EXECUTE in Files.getPosixFilePermissions(File(tools, "bin/pocket").toPath()))
+        assertTrue(OWNER_EXECUTE in Files.getPosixFilePermissions(File(tools, "bin/mynx").toPath()))
     }
 
     @Test
     fun `records the version it installed, readable from Debian`() {
-        update("42", archive { file("bin/pocket", "") })
+        update("42", archive { file("bin/mynx", "") })
 
         assertEquals("42\n", File(tools, ".version").readText())
     }
 
     @Test
     fun `leaves the tools alone while the version is the same`() {
-        update("1", archive { file("bin/pocket", "old") })
+        update("1", archive { file("bin/mynx", "old") })
         var opened = false
 
-        installer.update("1") { opened = true; ByteArrayInputStream(archive { file("bin/pocket", "new") }) }
+        installer.update("1") { opened = true; ByteArrayInputStream(archive { file("bin/mynx", "new") }) }
 
         assertFalse(opened)
-        assertEquals("old", File(tools, "bin/pocket").readText())
+        assertEquals("old", File(tools, "bin/mynx").readText())
     }
 
     @Test
     fun `a new version replaces the tools completely`() {
         update("1", archive {
-            file("bin/pocket", "old")
+            file("bin/mynx", "old")
             file("bin/gone", "removed in version 2")
         })
 
-        update("2", archive { file("bin/pocket", "new") })
+        update("2", archive { file("bin/mynx", "new") })
 
-        assertEquals("new", File(tools, "bin/pocket").readText())
+        assertEquals("new", File(tools, "bin/mynx").readText())
         assertFalse(File(tools, "bin/gone").exists())
     }
 
     @Test
     fun `a failed update keeps the old tools and is retried next time`() {
-        update("1", archive { file("bin/pocket", "old") })
+        update("1", archive { file("bin/mynx", "old") })
 
         assertFailsWith<IOException> { update("2", "not an archive".toByteArray()) }
 
-        assertEquals("old", File(tools, "bin/pocket").readText())
-        update("2", archive { file("bin/pocket", "new") })
-        assertEquals("new", File(tools, "bin/pocket").readText())
+        assertEquals("old", File(tools, "bin/mynx").readText())
+        update("2", archive { file("bin/mynx", "new") })
+        assertEquals("new", File(tools, "bin/mynx").readText())
     }
 
     @Test
@@ -82,11 +82,11 @@ class ToolsInstallerTest {
 
         writeToolsProfile(rootfs)
 
-        val script = File(rootfs, "etc/profile.d/pc26.sh")
+        val script = File(rootfs, "etc/profile.d/mynx.sh")
         // First: the tools replace older copies of the same commands left in the rootfs.
-        assertEquals("/opt/pc26/bin:/usr/bin:/bin\n", sourced(script, "/usr/bin:/bin"))
+        assertEquals("/opt/mynx/bin:/usr/bin:/bin\n", sourced(script, "/usr/bin:/bin"))
         // Sourcing it twice (a nested login shell) adds nothing.
-        assertEquals("/usr/bin:/opt/pc26/bin\n", sourced(script, "/usr/bin:/opt/pc26/bin"))
+        assertEquals("/usr/bin:/opt/mynx/bin\n", sourced(script, "/usr/bin:/opt/mynx/bin"))
     }
 
     @Test
@@ -95,9 +95,9 @@ class ToolsInstallerTest {
 
         writeToolsProfile(rootfs)
 
-        val text = File(rootfs, "etc/profile.d/pc26.sh").readText()
-        assertTrue("""if [ -n "${'$'}{BASH_VERSION-}" ] && [ -r /opt/pc26/shell.bash ]; then
-            |    . /opt/pc26/shell.bash
+        val text = File(rootfs, "etc/profile.d/mynx.sh").readText()
+        assertTrue("""if [ -n "${'$'}{BASH_VERSION-}" ] && [ -r /opt/mynx/shell.bash ]; then
+            |    . /opt/mynx/shell.bash
             |fi""".trimMargin() in text, text)
     }
 
@@ -105,7 +105,7 @@ class ToolsInstallerTest {
     fun `rewrites the profile script only when it changed`() {
         val rootfs = File(base, "debian").apply { mkdirs() }
         writeToolsProfile(rootfs)
-        val script = File(rootfs, "etc/profile.d/pc26.sh")
+        val script = File(rootfs, "etc/profile.d/mynx.sh")
         script.setLastModified(1000)
 
         writeToolsProfile(rootfs)
@@ -113,7 +113,7 @@ class ToolsInstallerTest {
 
         script.writeText("stale")
         writeToolsProfile(rootfs)
-        assertTrue("/opt/pc26/bin" in script.readText())
+        assertTrue("/opt/mynx/bin" in script.readText())
     }
 
     private fun sourced(script: File, path: String): String {

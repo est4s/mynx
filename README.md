@@ -1,4 +1,4 @@
-# PC-26
+# Mynx
 
 An Android terminal app with **Debian Linux built in**. Install it, open
 it, and you're at a real Debian shell: no root, no Termux, no setup
@@ -21,8 +21,8 @@ scripts.
 - **Example apps** that use the phone: a compass, a spirit level, a
   flashlight, a sound spectrum, a sound meter, a guitar tuner and a
   metronome, in Python, to run, read and copy.
-- **Plain-text config** in `~/.config/pc26/`, changed with the `pocket`
-  command or its editors (`pocket edit`), checked before it applies,
+- **Plain-text config** in `~/.config/mynx/`, changed with the `mynx`
+  command or its editors (`mynx edit`), checked before it applies,
   with undo.
 - **The phone from the shell:** notifications, clipboard, share,
   camera and flashlight, location, sensors, and a sound device, so
@@ -51,7 +51,7 @@ USB. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 
-PC-26 is free software under the **GNU General Public License,
+Mynx is free software under the **GNU General Public License,
 version 3** (GPL-3.0-only): see [`LICENSE`](LICENSE). If you distribute
 a changed version, publish its full source under the same licence, and
 please give it its own name and icon.
@@ -59,4 +59,4 @@ please give it its own name and icon.
 Bundled components keep their own licences: `proot` (GPL-2.0-or-later,
 run as a separate program) with `talloc` (LGPL-3.0-or-later), Termux's
 terminal libraries (Apache-2.0), JetBrains Mono Nerd Font (OFL-1.1) and
-Debian's packages. `pocket about` lists them with their sources.
+Debian's packages. `mynx about` lists them with their sources.

@@ -14,7 +14,7 @@ class LaterRequestTest {
     private val home = File(base, "root").apply { mkdirs() }
     private val started = mutableListOf<Pair<List<String>, PendingReply>>()
     private val gone = mutableSetOf<Int>()
-    private val requests = Pc26Requests(
+    private val requests = MynxRequests(
         dir, home,
         later = mapOf(
             "slow" to Later(seconds = 30) { args, reply -> started += args to reply },
@@ -62,7 +62,7 @@ class LaterRequestTest {
     }
 
     @Test
-    fun `a stream sends lines until pocket cancels it`() {
+    fun `a stream sends lines until mynx cancels it`() {
         send("12-1", "feed")
         assertEquals("stream", file("12-1.wait").readText())
         val reply = started.single().second
@@ -89,7 +89,7 @@ class LaterRequestTest {
     }
 
     @Test
-    fun `a stream whose pocket has gone stops and leaves nothing behind`() {
+    fun `a stream whose mynx has gone stops and leaves nothing behind`() {
         send("77-5", "feed")
         send("78-5", "feed")
         val reply = started.first().second

@@ -5,7 +5,7 @@ an agent running in the app's Debian can walk the owner through it.
 
 ## Before you start
 
-- Portrait, **Neon** theme (`pocket theme set neon`), default font
+- Portrait, **Neon** theme (`mynx theme set neon`), default font
   size.
 - Nothing personal on screen: no notifications (turn on Do Not
   Disturb), no private file names, prompts or chat text. These go in a
@@ -27,10 +27,10 @@ next.
 3. **AI agent:** Claude Code (or another agent) working on something
    harmless, with the agent key bar.
 4. **A game:** `rogue` mid-game, with its key bar.
-5. **Themes:** `pocket edit` → Theme, the cursor on a theme other
+5. **Themes:** `mynx edit` → Theme, the cursor on a theme other
    than Neon, so the live preview shows.
-6. *(Optional)* a phone feature: `pocket sensor compass --stream`,
-   or `pocket location` with the coordinates hidden.
+6. *(Optional)* a phone feature: `mynx sensor compass --stream`,
+   or `mynx location` with the coordinates hidden.
 
 ## Putting them in the README
 

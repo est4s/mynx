@@ -18,7 +18,7 @@ android {
         targetSdk = 36
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         // The release workflow sets it from the tag (v0.1.0 → 0.1.0).
-        versionName = System.getenv("PC26_VERSION_NAME") ?: "0.0.1"
+        versionName = System.getenv("MYNX_VERSION_NAME") ?: "0.0.1"
 
         // proot and the Debian rootfs will be arm64-only, so ship nothing else.
         ndk { abiFilters += "arm64-v8a" }
@@ -37,15 +37,15 @@ android {
         // it from a GitHub secret and passes it in through these variables.
         // Without them (debug CI builds, the phone) there's no release key and
         // release builds come out unsigned.
-        val releaseKeystore = System.getenv("PC26_RELEASE_KEYSTORE")
+        val releaseKeystore = System.getenv("MYNX_RELEASE_KEYSTORE")
         if (!releaseKeystore.isNullOrEmpty()) {
             fun required(name: String) = System.getenv(name)?.takeIf { it.isNotEmpty() }
-                ?: error("$name must be set with PC26_RELEASE_KEYSTORE")
+                ?: error("$name must be set with MYNX_RELEASE_KEYSTORE")
             create("release") {
                 storeFile = file(releaseKeystore)
-                storePassword = required("PC26_RELEASE_STORE_PASSWORD")
-                keyAlias = required("PC26_RELEASE_KEY_ALIAS")
-                keyPassword = required("PC26_RELEASE_KEY_PASSWORD")
+                storePassword = required("MYNX_RELEASE_STORE_PASSWORD")
+                keyAlias = required("MYNX_RELEASE_KEY_ALIAS")
+                keyPassword = required("MYNX_RELEASE_KEY_PASSWORD")
             }
         }
     }

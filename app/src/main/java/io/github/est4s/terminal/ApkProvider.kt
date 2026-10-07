@@ -11,7 +11,7 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * Hands Android's installer the one APK `pocket install-apk` asked for.
+ * Hands Android's installer the one APK `mynx install-apk` asked for.
  * Only debug builds declare it (app/src/debug/AndroidManifest.xml), along
  * with the permission to install apps.
  */
