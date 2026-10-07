@@ -169,6 +169,11 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     [ "$(theme_name)" = custom ]
 }
 
+@test "the title names the app" {
+    run keys q
+    [[ $output == *"M Y N X"* ]]
+}
+
 @test "human sizes" {
     source "$MENU"
     [ "$(human_kb 524288)" = 512M ]

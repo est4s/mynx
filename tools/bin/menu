@@ -236,7 +236,7 @@ center_len() { # center_len <visible-length> <string>: center a string with colo
   local pad=$(((COLS - $1) / 2)); ((pad < 0)) && pad=0
   printf '%*s%s\n' $pad '' "$2"
 }
-TITLE_TEXT="▓▒░ P C - 2 6 ░▒▓"
+TITLE_TEXT="▓▒░ M Y N X ░▒▓"
 
 draw() { # draw <menu> <selected-index> <breadcrumb>
   local i n=${#ITEMS[@]} row

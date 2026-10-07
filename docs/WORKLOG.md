@@ -30,8 +30,8 @@ Newest entries first. Rules for keeping it up to date: see
   (`v0.1.0`), see "Next".
 - **Renamed to Mynx** (entry 70, 2026-10-07): app name, command
   `mynx`, paths `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`,
-  `MYNX_*`, repo `est4s/mynx`. **Pushed, not yet on the phone**: see
-  "Next", *Morning: install the Mynx build*.
+  `MYNX_*`, repo `est4s/mynx`. **Installed on the phone** and the
+  owner's Debian moved over (entry 71); checks left: see "Next".
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`mynx notify`, `mynx hook`),
   `mynx agent` installs Claude Code, Codex and Gemini CLI with their
@@ -86,38 +86,17 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Next
 
-### Morning: install the Mynx build (entry 70)
+### Check the Mynx build on the phone (entries 70-71)
 
-The rename is pushed; the phone still runs the old build, whose
-command is `pocket` and whose paths are `/opt/pc26`, `~/.config/pc26`.
-In this order:
-1. **Install the build.** `scripts/deliver.sh` calls `mynx
-   install-apk`, which the old build doesn't have: let it download
-   (it fails at the install step), then run
-   `pocket install-apk /storage/emulated/0/Download/mynx-build.apk`,
-   or open that file from the Files app.
-2. **Move the owner's Debian over:** `bash ~/mynx-migrate.sh` (written
-   2026-10-07, outside the repo). It refuses to run before the new
-   build is in (`/opt/mynx/bin/mynx` must exist), backs up what it
-   touches to `~/.cache/mynx-migrate-backup.tar.gz`, then: moves
-   `~/.config/pc26` → `~/.config/mynx` and `~/.local/state/pc26` →
-   `~/.local/state/mynx` (it replaces the links made the night
-   before), deletes `/etc/profile.d/pc26.sh`, and rewrites the old
-   names in `~/.bashrc`, `~/AGENTS.md`, `~/CLAUDE.md`,
-   `~/.claude/settings.json` (hooks → `/opt/mynx/bin/mynx hook
-   claude`), `~/.local/bin/{brush,flog,apps-menu}` and
-   `~/games/termdoom.py`. Then open a new tab.
-3. **The local clone** was copied to `~/mynx` the night before (with
-   `cp -rL`, see AGENTS.md's proot notes), with Claude's project data.
-   Work from `~/mynx`; delete `~/PC-26` once `git -C ~/mynx status`
-   is clean and matches `origin/main`.
-4. **Check on the phone:** the app is named Mynx; theme, font, key
-   bars and the owner's menu kept; `mynx check` clean; `pocket` is
-   "command not found"; `ls /opt/pc26` fails; closing all tabs and
-   restarting opens the menu (`MYNX_MENU`); a long Claude turn with
-   the app in the background notifies; `mynx edit` shows its key bar
-   (`mynx-edit`); `mynx sound` is on; `mynx about` links
-   `github.com/est4s/mynx`.
+Installed and the owner's Debian moved over (entry 71). Left for the
+owner to check on the phone: the app is named Mynx; theme, font, key
+bars and the menu kept; closing all tabs and restarting opens the
+menu (`MYNX_MENU`); a long Claude turn with the app in the background
+notifies; `mynx edit` shows its key bar (`mynx-edit`); `mynx sound`
+is on; the menu's banner says MYNX (entry 72; needs the next build,
+or `scripts/deliver.sh`). Then delete `~/PC-26` (the old clone: clean, matches
+`origin/main`, no stashes; kept until the owner says so) and
+`~/mynx-migrate.sh`.
 
 ### Roadmap step 9: Android integration
 
@@ -411,6 +390,34 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (72): the menu's banner still said PC-26
+
+The owner saw the old name in the menu: its banner was spelled
+`▓▒░ P C - 2 6 ░▒▓`, letter-spaced, so the rename's searches for
+`pc26`/`pc-26` missed it. Now `▓▒░ M Y N X ░▒▓`, with a bats test.
+Swept the repo and the owner's Debian again, letter-spaced spellings
+included: nothing else in the code. Rewrote the old names left in
+comments of the owner's `~/.config/mynx` files (`menu.conf`,
+`keybars/agent.conf`, `colors.properties`, `settings.conf`; `mynx
+check` clean) and removed stale `/tmp/kotlin-compiler-in-pocketterminal-*`
+markers. Left on purpose: `~/PC-26`, `~/mynx-migrate.sh`, Claude's
+old project data (`~/.claude/projects/-root-PC-26`,
+`-root-pocket-terminal-app`, the `/root/PC-26` entry in
+`~/.claude.json`): history, for the owner to delete.
+
+### 2026-10-07 (71): Mynx build installed, Debian moved over
+
+The owner installed the Mynx build. Ran `~/mynx-migrate.sh`: backup
+in `~/.cache/mynx-migrate-backup.tar.gz`; `~/.config/pc26` and
+`~/.local/state/pc26` moved to the `mynx` names (replacing the
+links), `/etc/profile.d/pc26.sh` removed, old names rewritten in the
+home files and `~/.claude/settings.json` (hooks now
+`/opt/mynx/bin/mynx hook claude`). Removed the empty `/opt/pc26`
+mount folder the old build left. Checked here: `pocket` is gone,
+`mynx check` clean, `mynx about` links `github.com/est4s/mynx`;
+`~/mynx` is clean at `origin/main` and `git fsck` is fine. Not
+deleted yet: `~/PC-26`, `~/mynx-migrate.sh`.
 
 ### 2026-10-07 (70): renamed to Mynx
 
