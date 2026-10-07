@@ -917,6 +917,9 @@ APP_NAME = "PC-26"
 
 # What the app ships that others wrote. Licence texts are in
 # /opt/pc26/licenses/; proot's GPL needs its source linked.
+APP_LICENSE = "GPL-3.0-only"
+APP_SOURCE = "https://github.com/est4s/PC-26"
+
 COMPONENTS = [
     {"name": "proot", "version": "v5.1.107.96", "license": "GPL-2.0-or-later",
      "source": "https://github.com/termux/proot",
@@ -966,7 +969,10 @@ def about_text(version):
     heading = (f"version {name} (build {build})" if name else
                f"build {build}" if build else "version unknown")
     lines = [APP_NAME, heading, "",
-             "A Debian terminal for Android.", "", "Made with:", ""]
+             "A Debian terminal for Android.", "",
+             wrap(f"Free software under the GNU General Public License "
+                  f"version 3 ({APP_LICENSE}). Source:", ""), APP_SOURCE, "",
+             "Made with:", ""]
     for c in COMPONENTS:
         source = f"  Source: {c['source']}"
         lines += [f"{c['name']} {c['version']}", f"  License: {c['license']}",
@@ -993,6 +999,7 @@ def cmd_about(args, as_json):
         build, name = version_parts(version)
         out(True, {"ok": True, "name": APP_NAME, "version": version,
                    "version_name": name, "build": build,
+                   "license": APP_LICENSE, "source": APP_SOURCE,
                    "components": COMPONENTS}, None)
         return 0
     text = about_text(version)

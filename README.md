@@ -1,249 +1,59 @@
 # PC-26
 
-A standalone Android terminal app with **Debian Linux built in**. Install the
-app, open it, and you're at a real Debian shell, with no root, no Termux and
-no setup scripts to paste.
+An Android terminal app with **Debian Linux built in**. Install it, open
+it, and you're at a real Debian shell: no root, no Termux, no setup
+scripts.
 
-On top of that it ships a ready-to-use, fully customizable setup: a launcher
-menu, themes, a key bar above the keyboard that follows what's running,
-multiple terminals, and
-**shareable profiles**, so you can send your whole setup to a friend and they
-can install it with one tap.
+> **Status:** in development, not released yet.
 
-It's also built for **AI coding agents** like Claude Code: the setup is
-documented for them and fully scriptable, so an agent can customize it for
-you.
+## What you get
 
-> **Status:** in development, not released. Roadmap steps 1–7 and 9
-> work (8 is parked); this README describes the intended scope.
+- **Debian 13 (arm64)** through `proot`. `apt install` whatever you
+  need; your files and packages survive app updates.
+- **Tabs** that keep running in the background and come back when you
+  reopen the app. Swipe sideways to switch.
+- **A key bar** above the phone's keyboard (Esc, Tab, Ctrl, arrows, …)
+  that changes with what's running: the file manager, games, AI agents
+  and your own programs can each have their own.
+- **A ready setup:** a launcher menu, a file manager
+  ([nnn](https://github.com/jarun/nnn)), ten themes, a Nerd Font, the
+  starship prompt and a few terminal games.
+- **Plain-text config** in `~/.config/pc26/`, changed with the `pocket`
+  command or its editors (`pocket edit`), checked before it applies,
+  with undo.
+- **The phone from the shell:** notifications, clipboard, share,
+  camera and flashlight, location, sensors, and a sound device, so
+  Linux programs play through the speaker and record from the
+  microphone.
+- **Built for AI agents:** one-tap install of Claude Code, Codex or
+  Gemini CLI (official installers, your own account), a guide in
+  `~/AGENTS.md` so they can change your setup for you, and a phone
+  notification when they finish or need you.
 
----
+## Install
 
-## Features
+Needs an **arm64** phone with **Android 8** or newer. Download the APK
+from [Releases](../../releases) and open it. The first launch unpacks
+Debian; after that the app opens straight into the menu.
 
-### Debian, built in
-- Full Debian (arm64) userland running through `proot`. No root needed and
-  nothing to install separately.
-- First launch unpacks Debian with a progress screen; after that the app opens
-  straight into a shell.
-- Use `apt` as normal: install compilers, editors, Python, Node, and so on.
-- Your files and installed packages survive app updates. Updates only add
-  on top of an existing install and never overwrite it.
+## Limitations
 
-### Multiple terminals, in tabs
-Terminals open in **browser-style tabs**, laid out like Windows Terminal:
-- A **tab strip** along the top. Each tab shows the profile's icon, a title
-  and a **×** close button.
-- A **+** button opens a new tab in the current profile. The **⌄** next to it
-  lists your profiles, so you can open a tab in any of them.
-- Tab titles follow what's running (for example `vim notes.txt`), or you can
-  rename a tab yourself.
-- Tabs take their **profile's colour**, so you can tell profiles apart at a
-  glance. You can also pick a colour for a single tab.
-- **Drag to reorder** tabs. Long-press a tab for rename, colour, duplicate,
-  close others.
-- **Swipe** across the terminal to move to the next or previous tab.
-- With many tabs, the strip scrolls sideways, and a tab overview shows them
-  all at once.
-- An **activity dot** on background tabs shows new output, and a bell icon
-  marks a terminal bell.
-- Tabs keep running in the background (foreground service with an optional
-  wakelock: the `wakelock` setting), so long jobs survive switching apps.
-  Open tabs are restored when you reopen the app.
-
-### File manager
-`files` opens [nnn](https://github.com/jarun/nnn), a fast one-pane
-terminal file manager that fits a narrow portrait screen, set up for the
-phone. Midnight Commander is still installed, but it's built for wide
-desktop terminals and a full keyboard.
-- **Detail mode** by default: sizes, dates and permissions in one list.
-- **Quick places** on `b`: home, Download, Pictures, DCIM and `/`, plus
-  your own bookmarks.
-- **Key bar:** while nnn runs, the bar above the keyboard shows its
-  actions as labelled buttons (↑, ↓, Open, Back, Select, Search, Copy,
-  Move, Rename, Delete, Places, Quit), so there are no shortcuts to memorise.
-- Text files open in your terminal editor (nano by default).
-- Later: open other files in an Android app, share, and "open terminal
-  here" in a new tab; tap support (off by default, behind a setting).
-
-### Key bar
-Two rows of labelled buttons between the terminal and the keyboard,
-always visible, so the phone's own keyboard is all you need for typing
-(swipe, voice, any language).
-- **Follows what's running:** the shell gets Esc, Tab, a sticky Ctrl,
-  arrows, Files and Menu; the file manager and the menu get their own
-  actions.
-- **Games:** each game gets its own controls (Neon Rogue: arrows, Wait,
-  Explore, Potion, …; Neon Drive: steer, Brake, Nitro), and any other
-  game a generic D-pad bar.
-- **Hold to repeat:** arrows (and any button marked to) repeat while
-  held, and send as soon as they're touched.
-- **Pages:** if a bar has more buttons than fit, swipe sideways for the
-  rest.
-- **Any program or game can bring its own:** bars are plain-text files;
-  `keybar NAME command` shows bar `NAME` while the command runs, and
-  `play game` runs a game with the bar named after it.
-
-### Customize everything
-- **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
-  cursor style.
-- **Key bars:** edit the built-in bars or add your own, for any program.
-- **Launcher menu:** a "PC-26" start menu (Terminal, Files, Games,
-  Settings, System, …) that you can edit and reorder, with items that run
-  any command.
-- **Editors in the terminal:** `pocket edit` (or the menu's Settings, or
-  long-press the app icon → Settings, which opens them in a new tab) for
-  the theme (with live preview), font and cursor, key bars and the menu.
-  Every change is also a `pocket` command, so an AI agent can make it.
-- **Shell:** your own dotfiles, prompt, aliases and packages.
-
-### Profiles: share your setup
-A **profile** is a complete setup: theme, font, key bars, launcher
-menu, dotfiles, package list and setup scripts.
-- **Several profiles** on one phone (for example "Neon", "Minimal",
-  "Python dev"), with fast switching between them.
-- Each profile can have its **own separate Debian environment**, or share one
-  with other profiles.
-- **Export** a profile as a single small file to send through any app. It
-  stores the setup *recipe*, not a whole Linux system.
-- **Import** a profile file to install it as a new profile. The app shows you
-  exactly what it will install and run before anything runs.
-- Optional full **backup/restore** of a profile's Debian environment for
-  moving to a new phone.
-
-### Android integration
-Commands available inside Debian:
-- notifications, vibration
-- clipboard copy/paste
-- share files or text to other apps, open URLs
-- access to phone storage (with permission)
-- **location:** GPS position, one-off or as a stream
-- **camera:** take photos from the front or back camera; the flashlight
-  on and off
-- **sound:** play audio files and record from the microphone, and a sound
-  device so Linux programs play through the phone's speaker and hear its
-  microphone
-- **sensors:** read accelerometer, gyroscope, compass, light, proximity
-  and other sensors, one-off or as a stream
-
-Each of these asks for Android permission the first time it's used, and you can
-turn any of them off per profile.
-
-### Built for AI coding agents
-CLI agents like Claude Code are first-class citizens. An agent running in a
-terminal tab should be able to understand and change your setup as easily as
-you can.
-
-**Setup docs for agents.** Every Debian environment ships with documentation
-written for agents, kept in sync with the app version and the active profile:
-- `AGENTS.md` and `CLAUDE.md` in your home folder, so Claude Code, Codex,
-  Gemini CLI and other agents pick them up automatically.
-- What the environment is (Debian under `proot` on Android) and its limits
-  (no `systemd`, Docker or root kernel features), so agents don't waste time
-  on things that can't work.
-- Where everything lives: profile, theme, key bars, launcher menu,
-  file manager settings, dotfiles.
-- The file formats, with examples, and what each setting does.
-- Every `pocket` command, including the Android ones (notifications, camera,
-  location, sensors, clipboard, share).
-- How to apply a change, check it and undo it.
-
-**An agent-friendly setup:**
-- **Plain-text config.** Everything you can change in the settings screens
-  is stored in readable, commented files that an agent can edit directly.
-- **A `pocket` command for everything.** Anything the app can do, a script
-  can do: `pocket theme set neon`, `pocket set font-size 14`,
-  `pocket profile export`, … with `--json` output for scripts and agents.
-- **Live reload.** Config changes apply without restarting the app.
-- **Checks before applying.** `pocket check` validates edits and
-  explains mistakes, so a broken edit never breaks the app.
-- **Undo.** Config is snapshotted before each change; `pocket undo` rolls
-  back the last one.
-- **Agent notifications.** A phone notification when an agent finishes or
-  needs your input, so you can switch apps while it works.
-- **One-tap install** of popular agent CLIs (Claude Code, Codex, Gemini
-  CLI) through their official installers; you sign in with your own
-  account.
-
-### Development boards *(later)*
-Flash and talk to boards like **Arduino** and **ESP32** over a USB-C OTG
-cable, using standard tools.
-- A **USB serial bridge** in the app connects to the board through Android's
-  USB API and gives Debian a normal serial port (`/dev/ttyUSB0`). This covers
-  CH340, CP210x, FTDI, ATmega16U2 and native-USB ESP32-S2/S3/C3 boards.
-- Standard tools work against that serial port: `arduino-cli`, PlatformIO,
-  `esptool`, `avrdude`, `picocom`. Toolchains (AVR, ESP32) run on arm64 inside
-  Debian.
-- Automatic reset into the bootloader (DTR/RTS) is passed through to the
-  board; holding BOOT works as a fallback.
-- **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's USB
-  drive.
-- **Raw USB** devices (STM32 DFU, …) for tools that support it via `libusb`.
-- **Serial monitor tab**, a "board connected" notification and a
-  `pocket usb` command; covered by the agent docs, so an agent can write,
-  build and flash firmware.
-
-### Included extras
-- The default **Neon** profile comes with a synthwave theme and a few terminal
-  games, each with its own key bar.
-- Optional one-tap install of popular tools and AI agent CLIs (see above).
-
----
-
-## How it works
-
-| Part | Approach |
-|---|---|
-| App | Kotlin, a single native Android app |
-| Terminal | Termux's `terminal-emulator` / `terminal-view` libraries (Apache 2.0) |
-| Linux | Termux's Android-patched `proot`, shipped as a native library so it can run on modern Android |
-| Debian | A prebuilt arm64 rootfs, customized at build time and unpacked on first launch |
-| Profiles | A recipe file (config + dotfiles + package list + scripts) applied to a Debian environment |
-| Builds | GitHub Actions builds and signs the APK |
-
-### Limitations
-Because Debian runs through `proot` rather than a virtual machine:
-- no `systemd`, Docker or kernel modules
-- heavy work (big builds, package installs) is slower than on a PC
-- arm64 devices only
-
----
-
-## Distribution
-- **APK downloads** from GitHub Releases, signed, built by CI from version tags.
-- **Google Play** later, once the app is stable.
-
----
+Debian runs through `proot`, not a virtual machine: no `systemd`,
+Docker or kernel modules, and heavy builds are slower than on a PC.
 
 ## Roadmap
-1. **Core:** app opens a terminal into the built-in Debian.
-2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
-3. **Default setup:** Neon theme, fonts, launcher menu, games.
-4. **File manager:** nnn set up for the phone, and the key bar above the
-   keyboard.
-5. **Game and program key bars:** game controls, hold to repeat, bars for
-   any program or game (replaces the in-app keyboard).
-6. **Customization:** theme, key bar and menu editors (terminal programs),
-   and the first `pocket` commands they're built on.
-7. **Agent support:** undo for config changes, agent notifications,
-   one-tap install of agent CLIs. (The agent guide, the `pocket` CLI and
-   config checks came with step 6.) The agent docs are updated with
-   every later feature.
-8. **Profiles:** multiple profiles, switching, export/import.
-9. **Android integration:** notifications, clipboard, share, storage,
-   location, sensors, camera and flashlight, speaker and microphone.
-10. **Polish:** first-run experience, settings, icon, signed releases.
-11. **Later:**
-    - optional tap support in the file manager (settings toggle)
-    - development boards: USB serial bridge, flashing Arduino/ESP32/UF2
-      boards, serial monitor tab
 
----
+Next: shareable setup profiles, and flashing Arduino/ESP32 boards over
+USB. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
-To be decided. Bundled third-party components keep their own licenses:
-`proot` (GPL-2.0-or-later, run as a separate program) with `talloc`
-(LGPL-3.0-or-later), Termux's terminal libraries (Apache-2.0), the
-JetBrains Mono Nerd Font (OFL-1.1) and Debian's packages. `pocket about`
-(or the menu's System → About) lists them with their source links and
-shows the license texts, which ship in `/opt/pc26/licenses`.
+
+PC-26 is free software under the **GNU General Public License,
+version 3** (GPL-3.0-only): see [`LICENSE`](LICENSE). If you distribute
+a changed version, publish its full source under the same licence, and
+please give it its own name and icon.
+
+Bundled components keep their own licences: `proot` (GPL-2.0-or-later,
+run as a separate program) with `talloc` (LGPL-3.0-or-later), Termux's
+terminal libraries (Apache-2.0), JetBrains Mono Nerd Font (OFL-1.1) and
+Debian's packages. `pocket about` lists them with their sources.

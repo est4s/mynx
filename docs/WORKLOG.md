@@ -380,6 +380,36 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-07 (68): GPL-3.0 licence; making the repo user ready
+
+**Owner's decision:** the app is **GPL-3.0-only** (forks that are
+distributed must publish their source under the same licence).
+`LICENSE` is the GPL-3.0 text (Debian's `common-licenses/GPL-3`, same
+as `tools/licenses/GPL-3.0.txt`). `pocket about` states it with the
+source link (`APP_LICENSE`, `APP_SOURCE`, also in `--json`); the README's
+License section says so and asks forks for their own name and icon.
+
+Reviewed what a user-ready public repo needs before `v0.1.0` (the repo
+is still private). Still open, waiting on the owner:
+- GitHub description (still mentions profiles and an in-app keyboard),
+  topics
+- install section (arm64, Android 8+, APK from Releases, debug and
+  release builds can't install over each other)
+- screenshots (owner takes them)
+- `PRIVACY.md` (location, camera, mic, sensors stay on the phone)
+- `docs/WORKLOG.md`: keep, move to `docs/dev/`, or drop from the
+  public repo (owner to decide)
+- `CONTRIBUTING.md`, `SECURITY.md`, issue templates, CI badge
+- make the repo public at the release (suggested)
+
+**README cut to what ships** (owner: "way too long"), 249 → 60 lines:
+what you get, install, limitations, roadmap pointer, licence. The full
+scope (features as planned, How it works, roadmap) moved to
+`docs/ROADMAP.md`, with a note on what isn't built; AGENTS.md now
+points there for the scope.
+
+Tests: 187 unittest, 87 bats.
+
 ### 2026-10-07 (67): build 77 (one command, `pocket`) installed
 
 The owner installed build 77 (27058ec). Checked from the terminal:

@@ -231,6 +231,16 @@ class Pc26Test(unittest.TestCase):
         for name in self.LICENSES:
             self.assertIn(f"full text of {name}", text)
 
+    def test_about_states_the_apps_own_license_and_source(self):
+        self.write_about_files()
+        text = self.pocket("about").stdout
+        credits = text[:text.index("Made with:")]
+        self.assertIn("GPL-3.0", credits)
+        self.assertIn("https://github.com/est4s/PC-26", credits)
+        answer = json.loads(self.pocket("about", "--json").stdout)
+        self.assertEqual(answer["license"], "GPL-3.0-only")
+        self.assertEqual(answer["source"], "https://github.com/est4s/PC-26")
+
     def test_about_fits_the_phone_screen(self):
         self.write_about_files()
         lines = self.pocket("about").stdout.splitlines()

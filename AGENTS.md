@@ -1,7 +1,7 @@
 # Agent guide
 
 Context for AI agents (and humans) working on this repo. Read `README.md` first
-for **what** the app does. This file covers **how** we build it and the decisions
+for **what** the app does (and `docs/ROADMAP.md` for the full scope). This file covers **how** we build it and the decisions
 already made. Status and next steps live in `docs/WORKLOG.md`.
 
 Keep this file up to date: when a decision changes or a milestone lands, update
@@ -124,7 +124,7 @@ View-based).
 
 ## Architecture (decided)
 
-See README "How it works". The details:
+See `docs/ROADMAP.md` "How it works". The details:
 
 - **App:** a single Kotlin app. Don't fork `termux-app`; most of it manages
   Termux's own package system, which has `/data/data/com.termux` baked into
@@ -369,7 +369,7 @@ See README "How it works". The details:
 
 ### Design rules from day one
 
-These come from the README scope and apply to every feature:
+These come from the scope (`docs/ROADMAP.md`) and apply to every feature:
 - **Keyboard-first.** Everything must work from the keyboard (the in-app
   keyboard, once it exists). Tap/touch support is a low priority: add it later,
   off by default, behind a settings toggle. Exception (owner's decision,
@@ -391,6 +391,10 @@ These come from the README scope and apply to every feature:
 - **Don't bundle third-party agent CLIs** (Claude Code, Codex, …). Offer to
   install them with their official installers; users sign in with their own
   accounts.
+- **Licence:** the app is GPL-3.0-only (owner's decision, 2026-10-07;
+  `LICENSE`). `pocket about` states it (`APP_LICENSE`, `APP_SOURCE` in
+  `tools/lib/pc26/cli.py`). The name and icon aren't covered: forks
+  use their own.
 - **Licenses:** keep GPL components (proot) as separate executables and link
   their source from About (`pocket about`, the menu's System → About, in
   the terminal: owner's decision). Its credits are `COMPONENTS` in
@@ -486,7 +490,9 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
   it isn't obvious. Commit and push only when the owner asks.
 - **Releases:** only the owner tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
-- **README:** it's the product scope. When the owner changes scope, update the
-  README and its roadmap in the same commit.
+- **README:** short, for users: what ships today, install, licence.
+  The full scope and roadmap are `docs/ROADMAP.md`; when the owner
+  changes scope, update it in the same commit, and the README when a
+  feature ships.
 - Don't describe in user-facing docs how this app itself is developed.
 - Keep code comments sparse and about *why*, matching the existing files.
