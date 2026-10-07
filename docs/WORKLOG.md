@@ -380,6 +380,22 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-07 (67): build 77 (one command, `pocket`) installed
+
+The owner installed build 77 (27058ec). Checked from the terminal:
+`pocket` is the only command (`/opt/pc26/bin/pocket`, no `pc26`),
+`pocket check` clean, Claude's 3 hooks run
+`/opt/pc26/bin/pocket hook claude`, PATH puts the tools before `/usr`,
+sound device on with one Pulse, `pc26.client` imports for the owner's
+own programs, the editors' bar is `pocket-edit`, nothing in the home
+dotfiles, `~/.local/bin` or `~/.config/pc26` names the old paths.
+Removed the empty `/opt/pocket-terminal` folder (the old mount point,
+left in the owner's rootfs; new installs never had it).
+
+**Repository renamed** to `est4s/PC-26` (owner's request), with the
+local remote updated. GitHub redirects the old URL; nothing in the repo
+named it. The local clone stays at `~/pocket-terminal-app`.
+
 ### 2026-10-07 (66): one command, `pocket`; old names dropped
 
 **Owner's decision:** people and agents must use the same commands, so
