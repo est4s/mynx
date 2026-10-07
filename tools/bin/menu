@@ -8,11 +8,15 @@
 # Games: every executable in /opt/neon-games and ~/games shows up under
 #   Games, named after the file (neon-flap.py → "Neon Flap"). Add your own:
 #   ln -s /path/to/game ~/games/my-game
+# Apps: the same for /opt/pc26/apps and ~/apps; a "# label: Name" line near
+#   the top of the file names it in the menu. Each runs with its own key bar
+#   (the file's name without its ending), else the shell's.
 # menu --boot plays the boot splash first (the app does this on a fresh start),
 #   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
 # Exit closes the tab: the menu exits with 10 and ~/.bashrc exits the shell.
-# MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS
-# (colon-separated) overrides where games are found (both for testing).
+# MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
+# MENU_APP_DIRS (colon-separated) override where games and apps are found
+# (all for testing).
 
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pc26
 STATE=$STATE_DIR/menu
@@ -20,6 +24,7 @@ CONFIG_DIR=$HOME/.config/pc26
 DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
 WELCOME=${DEFAULT_MENU%/*}/welcome.txt
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
+IFS=: read -r -a APP_DIRS <<<"${MENU_APP_DIRS:-${DEFAULT_MENU%/*}/apps:$HOME/apps}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
 export LC_COLLATE=C       # games in the same order whatever the locale
 ITEM_W=26                 # width of a menu row (" ▶ 1. " + 20-char label)
@@ -70,7 +75,7 @@ theme_name() { # the theme the colours file was set from (see pocket theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, games, settings, agents, system, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, games, settings, agents, system, welcome, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -92,6 +97,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
     case $action in
       shell) action=exit ;;
       files) action=files ;;
+      apps) action=menu:apps ;;
       games) action=menu:games ;;
       settings) action=settings ;;
       agents) action=menu:agents ;;
@@ -151,7 +157,7 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [games]=Games [agents]="AI agents" [system]=System)
+declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [system]=System)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
   local name=${1##*/} label= w
@@ -160,6 +166,17 @@ game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
     label+="${label:+ }${w^}"
   done
   printf '%s' "${label:0:20}"
+}
+
+app_label() { # app_label <file>: its "# label:" line, else named like a game
+  local line n=0
+  while IFS= read -r line && ((n++ < 5)); do
+    if [[ $line =~ ^#[[:space:]]*label:[[:space:]]*(.*[^[:space:]]) ]]; then
+      printf '%s' "${BASH_REMATCH[1]:0:20}"
+      return
+    fi
+  done <"$1"
+  game_label "$1"
 }
 
 menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
@@ -176,8 +193,17 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         read_menu_file "$file"
         ((${#ITEMS[@]})) && return
       done
-      ITEMS=(Terminal Files Games Settings "AI agents" System "Getting started" Exit)
-      ACTS=(exit files menu:games settings menu:agents menu:system welcome quit_session) ;;
+      ITEMS=(Terminal Files Apps Games Settings "AI agents" System "Getting started" Exit)
+      ACTS=(exit files menu:apps menu:games settings menu:agents menu:system welcome quit_session) ;;
+    apps)
+      local dir f
+      for dir in "${APP_DIRS[@]}"; do
+        for f in "$dir"/*; do
+          [[ -f $f && -x $f ]] || continue   # skips shared modules and data files
+          ITEMS+=("$(app_label "$f")") ACTS+=("app:$f")
+        done
+      done
+      ((${#ITEMS[@]})) || { ITEMS=("(no apps yet)"); ACTS=(none); } ;;
     games)
       local dir f
       for dir in "${GAME_DIRS[@]}"; do
@@ -362,6 +388,10 @@ act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   pause
 }
 act_game() { run play "$1"; }
+act_app() { # under the bar named after the file (tuner, my-tool), else the shell's
+  local name=${1##*/}
+  run keybar "${name%.*},shell" "$1"
+}
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
   run pocket agent start "$1" || pause
 }

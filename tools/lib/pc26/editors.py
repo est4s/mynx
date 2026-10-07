@@ -20,7 +20,7 @@ from .models import ItemsFile, set_color
 KEY_BAR = "pocket-edit"
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 COLOR_KEYS = ["background", "foreground", "cursor"] + [f"color{i}" for i in range(16)]
-MENU_ACTIONS = ["shell", "files", "games", "settings", "agents", "system", "welcome", "exit"]
+MENU_ACTIONS = ["shell", "files", "apps", "games", "settings", "agents", "system", "welcome", "exit"]
 NUMBER_STEPS = {"font-size": 1, "agent-notify-after": 5, "undo-keep": 1}  # ←→ change these by this much
 FONT_DIRS = ["/usr/share/fonts", "/usr/local/share/fonts", "~/.fonts", "~/.local/share/fonts",
              "~/.config/pc26/fonts"]

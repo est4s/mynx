@@ -36,6 +36,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         "/opt/pc26/themes" \
         "~/.local/state/pc26/menu" \
         "~/games" \
+        "~/apps" \
+        "/opt/pc26/apps" \
         "/opt/pc26/bin" \
         "\`menu\`" "\`files\`" "\`keybar\`" "\`play\`" \
         "NNN_BMS" \

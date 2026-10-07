@@ -1,0 +1,652 @@
+#!/usr/bin/env python3
+# label: Compass
+"""compass - a compass card, fed by the phone's compass sensor.
+
+The card turns under a fixed mark at the top, like a ship's compass, with a
+heading tape and the heading in big digits below. Hold the phone flat and
+point its top edge where you want to go. Lock a bearing to get a marker on
+the card and a "turn left/right" readout to follow it.
+
+Keys: l lock the current heading as a bearing (again: clear it), space hold,
+t true/magnetic north, [ and ] declination (for true north), b buzz when on
+the bearing, q quit. Bearing, declination and settings are kept in
+~/.config/compass/state.json.
+"""
+import json
+import math
+import os
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import termios
+import time
+import tty
+
+RATE = 30            # sensor readings per second
+SMOOTH = 0.2         # low-pass factor per reading (lower = calmer)
+ON_COURSE = 3.0      # degrees within which you're on the locked bearing
+TILT_WARN = 35.0     # degrees from flat before the heading gets doubtful
+DPC = 2.5            # degrees per column on the heading tape
+STATE = os.path.expanduser("~/.config/compass/state.json")
+
+ESC = "\x1b["
+RESET = ESC + "0m"
+BOLD = ESC + "1m"
+
+
+def fg(c):
+    return f"{ESC}38;2;{c[0]};{c[1]};{c[2]}m"
+
+
+def mix(a, b, t):
+    t = max(0.0, min(1.0, t))
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def dim(c, k):
+    return tuple(int(v * k) for v in c)
+
+
+# Palette
+INK = (205, 220, 235)
+MUTED = (90, 110, 130)
+FAINT = (45, 62, 78)
+RING = (55, 110, 125)
+ACCENT = (90, 220, 255)
+MINT = (70, 255, 170)
+AMBER = (255, 200, 80)
+NORTH = (255, 70, 110)
+NORTH_LO = (170, 35, 70)
+STEEL = (175, 190, 205)
+STEEL_LO = (95, 110, 125)
+
+# Colour by how far off the bearing, in degrees
+OFF_STOPS = [(0.0, MINT), (ON_COURSE, (150, 255, 110)), (15.0, (255, 225, 80)),
+             (45.0, (255, 150, 60)), (120.0, (255, 70, 120))]
+
+
+def off_color(deg):
+    deg = abs(deg)
+    for (a, ca), (b, cb) in zip(OFF_STOPS, OFF_STOPS[1:]):
+        if deg <= b:
+            return mix(ca, cb, (deg - a) / (b - a))
+    return OFF_STOPS[-1][1]
+
+
+POINTS16 = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
+
+
+def point_name(deg, n=16):
+    step = 360 / n
+    return POINTS16[int(((deg % 360) + step / 2) // step) * (16 // n) % 16]
+
+
+def wrap180(d):
+    return (d + 180) % 360 - 180
+
+
+# ---------------------------------------------------------------- braille canvas
+
+BITS = ((0x01, 0x08), (0x02, 0x10), (0x04, 0x20), (0x40, 0x80))
+
+
+class Canvas:
+    """Braille dots (2x4 per cell), one colour per cell: highest priority wins."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.W, self.H = w * 2, h * 4
+        self.dots = [[0] * w for _ in range(h)]
+        self.col = [[None] * w for _ in range(h)]
+        self.pri = [[-1] * w for _ in range(h)]
+        self.text = {}
+
+    def dot(self, x, y, c, p=0):
+        xi, yi = int(round(x)), int(round(y))
+        if 0 <= xi < self.W and 0 <= yi < self.H:
+            cx, cy = xi >> 1, yi >> 2
+            self.dots[cy][cx] |= BITS[yi & 3][xi & 1]
+            if p >= self.pri[cy][cx]:
+                self.pri[cy][cx] = p
+                self.col[cy][cx] = c
+
+    def line(self, x0, y0, x1, y1, c, p=0, every=1):
+        n = max(1, int(max(abs(x1 - x0), abs(y1 - y0))))
+        for i in range(0, n + 1, every):
+            t = i / n
+            self.dot(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, c, p)
+
+    def circle(self, cx, cy, r, c, p=0, every=1):
+        n = max(8, int(2 * math.pi * r * 1.3))
+        for i in range(0, n, every):
+            a = 2 * math.pi * i / n
+            self.dot(cx + r * math.cos(a), cy + r * math.sin(a), c, p)
+
+    def disc(self, cx, cy, r, c, p=0):
+        for yi in range(int(cy - r - 1), int(cy + r + 2)):
+            for xi in range(int(cx - r - 1), int(cx + r + 2)):
+                if (xi - cx) ** 2 + (yi - cy) ** 2 <= r * r:
+                    self.dot(xi, yi, c, p)
+
+    def tri(self, a, b, c, col, p=0):
+        """A filled triangle."""
+        x0 = int(min(a[0], b[0], c[0])) - 1
+        x1 = int(max(a[0], b[0], c[0])) + 1
+        y0 = int(min(a[1], b[1], c[1])) - 1
+        y1 = int(max(a[1], b[1], c[1])) + 1
+
+        def side(p1, p2, x, y):
+            return (p2[0] - p1[0]) * (y - p1[1]) - (p2[1] - p1[1]) * (x - p1[0])
+
+        for yi in range(y0, y1 + 1):
+            for xi in range(x0, x1 + 1):
+                d1, d2, d3 = side(a, b, xi, yi), side(b, c, xi, yi), side(c, a, xi, yi)
+                neg = d1 < 0 or d2 < 0 or d3 < 0
+                pos = d1 > 0 or d2 > 0 or d3 > 0
+                if not (neg and pos):
+                    self.dot(xi, yi, col, p)
+
+    def put(self, col, row, s, c):
+        for i, ch in enumerate(s):
+            if 0 <= col + i < self.w and 0 <= row < self.h:
+                self.text[(row, col + i)] = (ch, c)
+
+    def rows(self):
+        out = []
+        for r in range(self.h):
+            line, cur = [], None
+            for c in range(self.w):
+                if (r, c) in self.text:
+                    ch, colr = self.text[(r, c)]
+                elif self.dots[r][c]:
+                    ch, colr = chr(0x2800 + self.dots[r][c]), self.col[r][c]
+                else:
+                    ch, colr = " ", None
+                if colr != cur and ch != " ":
+                    line.append(fg(colr))
+                    cur = colr
+                line.append(ch)
+            out.append("".join(line) + RESET)
+        return out
+
+
+# ---------------------------------------------------------------- big digits
+
+FONT = {
+    "0": ["###", "# #", "# #", "# #", "###"],
+    "1": [" # ", "## ", " # ", " # ", "###"],
+    "2": ["###", "  #", "###", "#  ", "###"],
+    "3": ["###", "  #", " ##", "  #", "###"],
+    "4": ["# #", "# #", "###", "  #", "  #"],
+    "5": ["###", "#  ", "###", "  #", "###"],
+    "6": ["###", "#  ", "###", "# #", "###"],
+    "7": ["###", "  #", "  #", " # ", " # "],
+    "8": ["###", "# #", "###", "# #", "###"],
+    "9": ["###", "# #", "###", "  #", "###"],
+    "°": ["##", "##", "  ", "  ", "  "],
+    "N": ["#  #", "## #", "# ##", "#  #", "#  #"],
+    "E": ["###", "#  ", "## ", "#  ", "###"],
+    "S": [" ##", "#  ", " # ", "  #", "## "],
+    "W": ["#   #", "#   #", "# # #", "## ##", "#   #"],
+    " ": ["  ", "  ", "  ", "  ", "  "],
+}
+
+
+def big(text):
+    """Text in a 5-pixel font drawn with half blocks: three rows."""
+    rows = ["", "", ""]
+    for i, ch in enumerate(text):
+        g = FONT.get(ch, FONT[" "])
+        g = g + [" " * len(g[0])]
+        for r in range(3):
+            top, bot = g[2 * r], g[2 * r + 1]
+            for a, b in zip(top, bot):
+                rows[r] += {(1, 1): "█", (1, 0): "▀", (0, 1): "▄"}.get(
+                    (a == "#", b == "#"), " ")
+            if i < len(text) - 1:
+                rows[r] += " "
+    return rows
+
+
+def shade(rows, c):
+    """Lighter at the top, full colour at the bottom."""
+    return [fg(mix((255, 255, 255), c, 0.45 + 0.3 * i)) + r + RESET
+            for i, r in enumerate(rows)]
+
+
+def vlen(s):
+    n, i = 0, 0
+    while i < len(s):
+        if s[i] == "\x1b":
+            i = s.index("m", i) + 1
+        else:
+            n += 1
+            i += 1
+    return n
+
+
+def center(s, w):
+    pad = max(0, (w - vlen(s)) // 2)
+    return " " * pad + s
+
+
+# ---------------------------------------------------------------- state
+
+class State:
+    def __init__(self):
+        self.vec = None            # smoothed heading as (cos, sin), magnetic
+        self.pitch = self.roll = 0.0
+        self.accuracy = None
+        self.hold = False
+        self.true_north = False
+        self.decl = 0.0            # magnetic declination, east positive
+        self.lock = None           # locked bearing, in the shown reference
+        self.buzz = False
+        self.was_on = False
+        self.error = None
+        self.flash = None, 0.0     # message, until
+        self.load()
+
+    def load(self):
+        try:
+            with open(STATE) as f:
+                d = json.load(f)
+            self.true_north = bool(d.get("true_north", False))
+            self.decl = float(d.get("declination", 0.0))
+            self.lock = d.get("lock")
+            self.buzz = bool(d.get("buzz", False))
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(STATE), exist_ok=True)
+            with open(STATE, "w") as f:
+                json.dump({"true_north": self.true_north, "declination": self.decl,
+                           "lock": self.lock, "buzz": self.buzz}, f)
+        except OSError:
+            pass
+
+    def feed(self, az, pitch, roll, accuracy):
+        self.accuracy = accuracy
+        if self.hold:
+            return
+        a = math.radians(az)
+        v = (math.cos(a), math.sin(a))
+        if self.vec is None:
+            self.vec = v
+            self.pitch, self.roll = pitch, roll
+        else:
+            self.vec = tuple(p + (q - p) * SMOOTH for p, q in zip(self.vec, v))
+            self.pitch += (pitch - self.pitch) * SMOOTH
+            self.roll += wrap180(roll - self.roll) * SMOOTH
+
+    def heading(self):
+        """The shown heading: magnetic, or true with the declination added."""
+        h = math.degrees(math.atan2(self.vec[1], self.vec[0])) % 360
+        return (h + self.decl) % 360 if self.true_north else h
+
+    def tilt(self):
+        p, r = math.radians(self.pitch), math.radians(self.roll)
+        return math.degrees(math.acos(max(-1.0, min(1.0, math.cos(p) * math.cos(r)))))
+
+    def flash_msg(self, msg):
+        self.flash = msg, time.time() + 1.5
+
+
+# ---------------------------------------------------------------- drawing
+
+def header(st, cols):
+    left = f" {fg(ACCENT)}{BOLD}◈ COMPASS{RESET}"
+    chips = []
+    if st.hold:
+        chips.append((AMBER, "❚❚ HOLD"))
+    if st.buzz:
+        chips.append((MUTED, "BUZZ"))
+    if st.vec is not None and st.tilt() > TILT_WARN:
+        chips.append((AMBER, "TILT"))
+    acc = {"high": (MINT, "● CAL"), "medium": (AMBER, "◐ CAL"),
+           "low": (NORTH, "○ CAL"), "unreliable": (NORTH, "✕ CAL")}.get(st.accuracy)
+    if acc:
+        chips.append(acc)
+    chips.append((INK, "TRUE" if st.true_north else "MAG"))
+    msg, until = st.flash
+
+    def build():
+        r = "  ".join(fg(c) + t + RESET for c, t in chips) + " "
+        if msg and time.time() < until:
+            r = fg(AMBER) + msg + RESET + "  " + r
+        return r
+
+    right = build()
+    while cols - vlen(left) - vlen(right) < 1 and chips:
+        chips.pop(0)
+        right = build()
+    return left + " " * max(1, cols - vlen(left) - vlen(right)) + right
+
+
+def footer(cols):
+    keys = [("l", "lock"), ("␣", "hold"), ("t", "true"), ("[]", "decl"),
+            ("b", "buzz"), ("q", "quit")]
+    parts = [f"{fg(ACCENT)}{k}{RESET} {fg(MUTED)}{v}{RESET}" for k, v in keys]
+    s = "  ".join(parts)
+    if vlen(s) > cols:
+        s = " ".join(f"{fg(ACCENT)}{k}{RESET}{fg(MUTED)}{v[:3]}{RESET}" for k, v in keys)
+    return center(s, cols)
+
+
+def draw_card(st, cw, ch):
+    cv = Canvas(cw, ch)
+    W, H = cv.W, cv.H
+    cx, cy = (W - 1) / 2, (H - 1) / 2 + 1.5
+    R = min(W, H - 3) / 2 - 4
+    h = st.heading()
+
+    def at(bearing, r):
+        """Where a bearing on the card is on screen: the heading is up."""
+        t = math.radians(bearing - h)
+        return cx + r * math.sin(t), cy - r * math.cos(t)
+
+    # bezel: a double ring, brighter towards the top where you read it
+    for k in range(int(2 * math.pi * R * 1.3)):
+        a = 2 * math.pi * k / int(2 * math.pi * R * 1.3)
+        c = mix(RING, ACCENT, 0.15 + 0.45 * (1 + math.cos(a)) / 2)
+        cv.dot(cx + R * math.sin(a), cy - R * math.cos(a), c, 1)
+
+    # graduations
+    for d in range(0, 360, 5):
+        if d % 90 == 0:
+            ln, c = 6, (NORTH if d == 0 else INK)
+        elif d % 30 == 0:
+            ln, c = 4, mix(RING, INK, 0.6)
+        elif d % 10 == 0:
+            ln, c = 2.5, RING
+        else:
+            ln, c = 1.5, dim(RING, 0.7)
+        if R < 40 and d % 10:
+            continue
+        x0, y0 = at(d, R - 1)
+        x1, y1 = at(d, R - 1 - ln)
+        cv.line(x0, y0, x1, y1, c, 2)
+
+    # labels: cardinals, then intercardinals and degrees when there's room
+    labels = [(0, "N", NORTH)]
+    if R >= 22:
+        labels += [(90, "E", INK), (180, "S", INK), (270, "W", INK)]
+    if R >= 26:
+        labels += [(45, "NE", MUTED), (135, "SE", MUTED), (225, "SW", MUTED),
+                   (315, "NW", MUTED)]
+    if R >= 40:
+        labels += [(d, str(d), dim(MUTED, 0.85)) for d in range(30, 360, 30)
+                   if d % 90]
+    for d, s, c in labels:
+        rr = R - (11 if s in "NESW" else 12) if R >= 22 else R - 7
+        x, y = at(d, rr)
+        cv.put(int(round(x / 2 - len(s) / 2)), int(y // 4), s, c)
+
+    # the rose: four long points and four short ones, lit from one side
+    rl = min(R * 0.62, R - 16) if R >= 22 else R * 0.45
+    rs, wd = rl * 0.58, max(2.0, rl * 0.14)
+    for d in (45, 135, 225, 315):
+        tip, l, r = at(d, rs), at(d - 90, wd * 0.8), at(d + 90, wd * 0.8)
+        cv.tri((cx, cy), tip, l, dim(STEEL_LO, 0.8), 3)
+        cv.tri((cx, cy), tip, r, dim(STEEL_LO, 0.55), 3)
+    for d in (90, 180, 270, 0):
+        tip, l, r = at(d, rl), at(d - 90, wd), at(d + 90, wd)
+        lit, dark = (NORTH, NORTH_LO) if d == 0 else (STEEL, STEEL_LO)
+        cv.tri((cx, cy), tip, l, lit, 4 + (d == 0))
+        cv.tri((cx, cy), tip, r, dark, 4 + (d == 0))
+    cv.disc(cx, cy, max(1.5, wd * 0.6), ACCENT, 6)
+
+    # the locked bearing: a marker on the bezel and the arc to it
+    if st.lock is not None:
+        off = wrap180(st.lock - h)
+        col = off_color(off)
+        n = max(2, int(abs(off) * R / 40))
+        for i in range(n + 1):
+            x, y = at(h + off * i / n, R + 2.5)
+            cv.dot(x, y, col, 7)
+        x, y = at(st.lock, R)
+        cv.disc(x, y, 2.2, AMBER, 8)
+
+    # lubber mark: fixed at the top, where the phone points
+    cv.tri((cx - 3.5, cy - R - 5), (cx + 3.5, cy - R - 5), (cx, cy - R + 0.5), ACCENT, 9)
+    cv.line(cx, cy - R + 2, cx, cy - rl - 2, dim(ACCENT, 0.5), 1, every=2)
+    return cv.rows()
+
+
+def tape(st, cols):
+    """A strip of the heading around the current one, as on a head-up display."""
+    h = st.heading()
+    c0 = cols // 2
+    lab = [(" ", None)] * cols
+    tick = [(" ", None)] * cols
+    span = c0 * DPC
+
+    def fade(c, i):
+        k = 1 - (abs(i - c0) / max(1, c0)) ** 1.6 * 0.85
+        return dim(c, k)
+
+    first = int(math.floor((h - span) / 5) * 5)
+    for m in range(first, int(h + span) + 6, 5):
+        i = c0 + int(round((m - h) / DPC))
+        if not 0 <= i < cols:
+            continue
+        d = m % 360
+        if d % 45 == 0:
+            ch, c = "┃", (NORTH if d == 0 else INK)
+        elif d % 15 == 0:
+            ch, c = "│", MUTED
+        else:
+            ch, c = "╷", FAINT
+        tick[i] = (ch, fade(c, i))
+        if d % 15 == 0:
+            s = point_name(d, 8) if d % 45 == 0 else str(d)
+            c = NORTH if d == 0 else (INK if d % 45 == 0 else MUTED)
+            j = i - len(s) // 2
+            if 0 <= j and j + len(s) <= cols and all(x[0] == " " for x in lab[max(0, j - 1):j + len(s) + 1]):
+                for k, chh in enumerate(s):
+                    lab[j + k] = (chh, fade(c, i))
+
+    ptr = [(" ", None)] * cols
+    ptr[c0] = ("▲", ACCENT)
+    if st.lock is not None:
+        off = wrap180(st.lock - h)
+        i = c0 + int(round(off / DPC))
+        if 0 <= i < cols and i != c0:
+            ptr[i] = ("◆", AMBER)
+        elif not 0 <= i < cols:
+            s = f"◀ {st.lock:.0f}°" if off < 0 else f"{st.lock:.0f}° ▶"
+            j = 0 if off < 0 else cols - len(s)
+            for k, chh in enumerate(s):
+                ptr[j + k] = (chh, AMBER)
+
+    def render(cells):
+        out, cur = [], None
+        for ch, c in cells:
+            if c != cur and ch != " ":
+                out.append(fg(c))
+                cur = c
+            out.append(ch)
+        return "".join(out) + RESET
+
+    return [render(lab), render(tick), render(ptr)]
+
+
+def readout(st, cols):
+    h = st.heading()
+    deg = int(round(h)) % 360
+    name = point_name(h, 8)
+    digits = shade(big(f"{deg:03d}°"), ACCENT)
+    letters = shade(big(name), NORTH if name == "N" else INK)
+    lines = [center(a + "   " + b, cols) for a, b in zip(digits, letters)]
+
+    parts = [f"{fg(INK)}{point_name(h)}{RESET}"]
+    ref = "true" if st.true_north else "magnetic"
+    parts.append(f"{fg(MUTED)}{ref}{RESET}")
+    if st.decl or st.true_north:
+        parts.append(f"{fg(MUTED)}decl {st.decl:+.1f}°{RESET}")
+    if st.lock is not None:
+        off = wrap180(st.lock - h)
+        c = off_color(off)
+        if abs(off) < ON_COURSE:
+            turn = "on course"
+        else:
+            turn = ("turn ↺ " if off < 0 else "turn ↻ ") + f"{abs(off):.0f}°"
+        parts.append(f"{fg(AMBER)}◆ {st.lock:03.0f}°{RESET} {fg(c)}{turn}{RESET}")
+    sub = f" {fg(FAINT)}·{RESET} ".join(parts)
+    if st.accuracy in ("low", "unreliable"):
+        sub = f"{fg(NORTH)}calibrate: wave the phone in a figure 8{RESET}"
+    elif st.tilt() > TILT_WARN:
+        sub = f"{fg(AMBER)}hold the phone flat for a steady heading{RESET}"
+    lines.append(center(sub, cols))
+    return lines
+
+
+def frame(st, cols, rows):
+    out = [header(st, cols), fg(FAINT) + "─" * cols + RESET]
+    if st.vec is None:
+        msg = st.error or "waiting for the compass…"
+        out += [""] * max(0, rows // 2 - 3) + [center(fg(MUTED) + msg + RESET, cols)]
+        return out
+    tp = tape(st, cols)
+    rd = readout(st, cols)
+    card_rows = rows - len(out) - len(tp) - len(rd) - 3
+    if card_rows >= 6:
+        out += draw_card(st, cols, card_rows)
+    out += tp + [""] + rd
+    out += [""] * (rows - 1 - len(out))
+    out.append(footer(cols))
+    return out[:rows]
+
+
+# ---------------------------------------------------------------- main loop
+
+def on_course_buzz(st):
+    if st.lock is None or st.vec is None or st.hold:
+        st.was_on = False
+        return
+    on = abs(wrap180(st.lock - st.heading())) < ON_COURSE
+    if on and not st.was_on and st.buzz:
+        subprocess.Popen(["pocket", "vibrate", "40"], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    st.was_on = on
+
+
+def key(st, k):
+    """Handle one key; False to quit."""
+    if k in "qQ\x03\x1b":
+        return False
+    if k == " ":
+        st.hold = not st.hold
+    elif k in "lL" and st.vec is not None:
+        if st.lock is None:
+            st.lock = round(st.heading()) % 360
+            st.flash_msg(f"bearing {st.lock:03.0f}° locked")
+        else:
+            st.lock = None
+            st.flash_msg("bearing cleared")
+        st.save()
+    elif k in "tT":
+        st.true_north = not st.true_north
+        if st.lock is not None:
+            st.lock = (st.lock + (st.decl if st.true_north else -st.decl)) % 360
+        st.flash_msg("true north" if st.true_north else "magnetic north")
+        st.save()
+    elif k in "[]":
+        step = 0.5 if k == "]" else -0.5
+        st.decl = max(-90.0, min(90.0, st.decl + step))
+        if st.lock is not None and st.true_north:
+            st.lock = (st.lock + step) % 360
+        st.flash_msg(f"declination {st.decl:+.1f}°")
+        st.save()
+    elif k in "bB":
+        st.buzz = not st.buzz
+        st.flash_msg("buzz " + ("on" if st.buzz else "off"))
+        st.save()
+    return True
+
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    if not sys.stdin.isatty():
+        print("compass: needs a terminal", file=sys.stderr)
+        return 2
+    proc = subprocess.Popen(
+        ["pocket", "sensor", "compass", "--stream", "--json", "--rate", str(RATE)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    # the heading is where the phone's top points: keep the screen upright
+    subprocess.run(["pocket", "rotation", "lock", "portrait", "--pid", str(os.getpid())],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    st = State()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    w = sys.stdout.write
+    resized = [True]
+    signal.signal(signal.SIGWINCH, lambda *_: resized.__setitem__(0, True))
+    buf = b""
+    last_draw = 0.0
+    try:
+        tty.setcbreak(fd)
+        w("\x1b[?1049h\x1b[?25l\x1b]0;compass\a")
+        while True:
+            fds = [fd] + ([proc.stdout] if proc.stdout else [])
+            r, _, _ = select.select(fds, [], [], 0.25)
+            dirty = resized[0]
+            if fd in r:
+                for k in os.read(fd, 64).decode(errors="ignore"):
+                    if not key(st, k):
+                        return 0
+                dirty = True
+            if proc.stdout in r:
+                chunk = os.read(proc.stdout.fileno(), 65536)
+                if not chunk:
+                    err = proc.stderr.read().decode(errors="ignore").strip()
+                    st.error = "sensor stopped: " + (err.splitlines()[-1] if err else "no data")
+                    proc.stdout = None
+                    dirty = True
+                buf += chunk
+                *lines, buf = buf.split(b"\n")
+                for ln in lines:
+                    try:
+                        d = json.loads(ln)
+                    except ValueError:
+                        continue
+                    if not d.get("ok", True):
+                        st.error = d.get("error", "sensor error")
+                        continue
+                    rd = d.get("reading", d)
+                    v = rd.get("values")
+                    if v:
+                        st.feed(v["azimuth"], v["pitch"], v["roll"], rd.get("accuracy"))
+                        dirty = True
+                on_course_buzz(st)
+            now = time.time()
+            if dirty and now - last_draw >= 1 / 30:
+                cols, rows = shutil.get_terminal_size()
+                if resized[0]:
+                    w("\x1b[2J")
+                    resized[0] = False
+                lines = frame(st, cols, rows)
+                w("\x1b[H" + "\x1b[K\n".join(lines) + "\x1b[K\x1b[J")
+                sys.stdout.flush()
+                last_draw = now
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        w("\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

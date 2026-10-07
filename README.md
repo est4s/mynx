@@ -18,6 +18,9 @@ scripts.
 - **A ready setup:** a launcher menu, a file manager
   ([nnn](https://github.com/jarun/nnn)), ten themes, a Nerd Font, the
   starship prompt and a few terminal games.
+- **Example apps** that use the phone: a compass, a spirit level, a
+  flashlight, a sound spectrum, a sound meter, a guitar tuner and a
+  metronome, in Python, to run, read and copy.
 - **Plain-text config** in `~/.config/pc26/`, changed with the `pocket`
   command or its editors (`pocket edit`), checked before it applies,
   with undo.

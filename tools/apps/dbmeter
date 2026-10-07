@@ -1,0 +1,345 @@
+#!/usr/bin/env python3
+# label: Sound meter
+"""dbmeter: a live sound level meter for the phone's microphone.
+
+It streams the microphone live from the app's sound device (PulseAudio,
+through `parec`, see mic.py), so the levels update about 20 times a second
+with no recordings in between. Without the sound device it falls back to
+reading a `pocket audio record` WAV as it grows. Keys: q quit, r reset, s fast/slow, + and - calibrate,
+space pause.
+"""
+import array
+import math
+import os
+import select
+import shutil
+import sys
+import termios
+import time
+import tty
+from collections import deque
+
+from mic import Mic
+
+RATE = 16000
+BLOCK = RATE // 20            # 50 ms of samples
+LO, HI = 30.0, 110.0          # dB range drawn
+COLUMN = 0.25                 # seconds of history per graph column
+CONF = os.path.expanduser("~/.config/dbmeter/offset")
+DEFAULT_OFFSET = 95.0         # dBFS -> estimated dB SPL; tune with + and -
+
+STOPS = [(30, (56, 189, 248)), (50, (52, 211, 153)), (65, (250, 204, 21)),
+         (80, (251, 146, 60)), (95, (244, 63, 94)), (110, (217, 70, 239))]
+DIM, FAINT, TEXT = (110, 110, 135), (60, 60, 80), (220, 220, 235)
+
+LABELS = [(30, "Whisper quiet"), (40, "Quiet library"), (50, "Quiet room"),
+          (60, "Moderate, like rainfall"), (70, "Normal conversation"),
+          (80, "Busy street"), (85, "Loud: limit long exposure"),
+          (95, "Very loud: protect your ears"), (110, "Dangerous")]
+
+FONT = {
+    "0": "111 101 101 101 111", "1": "010 110 010 010 111",
+    "2": "111 001 111 100 111", "3": "111 001 111 001 111",
+    "4": "101 101 111 001 001", "5": "111 100 111 001 111",
+    "6": "111 100 111 101 111", "7": "111 001 001 001 001",
+    "8": "111 101 111 101 111", "9": "111 101 111 001 111",
+    ".": "0 0 0 0 1", "-": "000 000 111 000 000",
+}
+
+
+def color(db):
+    if db <= STOPS[0][0]:
+        return STOPS[0][1]
+    for (d0, c0), (d1, c1) in zip(STOPS, STOPS[1:]):
+        if db <= d1:
+            t = (db - d0) / (d1 - d0)
+            return tuple(round(a + (b - a) * t) for a, b in zip(c0, c1))
+    return STOPS[-1][1]
+
+
+def mix(c, other, t):
+    return tuple(round(a + (b - a) * t) for a, b in zip(c, other))
+
+
+def label(db):
+    return next((text for limit, text in LABELS if db < limit), LABELS[-1][1])
+
+
+class Line:
+    """One row of the screen: styled text plus its visible width."""
+
+    def __init__(self):
+        self.s, self.n = "", 0
+
+    def add(self, text, rgb=None, bold=False):
+        if rgb:
+            self.s += f"\x1b[{'1;' if bold else ''}38;2;{rgb[0]};{rgb[1]};{rgb[2]}m{text}\x1b[0m"
+        else:
+            self.s += text
+        self.n += len(text)
+        return self
+
+    def pad(self, n):
+        return self.add(" " * max(0, n))
+
+
+def big(text, scale):
+    """Text in the 3x5 block font: 5 rows."""
+    rows = [""] * 5
+    for ch in text:
+        for r, bits in enumerate(FONT[ch].split()):
+            rows[r] += "".join(("██" if b == "1" else "  ") * scale for b in bits) + "  " * (scale // 2 or 1)
+    return [r.rstrip() for r in rows]
+
+
+class Meter:
+    def __init__(self):
+        self.offset = self.load_offset()
+        self.slow = False
+        self.paused = False
+        self.notice = None          # the mic's status, shown instead of the keys
+        self.reset()
+
+    def reset(self):
+        self.level = None                 # smoothed power, 0..1 full scale
+        self.peak, self.peak_at = -200.0, 0.0
+        self.min = self.max = self.top = None
+        self.energy, self.blocks = 0.0, 0
+        self.history = deque(maxlen=400)  # dBFS per graph column
+        self.col_sum, self.col_n = 0.0, 0
+        self.started = time.monotonic()
+        self.pending = array.array("h")
+
+    @staticmethod
+    def load_offset():
+        try:
+            with open(CONF) as f:
+                return float(f.read())
+        except (OSError, ValueError):
+            return DEFAULT_OFFSET
+
+    def save_offset(self):
+        os.makedirs(os.path.dirname(CONF), exist_ok=True)
+        with open(CONF, "w") as f:
+            f.write(f"{self.offset:g}\n")
+
+    def feed(self, samples):
+        self.pending.extend(samples)
+        tau = 1.0 if self.slow else 0.125
+        alpha = 1 - math.exp(-(BLOCK / RATE) / tau)
+        now = time.monotonic()
+        while len(self.pending) >= BLOCK:
+            block = self.pending[:BLOCK]
+            del self.pending[:BLOCK]
+            power = math.sumprod(block, block) / BLOCK / 32768.0 ** 2 + 1e-12
+            self.level = power if self.level is None else self.level + alpha * (power - self.level)
+            inst, smooth = 10 * math.log10(power), 10 * math.log10(self.level)
+            if inst >= self.peak:
+                self.peak, self.peak_at = inst, now
+            elif now - self.peak_at > 1.5:
+                self.peak = max(inst, self.peak - 0.6)
+            self.energy += power
+            self.blocks += 1
+            self.top = inst if self.top is None else max(self.top, inst)
+            if now - self.started > 1:
+                self.min = smooth if self.min is None else min(self.min, smooth)
+                self.max = smooth if self.max is None else max(self.max, smooth)
+            self.col_sum += power
+            self.col_n += 1
+            if self.col_n * BLOCK / RATE >= COLUMN:
+                self.history.append(10 * math.log10(self.col_sum / self.col_n))
+                self.col_sum, self.col_n = 0.0, 0
+
+    def db(self, dbfs):
+        return dbfs + self.offset
+
+    # Drawing
+
+    def render(self, cols, rows):
+        w = max(30, min(cols - 2, 64))
+        left = " " * max(0, (cols - w) // 2)
+        lines = []
+        now = time.monotonic()
+        cur = self.db(10 * math.log10(self.level)) if self.level else None
+        c = color(cur) if cur is not None else DIM
+
+        # Header
+        h = Line()
+        rec = (now * 2) % 2 < 1.3
+        h.add("● " if rec else "  ", (244, 63, 94) if not self.paused else DIM, True)
+        h.add("DECIBEL METER", TEXT, True)
+        secs = int(now - self.started)
+        right = f"{'PAUSED' if self.paused else ('SLOW' if self.slow else 'FAST')} · {secs // 60:02d}:{secs % 60:02d}"
+        h.pad(w - h.n - len(right)).add(right, DIM)
+        lines.append(h)
+        g = Line()
+        for i in range(w):
+            g.add("─", mix(color(LO + (i + 0.5) / w * (HI - LO)), (0, 0, 0), 0.45))
+        lines.append(g)
+        lines.append(Line())
+
+        # Big number
+        text = f"{cur:.1f}" if cur is not None else "--.-"
+        scale = 1
+        digits = big(text, scale)
+        digits = [r.ljust(max(map(len, digits))) for r in digits]
+        dw = len(digits[0]) + 3
+        for r, row in enumerate(digits):
+            ln = Line().pad((w - dw) // 2)
+            ln.add(row, mix(c, (255, 255, 255), 0.4 - r * 0.1), True)
+            ln.add(" " * (len(digits[0]) - len(row)) + (" dB" if r == 4 else "   "), DIM, True)
+            lines.append(ln)
+        name = label(cur) if cur is not None else "Listening…"
+        ln = Line().pad((w - len(name) - 4) // 2)
+        lines.append(ln.add("◆ ", c).add(name, TEXT).add(" ◆", c))
+        lines.append(Line())
+
+        # Level bar with peak hold
+        fill = ((cur if cur is not None else LO) - LO) / (HI - LO) * w
+        pk = int((self.db(self.peak) - LO) / (HI - LO) * w)
+        bar = Line()
+        for i in range(w):
+            a = min(1.0, max(0.0, fill - i))
+            cc = color(LO + (i + 0.5) / w * (HI - LO))
+            if i == pk and a < 1 and self.peak > -199:
+                bar.add("┃", mix(color(self.db(self.peak)), (255, 255, 255), 0.3), True)
+            elif a > 0:
+                bar.add(" ▏▎▍▌▋▊▉█"[round(a * 8)], cc)
+            else:
+                bar.add("·", FAINT)
+        lines.append(bar)
+        ticks = [" "] * w
+        for v in range(int(LO), int(HI) + 1, 10):
+            p = min(w - len(str(v)), round((v - LO) / (HI - LO) * (w - 1)))
+            if v == HI:
+                p = w - len(str(v))
+            ticks[p:p + len(str(v))] = str(v)
+        lines.append(Line().add("".join(ticks), DIM))
+        lines.append(Line())
+
+        # Stats
+        st = Line()
+        items = [("MIN", self.min), ("AVG", 10 * math.log10(self.energy / self.blocks) if self.blocks else None),
+                 ("MAX", self.max), ("PEAK", self.top)]
+        parts = []
+        for k, v in items:
+            parts.append((k, f"{self.db(v):.1f}" if v is not None else "--.-", color(self.db(v)) if v is not None else DIM))
+        width = sum(len(k) + 1 + len(v) for k, v, _ in parts)
+        gap = max(1, (w - width) // (len(parts) - 1))
+        for i, (k, v, cc) in enumerate(parts):
+            if i:
+                st.pad(gap)
+            st.add(k + " ", DIM).add(v, cc, True)
+        lines.append(st)
+        lines.append(Line())
+
+        # History graph
+        room = rows - len(lines) - 5
+        gh = 16 if room >= 16 else 8 if room >= 8 else 4
+        gw = w - 5
+        span = gw * COLUMN
+        lines.append(Line().add(f"last {span:.0f} s", DIM).pad(w - 18 - len(f"last {span:.0f} s")).add("╌ 85 dB hearing risk", (251, 146, 60)))
+        hist = [self.db(v) for v in list(self.history)[-gw:]]
+        hist = [None] * (gw - len(hist)) + hist
+        step = (HI - LO) / gh
+        for r in range(gh - 1, -1, -1):
+            low = LO + r * step
+            ln = Line()
+            ln.add(f"{low + step:>3.0f} " if (low + step) % 20 == 10 else "    ", DIM).add("│", FAINT)
+            risk = low <= 85 < low + step
+            cc = color(low + step / 2)
+            for v in hist:
+                a = 0.0 if v is None else min(1.0, max(0.0, (v - low) / step))
+                ch = " ▁▂▃▄▅▆▇█"[round(a * 8)]
+                if ch != " ":
+                    ln.add(ch, cc)
+                elif risk:
+                    ln.add("╌", mix((251, 146, 60), (0, 0, 0), 0.5))
+                else:
+                    ln.add(" ")
+            lines.append(ln)
+        lines.append(Line().add("    └" + "─" * gw, FAINT))
+
+        # Keys
+        lines.append(Line())
+        k = Line()
+        for i, (key, what) in enumerate([("q", "quit"), ("r", "reset"), ("s", "speed"),
+                                         ("±", f"cal {self.offset:+.0f}"), ("␣", "pause")]):
+            if i:
+                k.add(" · ", FAINT)
+            k.add(key, c, True).add(" " + what, DIM)
+        if self.notice:
+            k = Line().add(self.notice[:w], (250, 204, 21), True)
+        centred = Line().pad((w - k.n) // 2)
+        centred.s += k.s
+        lines.append(centred)
+
+        out = ["\x1b[H"]
+        top = max(0, (rows - len(lines)) // 2) if rows > len(lines) + 2 else 0
+        out.append("\x1b[K\n" * top)
+        for ln in lines[:rows - top]:
+            out.append(left + ln.s + "\x1b[K\n")
+        out.append("\x1b[J")
+        return "".join(out).rstrip("\n")
+
+
+def main():
+    if len(sys.argv) > 1:
+        print(__doc__.strip())
+        return 0
+    if not sys.stdin.isatty():
+        print("dbmeter needs a terminal", file=sys.stderr)
+        return 2
+    meter = Meter()
+    rec = Mic(RATE, latency_ms=50)
+    old = termios.tcgetattr(0)
+    sys.stdout.write("\x1b[?1049h\x1b[?25l\x1b[2J")
+    error = None
+    try:
+        tty.setcbreak(0)
+        rec.start()
+        size = None
+        frozen = ""
+        while True:
+            samples = rec.read()
+            if not meter.paused:
+                meter.feed(samples)
+            if select.select([0], [], [], 0.05)[0]:
+                for ch in os.read(0, 64).decode(errors="ignore"):
+                    if ch in "qQ\x1b":
+                        return 0
+                    elif ch in "rR":
+                        meter.reset()
+                    elif ch in "sS":
+                        meter.slow = not meter.slow
+                    elif ch in "+=":
+                        meter.offset += 1
+                        meter.save_offset()
+                    elif ch in "-_":
+                        meter.offset -= 1
+                        meter.save_offset()
+                    elif ch == " ":
+                        meter.paused = not meter.paused
+            meter.notice = rec.status
+            cols, rows = shutil.get_terminal_size()
+            if (cols, rows) != size:
+                size = (cols, rows)
+                sys.stdout.write("\x1b[2J")
+            sys.stdout.write(meter.render(cols, rows))
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        return 0
+    except RuntimeError as e:
+        error = str(e)
+        return 1
+    finally:
+        sys.stdout.write("\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+        termios.tcsetattr(0, termios.TCSADRAIN, old)
+        rec.close()
+        if error:
+            print(f"dbmeter: {error}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

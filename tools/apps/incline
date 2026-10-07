@@ -1,0 +1,572 @@
+#!/usr/bin/env python3
+# label: Spirit level
+"""incline - a spirit level / inclinometer, fed by the phone's accelerometer.
+
+Lay the phone flat for a bubble level (roll and pitch), or stand it on an
+edge for a level that reads the edge's error from true horizontal or
+vertical. The mode follows how the phone is held unless you pin it.
+
+Keys: z zero (calibrate on a surface), space hold, m mode (auto/flat/edge),
+r rotate the display a quarter turn, b buzz when level, q quit.
+"""
+import json
+import math
+import os
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import termios
+import time
+import tty
+
+RATE = 30            # sensor readings per second
+SMOOTH = 0.22        # low-pass factor per reading (lower = calmer)
+RANGE = 30.0         # degrees at the bubble dial's outer ring
+LEVEL = 0.3          # degrees within which it counts as level
+TRAIL = 14
+
+ESC = "\x1b["
+RESET = ESC + "0m"
+BOLD = ESC + "1m"
+
+
+def fg(c):
+    return f"{ESC}38;2;{c[0]};{c[1]};{c[2]}m"
+
+
+def mix(a, b, t):
+    t = max(0.0, min(1.0, t))
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def dim(c, k):
+    return tuple(int(v * k) for v in c)
+
+
+# Palette
+INK = (205, 220, 235)
+MUTED = (90, 110, 130)
+FAINT = (45, 62, 78)
+RING = (55, 110, 125)
+ACCENT = (90, 220, 255)
+MINT = (70, 255, 170)
+
+# Colour by how far from level, in degrees
+TILT_STOPS = [(0.0, MINT), (1.0, (150, 255, 110)), (3.0, (255, 225, 80)),
+              (8.0, (255, 150, 60)), (20.0, (255, 70, 120))]
+
+
+def tilt_color(deg):
+    deg = abs(deg)
+    for (a, ca), (b, cb) in zip(TILT_STOPS, TILT_STOPS[1:]):
+        if deg <= b:
+            return mix(ca, cb, (deg - a) / (b - a))
+    return TILT_STOPS[-1][1]
+
+
+# ---------------------------------------------------------------- braille canvas
+
+BITS = ((0x01, 0x08), (0x02, 0x10), (0x04, 0x20), (0x40, 0x80))
+
+
+class Canvas:
+    """Braille dots (2x4 per cell), one colour per cell: highest priority wins."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.W, self.H = w * 2, h * 4
+        self.dots = [[0] * w for _ in range(h)]
+        self.col = [[None] * w for _ in range(h)]
+        self.pri = [[-1] * w for _ in range(h)]
+        self.text = {}
+
+    def dot(self, x, y, c, p=0):
+        xi, yi = int(round(x)), int(round(y))
+        if 0 <= xi < self.W and 0 <= yi < self.H:
+            cx, cy = xi >> 1, yi >> 2
+            self.dots[cy][cx] |= BITS[yi & 3][xi & 1]
+            if p >= self.pri[cy][cx]:
+                self.pri[cy][cx] = p
+                self.col[cy][cx] = c
+
+    def line(self, x0, y0, x1, y1, c, p=0, every=1):
+        n = max(1, int(max(abs(x1 - x0), abs(y1 - y0))))
+        for i in range(0, n + 1, every):
+            t = i / n
+            self.dot(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, c, p)
+
+    def circle(self, cx, cy, r, c, p=0, every=1):
+        n = max(8, int(2 * math.pi * r * 1.3))
+        for i in range(0, n, every):
+            a = 2 * math.pi * i / n
+            self.dot(cx + r * math.cos(a), cy + r * math.sin(a), c, p)
+
+    def arc(self, cx, cy, r, a0, a1, c, p=0):
+        n = max(2, int(abs(a1 - a0) * r * 1.3))
+        for i in range(n + 1):
+            a = a0 + (a1 - a0) * i / n
+            self.dot(cx + r * math.cos(a), cy + r * math.sin(a), c, p)
+
+    def disc(self, cx, cy, r, c, p=0, hole=None):
+        for yi in range(int(cy - r - 1), int(cy + r + 2)):
+            for xi in range(int(cx - r - 1), int(cx + r + 2)):
+                if (xi - cx) ** 2 + (yi - cy) ** 2 <= r * r:
+                    if hole and (xi - hole[0]) ** 2 + (yi - hole[1]) ** 2 <= hole[2] ** 2:
+                        continue
+                    self.dot(xi, yi, c, p)
+
+    def put(self, col, row, s, c):
+        for i, ch in enumerate(s):
+            if 0 <= col + i < self.w and 0 <= row < self.h:
+                self.text[(row, col + i)] = (ch, c)
+
+    def rows(self):
+        out = []
+        for r in range(self.h):
+            line, cur = [], None
+            for c in range(self.w):
+                if (r, c) in self.text:
+                    ch, colr = self.text[(r, c)]
+                elif self.dots[r][c]:
+                    ch, colr = chr(0x2800 + self.dots[r][c]), self.col[r][c]
+                else:
+                    ch, colr = " ", None
+                if colr != cur and ch != " ":
+                    line.append(fg(colr))
+                    cur = colr
+                line.append(ch)
+            out.append("".join(line) + RESET)
+        return out
+
+
+# ---------------------------------------------------------------- big digits
+
+FONT = {
+    "0": ["###", "# #", "# #", "# #", "###"],
+    "1": [" # ", "## ", " # ", " # ", "###"],
+    "2": ["###", "  #", "###", "#  ", "###"],
+    "3": ["###", "  #", " ##", "  #", "###"],
+    "4": ["# #", "# #", "###", "  #", "  #"],
+    "5": ["###", "#  ", "###", "  #", "###"],
+    "6": ["###", "#  ", "###", "# #", "###"],
+    "7": ["###", "  #", "  #", " # ", " # "],
+    "8": ["###", "# #", "###", "# #", "###"],
+    "9": ["###", "# #", "###", "  #", "###"],
+    "-": ["   ", "   ", "###", "   ", "   "],
+    "+": ["   ", " # ", "###", " # ", "   "],
+    ".": [" ", " ", " ", " ", "#"],
+    "°": ["##", "##", "  ", "  ", "  "],
+    " ": ["  ", "  ", "  ", "  ", "  "],
+}
+
+
+def big(text):
+    """Text in a 5-pixel font drawn with half blocks: three rows."""
+    rows = ["", "", ""]
+    for i, ch in enumerate(text):
+        g = FONT.get(ch, FONT[" "])
+        g = g + [" " * len(g[0])]
+        for r in range(3):
+            top, bot = g[2 * r], g[2 * r + 1]
+            for a, b in zip(top, bot):
+                rows[r] += {(1, 1): "█", (1, 0): "▀", (0, 1): "▄"}.get(
+                    (a == "#", b == "#"), " ")
+            if i < len(text) - 1:
+                rows[r] += " "
+    return rows
+
+
+def big_angle(v):
+    v = max(-180.0, min(180.0, v))
+    if abs(v) < 0.05:
+        return "0.0°"
+    s = f"{v:.1f}°" if abs(v) < 99.95 else f"{v:.0f}°"
+    return "+" + s if v > 0 else s
+
+
+def shade(rows, c):
+    """Lighter at the top, full colour at the bottom."""
+    return [fg(mix((255, 255, 255), c, 0.45 + 0.3 * i)) + r + RESET
+            for i, r in enumerate(rows)]
+
+
+def vlen(s):
+    n, i = 0, 0
+    while i < len(s):
+        if s[i] == "\x1b":
+            i = s.index("m", i) + 1
+        else:
+            n += 1
+            i += 1
+    return n
+
+
+def center(s, w):
+    pad = max(0, (w - vlen(s)) // 2)
+    return " " * pad + s
+
+
+# ---------------------------------------------------------------- state
+
+class State:
+    def __init__(self):
+        self.g = None              # smoothed (x, y, z)
+        self.mode = "auto"         # auto, flat, edge
+        self.shown = "flat"        # what auto picked
+        self.hold = False
+        self.zero_flat = (0.0, 0.0)
+        self.zero_edge = 0.0
+        self.rot = 0
+        self.buzz = False
+        self.was_level = False
+        self.trail = []
+        self.error = None
+        self.flash = None, 0.0     # message, until
+
+    def feed(self, x, y, z):
+        if self.hold:
+            return
+        if self.g is None:
+            self.g = (x, y, z)
+        else:
+            self.g = tuple(a + (b - a) * SMOOTH for a, b in zip(self.g, (x, y, z)))
+
+    def screen_xy(self):
+        x, y, _ = self.g
+        return [(x, y), (-y, x), (-x, -y), (y, -x)][self.rot]
+
+    def view(self):
+        if self.mode != "auto":
+            return self.mode
+        x, y, z = self.g
+        n = math.sqrt(x * x + y * y + z * z) or 1.0
+        off_flat = math.degrees(math.acos(max(-1, min(1, abs(z) / n))))
+        if self.shown == "flat" and off_flat > 55:
+            self.shown = "edge"
+        elif self.shown == "edge" and off_flat < 45:
+            self.shown = "flat"
+        return self.shown
+
+    def flat_angles(self):
+        sx, sy = self.screen_xy()
+        z = self.g[2]
+        roll = math.degrees(math.atan2(sx, abs(z) or 1e-9))
+        pitch = math.degrees(math.atan2(sy, abs(z) or 1e-9))
+        return roll - self.zero_flat[0], pitch - self.zero_flat[1]
+
+    def edge_angle(self):
+        """Angle of gravity on screen, 0 = straight down, clockwise positive."""
+        sx, sy = self.screen_xy()
+        # gravity points opposite the reading: on screen (right, down) = (-sx, sy)
+        return math.degrees(math.atan2(-sx, sy))
+
+    def edge_error(self):
+        a = self.edge_angle()
+        nearest = 90 * round(a / 90)
+        return (a - nearest) - self.zero_edge, nearest
+
+
+# ---------------------------------------------------------------- drawing
+
+def header(st, cols, view, level):
+    left = f" {fg(ACCENT)}{BOLD}◉ INCLINE{RESET}"
+    chips = []
+    if level:
+        chips.append((MINT, "● LEVEL"))
+    if st.hold:
+        chips.append(((255, 200, 80), "❚❚ HOLD"))
+    if st.zero_flat != (0.0, 0.0) or st.zero_edge:
+        chips.append((ACCENT, "ZEROED"))
+    if st.buzz:
+        chips.append((MUTED, "BUZZ"))
+    if st.rot:
+        chips.append((MUTED, f"↻{st.rot * 90}"))
+    chips.append((INK, view.upper() + ("" if st.mode == "auto" else " ·PIN")))
+    right = "  ".join(fg(c) + t + RESET for c, t in chips) + " "
+    msg, until = st.flash
+    if msg and time.time() < until:
+        right = fg((255, 200, 80)) + msg + RESET + "  " + right
+    gap = cols - vlen(left) - vlen(right)
+    while gap < 1 and chips:
+        chips.pop(0)
+        right = "  ".join(fg(c) + t + RESET for c, t in chips) + " "
+        gap = cols - vlen(left) - vlen(right)
+    return left + " " * max(1, gap) + right
+
+
+def footer(cols):
+    keys = [("z", "zero"), ("␣", "hold"), ("m", "mode"), ("r", "rotate"),
+            ("b", "buzz"), ("q", "quit")]
+    parts = [f"{fg(ACCENT)}{k}{RESET} {fg(MUTED)}{v}{RESET}" for k, v in keys]
+    s = "  ".join(parts)
+    if vlen(s) > cols:
+        s = " ".join(f"{fg(ACCENT)}{k}{RESET}{fg(MUTED)}{v[:3]}{RESET}" for k, v in keys)
+    return center(s, cols)
+
+
+def draw_flat(st, cw, ch):
+    cv = Canvas(cw, ch)
+    W, H = cv.W, cv.H
+    cx, cy = (W - 1) / 2, (H - 1) / 2
+    R = min(W, H) / 2 - 1.5
+    roll, pitch = st.flat_angles()
+    tilt = math.hypot(roll, pitch)
+    col = tilt_color(tilt)
+
+    def rmap(d):
+        return R * math.sqrt(min(d, RANGE) / RANGE)
+
+    # crosshair and rings
+    cv.line(cx - R, cy, cx + R, cy, FAINT, 0, every=3)
+    cv.line(cx, cy - R, cx, cy + R, FAINT, 0, every=3)
+    for d in (5, 10, 20):
+        cv.circle(cx, cy, rmap(d), dim(RING, 0.8), 1)
+    cv.circle(cx, cy, R, mix(RING, ACCENT, 0.4), 1)
+    for k in range(12):
+        a = k * math.pi / 6
+        cv.line(cx + (R - 3) * math.cos(a), cy + (R - 3) * math.sin(a),
+                cx + R * math.cos(a), cy + R * math.sin(a), mix(RING, ACCENT, 0.4), 1)
+    level = tilt < LEVEL
+    cv.circle(cx, cy, max(2.0, rmap(1)), MINT if level else dim(MINT, 0.5), 2)
+    if R > 18:
+        crow = int(cy) // 4
+        for d in (5, 10, 20):
+            c0 = int((cx + rmap(d)) / 2) + 1
+            cv.put(c0, crow, f"{d}°", MUTED)
+
+    # bubble: rises to the high side
+    r = rmap(tilt)
+    a = math.atan2(-pitch, roll)
+    bx, by = cx + r * math.cos(a), cy + r * math.sin(a)
+    st.trail = (st.trail + [(bx, by)])[-TRAIL:]
+    for i, (tx, ty) in enumerate(st.trail[:-1]):
+        cv.dot(tx, ty, mix(FAINT, col, i / TRAIL * 0.7), 2)
+    rb = max(2.5, R * 0.14)
+    cv.disc(bx, by, rb, col, 4, hole=(bx - rb * 0.4, by - rb * 0.4, rb * 0.28))
+    if level:
+        cv.circle(cx, cy, rb + 3, dim(MINT, 0.7), 3, every=2)
+    return cv.rows(), (roll, pitch, tilt, level)
+
+
+def draw_edge(st, cw, ch):
+    cv = Canvas(cw, ch)
+    W, H = cv.W, cv.H
+    cx, cy = (W - 1) / 2, (H - 1) / 2
+    R = min(W, H) / 2 - 1.5
+    err, nearest = st.edge_error()
+    ang = math.radians(st.edge_angle() - st.zero_edge)
+    col = tilt_color(err)
+    level = abs(err) < LEVEL
+
+    # gravity on screen (dots: right, down) and the horizon across it
+    gx, gy = math.sin(ang), math.cos(ang)
+    hx, hy = gy, -gx
+
+    # ground: hatched half-disc on the gravity side
+    ground = dim(col, 0.35)
+    rr = R - 5
+    for yi in range(int(cy - rr), int(cy + rr) + 1):
+        for xi in range(int(cx - rr), int(cx + rr) + 1):
+            dx, dy = xi - cx, yi - cy
+            if dx * dx + dy * dy <= rr * rr and dx * gx + dy * gy > 1 \
+                    and (xi + 2 * yi) % 7 == 0:
+                cv.dot(xi, yi, ground, 0)
+
+    # dial: ticks every 10°, cardinal marks bright
+    cv.circle(cx, cy, R, mix(RING, ACCENT, 0.4), 1)
+    for k in range(36):
+        a = math.radians(k * 10)
+        long = k % 9 == 0
+        inner = R - (5 if long else (3 if k % 3 == 0 else 2))
+        cv.line(cx + inner * math.cos(a), cy + inner * math.sin(a),
+                cx + R * math.cos(a), cy + R * math.sin(a),
+                ACCENT if long else RING, 2 if long else 1)
+
+    # fixed screen reference (where level would be) and the error wedge
+    ref = math.radians(nearest)
+    rx, ry = math.cos(ref), math.sin(ref)
+    cv.line(cx - rx * (R - 6), cy + ry * (R - 6), cx + rx * (R - 6), cy - ry * (R - 6),
+            FAINT, 1, every=3)
+    base = math.atan2(-math.sin(ref), math.cos(ref))
+    target = math.atan2(hy, hx)
+    d = (target - base + math.pi / 2) % math.pi - math.pi / 2
+    for s in (0, math.pi):
+        cv.arc(cx, cy, R * 0.55, base + s, base + s + d, col, 3)
+
+    # horizon and plumb line
+    L = R - 6
+    cv.line(cx - hx * L, cy - hy * L, cx + hx * L, cy + hy * L, col, 5)
+    cv.line(cx, cy, cx + gx * R * 0.7, cy + gy * R * 0.7, mix(col, INK, 0.4), 4)
+    rb = max(2.0, R * 0.08)
+    cv.disc(cx + gx * R * 0.7, cy + gy * R * 0.7, rb, col, 5)
+    cv.disc(cx, cy, 1.2, INK, 6)
+    if level:
+        cv.circle(cx, cy, R + 0.0, MINT, 2)
+    return cv.rows(), (err, nearest, level)
+
+
+def readout_flat(roll, pitch, tilt, cols):
+    a = shade(big(big_angle(roll)), tilt_color(roll))
+    b = shade(big(big_angle(pitch)), tilt_color(pitch))
+    half = cols // 2
+    la = f"{fg(MUTED)}◀▶ ROLL{RESET}"
+    lb = f"{fg(MUTED)}▲▼ PITCH{RESET}"
+    lines = [center(la, half) + " " * (half - vlen(center(la, half))) + center(lb, cols - half)]
+    for ra, rb in zip(a, b):
+        left = center(ra, half)
+        lines.append(left + " " * (half - vlen(left)) + center(rb, cols - half))
+    lines.append(center(f"{fg(MUTED)}total tilt {RESET}{fg(tilt_color(tilt))}{tilt:.1f}°{RESET}", cols))
+    return lines
+
+
+def readout_edge(err, nearest, cols):
+    which = {0: "bottom edge down", 90: "right edge down", -90: "left edge down",
+             180: "top edge down", -180: "top edge down"}.get(nearest, "")
+    lines = [center(f"{fg(MUTED)}LEVEL ERROR · {which}{RESET}", cols)]
+    lines += [center(r, cols) for r in shade(big(big_angle(err)), tilt_color(err))]
+    side = "level" if abs(err) < LEVEL else ("turn ↺" if err > 0 else "turn ↻")
+    lines.append(center(f"{fg(tilt_color(err))}{side}{RESET}", cols))
+    return lines
+
+
+def frame(st, cols, rows):
+    out = []
+    if st.g is None:
+        view = st.mode if st.mode != "auto" else "flat"
+        out.append(header(st, cols, view, False))
+        out.append(fg(FAINT) + "─" * cols + RESET)
+        msg = st.error or "waiting for the accelerometer…"
+        pad = max(0, rows // 2 - 3)
+        out += [""] * pad + [center(fg(MUTED) + msg + RESET, cols)]
+        return out
+    view = st.view()
+    dial_rows = rows - 10
+    if view == "flat":
+        dial, (roll, pitch, tilt, level) = draw_flat(st, cols, max(1, dial_rows))
+        read = readout_flat(roll, pitch, tilt, cols)
+        sig = level
+    else:
+        dial, (err, nearest, level) = draw_edge(st, cols, max(1, dial_rows))
+        read = readout_edge(err, nearest, cols)
+        sig = level
+    if sig and not st.was_level and st.buzz and not st.hold:
+        subprocess.Popen(["pocket", "vibrate", "40"], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL)
+    st.was_level = sig
+    out.append(header(st, cols, view, sig))
+    out.append(fg(FAINT) + "─" * cols + RESET)
+    if dial_rows >= 5:
+        out += dial
+    out.append("")
+    out += read
+    out.append("")
+    out += [""] * (rows - 1 - len(out))
+    out.append(footer(cols))
+    return out[:rows]
+
+
+# ---------------------------------------------------------------- main loop
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    if not sys.stdin.isatty():
+        print("incline: needs a terminal", file=sys.stderr)
+        return 2
+    proc = subprocess.Popen(
+        ["pocket", "sensor", "accelerometer", "--stream", "--json", "--rate", str(RATE)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    # keep the screen upright while it runs; the lock ends when this process does
+    subprocess.run(["pocket", "rotation", "lock", "portrait", "--pid", str(os.getpid())],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    st = State()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    w = sys.stdout.write
+    resized = [True]
+    signal.signal(signal.SIGWINCH, lambda *_: resized.__setitem__(0, True))
+    buf = b""
+    last_draw = 0.0
+    try:
+        tty.setcbreak(fd)
+        w("\x1b[?1049h\x1b[?25l\x1b]0;incline\a")
+        while True:
+            fds = [fd] + ([proc.stdout] if proc.stdout else [])
+            r, _, _ = select.select(fds, [], [], 0.25)
+            dirty = resized[0]
+            if fd in r:
+                keys = os.read(fd, 64).decode(errors="ignore")
+                for k in keys:
+                    if k in "qQ\x03\x1b":
+                        return 0
+                    if k == " ":
+                        st.hold = not st.hold
+                    elif k in "zZ" and st.g is not None:
+                        if st.view() == "flat":
+                            r0, p0 = st.flat_angles()
+                            st.zero_flat = (st.zero_flat[0] + r0, st.zero_flat[1] + p0)
+                        else:
+                            st.zero_edge += st.edge_error()[0]
+                        st.trail = []
+                        st.flash = "zeroed", time.time() + 1.5
+                    elif k in "cC":
+                        st.zero_flat, st.zero_edge = (0.0, 0.0), 0.0
+                        st.flash = "zero cleared", time.time() + 1.5
+                    elif k in "mM":
+                        st.mode = {"auto": "flat", "flat": "edge", "edge": "auto"}[st.mode]
+                        st.flash = "mode " + st.mode, time.time() + 1.5
+                    elif k in "rR":
+                        st.rot = (st.rot + 1) % 4
+                        st.trail = []
+                    elif k in "bB":
+                        st.buzz = not st.buzz
+                        st.flash = "buzz " + ("on" if st.buzz else "off"), time.time() + 1.5
+                dirty = True
+            if proc.stdout in r:
+                chunk = os.read(proc.stdout.fileno(), 65536)
+                if not chunk:
+                    err = proc.stderr.read().decode(errors="ignore").strip()
+                    st.error = "sensor stopped: " + (err.splitlines()[-1] if err else "no data")
+                    proc.stdout = None
+                    dirty = True
+                buf += chunk
+                *lines, buf = buf.split(b"\n")
+                for ln in lines:
+                    try:
+                        d = json.loads(ln)
+                    except ValueError:
+                        continue
+                    if not d.get("ok", True):
+                        st.error = d.get("error", "sensor error")
+                        continue
+                    v = d.get("values") or d.get("reading", {}).get("values")
+                    if v:
+                        st.feed(v["x"], v["y"], v["z"])
+                        dirty = True
+            now = time.time()
+            if dirty and now - last_draw >= 1 / 40:
+                cols, rows = shutil.get_terminal_size()
+                if resized[0]:
+                    w("\x1b[2J")
+                    resized[0] = False
+                lines = frame(st, cols, rows)
+                w("\x1b[H" + "\x1b[K\n".join(lines) + "\x1b[K\x1b[J")
+                sys.stdout.flush()
+                last_draw = now
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        w("\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

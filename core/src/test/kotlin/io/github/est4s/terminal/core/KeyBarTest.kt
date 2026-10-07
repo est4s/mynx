@@ -203,6 +203,37 @@ class KeyBarTest {
     }
 
     @Test
+    fun `the example apps have built-in bars`() {
+        val labels = { name: String ->
+            val loaded = loadKeyBar(name, dir)
+            assertEquals(emptyList(), loaded.problems, name)
+            assertEquals("built-in $name", loaded.source, name)
+            loaded.buttons.map { it.label }
+        }
+
+        assertEquals(listOf("Lock", "Hold", "True", "Decl −", "Decl +", "Buzz", "Quit"), labels("compass"))
+        assertEquals(listOf("Zero", "Hold", "Mode", "Rotate", "Buzz", "Clear", "Quit"), labels("incline"))
+        assertEquals(
+            listOf("On/Off", "Dim", "Bright", "Mode ◂", "Mode ▸", "Slower", "Faster", "Message", "Quit"),
+            labels("torch"),
+        )
+        assertEquals(
+            listOf("Quit", "Mode", "Width", "Log/Lin", "Pause", "Peaks", "Sens −", "Sens +", "Reset"),
+            labels("spectrum"),
+        )
+        assertEquals(listOf("Quit", "Reset", "Fast/Slow", "Pause", "Cal −", "Cal +"), labels("dbmeter"))
+        assertEquals(
+            listOf("Quit", "Tuning", "◀ Str", "Str ▶", "Auto", "Tone", "Chrom", "A4 −", "A4 +", "Vibrate"),
+            labels("tuner"),
+        )
+        assertEquals(
+            listOf("Start", "Tap", "− 5", "− 1", "+ 1", "+ 5", "Clap", "Beats", "Subdiv", "Accent", "Sound",
+                "Vib", "Flash", "Quit"),
+            labels("metronome"),
+        )
+    }
+
+    @Test
     fun `game bars repeat the keys you hold to move`() {
         fun repeating(name: String) = loadKeyBar(name, dir).buttons.filter { it.repeat }.map { it.label }
 

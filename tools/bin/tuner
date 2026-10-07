@@ -1,0 +1,3 @@
+#!/bin/sh
+# The tuner example app, with its key bar. Source: /opt/pc26/apps/tuner
+exec keybar tuner,shell "$(dirname "$0")/../apps/tuner" "$@"

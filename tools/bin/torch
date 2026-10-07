@@ -1,0 +1,3 @@
+#!/bin/sh
+# The torch example app, with its key bar. Source: /opt/pc26/apps/torch
+exec keybar torch,shell "$(dirname "$0")/../apps/torch" "$@"

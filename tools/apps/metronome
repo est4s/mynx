@@ -1,0 +1,996 @@
+#!/usr/bin/env python3
+# label: Metronome
+"""metronome - a metronome with a swinging pendulum and a beat light.
+
+Clicks play through the phone's speaker from the app's sound device: one
+continuous stream from `pacat`, with every click placed on its exact sample,
+so the beat stays steady however busy the phone is. The pendulum, the beat
+boxes and (if you like) the phone's flashlight and vibration follow it.
+
+Set the tempo by tapping (t or Enter) or by clapping into the microphone
+(c: clap four or more times, it starts at your tempo, on your beat).
+
+Usage: metronome [BPM]
+
+Keys: space start/stop, Up/Down or + and - tempo ±1, Left/Right ±5,
+t or Enter tap tempo, c clap tempo, b and B beats per bar, d subdivision,
+a accent on/off, s sound, [ and ] volume, m mute, v vibrate, f flash the
+torch, , and . move the picture earlier/later to line up with the sound,
+q quit. Settings are kept in ~/.config/metronome/state.json.
+"""
+import fcntl
+import json
+import math
+import os
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import termios
+import threading
+import time
+import tty
+from collections import deque
+
+import needs
+
+sys.path.insert(0, "/opt/pc26/lib")
+try:
+    from pc26.client import request  # noqa: E402
+except ImportError:
+    request = None
+
+np = None                     # numpy, loaded by main() (see needs.py)
+RATE = 48000
+BLOCK = RATE // 50            # 20 ms of audio per write
+LEAD = 0.06                   # without sound: seconds written ahead of the clock
+QUEUE = 0.12                  # seconds from pacat's pipe to the speaker (, and . adjust)
+BPM_MIN, BPM_MAX = 20, 300
+STATE = os.path.expanduser("~/.config/metronome/state.json")
+SOUNDS = ["wood", "click", "beep", "bell"]
+SUBS = {1: "quarters", 2: "8ths", 3: "triplets", 4: "16ths"}
+SUB_MARK = {1: "♩", 2: "♫", 3: "³", 4: "♬"}
+
+ESC = "\x1b["
+RESET = ESC + "0m"
+BOLD = ESC + "1m"
+
+
+def fg(c):
+    return f"{ESC}38;2;{c[0]};{c[1]};{c[2]}m"
+
+
+def mix(a, b, t):
+    t = max(0.0, min(1.0, t))
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def dim(c, k):
+    return tuple(int(v * k) for v in c)
+
+
+# Palette
+INK = (205, 220, 235)
+MUTED = (90, 110, 130)
+FAINT = (45, 62, 78)
+RING = (55, 110, 125)
+ACCENT = (90, 220, 255)
+HOT = (255, 70, 150)          # the accented beat
+MINT = (70, 255, 170)
+AMBER = (255, 200, 80)
+WHITE = (255, 255, 255)
+
+
+def tempo_name(bpm):
+    for top, name in ((40, "Grave"), (60, "Largo"), (66, "Larghetto"), (76, "Adagio"),
+                      (108, "Andante"), (120, "Moderato"), (156, "Allegro"),
+                      (176, "Vivace"), (200, "Presto")):
+        if bpm < top:
+            return name
+    return "Prestissimo"
+
+
+# ---------------------------------------------------------------- sounds
+
+def make_sounds():
+    """Each sound as float arrays for the accented beat, a beat and a subdivision."""
+    def t(dur):
+        return np.arange(int(RATE * dur)) / RATE
+
+    def wood(f, amp):
+        x = t(0.09)
+        s = np.sin(2 * np.pi * f * x) + 0.35 * np.sin(2 * np.pi * f * 2.76 * x)
+        s *= np.exp(-x / 0.016)
+        s[:96] += np.random.default_rng(1).normal(0, 0.4, 96) * np.linspace(1, 0, 96)
+        return s * amp * 0.75
+
+    def click(f, amp):
+        x = t(0.035)
+        n = np.diff(np.random.default_rng(2).normal(0, 1, len(x) + 1))
+        s = 0.5 * n * np.exp(-x / 0.003) + np.sin(2 * np.pi * f * x) * np.exp(-x / 0.007)
+        return s * amp * 0.8
+
+    def beep(f, amp):
+        x = t(0.06)
+        env = np.minimum(1, x / 0.002) * np.minimum(1, (x[-1] - x) / 0.012)
+        return np.sin(2 * np.pi * f * x) * env * amp * 0.6
+
+    def bell(f, amp):
+        x = t(0.28)
+        s = sum(np.sign(np.sin(2 * np.pi * f * k * x)) * w
+                for k, w in ((1.0, 0.6), (1.48, 0.4)))
+        s = np.convolve(s, np.ones(6) / 6, "same")     # take the edge off
+        return s * np.exp(-x / 0.07) * np.minimum(1, x / 0.001) * amp * 0.35
+
+    base = {"wood": (wood, 1000), "click": (click, 2600), "beep": (beep, 880),
+            "bell": (bell, 560)}
+    out = {}
+    for name, (fn, f) in base.items():
+        out[name] = {"accent": fn(f * 1.5, 1.0), "beat": fn(f, 0.7),
+                     "sub": fn(f * 0.75, 0.35)}
+    return out
+
+
+# ---------------------------------------------------------------- the clock and sound
+
+class Engine(threading.Thread):
+    """Writes the click track to pacat, paced by the wall clock, and reports
+    when each click will be heard. Without a sound device it keeps the same
+    clock silently, so the picture still runs."""
+
+    def __init__(self, st):
+        super().__init__(daemon=True)
+        self.st = st
+        self.lock = threading.Lock()
+        self.events = deque(maxlen=64)   # (sample, step, beat, sub, beat no.)
+        self.sounds = make_sounds()
+        self.running = False
+        self.restart = False
+        self.align_at = None
+        self.stopping = False
+        self.error = None
+        self.proc = None
+        self.base = time.monotonic() + 0.1
+        self.retry = 0.0
+        self.open()
+
+    def open(self):
+        """Start pacat; the sound device can restart under us, so it's
+        called again every couple of seconds while sound is missing."""
+        self.retry = time.monotonic() + 2
+        if not shutil.which("pacat"):
+            self.error = "no sound: pacat is missing"
+            return
+        try:
+            self.proc = subprocess.Popen(
+                ["pacat", "--raw", "--format=s16le", f"--rate={RATE}", "--channels=1",
+                 "--latency-msec=250", "--client-name=metronome"],
+                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+            fcntl.fcntl(self.proc.stdin.fileno(), 1031, 4096)   # F_SETPIPE_SZ
+            self.error = None
+        except OSError as e:
+            self.proc, self.error = None, f"no sound: {e}"
+
+    def drop(self):
+        proc, self.proc = self.proc, None
+        if proc:
+            try:
+                proc.kill()
+                proc.stdin.close()
+            except (OSError, ValueError):
+                pass
+
+    def start_beat(self):
+        with self.lock:
+            self.running, self.restart = True, True
+
+    def stop_beat(self):
+        with self.lock:
+            self.running = False
+            self.events.clear()
+
+    def align(self, when):
+        """Put the next beat at wall time `when` (when it should be heard)."""
+        with self.lock:
+            self.align_at = when
+
+    def heard(self, pos):
+        """The wall time sample `pos` comes out of the speaker."""
+        return self.base + pos / RATE + self.st.offset
+
+    def run(self):
+        written = 0
+        step, next_step = 0, 0.0
+        tail = np.zeros(0, np.float32)
+        seen = deque()
+        while not self.stopping:
+            if not self.proc and time.monotonic() > self.retry:
+                self.open()
+                seen.clear()
+            if not self.proc:
+                # no sound: keep the same clock against the wall
+                if written / RATE + self.base - LEAD > time.monotonic():
+                    time.sleep(0.005)
+                    continue
+            st = self.st
+            acc = np.zeros(max(BLOCK, len(tail)), np.float32)
+            acc[:len(tail)] += tail
+            with self.lock:
+                bpm, sub, beats = st.bpm, st.sub, st.beats
+                per_step = RATE * 60.0 / bpm / sub
+                if self.restart:
+                    self.restart = False
+                    step, next_step = 0, written + RATE * 0.03
+                if self.align_at is not None and self.running:
+                    s = (self.align_at - st.offset - self.base) * RATE
+                    while s < written:
+                        s += per_step * sub
+                    step = -(-step // sub) * sub       # up to the next beat
+                    next_step = s
+                    self.align_at = None
+                while self.running and next_step < written + BLOCK:
+                    beat, part = (step // sub) % beats, step % sub
+                    kind = "sub" if part else ("accent" if beat == 0 and st.accent
+                                               else "beat")
+                    snd = self.sounds[st.sound][kind]
+                    off = max(0, int(next_step - written))
+                    if off + len(snd) > len(acc):
+                        acc = np.concatenate([acc, np.zeros(off + len(snd) - len(acc),
+                                                            np.float32)])
+                    acc[off:off + len(snd)] += snd
+                    self.events.append((next_step, step, beat, part, step // sub))
+                    step += 1
+                    next_step += per_step
+                vol = 0.0 if st.muted else st.volume
+            block, tail = acc[:BLOCK], acc[BLOCK:]
+            written += BLOCK
+            if self.proc:
+                pcm = np.clip(block * vol, -1, 1)
+                try:
+                    self.proc.stdin.write((pcm * 32767).astype("<i2").tobytes())
+                    self.proc.stdin.flush()
+                except (OSError, ValueError):
+                    self.drop()
+                    self.error = "sound stopped (is the sound device on?)"
+                    continue
+                # A write returns once the queue to the speaker has room, so
+                # the sample just written comes out a full queue later. Writes
+                # that return sooner (the queue had room) only ever look early,
+                # so take the latest over the last two seconds.
+                now = time.monotonic()
+                seen.append((now, now - written / RATE + QUEUE))
+                while seen[0][0] < now - 2:
+                    seen.popleft()
+                self.base = max(o for _, o in seen)
+
+    def close(self):
+        self.stopping = True
+        self.drop()
+
+
+# ---------------------------------------------------------------- torch and vibration
+
+class Signal(threading.Thread):
+    """Sends the latest wanted request to the app; ones that are passed over
+    while a request is out are skipped, so it never falls behind the beat."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.want = None
+        self.cond = threading.Condition()
+
+    def send(self, *args):
+        with self.cond:
+            self.want = args
+            self.cond.notify()
+
+    def run(self):
+        while True:
+            with self.cond:
+                while self.want is None:
+                    self.cond.wait()
+                args, self.want = self.want, None
+            try:
+                request(*args)
+            except Exception:
+                time.sleep(0.3)
+
+
+# ---------------------------------------------------------------- clap detection
+
+class Claps:
+    """Listens to the microphone (mic.py) for claps and works out their tempo."""
+
+    def __init__(self):
+        from mic import Mic
+        self.mic = Mic(RATE)
+        self.mic.start()
+        self.times = []
+        self.floor = 300.0
+        self.prev = 0.0
+        self.level = 0.0
+        self.rest = np.zeros(0, np.float32)
+        self.message = None
+
+    def fileno(self):
+        return self.mic.fileno()
+
+    def poll(self):
+        """Read new audio; returns the new claps' times."""
+        got = self.mic.read()
+        self.message = self.mic.status
+        if not len(got):
+            return []
+        now = time.monotonic()
+        x = np.concatenate([self.rest, np.frombuffer(got, np.int16).astype(np.float32)])
+        n = len(x) // BLOCK
+        self.rest = x[n * BLOCK:]
+        new = []
+        for i in range(n):
+            b = x[i * BLOCK:(i + 1) * BLOCK]
+            rms = float(np.sqrt(np.mean(b * b)))
+            when = now - (n - i) * BLOCK / RATE
+            thr = max(1200.0, self.floor * 6)
+            if rms > thr and self.prev < thr and (not self.times or when - self.times[-1] > 0.12):
+                if self.times and when - self.times[-1] > 2.5:
+                    self.times = []
+                self.times.append(when)
+                new.append(when)
+            elif rms < self.floor * 3:
+                self.floor += (rms - self.floor) * 0.05
+            self.prev = rms
+            self.level = max(rms, self.level * 0.85)
+        return new
+
+    def tempo(self):
+        if len(self.times) < 2:
+            return None
+        iv = sorted(np.diff(self.times[-8:]))
+        return 60.0 / iv[len(iv) // 2]
+
+    def close(self):
+        self.mic.close()
+
+
+# ---------------------------------------------------------------- braille canvas
+
+BITS = ((0x01, 0x08), (0x02, 0x10), (0x04, 0x20), (0x40, 0x80))
+
+
+class Canvas:
+    """Braille dots (2x4 per cell), one colour per cell: highest priority wins."""
+
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+        self.W, self.H = w * 2, h * 4
+        self.dots = [[0] * w for _ in range(h)]
+        self.col = [[None] * w for _ in range(h)]
+        self.pri = [[-1] * w for _ in range(h)]
+
+    def dot(self, x, y, c, p=0):
+        xi, yi = int(round(x)), int(round(y))
+        if 0 <= xi < self.W and 0 <= yi < self.H:
+            cx, cy = xi >> 1, yi >> 2
+            self.dots[cy][cx] |= BITS[yi & 3][xi & 1]
+            if p >= self.pri[cy][cx]:
+                self.pri[cy][cx] = p
+                self.col[cy][cx] = c
+
+    def line(self, x0, y0, x1, y1, c, p=0, every=1):
+        n = max(1, int(max(abs(x1 - x0), abs(y1 - y0))))
+        for i in range(0, n + 1, every):
+            t = i / n
+            self.dot(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, c, p)
+
+    def disc(self, cx, cy, r, c, p=0):
+        for yi in range(int(cy - r - 1), int(cy + r + 2)):
+            for xi in range(int(cx - r - 1), int(cx + r + 2)):
+                if (xi - cx) ** 2 + (yi - cy) ** 2 <= r * r:
+                    self.dot(xi, yi, c, p)
+
+    def quad(self, pts, c, p=0):
+        """A filled convex polygon."""
+        xs, ys = [q[0] for q in pts], [q[1] for q in pts]
+        for yi in range(int(min(ys)) - 1, int(max(ys)) + 2):
+            for xi in range(int(min(xs)) - 1, int(max(xs)) + 2):
+                sgn = 0
+                for (ax, ay), (bx, by) in zip(pts, pts[1:] + pts[:1]):
+                    d = (bx - ax) * (yi - ay) - (by - ay) * (xi - ax)
+                    if d:
+                        if sgn and (d > 0) != (sgn > 0):
+                            break
+                        sgn = d
+                else:
+                    self.dot(xi, yi, c, p)
+
+    def rows(self):
+        out = []
+        for r in range(self.h):
+            line, cur = [], None
+            for c in range(self.w):
+                if self.dots[r][c]:
+                    ch, colr = chr(0x2800 + self.dots[r][c]), self.col[r][c]
+                else:
+                    ch, colr = " ", None
+                if colr != cur and ch != " ":
+                    line.append(fg(colr))
+                    cur = colr
+                line.append(ch)
+            out.append("".join(line) + RESET)
+        return out
+
+
+# ---------------------------------------------------------------- big digits
+
+FONT = {
+    "0": ["###", "# #", "# #", "# #", "###"],
+    "1": [" # ", "## ", " # ", " # ", "###"],
+    "2": ["###", "  #", "###", "#  ", "###"],
+    "3": ["###", "  #", " ##", "  #", "###"],
+    "4": ["# #", "# #", "###", "  #", "  #"],
+    "5": ["###", "#  ", "###", "  #", "###"],
+    "6": ["###", "#  ", "###", "# #", "###"],
+    "7": ["###", "  #", "  #", " # ", " # "],
+    "8": ["###", "# #", "###", "# #", "###"],
+    "9": ["###", "# #", "###", "  #", "###"],
+    " ": ["  ", "  ", "  ", "  ", "  "],
+}
+
+
+def big(text):
+    """Text in a 5-pixel font drawn with half blocks: three rows."""
+    rows = ["", "", ""]
+    for i, ch in enumerate(text):
+        g = FONT.get(ch, FONT[" "])
+        g = g + [" " * len(g[0])]
+        for r in range(3):
+            top, bot = g[2 * r], g[2 * r + 1]
+            for a, b in zip(top, bot):
+                rows[r] += {(1, 1): "█", (1, 0): "▀", (0, 1): "▄"}.get(
+                    (a == "#", b == "#"), " ")
+            if i < len(text) - 1:
+                rows[r] += " "
+    return rows
+
+
+def shade(rows, c):
+    """Lighter at the top, full colour at the bottom."""
+    return [fg(mix(WHITE, c, 0.45 + 0.3 * i)) + r + RESET for i, r in enumerate(rows)]
+
+
+def vlen(s):
+    n, i = 0, 0
+    while i < len(s):
+        if s[i] == "\x1b":
+            i = s.index("m", i) + 1
+        else:
+            n += 1
+            i += 1
+    return n
+
+
+def center(s, w):
+    pad = max(0, (w - vlen(s)) // 2)
+    return " " * pad + s
+
+
+# ---------------------------------------------------------------- state
+
+class State:
+    def __init__(self):
+        self.bpm = 100
+        self.beats = 4
+        self.sub = 1
+        self.accent = True
+        self.sound = "wood"
+        self.volume = 0.8
+        self.muted = False
+        self.vibrate = False
+        self.flash_torch = False
+        self.offset = 0.0           # seconds to move the picture by
+        self.load()
+        self.playing = False
+        self.taps = []
+        self.claps = None
+        self.since = None           # when it started, for the clock
+        self.angle = 0.0            # pendulum, shown
+        self.flash = None, 0.0      # message, until
+        self.seen = -1              # last event step acted on
+
+    KEYS = ("bpm", "beats", "sub", "accent", "sound", "volume", "vibrate",
+            "flash_torch", "offset")
+
+    def load(self):
+        try:
+            with open(STATE) as f:
+                d = json.load(f)
+            for k in self.KEYS:
+                if k in d:
+                    setattr(self, k, type(getattr(self, k))(d[k]))
+        except (OSError, ValueError, TypeError):
+            pass
+        self.bpm = max(BPM_MIN, min(BPM_MAX, self.bpm))
+        self.beats = max(1, min(12, self.beats))
+        self.sub = self.sub if self.sub in SUBS else 1
+        self.sound = self.sound if self.sound in SOUNDS else "wood"
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(STATE), exist_ok=True)
+            with open(STATE, "w") as f:
+                json.dump({k: getattr(self, k) for k in self.KEYS}, f)
+        except OSError:
+            pass
+
+    def say(self, msg):
+        self.flash = msg, time.time() + 1.5
+
+
+# ---------------------------------------------------------------- drawing
+
+def header(st, eng, cols, glow):
+    dotc = mix(FAINT, HOT if glow[1] else ACCENT, glow[0]) if st.playing else MUTED
+    left = f" {fg(dotc)}●{RESET} {fg(ACCENT)}{BOLD}METRONOME{RESET}"
+    chips = []
+    if eng.error:
+        chips.append((HOT, "NO SOUND"))
+    if st.muted:
+        chips.append((AMBER, "MUTE"))
+    if st.flash_torch:
+        chips.append((AMBER, "FLASH"))
+    if st.vibrate:
+        chips.append((MUTED, "VIB"))
+    chips.append((MUTED, f"{st.volume * 100:.0f}%"))
+    chips.append((INK, st.sound.upper()))
+    msg, until = st.flash
+
+    def build():
+        r = "  ".join(fg(c) + t + RESET for c, t in chips) + " "
+        if msg and time.time() < until:
+            r = fg(AMBER) + msg + RESET + "  " + r
+        return r
+
+    right = build()
+    while cols - vlen(left) - vlen(right) < 1 and chips:
+        chips.pop(0)
+        right = build()
+    return left + " " * max(1, cols - vlen(left) - vlen(right)) + right
+
+
+def footer(cols):
+    keys = [("␣", "start"), ("t", "tap"), ("c", "clap"), ("b", "beats"),
+            ("d", "sub"), ("s", "sound"), ("q", "quit")]
+    parts = [f"{fg(ACCENT)}{k}{RESET} {fg(MUTED)}{v}{RESET}" for k, v in keys]
+    s = "  ".join(parts)
+    if vlen(s) > cols:
+        s = " ".join(f"{fg(ACCENT)}{k}{RESET}{fg(MUTED)}{v[:3]}{RESET}" for k, v in keys)
+    return center(s, cols)
+
+
+def draw_pendulum(st, cw, ch, angle, glow, side):
+    """A wind-up metronome: a body, a scale and the rod with its weight,
+    which sits lower the faster it goes, as on the real thing."""
+    cv = Canvas(cw, ch)
+    W, H = cv.W, cv.H
+    cx = (W - 1) / 2
+    L = min(H - 4, W * 0.62)
+    base = H - 1
+    px, py = cx, base - L * 0.14              # pivot
+    amp = math.radians(30)
+    hot = HOT if glow[1] else ACCENT
+
+    # body: a tall trapezoid, outline only, a little lighter on one side
+    bw, tw, bh = L * 0.62, L * 0.2, L * 0.9
+    cv.line(cx - bw / 2, base, cx + bw / 2, base, RING, 1)
+    cv.line(cx - bw / 2, base, cx - tw / 2, base - bh, mix(RING, ACCENT, 0.3), 1)
+    cv.line(cx + bw / 2, base, cx + tw / 2, base - bh, dim(RING, 0.7), 1)
+    cv.line(cx - tw / 2, base - bh, cx + tw / 2, base - bh, RING, 1)
+    cv.line(cx - bw / 2 + 2, base - 2, cx + bw / 2 - 2, base - 2, FAINT, 0, every=2)
+
+    # scale behind the rod, with the end the rod reached glowing
+    R = L * 0.97
+    for k in range(-8, 9):
+        a = amp * k / 8
+        r0 = R - (3 if k % 4 == 0 else 1.5)
+        c = FAINT if k % 4 else RING
+        if abs(k) == 8 and st.playing and (k > 0) == (side > 0):
+            c = mix(RING, hot, glow[0])
+        cv.line(px + r0 * math.sin(a), py - r0 * math.cos(a),
+                px + R * math.sin(a), py - R * math.cos(a), c, 2)
+
+    # rod, with fading ghosts behind it for motion
+    def rod(a, c, p):
+        cv.line(px, py, px + L * 0.92 * math.sin(a), py - L * 0.92 * math.cos(a), c, p)
+
+    if st.playing:
+        for i, g in enumerate((0.05, 0.1, 0.15)):
+            if st.frac - g >= 0:
+                rod(-side * amp * math.cos(math.pi * (st.frac - g)), dim(RING, 0.7 - i * 0.2), 3)
+    rod(angle, mix(INK, hot, glow[0] * 0.6), 5)
+
+    # the sliding weight
+    pos = 0.32 + 0.55 * (1 - (st.bpm - BPM_MIN) / (BPM_MAX - BPM_MIN))
+    wx, wy = px + L * pos * math.sin(angle), py - L * pos * math.cos(angle)
+    s = max(2.5, L * 0.07)
+    ca, sa = math.cos(angle), math.sin(angle)
+
+    def pt(u, v):          # u across the rod, v along it
+        return wx + u * ca + v * sa, wy + u * sa - v * ca
+
+    wc = mix(mix(INK, ACCENT, 0.4), WHITE if not glow[1] else HOT, glow[0])
+    cv.quad([pt(-s * 1.2, -s * 0.8), pt(s * 1.2, -s * 0.8), pt(s * 0.8, s * 0.8),
+             pt(-s * 0.8, s * 0.8)], wc, 6)
+    cv.disc(px, py, max(1.5, L * 0.025), ACCENT, 7)
+    return cv.rows()
+
+
+def beat_boxes(st, cols, cur_beat, cur_part, glow):
+    n = st.beats
+    bw = max(1, min(7, (cols - 2) // n - 1))
+    top, bot, subs = [], [], []
+    for b in range(n):
+        accent = b == 0 and st.accent
+        base = HOT if accent else ACCENT
+        if st.playing and b == cur_beat:
+            c = mix(base, WHITE, glow[0] * 0.5)
+        elif st.playing and cur_beat is not None and b < cur_beat:
+            c = dim(base, 0.35)
+        else:
+            c = dim(base, 0.2)
+        top.append(fg(c) + "█" * bw + RESET)
+        bot.append(fg(dim(c, 0.6)) + "▀" * bw + RESET)
+        marks = ""
+        for p in range(st.sub):
+            lit = st.playing and b == cur_beat and p <= cur_part
+            marks += "•" if lit else "·"
+        mc = mix(MUTED, INK, 1.0) if st.playing and b == cur_beat else FAINT
+        cell = marks[:bw].center(bw) if st.sub > 1 else " " * bw
+        subs.append(fg(mc) + cell + RESET)
+    return [center(" ".join(r), cols) for r in (top, bot, subs)]
+
+
+def clap_panel(st, cols, rows):
+    cl = st.claps
+    out = [""] * max(0, rows // 2 - 4)
+    out.append(center(f"{fg(AMBER)}{BOLD}CLAP THE BEAT{RESET}", cols))
+    out.append(center(f"{fg(MUTED)}four or more claps; it starts on your beat{RESET}", cols))
+    out.append("")
+    n = len(cl.times)
+    dots = " ".join(fg(MINT) + "●" + RESET for _ in range(min(n, 12)))
+    dots += (" " if n else "") + " ".join(fg(FAINT) + "○" + RESET for _ in range(max(0, 4 - n)))
+    out.append(center(dots, cols))
+    out.append("")
+    w = min(40, cols - 8)
+    lvl = 0 if cl.level <= 1 else max(0.0, min(1.0, (20 * math.log10(cl.level) - 40) / 50))
+    k = int(lvl * w)
+    bar = "".join(fg(mix(MINT, HOT, i / w)) + "▮" for i in range(k)) + fg(FAINT) + "▯" * (w - k)
+    out.append(center(f"{fg(MUTED)}mic {RESET}" + bar + RESET, cols))
+    est = cl.tempo()
+    out.append("")
+    if cl.message:
+        out.append(center(fg(AMBER) + cl.message + RESET, cols))
+    elif est:
+        out.append(center(f"{fg(INK)}≈ {est:.0f} bpm{RESET}", cols))
+    return out[:rows] + [""] * max(0, rows - len(out))
+
+
+def frame(st, eng, cols, rows, view):
+    cur_beat, cur_part, glow, side, angle = view
+    out = [header(st, eng, cols, glow), fg(FAINT) + "─" * cols + RESET]
+    boxes = beat_boxes(st, cols, cur_beat, cur_part, glow)
+    digits = shade(big(f"{st.bpm:>3d}"), HOT if glow[1] and glow[0] > 0.5 else ACCENT)
+    label = [f"{fg(MUTED)}BPM{RESET}", "", ""]
+    read = [center(d + "  " + l + " " * (3 - vlen(l)), cols) for d, l in zip(digits, label)]
+    elapsed = ""
+    if st.playing and st.since:
+        e = int(time.monotonic() - st.since)
+        elapsed = f" {fg(FAINT)}·{RESET} {fg(MUTED)}{e // 60:02d}:{e % 60:02d}{RESET}"
+    bar_no = ""
+    if st.playing and st.bar is not None:
+        bar_no = f" {fg(FAINT)}·{RESET} {fg(MUTED)}bar {st.bar + 1}{RESET}"
+    info = (f"{fg(INK)}{tempo_name(st.bpm)}{RESET} {fg(FAINT)}·{RESET} "
+            f"{fg(INK)}{st.beats}/4{RESET} {fg(FAINT)}·{RESET} "
+            f"{fg(MUTED)}{SUB_MARK[st.sub]} {SUBS[st.sub]}{RESET}" + bar_no + elapsed)
+    if eng.error and not st.playing:
+        info = fg(HOT) + eng.error + RESET
+    fixed = len(out) + len(boxes) + 1 + len(read) + 1 + 1 + 1
+    area = rows - fixed
+    if st.claps:
+        out += clap_panel(st, cols, max(0, area))
+    elif area >= 6:
+        out += draw_pendulum(st, cols, area, angle, glow, side)
+    else:
+        out += [""] * max(0, area)
+    out += boxes + [""] + read + [center(info, cols)]
+    out += [""] * (rows - 1 - len(out))
+    out.append(footer(cols))
+    return out[:rows]
+
+
+# ---------------------------------------------------------------- the beat, as seen
+
+def current(st, eng, sig_torch, sig_vib):
+    """Where the beat is now: (beat, part, (glow, accented), side, angle).
+    Also fires the torch and the vibration as each beat comes due."""
+    now = time.monotonic()
+    with eng.lock:
+        evs = [(eng.heard(e[0]),) + e[1:] for e in eng.events]
+    last = last_beat = nxt = None
+    for e in evs:
+        if e[0] <= now:
+            last = e
+            if e[3] == 0:
+                last_beat = e
+        elif nxt is None:
+            nxt = e
+    target = 0.0
+    glow, accented, side = 0.0, False, 1
+    cur_beat = cur_part = None
+    st.bar = None
+    per_beat = 60.0 / st.bpm
+    if st.playing and last_beat:
+        _, step, beat, _, beat_no = last_beat
+        frac = min(1.0, (now - last_beat[0]) / per_beat)
+        side = 1 if beat_no % 2 else -1
+        target = -side * math.radians(30) * math.cos(math.pi * frac)
+        st.frac = frac
+        cur_beat, cur_part = beat, last[3]
+        st.bar = beat_no // st.beats
+        glow = math.exp(-(now - last[0]) / (0.09 if last[3] else 0.16))
+        if last[3]:
+            glow *= 0.45
+        accented = beat == 0 and st.accent and last[3] == 0
+        if last[1] != st.seen:
+            st.seen = last[1]
+            if last[3] == 0:
+                if st.flash_torch and sig_torch:
+                    sig_torch.send("torch", "on", "100" if accented else "35")
+                if st.vibrate and sig_vib:
+                    sig_vib.send("vibrate", "60" if accented else "25")
+        if st.flash_torch and sig_torch and now - last[0] > 0.07 and st.torch_on != last[1]:
+            st.torch_on = last[1]
+            sig_torch.send("torch", "off")
+        st.angle = target
+    else:
+        st.angle *= 0.85
+    return cur_beat, cur_part, (glow, accented), side, st.angle, nxt
+
+
+# ---------------------------------------------------------------- keys
+
+def tap(st, eng, when):
+    if st.taps and when - st.taps[-1] > 2.0:
+        st.taps = []
+    st.taps = (st.taps + [when])[-8:]
+    if len(st.taps) >= 2:
+        iv = sorted(np.diff(st.taps))
+        bpm = int(round(60.0 / iv[len(iv) // 2]))
+        with eng.lock:
+            st.bpm = max(BPM_MIN, min(BPM_MAX, bpm))
+        st.say(f"tap {len(st.taps)}")
+        if st.playing and len(st.taps) >= 3:
+            eng.align(when + 60.0 / st.bpm)
+        st.save()
+    else:
+        st.say("tap again")
+
+
+def set_bpm(st, eng, bpm):
+    with eng.lock:
+        st.bpm = max(BPM_MIN, min(BPM_MAX, int(bpm)))
+    st.save()
+
+
+def start_stop(st, eng, sig_torch):
+    st.playing = not st.playing
+    if st.playing:
+        st.since = time.monotonic()
+        eng.start_beat()
+    else:
+        eng.stop_beat()
+        if st.flash_torch and sig_torch:
+            sig_torch.send("torch", "off")
+
+
+def handle(st, eng, k, sig_torch):
+    """One key (or escape sequence); False to quit."""
+    if st.claps:
+        if k in ("c", "C", "\x1b", "q", " "):
+            st.claps.close()
+            st.claps = None
+            st.say("clap cancelled")
+        return k not in ("q", "Q", "\x03")
+    if k in ("q", "Q", "\x03", "\x1b"):
+        return False
+    with eng.lock:
+        if k == " ":
+            pass
+        elif k in ("+", "=", "\x1b[A"):
+            st.bpm = min(BPM_MAX, st.bpm + 1)
+        elif k in ("-", "_", "\x1b[B"):
+            st.bpm = max(BPM_MIN, st.bpm - 1)
+        elif k == "\x1b[C":
+            st.bpm = min(BPM_MAX, st.bpm + 5)
+        elif k == "\x1b[D":
+            st.bpm = max(BPM_MIN, st.bpm - 5)
+        elif k == "\x1b[5~":
+            st.bpm = min(BPM_MAX, st.bpm + 10)
+        elif k == "\x1b[6~":
+            st.bpm = max(BPM_MIN, st.bpm - 10)
+        elif k == "b":
+            st.beats = st.beats % 12 + 1
+            st.say(f"{st.beats} beats")
+        elif k == "B":
+            st.beats = (st.beats - 2) % 12 + 1
+            st.say(f"{st.beats} beats")
+        elif k in "dD":
+            order = [1, 2, 3, 4]
+            st.sub = order[(order.index(st.sub) + (1 if k == "d" else -1)) % 4]
+            st.say(SUBS[st.sub])
+        elif k in "aA":
+            st.accent = not st.accent
+            st.say("accent " + ("on" if st.accent else "off"))
+        elif k in "sS":
+            st.sound = SOUNDS[(SOUNDS.index(st.sound) + (1 if k == "s" else -1)) % len(SOUNDS)]
+            st.say(st.sound)
+        elif k == "]":
+            st.volume = min(1.0, round(st.volume + 0.1, 1))
+        elif k == "[":
+            st.volume = max(0.1, round(st.volume - 0.1, 1))
+        elif k in "mM":
+            st.muted = not st.muted
+        elif k in "vV":
+            st.vibrate = not st.vibrate
+            st.say("vibrate " + ("on" if st.vibrate else "off"))
+        elif k in "fF":
+            st.flash_torch = not st.flash_torch
+            st.say("torch flash " + ("on" if st.flash_torch else "off"))
+        elif k in ",<":
+            st.offset = round(st.offset - 0.01, 2)
+            st.say(f"picture {st.offset * 1000:+.0f} ms")
+        elif k in ".>":
+            st.offset = round(st.offset + 0.01, 2)
+            st.say(f"picture {st.offset * 1000:+.0f} ms")
+    if k == " ":
+        start_stop(st, eng, sig_torch)
+    elif k in ("t", "T", "\r", "\n"):
+        tap(st, eng, time.monotonic())
+    elif k in ("c", "C"):
+        if st.playing:
+            start_stop(st, eng, sig_torch)
+        try:
+            st.claps = Claps()
+        except Exception as e:
+            st.say(f"no microphone: {e}")
+    elif k in ("f", "F") and not st.flash_torch and sig_torch:
+        sig_torch.send("torch", "off")
+    st.save()
+    return True
+
+
+def split_keys(data):
+    """Bytes from the terminal into keys, keeping escape sequences whole."""
+    keys, i = [], 0
+    while i < len(data):
+        if data[i] == "\x1b" and i + 1 < len(data) and data[i + 1] in "[O":
+            j = i + 2
+            while j < len(data) and not (data[j].isalpha() or data[j] == "~"):
+                j += 1
+            keys.append("\x1b[" + data[i + 2:j + 1])
+            i = j + 1
+        else:
+            keys.append(data[i])
+            i += 1
+    return keys
+
+
+# ---------------------------------------------------------------- main loop
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    if not sys.stdin.isatty():
+        print("metronome: needs a terminal", file=sys.stderr)
+        return 2
+    global np
+    np = needs.numpy("metronome")
+    st = State()
+    st.frac, st.bar, st.torch_on = 0.0, None, None
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    if args:
+        try:
+            st.bpm = max(BPM_MIN, min(BPM_MAX, int(args[0])))
+        except ValueError:
+            print(__doc__.strip())
+            return 2
+    eng = Engine(st)
+    eng.start()
+    sig_torch = sig_vib = None
+    if request and os.environ.get("PC26_REQUESTS"):
+        sig_torch, sig_vib = Signal(), Signal()
+        sig_torch.start()
+        sig_vib.start()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    w = sys.stdout.write
+    resized = [True]
+    signal.signal(signal.SIGWINCH, lambda *_: resized.__setitem__(0, True))
+    last_draw = 0.0
+    try:
+        tty.setcbreak(fd)
+        w("\x1b[?1049h\x1b[?25l\x1b]0;metronome\a")
+        while True:
+            *view, nxt = current(st, eng, sig_torch, sig_vib)
+            now = time.monotonic()
+            wait = 1 / 40 if st.playing or abs(st.angle) > 0.001 else 0.25
+            if nxt:
+                wait = max(0.0, min(wait, nxt[0] - now))
+            if st.claps:
+                wait = 1 / 30
+            fds = [fd]
+            if st.claps and st.claps.fileno() is not None:
+                fds.append(st.claps.fileno())
+            r, _, _ = select.select(fds, [], [], wait)
+            if fd in r:
+                data = os.read(fd, 64).decode(errors="ignore")
+                for k in split_keys(data):
+                    if not handle(st, eng, k, sig_torch):
+                        return 0
+            if st.claps:
+                try:
+                    st.claps.poll()
+                except Exception as e:
+                    st.claps.close()
+                    st.claps = None
+                    st.say(f"mic: {e}")
+                else:
+                    cl = st.claps
+                    now = time.monotonic()
+                    est = cl.tempo()
+                    if est and len(cl.times) >= 4 and now - cl.times[-1] > max(1.2, 1.6 * 60 / est):
+                        set_bpm(st, eng, round(est))
+                        beat = 60.0 / st.bpm
+                        last = cl.times[-1]
+                        cl.close()
+                        st.claps = None
+                        start_stop(st, eng, sig_torch)
+                        nxt_beat = last + beat
+                        while nxt_beat < now + 0.05:
+                            nxt_beat += beat
+                        eng.align(nxt_beat)
+                        st.say(f"{st.bpm} bpm from your claps")
+                    elif cl.times and len(cl.times) < 4 and now - cl.times[-1] > 3:
+                        cl.times = []
+            now = time.monotonic()
+            if now - last_draw >= 1 / 45 or resized[0] or fd in r:
+                *view, _ = current(st, eng, sig_torch, sig_vib)
+                cols, rows = shutil.get_terminal_size()
+                if resized[0]:
+                    w("\x1b[2J")
+                    resized[0] = False
+                lines = frame(st, eng, cols, rows, view)
+                w("\x1b[H" + "\x1b[K\n".join(lines) + "\x1b[K\x1b[J")
+                sys.stdout.flush()
+                last_draw = now
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        w("\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+        st.save()
+        if st.claps:
+            st.claps.close()
+        eng.close()
+        if st.flash_torch and sig_torch:
+            try:
+                request("torch", "off")
+            except Exception:
+                pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())

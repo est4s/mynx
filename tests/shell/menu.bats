@@ -8,7 +8,8 @@ MENU="$BATS_TEST_DIRNAME/../../tools/bin/menu"
 setup() {
     export HOME="$BATS_TEST_TMPDIR/home"
     export MENU_GAME_DIRS="$BATS_TEST_TMPDIR/games:$HOME/games"
-    mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games"
+    export MENU_APP_DIRS="$BATS_TEST_TMPDIR/apps:$HOME/apps"
+    mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games" "$BATS_TEST_TMPDIR/apps"
 }
 
 game() {
@@ -24,8 +25,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Getting started Exit" ]
-    [ "${ACTS[*]}" = "exit files menu:games settings menu:agents menu:system welcome quit_session" ]
+    [ "${ITEMS[*]}" = "Terminal Files Apps Games Settings AI agents System Getting started Exit" ]
+    [ "${ACTS[*]}" = "exit files menu:apps menu:games settings menu:agents menu:system welcome quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -43,7 +44,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/pc26/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Games Settings AI agents System Getting started Exit" ]
+    [ "${ITEMS[*]}" = "Terminal Files Apps Games Settings AI agents System Getting started Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -51,7 +52,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, games, settings, agents, system, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, agents, system, welcome, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -70,7 +71,7 @@ keys() {
 }
 
 @test "About shows pocket about" {
-    run keys 63
+    run keys 73
     [[ $output == *"RUN: pocket about"* ]]
 }
 
@@ -92,6 +93,54 @@ keys() {
     menu_items games
     [ "${ITEMS[*]}" = "(no games yet)" ]
     [ "${ACTS[*]}" = "none" ]
+}
+
+app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
+    printf '#!/bin/sh\n%s\n' "${2:+# label: $2}" >"$1"
+    chmod +x "$1"
+}
+
+@test "apps come from both folders, with their labels" {
+    mkdir -p "$HOME/apps"
+    app "$BATS_TEST_TMPDIR/apps/dbmeter" "Sound meter"
+    app "$BATS_TEST_TMPDIR/apps/tuner" "Guitar tuner"
+    printf 'not an app\n' >"$BATS_TEST_TMPDIR/apps/mic.py"
+    app "$HOME/apps/my-tool.py"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Sound meter Guitar tuner My Tool" ]
+    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/apps/dbmeter" ]
+    [ "${ACTS[2]}" = "app:$HOME/apps/my-tool.py" ]
+}
+
+@test "a label is cut to 20 characters" {
+    app "$BATS_TEST_TMPDIR/apps/x" "A label that is much too long"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[0]}" = "A label that is much" ]
+}
+
+@test "no apps" {
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "(no apps yet)" ]
+    [ "${ACTS[*]}" = "none" ]
+}
+
+@test "Apps starts the chosen app under its key bar" {
+    mkdir -p "$HOME/apps"
+    app "$BATS_TEST_TMPDIR/apps/tuner" "Guitar tuner"
+    app "$HOME/apps/my-tool.py"
+    run keys 31
+    [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/apps/tuner"* ]]
+    run keys 32
+    [[ $output == *"RUN: keybar my-tool,shell $HOME/apps/my-tool.py"* ]]
+}
+
+@test "menu --check accepts the apps action" {
+    printf 'Apps = apps\n' >"$BATS_TEST_TMPDIR/menu.conf"
+    run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
+    [ "$status" -eq 0 ]
 }
 
 @test "state survives a restart" {
@@ -132,7 +181,7 @@ keys() {
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 8
+    run keys 9
     [ "$status" -eq 10 ]
 }
 
@@ -143,12 +192,12 @@ keys() {
 
 @test "Games starts the chosen game" {
     game "$BATS_TEST_TMPDIR/games/neon-rogue.py"
-    run keys 31
+    run keys 41
     [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
 @test "Settings opens the settings editor" {
-    run keys 4
+    run keys 5
     [[ $output == *"RUN: pocket edit"* ]]
 }
 
@@ -171,14 +220,14 @@ fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
 
 @test "picking an agent starts it (or offers to install it)" {
     fake_pc26
-    run keys 52
+    run keys 62
     [[ $output == *"RUN: pocket agent start codex"* ]]
 }
 
 @test "moving through AI agents doesn't ask pocket again on each key" {
     fake_pc26
     sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pocket"
-    run keys 5jjjkqq
+    run keys 6jjjkqq
     [ "$status" -eq 0 ]
     [ "$(wc -l <"$BATS_TEST_TMPDIR/calls")" -eq 1 ]
 }
@@ -212,7 +261,7 @@ fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
 }
 
 @test "Update all runs apt" {
-    run keys 61
+    run keys 71
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 

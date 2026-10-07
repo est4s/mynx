@@ -1,0 +1,535 @@
+#!/usr/bin/env python3
+# label: Flashlight
+"""torch: the phone's flashlight, with brightness and flashing modes.
+
+Modes: Steady, Strobe, SOS, Beacon, Breathe, Flicker (a candle) and Morse
+(flashes a message of your own). It talks to the app straight through its
+request folder (the same way `pocket torch` does), about 35 ms a change,
+so strobes keep up. The light goes off when it quits.
+
+Keys: space on/off, Up/Down or +/- brightness, 1-9 and 0 brightness
+10-100%, Left/Right or Tab mode, [ and ] speed, m Morse message, q quit.
+`torch MODE` starts in a mode, e.g. `torch strobe`.
+"""
+import json
+import math
+import os
+import random
+import re
+import select
+import shutil
+import signal
+import sys
+import termios
+import threading
+import time
+import tty
+
+sys.path.insert(0, "/opt/pc26/lib")
+from pc26.client import Failure, request  # noqa: E402
+
+STATE = os.path.expanduser("~/.config/torch/state.json")
+
+MORSE = {
+    "A": ".-", "B": "-...", "C": "-.-.", "D": "-..", "E": ".", "F": "..-.",
+    "G": "--.", "H": "....", "I": "..", "J": ".---", "K": "-.-", "L": ".-..",
+    "M": "--", "N": "-.", "O": "---", "P": ".--.", "Q": "--.-", "R": ".-.",
+    "S": "...", "T": "-", "U": "..-", "V": "...-", "W": ".--", "X": "-..-",
+    "Y": "-.--", "Z": "--..", "0": "-----", "1": ".----", "2": "..---",
+    "3": "...--", "4": "....-", "5": ".....", "6": "-....", "7": "--...",
+    "8": "---..", "9": "----.", ".": ".-.-.-", ",": "--..--", "?": "..--..",
+    "!": "-.-.--", "/": "-..-.", "-": "-....-", "@": ".--.-.", "=": "-...-",
+}
+
+# name, speed choices, default index, how a speed is shown
+MODES = [
+    ("Steady", [None], 0, lambda s: "constant light"),
+    ("Strobe", [1, 2, 3, 5, 8, 10], 2, lambda s: f"{s} Hz"),
+    ("SOS", [6, 9, 12, 16, 20], 2, lambda s: f"{s} wpm"),
+    ("Beacon", [1, 2, 3, 5, 10], 1, lambda s: f"blink every {s} s"),
+    ("Breathe", [2, 3, 5, 8], 1, lambda s: f"{s} s a breath"),
+    ("Flicker", [1, 2, 3], 1, lambda s: ["calm", "lively", "wild"][s - 1]),
+    ("Morse", [6, 9, 12, 16, 20], 2, lambda s: f"{s} wpm"),
+]
+
+# ── colours ──────────────────────────────────────────────────────────────
+
+def hex_rgb(h):
+    h = h.strip().lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def theme_background():
+    for path in ("~/.config/pc26/colors.properties",
+                 "/opt/pc26/themes/neon.colors.properties"):
+        try:
+            with open(os.path.expanduser(path)) as f:
+                for line in f:
+                    if line.startswith("background="):
+                        return hex_rgb(line.split("=", 1)[1])
+        except (OSError, ValueError):
+            pass
+    return (20, 16, 31)
+
+
+BG = theme_background()
+WHITE = (255, 252, 240)
+WARM = (255, 196, 110)
+AMBER = (255, 170, 60)
+DIM, FAINT, TEXT = (120, 115, 140), (70, 66, 88), (228, 230, 240)
+HOT = (255, 214, 120)
+
+
+def mix(a, b, t):
+    t = 0.0 if t < 0 else 1.0 if t > 1 else t
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+
+def fg(c):
+    return f"\x1b[38;2;{c[0]};{c[1]};{c[2]}m"
+
+
+def bg(c):
+    return f"\x1b[48;2;{c[0]};{c[1]};{c[2]}m"
+
+
+RESET, BOLD = "\x1b[0m", "\x1b[1m"
+
+# ── morse timelines ──────────────────────────────────────────────────────
+
+def morse_timeline(text):
+    """[(on, units, char index)], looping: dot 1, dash 3, gaps 1/3/7."""
+    events = []
+    for i, ch in enumerate(text):
+        if ch == " ":
+            if events:
+                events[-1] = (False, 7, events[-1][2])
+            continue
+        code = MORSE.get(ch)
+        if not code:
+            continue
+        for sym in code:
+            events.append((True, 1 if sym == "." else 3, i))
+            events.append((False, 1, i))
+        events[-1] = (False, 3, i)
+    if events:
+        events[-1] = (False, 7, events[-1][2])
+    return events
+
+
+def clean_message(text):
+    text = re.sub(r"\s+", " ", text.upper())
+    return "".join(c for c in text if c == " " or c in MORSE).strip()
+
+# ── the light, driven from its own thread ────────────────────────────────
+
+class Driver(threading.Thread):
+    """Sends the latest wanted level to the app; levels that are passed
+    over while a request is out are skipped, so it never falls behind."""
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.want, self.sent = 0, None
+        self.error = None
+        self.cond = threading.Condition()
+        self.stopping = False
+
+    def set(self, level):
+        with self.cond:
+            if level != self.want:
+                self.want = level
+                self.cond.notify()
+
+    def run(self):
+        while True:
+            with self.cond:
+                while self.want == self.sent and not self.stopping:
+                    self.cond.wait()
+                if self.stopping:
+                    return
+                level = self.want
+            self.send(level)
+
+    def send(self, level):
+        try:
+            if level <= 0:
+                request("torch", "off")
+            else:
+                request("torch", "on", str(min(100, level)))
+            self.sent, self.error = level, None
+        except Failure as e:
+            self.sent, self.error = level, str(e)
+            time.sleep(0.5)
+        except Exception as e:  # never let the thread die silently
+            self.sent, self.error = level, f"{type(e).__name__}: {e}"
+            time.sleep(0.5)
+
+    def stop(self):
+        with self.cond:
+            self.stopping = True
+            self.cond.notify()
+
+# ── the app ──────────────────────────────────────────────────────────────
+
+class Torch:
+    def __init__(self, start_mode=None):
+        self.on = True
+        self.bright = 100
+        self.mode = 0
+        self.speeds = [m[2] for m in MODES]
+        self.message = "HELLO WORLD"
+        self.load()
+        if start_mode is not None:
+            self.mode = start_mode
+        self.t0 = time.monotonic()
+        self.editing = None
+        self.flick = (0.0, 1.0)
+        self.timeline_for = None
+        self.canvas_cache = {}
+
+    # state that lasts between runs
+    def load(self):
+        try:
+            with open(STATE) as f:
+                s = json.load(f)
+            self.bright = max(10, min(100, int(s.get("bright", 100))))
+            self.mode = int(s.get("mode", 0)) % len(MODES)
+            sp = s.get("speeds", [])
+            for i, m in enumerate(MODES):
+                if i < len(sp):
+                    self.speeds[i] = max(0, min(len(m[1]) - 1, int(sp[i])))
+            self.message = clean_message(s.get("message", self.message)) or self.message
+        except (OSError, ValueError, TypeError):
+            pass
+
+    def save(self):
+        try:
+            os.makedirs(os.path.dirname(STATE), exist_ok=True)
+            with open(STATE, "w") as f:
+                json.dump({"bright": self.bright, "mode": self.mode,
+                           "speeds": self.speeds, "message": self.message}, f)
+        except OSError:
+            pass
+
+    @property
+    def speed(self):
+        name, choices, _, _ = MODES[self.mode]
+        return choices[self.speeds[self.mode]]
+
+    def restart(self):
+        self.t0 = time.monotonic()
+
+    def timeline(self):
+        text = "SOS" if MODES[self.mode][0] == "SOS" else self.message
+        if self.timeline_for != text:
+            self.timeline_for = text
+            self.events = morse_timeline(text)
+            self.total = sum(u for _, u, _ in self.events) or 1
+        return text
+
+    def fraction(self, now):
+        """How much of the set brightness to show now (0 to 1), and the
+        index of the Morse letter being sent (or None)."""
+        t = now - self.t0
+        name, s = MODES[self.mode][0], self.speed
+        if name == "Steady":
+            return 1.0, None
+        if name == "Strobe":
+            return (1.0 if (t * s) % 1 < 0.5 else 0.0), None
+        if name == "Beacon":
+            return (1.0 if t % s < 0.15 else 0.0), None
+        if name == "Breathe":
+            x = 0.5 - 0.5 * math.cos(2 * math.pi * t / s)
+            return 0.08 + 0.92 * x * x, None
+        if name == "Flicker":
+            until, level = self.flick
+            if now >= until:
+                calm = {1: 0.25, 2: 0.45, 3: 0.75}[s]
+                level = 1 - random.random() * calm
+                hold = random.uniform(0.06, 0.22) / (0.6 + 0.4 * s)
+                self.flick = (now + hold, level)
+            return self.flick[1], None
+        # SOS and Morse
+        self.timeline()
+        unit = 1.2 / s
+        pos = (t / unit) % self.total
+        for lit, units, idx in self.events:
+            if pos < units:
+                return (1.0 if lit else 0.0), idx
+            pos -= units
+        return 0.0, None
+
+    # ── drawing ──
+    def canvas(self, level, width, rows):
+        key = (level, width, rows)
+        if key in self.canvas_cache:
+            return self.canvas_cache[key]
+        b = level / 100
+        h = rows * 2
+        cx, cy = (width - 1) / 2, (h - 1) / 2
+        r0 = min(4.6, h / 4)
+        spread = 2.5 + 9 * math.sqrt(b)
+
+        def pixel(x, y):
+            dx, dy = x - cx, (y - cy)
+            d = math.hypot(dx, dy)
+            if level == 0:  # the lamp, dark: a bezel round a glass lens
+                if d < r0 - 1.2:
+                    return mix(BG, (58, 56, 72), 1 - d / r0 * 0.4)
+                if d < r0 + 0.4:
+                    return (104, 100, 122)
+                return BG
+            if d < r0 - 0.8:
+                return mix(WHITE, (255, 255, 255), 1 - d / r0)
+            if d < r0 + 0.3:
+                return mix(WARM, WHITE, 0.4 + 0.6 * b)
+            ang = math.atan2(dy, dx)
+            rays = 0.78 + 0.22 * math.cos(12 * ang) ** 2
+            g = (0.35 + 0.75 * b) * math.exp(-(d - r0) / spread) * rays
+            c = mix(BG, AMBER, g * 1.6)
+            return mix(c, WHITE, (g - 0.55) * 1.8)
+
+        raw = pixel
+
+        def pixel(x, y):
+            c = raw(x, y)
+            return c if c == BG else tuple(min(255, (v + 4) // 8 * 8) for v in c)
+
+        lines = []
+        for row in range(rows):
+            parts, last = [], "blank"
+            for x in range(width):
+                top, bot = pixel(x, row * 2), pixel(x, row * 2 + 1)
+                if top == BG and bot == BG:
+                    parts.append((RESET if last != "blank" else "") + " ")
+                    last = "blank"
+                    continue
+                code = ("" if last and last[0] == top else fg(top)) + \
+                       ("" if last and last[1] == bot else bg(bot))
+                parts.append(code + "▀")
+                last = (top, bot)
+            lines.append("".join(parts) + RESET)
+        if len(self.canvas_cache) > 300:
+            self.canvas_cache.clear()
+        self.canvas_cache[key] = lines
+        return lines
+
+    def bar(self, width):
+        full = self.bright / 100 * width
+        out = []
+        for i in range(width):
+            c = mix((255, 120, 40), (255, 236, 170), i / max(1, width - 1))
+            if not self.on:
+                c = mix(c, DIM, 0.6)
+            if i + 1 <= full:
+                out.append(fg(c) + "█")
+            elif i < full:
+                out.append(fg(c) + " ▏▎▍▌▋▊▉"[int((full - i) * 8)])
+            else:
+                out.append(fg(FAINT) + "─")
+        return "".join(out) + RESET
+
+    def frame(self, level, letter, error):
+        cols, lines = shutil.get_terminal_size((56, 30))
+        w = max(30, min(cols, 60))
+        pad = " " * max(0, (cols - w) // 2)
+        glow_rows = max(5, min(12, lines - 14))
+        out = []
+
+        def put(s=""):
+            out.append(pad + s + "\x1b[K")
+
+        def center(text, visible):
+            return " " * max(0, (w - visible) // 2) + text
+
+        # title
+        state = (fg(HOT) + BOLD + "● ON") if self.on else (fg(DIM) + "○ OFF")
+        title = "T O R C H"
+        put()
+        put("  " + fg(HOT) + BOLD + title + RESET +
+            " " * max(1, w - 4 - len(title) - (4 if self.on else 5)) + state + RESET)
+        put("  " + fg(FAINT) + "─" * (w - 4) + RESET)
+
+        for row in self.canvas(level, w - 4, glow_rows):
+            put("  " + row)
+
+        # brightness
+        put()
+        pct = f"{self.bright:3d}%"
+        put("  " + fg(DIM) + "Brightness " + RESET + self.bar(w - 19) + " " +
+            fg(TEXT if self.on else DIM) + BOLD + pct + RESET)
+
+        # mode
+        put()
+        name, choices, _, fmt = MODES[self.mode]
+        chip = f"◂  {name.upper()}  ▸"
+        put(center(fg(HOT) + BOLD + chip + RESET, len(chip)))
+        dots = " ".join("●" if i == self.mode else "·" for i in range(len(MODES)))
+        put(center(fg(DIM) + dots + RESET, len(dots)))
+        detail = fmt(self.speed)
+        if len(choices) > 1:
+            detail = f"[ {detail} ]"
+        put(center(fg(TEXT) + detail + RESET, len(detail)))
+
+        # Morse message, the letter being sent lit up
+        if name in ("SOS", "Morse"):
+            text = self.timeline()
+            if self.editing is not None:
+                shown = "› " + self.editing + "▏"
+                put(center(fg(HOT) + shown + RESET, len(shown)))
+            else:
+                shown = text[: w - 6]
+                parts = []
+                for i, ch in enumerate(shown):
+                    lit = i == letter and level > 0
+                    parts.append((fg((20, 16, 10)) + bg(HOT) + BOLD if lit else
+                                  fg(HOT if i == letter else DIM)) + ch + RESET)
+                put(center("".join(parts), len(shown)))
+                code = MORSE.get(text[letter], "") if letter is not None and letter < len(text) else ""
+                code = code.replace(".", "•").replace("-", "▬")
+                put(center(fg(DIM) + " ".join(code) + RESET, len(" ".join(code))))
+        else:
+            put()
+            put()
+
+        # status / help
+        put()
+        if error:
+            msg = ("  ! " + error)[: w]
+            put(fg((255, 110, 110)) + msg + RESET)
+        elif self.editing is not None:
+            put(fg(DIM) + "  type a message · Enter keep · Esc cancel" + RESET)
+        else:
+            put(fg(DIM) + "  space on/off  ↑↓ bright  ←→ mode  [ ] speed" + RESET)
+            put(fg(DIM) + ("  m message  " if name == "Morse" else "  ") + "q quit" + RESET)
+        return "\x1b[H" + "\n".join(out) + "\x1b[J"
+
+    # ── keys ──
+    def key(self, k):
+        """Returns False to quit."""
+        if self.editing is not None:
+            if k in ("\r", "\n"):
+                msg = clean_message(self.editing)
+                if msg:
+                    self.message = msg
+                    self.restart()
+                self.editing = None
+            elif k == "\x1b":
+                self.editing = None
+            elif k in ("\x7f", "\b"):
+                self.editing = self.editing[:-1]
+            elif len(k) == 1 and (k == " " or k.upper() in MORSE) and len(self.editing) < 40:
+                self.editing += k.upper()
+            return True
+        if k in ("q", "Q", "\x03", "\x04"):
+            return False
+        if k == " " or k in ("\r", "\n"):
+            self.on = not self.on
+            self.restart()
+        elif k in ("\x1b[A", "+", "=", "k"):
+            self.bright = min(100, self.bright + 10)
+        elif k in ("\x1b[B", "-", "_", "j"):
+            self.bright = max(10, self.bright - 10)
+        elif k.isdigit() and len(k) == 1:
+            self.bright = 100 if k == "0" else int(k) * 10
+        elif k in ("\x1b[C", "\t", "l"):
+            self.mode = (self.mode + 1) % len(MODES)
+            self.restart()
+        elif k in ("\x1b[D", "\x1b[Z", "h"):
+            self.mode = (self.mode - 1) % len(MODES)
+            self.restart()
+        elif k in ("]", "[", ".", ","):
+            step = 1 if k in ("]", ".") else -1
+            n = len(MODES[self.mode][1])
+            self.speeds[self.mode] = max(0, min(n - 1, self.speeds[self.mode] + step))
+        elif k in ("m", "M") and MODES[self.mode][0] == "Morse":
+            self.editing = ""
+        return True
+
+
+def read_keys(fd):
+    data = os.read(fd, 64).decode(errors="ignore")
+    keys = []
+    while data:
+        m = re.match(r"\x1b\[[0-9;]*[A-Za-z~]|\x1bO[A-Z]", data)
+        n = m.end() if m else 1
+        k = data[:n]
+        keys.append(k.replace("\x1bO", "\x1b[") if m else k)
+        data = data[n:]
+    return keys
+
+
+def main(argv):
+    start = None
+    if argv:
+        if argv[0] in ("-h", "--help"):
+            print(__doc__.strip())
+            return 0
+        names = [m[0].lower() for m in MODES]
+        if argv[0].lower() not in names:
+            print(f"torch: modes are {', '.join(names)}", file=sys.stderr)
+            return 2
+        start = names.index(argv[0].lower())
+    if not sys.stdin.isatty():
+        print("torch: needs a terminal", file=sys.stderr)
+        return 2
+    try:
+        request("torch", "off")
+    except Failure as e:
+        print(f"torch: {e}", file=sys.stderr)
+        return 2
+
+    app = Torch(start)
+    driver = Driver()
+    driver.start()
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+
+    def finish(*_):
+        raise SystemExit(0)
+
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, finish)
+    sys.stdout.write("\x1b[?1049h\x1b[?25l\x1b]0;torch\a")
+    last = None
+    try:
+        tty.setcbreak(fd)
+        while True:
+            now = time.monotonic()
+            frac, letter = app.fraction(now)
+            level = 0
+            if app.on and frac > 0:
+                level = max(1, round(app.bright * frac))
+                if MODES[app.mode][0] in ("Breathe", "Flicker"):
+                    level = max(5, round(level / 5) * 5)  # fewer requests
+            driver.set(level)
+            size = shutil.get_terminal_size((56, 30))
+            look = (level, letter, app.on, app.bright, app.mode, tuple(app.speeds),
+                    app.editing, app.message, driver.error, size)
+            if look != last:
+                sys.stdout.write(app.frame(level, letter, driver.error))
+                sys.stdout.flush()
+                last = look
+            busy = app.on and MODES[app.mode][0] != "Steady"
+            ready, _, _ = select.select([fd], [], [], 0.01 if busy else 0.25)
+            if ready:
+                for k in read_keys(fd):
+                    if not app.key(k):
+                        return 0
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write(RESET + "\x1b[?25h\x1b[?1049l")
+        sys.stdout.flush()
+        driver.stop()
+        app.save()
+        try:
+            request("torch", "off")
+        except Failure:
+            pass
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        sys.exit(0)

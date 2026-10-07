@@ -167,6 +167,16 @@ because of proot's GPL):**
 - `pocket edit` shows its key bar; `pocket sound` is on.
 - The owner's `torch` and `metronome` run again.
 
+**Make the repo user ready** (before `v0.1.0`, see entry 68):
+- **Screenshots:** the owner takes them later, guided by an agent:
+  [`docs/SCREENSHOTS.md`](SCREENSHOTS.md) has the list and how to add
+  them to the README. `PRIVACY.md` and `docs/images/icon.svg` are
+  written and wait to be committed with them.
+- Done: GPL-3.0 licence, short README, GitHub description and topics.
+- Still to decide or do: `docs/WORKLOG.md` (keep, move to
+  `docs/dev/`, or drop from the public repo), `CONTRIBUTING.md`,
+  `SECURITY.md`, issue templates, making the repo public.
+
 What's left of step 10 is the first release:
 
 1. **First release** (`docs/RELEASING.md`): make the key (1), back it
@@ -176,8 +186,8 @@ What's left of step 10 is the first release:
    first `assembleRelease`, so it's also the first time lint-vital
    runs; fix anything fatal it finds and move the tag as RELEASING.md
    says. Later, on a spare phone (or after uninstalling the debug
-   build, which deletes Debian): the release APK installs, `pc26
-   about` says "version 0.1.0", and `pc26 install-apk` says only debug
+   build, which deletes Debian): the release APK installs, `pocket
+   about` says "version 0.1.0", and `pocket install-apk` says only debug
    builds can.
 
 **Before Play (not urgent):**
@@ -380,6 +390,51 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-07 (69): example apps ship with the app
+
+**Owner's decisions:** ship seven of the owner's own programs (from
+`~/.local/bin`) as example apps: `compass`, `incline`, `torch`,
+`spectrum`, `dbmeter`, `tuner`, `metronome` (plus `mic.py`, shared by
+the microphone apps). Left out: `flog` (tied to the owner's Field Logs
+web app), `apps-menu` (hooks into the launcher's internals; the Apps
+menu replaces it), `brush` (no phone features). numpy is **offered on
+first run**, not added to the image. They show up in a **new Apps
+menu**, like Games.
+
+- `tools/apps/` → `/opt/pc26/apps` (app-owned, updated with the app).
+  Changes to the owner's code: a `# label:` line (the menu's name),
+  and `tuner`/`metronome` load numpy in `main()` through `needs.py`
+  (asks, then `apt-get update && apt-get install -y python3-numpy`;
+  without a terminal it only says how), so `--help` works without it.
+  `mic.py` and `needs.py` aren't executable, so the menu skips them.
+- Commands in `tools/bin/` (`compass`, …): `keybar NAME,shell` around
+  the app. Their bars are built in now (core resources,
+  `BUILT_IN_KEY_BARS`), copied from the owner's bars with the usual
+  header.
+- Menu: `apps` action and Apps submenu (built-in menu: Terminal,
+  Files, **Apps**, Games, …), listing executables in `/opt/pc26/apps`
+  and `~/apps` (`MENU_APP_DIRS` for tests), labelled by `# label:`
+  (first 5 lines, 20 chars) or the file name; runs `keybar
+  NAME,shell FILE`. The menu editor's action list has `apps`; a test
+  keeps it equal to the menu's.
+- Docs: guide (paths table, menu actions, key bars, an Apps section
+  with a table), welcome page line, README bullet.
+- Checked live in a pty: `spectrum --demo`, `tuner --demo`, `compass`,
+  `incline` draw and quit with `q` (torch, metronome and dbmeter not
+  run here: they'd switch on the light, speaker or mic).
+
+**After installing that build, on the owner's phone** (not done yet):
+the owner's own copies in `~/.local/bin` come first on the PATH, and
+their bars in `~/.config/pc26/keybars/` now show as "edited" copies of
+the built-in ones (same buttons). Offer to remove the duplicates (keep
+`flog`, `brush`, `apps-menu`, their bars), and to add `Apps = apps` to
+the owner's own `~/.config/pc26/menu.conf` (it has "My apps = run
+apps-menu", whose audio folder lists four of these apps). Then check
+on the phone: menu → Apps lists the seven by label, each opens with
+its bar, `tuner` offers numpy on a Debian without it.
+
+Tests: core green, 199 unittest, 92 bats.
+
 ### 2026-10-07 (68): GPL-3.0 licence; making the repo user ready
 
 **Owner's decision:** the app is **GPL-3.0-only** (forks that are
@@ -391,12 +446,7 @@ License section says so and asks forks for their own name and icon.
 
 Reviewed what a user-ready public repo needs before `v0.1.0` (the repo
 is still private). Still open, waiting on the owner:
-- GitHub description (still mentions profiles and an in-app keyboard),
-  topics
-- install section (arm64, Android 8+, APK from Releases, debug and
-  release builds can't install over each other)
 - screenshots (owner takes them)
-- `PRIVACY.md` (location, camera, mic, sensors stay on the phone)
 - `docs/WORKLOG.md`: keep, move to `docs/dev/`, or drop from the
   public repo (owner to decide)
 - `CONTRIBUTING.md`, `SECURITY.md`, issue templates, CI badge
@@ -407,6 +457,16 @@ what you get, install, limitations, roadmap pointer, licence. The full
 scope (features as planned, How it works, roadmap) moved to
 `docs/ROADMAP.md`, with a note on what isn't built; AGENTS.md now
 points there for the scope.
+
+**Description and topics** set on GitHub (android, terminal,
+terminal-emulator, debian, linux, proot, kotlin, android-app,
+ai-agents, claude-code, no-root). **`PRIVACY.md`** written: the app
+collects nothing and connects nowhere itself (no network code, no
+analytics; INTERNET is for Debian's programs), with a table of each
+permission and what uses it. **`docs/images/icon.svg`**: the launcher
+icon's own paths on its background, for the README header.
+**Screenshots** wait for the owner: `docs/SCREENSHOTS.md` lists them
+and how to add them.
 
 Tests: 187 unittest, 87 bats.
 

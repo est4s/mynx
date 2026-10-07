@@ -138,7 +138,10 @@ fun keyBarNames(reported: String?): List<String> =
 internal fun isKeyBarName(name: String) = BAR_NAME.matches(name)
 
 /** The bars shipped in the app (resources can't be listed on Android). */
-val BUILT_IN_KEY_BARS = listOf("shell", "nnn", "menu", "pocket-edit", "game", "neon-rogue", "neon-drive", "neon-flap", "agent")
+val BUILT_IN_KEY_BARS = listOf(
+    "shell", "nnn", "menu", "pocket-edit", "game", "neon-rogue", "neon-drive", "neon-flap", "agent",
+    "compass", "incline", "torch", "spectrum", "dbmeter", "tuner", "metronome",
+)
 
 /** A built-in bar's file, as shipped with the app. */
 fun builtInKeyBarText(name: String): String? =

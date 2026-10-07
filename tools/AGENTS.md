@@ -46,6 +46,7 @@ and applies them. See "Changing settings" below.
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
 | Menu state (last choices) | `~/.local/state/pc26/menu` |
+| Apps | `/opt/pc26/apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`), yours in `~/apps` |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
 | The app's tools: `pocket`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/pc26/bin` |
 | Built-in key bars and themes, to read or copy | `/opt/pc26/keybars`, `/opt/pc26/themes` |
@@ -358,6 +359,7 @@ line, in order; labels up to 20 characters. Actions:
 |---|---|
 | `shell` | leave the menu for the shell |
 | `files` | the file manager |
+| `apps` | the Apps menu (see "Apps") |
 | `games` | the Games menu |
 | `settings` | the settings editors (`pocket edit`) |
 | `agents` | AI agents: start one, or install it (`pocket agent start`) |
@@ -369,7 +371,9 @@ line, in order; labels up to 20 characters. Actions:
 To change it: `pocket menu edit`, edit the file, `pocket check` (it
 checks the menu file too). Any executable file in `~/games` shows up
 under Games, named after the file: `ln -s /path/to/game ~/games/my-game`
-shows "My Game". The menu starts games with `play`.
+shows "My Game". The menu starts games with `play`. Apps work the same
+way from `/opt/pc26/apps` and `~/apps`, named by a `# label: Name` line
+near the top of the file.
 
 ### Key bars
 
@@ -385,7 +389,9 @@ running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`,
 the editors use `pocket-edit`.
 
 Built-in bars: `shell`, `nnn`, `menu`, `pocket-edit`, the games'
-`neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, and
+`neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
+apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
+`metronome`, and
 `agent` for AI agents (`claude`, `codex` and `gemini` typed in the shell,
 or started with `pocket agent start`; an agent's own bar, e.g. `claude`,
 wins when it exists). Typing them by name works through bash functions
@@ -428,6 +434,27 @@ shows the generic game bar until `my-tool.conf` exists.
   its keys). Quick places on `b`: `h` home, `d` Download, `p` Pictures,
   `c` DCIM, `r` `/`; set `NNN_BMS` in `~/.bashrc` for your own (format
   `key:path;key:path`). Text files open in `$EDITOR` (nano).
+- **Apps:** example programs that use the phone, in Python, to run,
+  read and copy. Each is a command and an item in the menu's Apps,
+  shown with its own key bar; `--help` lists its keys.
+
+  | Command | What it is | Uses |
+  |---|---|---|
+  | `compass` | a compass card with a bearing to follow | `pocket sensor compass` |
+  | `incline` | a spirit level for flat or on an edge | `pocket sensor accelerometer` |
+  | `torch` | the flashlight: strobe, SOS, Morse, … | `pocket torch` |
+  | `spectrum` | a live sound spectrum (`--demo` without a mic) | the microphone |
+  | `dbmeter` | a sound level meter | the microphone |
+  | `tuner` | a guitar tuner (`--demo`) | the microphone, the speaker, numpy |
+  | `metronome` | a metronome with tap and clap tempo | the speaker, the flashlight, vibration, numpy |
+
+  The microphone apps read it through the sound device with `parec`
+  (`/opt/pc26/apps/mic.py`). `tuner` and `metronome` need numpy and
+  offer to install it (`apt install python3-numpy`) the first time.
+  Settings they keep go in `~/.config/NAME/`. **Your own app:** put an
+  executable in `~/apps` (or link one there) with a `# label: Name`
+  line near the top, and give it a bar: `pocket keybar edit NAME`; the
+  menu runs it as `keybar NAME,shell FILE`.
 - **Games:** `play GAME [args]` runs a game with the bar named after its
   file (`my-game.py` → `my-game`), else the generic `game` bar. `rogue`,
   `drive` and `flap` use it.

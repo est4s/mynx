@@ -1,0 +1,648 @@
+#!/usr/bin/env python3
+# label: Guitar tuner
+"""tuner: a guitar tuner for the phone's microphone.
+
+It streams the microphone from the app's sound device (PulseAudio, through
+`parec`), finds the pitch with the YIN algorithm and shows the note, how
+many cents it is off, and which strings of the tuning are already in tune.
+
+Usage: tuner [--demo]     (--demo plays a made-up guitar instead of the mic)
+
+Keys: q quit, t next tuning, c chromatic on/off, a auto string,
+1-6 or ←/→ pick a string, p play the target note, + and - move A4,
+v vibrate on/off.
+"""
+import math
+import os
+import select
+import shutil
+import signal
+import subprocess
+import sys
+import termios
+import threading
+import time
+import tty
+
+import needs
+
+from mic import Mic
+
+np = None                     # numpy, loaded by main() (see needs.py)
+RATE = 48000
+N = 4096                      # analysis window: 85 ms, enough for 35 Hz
+HOP = 1024                    # a new estimate every 21 ms
+FMIN, FMAX = 35.0, 1400.0
+FPS = 30
+GATE_DB = -52.0               # quieter than this is silence
+YIN_THRESHOLD = 0.15
+IN_TUNE = 3.0                 # cents
+LOCK_TIME = 0.6               # seconds held in tune to tick a string off
+
+NOTES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"]
+TUNINGS = [
+    ("Standard", [40, 45, 50, 55, 59, 64]),
+    ("Drop D", [38, 45, 50, 55, 59, 64]),
+    ("Half step down", [39, 44, 49, 54, 58, 63]),
+    ("Full step down", [38, 43, 48, 53, 57, 62]),
+    ("Drop C", [36, 43, 48, 53, 57, 62]),
+    ("DADGAD", [38, 45, 50, 55, 57, 62]),
+    ("Open G", [38, 43, 50, 55, 59, 62]),
+    ("Open D", [38, 45, 50, 54, 57, 62]),
+    ("Open E", [40, 47, 52, 56, 59, 64]),
+    ("Bass", [28, 33, 38, 43]),
+    ("Ukulele", [67, 60, 64, 69]),
+]
+
+# Colours (24-bit)
+CYAN = (0, 229, 255)
+MAGENTA = (255, 61, 242)
+GREEN = (57, 255, 136)
+AMBER = (255, 194, 61)
+RED = (255, 77, 109)
+TEXT = (225, 228, 240)
+DIM = (110, 116, 145)
+FAINT = (52, 56, 76)
+
+FONT = {
+    "A": [" ███ ", "█   █", "█████", "█   █", "█   █"],
+    "B": ["████ ", "█   █", "████ ", "█   █", "████ "],
+    "C": [" ████", "█    ", "█    ", "█    ", " ████"],
+    "D": ["████ ", "█   █", "█   █", "█   █", "████ "],
+    "E": ["█████", "█    ", "████ ", "█    ", "█████"],
+    "F": ["█████", "█    ", "████ ", "█    ", "█    "],
+    "G": [" ████", "█    ", "█  ██", "█   █", " ████"],
+    "-": ["     ", "     ", " ─── ", "     ", "     "],
+}
+SHARP = ["█ █", "███", "█ █", "███", "█ █"]
+SUB = "₀₁₂₃₄₅₆₇₈₉"
+
+
+# ── helpers ─────────────────────────────────────────────────────────────
+
+def mix(a, b, t):
+    t = min(1.0, max(0.0, t))
+    return tuple(round(x + (y - x) * t) for x, y in zip(a, b))
+
+
+def cents_colour(c):
+    c = abs(c)
+    if c <= IN_TUNE:
+        return GREEN
+    if c <= 15:
+        return mix(GREEN, AMBER, (c - IN_TUNE) / (15 - IN_TUNE))
+    return mix(AMBER, RED, (c - 15) / 25)
+
+
+def note_name(midi):
+    return NOTES[midi % 12], midi // 12 - 1
+
+
+def midi_freq(midi, a4):
+    return a4 * 2 ** ((midi - 69) / 12)
+
+
+class Line:
+    """A row of coloured text that knows its visible width."""
+
+    def __init__(self):
+        self.parts, self.width = [], 0
+
+    def add(self, text, fg=TEXT, bold=False, bg=None):
+        code = "\x1b[%s38;2;%d;%d;%dm" % ("1;" if bold else "", *fg)
+        if bg:
+            code += "\x1b[48;2;%d;%d;%dm" % bg
+        self.parts.append(code + text + "\x1b[0m")
+        self.width += len(text)
+        return self
+
+    def pad(self, n):
+        if n > 0:
+            self.parts.append(" " * n)
+            self.width += n
+        return self
+
+    def render(self, cols):
+        return " " * max(0, (cols - self.width) // 2) + "".join(self.parts)
+
+
+# ── pitch ───────────────────────────────────────────────────────────────
+
+def yin(x):
+    """Returns (frequency, confidence) or (None, 0)."""
+    x = x - x.mean()
+    w = len(x) // 2
+    tau_min, tau_max = int(RATE / FMAX), min(w - 1, int(RATE / FMIN))
+    size = 1 << (len(x) + w - 1).bit_length()
+    fx = np.fft.rfft(x, size)
+    fw = np.fft.rfft(x[:w], size)
+    cross = np.fft.irfft(fx * np.conj(fw), size)[:tau_max + 2]
+    sq = np.concatenate(([0.0], np.cumsum(x * x)))
+    taus = np.arange(tau_max + 2)
+    d = sq[w] + (sq[taus + w] - sq[taus]) - 2 * cross
+    d[0] = 0
+    cm = np.empty_like(d)
+    cm[0] = 1
+    run = np.cumsum(d[1:])
+    run[run == 0] = 1e-12
+    cm[1:] = d[1:] * np.arange(1, len(d)) / run
+
+    seg = cm[tau_min:tau_max]
+    below = np.nonzero(seg < YIN_THRESHOLD)[0]
+    if len(below):
+        t = below[0] + tau_min
+        while t + 1 < tau_max and cm[t + 1] < cm[t]:
+            t += 1
+    else:
+        t = int(np.argmin(seg)) + tau_min
+        if cm[t] > 0.35:
+            return None, 0.0
+    if 1 <= t < len(cm) - 1:
+        a, b, c = cm[t - 1], cm[t], cm[t + 1]
+        den = a - 2 * b + c
+        shift = 0.5 * (a - c) / den if den else 0.0
+    else:
+        shift = 0.0
+    return RATE / (t + shift), float(1 - cm[t])
+
+
+# ── sound in and out ────────────────────────────────────────────────────
+
+class Live(Mic):
+    """The microphone (see mic.py), as floats from -1 to 1."""
+
+    def __init__(self):
+        super().__init__(RATE, latency_ms=20)
+
+    def read(self):
+        return np.frombuffer(super().read(), dtype=np.int16).astype(np.float64) / 32768
+
+
+class Demo:
+    """A guitar being tuned: each string drifts in from out of tune."""
+
+    def __init__(self):
+        self.t0 = self.last = time.monotonic()
+        self.phase = 0.0
+
+    def start(self):
+        pass
+
+    def fileno(self):
+        return None
+
+    def read(self):
+        now = time.monotonic()
+        n = int((now - self.last) * RATE)
+        if n <= 0:
+            return np.zeros(0)
+        self.last += n / RATE
+        t = now - self.t0
+        string = int(t // 5) % 6
+        local = t % 5
+        if local > 4.3:                       # a gap between strings
+            return np.random.normal(0, 0.0005, n)
+        cents = 35 * math.exp(-local * 1.1) * (1 if string % 2 else -1) + 0.6 * math.sin(t * 3)
+        f = midi_freq(TUNINGS[0][1][string], 440) * 2 ** (cents / 1200)
+        ph = self.phase + 2 * math.pi * f * np.arange(1, n + 1) / RATE
+        self.phase = ph[-1] % (2 * math.pi)
+        amp = 0.4 * math.exp(-local * 0.5)
+        sig = sum(np.sin(k * ph) / k ** 1.3 for k in range(1, 6))
+        return amp * sig + np.random.normal(0, 0.002, n)
+
+    def close(self):
+        pass
+
+
+def pluck(freq, seconds=2.5):
+    """A soft plucked tone as 16-bit PCM."""
+    t = np.arange(int(RATE * seconds)) / RATE
+    sig = sum(np.sin(2 * np.pi * freq * k * t) * np.exp(-t * (1.2 + 0.8 * k)) / k
+              for k in range(1, 7))
+    sig *= np.minimum(1, t / 0.005) * 0.3
+    return (sig * 32767).astype("<i2").tobytes()
+
+
+def play_tone(freq):
+    if not shutil.which("pacat"):
+        return False
+    data = pluck(freq)
+
+    def run():
+        try:
+            p = subprocess.Popen(["pacat", "--raw", "--format=s16le", f"--rate={RATE}",
+                                  "--channels=1"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            p.communicate(data, timeout=10)
+        except Exception:
+            pass
+    threading.Thread(target=run, daemon=True).start()
+    return True
+
+
+def vibrate(ms):
+    if shutil.which("pocket"):
+        subprocess.Popen(["pocket", "vibrate", str(ms)], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ── the tuner ───────────────────────────────────────────────────────────
+
+class Tuner:
+    def __init__(self, source):
+        self.src = source
+        self.buf = np.zeros(N)
+        self.pending = 0
+        self.a4 = 440
+        self.tuning = 0
+        self.chromatic = False
+        self.locked = None            # index of a picked string, or None
+        self.vibrate = True
+        self.level = -90.0
+        self.freq = None              # smoothed frequency being shown
+        self.recent = []              # last raw estimates, for a median
+        self.target = None            # midi number being tuned to
+        self.string = None            # its index in the tuning, if any
+        self.cents = 0.0              # raw cents off the target
+        self.needle = 0.0             # smoothed cents for drawing
+        self.heard = 0.0              # when a pitch was last heard
+        self.in_tune_since = None
+        self.tuned = set()
+        self.trail = []               # (time, needle) for the fading trail
+        self.mute_until = 0.0
+        self.flash = ("", 0.0)
+
+    @property
+    def strings(self):
+        return TUNINGS[self.tuning][1]
+
+    def say(self, text):
+        self.flash = (text, time.monotonic() + 1.8)
+
+    # analysis
+
+    def feed(self, samples):
+        if not len(samples):
+            return
+        samples = samples[-N:]
+        self.buf = np.concatenate((self.buf[len(samples):], samples))
+        self.pending += len(samples)
+        if self.pending >= HOP:
+            self.pending = 0
+            self.analyse()
+
+    def analyse(self):
+        now = time.monotonic()
+        rms = math.sqrt(float(np.mean(self.buf[-HOP * 2:] ** 2))) + 1e-9
+        self.level = 20 * math.log10(rms)
+        if now < self.mute_until or self.level < GATE_DB:
+            self.recent.clear()
+            self.in_tune_since = None
+            return
+        f, conf = yin(self.buf)
+        if f is None or conf < 0.6:
+            self.recent.clear()
+            return
+        if self.recent and abs(1200 * math.log2(f / self.recent[-1])) > 80:
+            self.recent.clear()               # a new note: don't smear into it
+        self.recent = (self.recent + [f])[-5:]
+        f = float(np.median(self.recent))
+        if self.freq is None or abs(1200 * math.log2(f / self.freq)) > 80:
+            self.freq = f
+        else:
+            self.freq += (f - self.freq) * 0.5
+        self.heard = now
+        self.pick_target()
+
+    def pick_target(self):
+        midi = 69 + 12 * math.log2(self.freq / self.a4)
+        if self.chromatic:
+            self.target, self.string = round(midi), None
+        elif self.locked is not None:
+            self.string = self.locked
+            self.target = self.strings[self.locked]
+        else:
+            self.string = min(range(len(self.strings)),
+                              key=lambda i: abs(midi - self.strings[i]))
+            self.target = self.strings[self.string]
+        new = (midi - self.target) * 100
+        if abs(new - self.cents) > 60:
+            self.needle = max(-50, min(50, new))
+        self.cents = new
+        now = time.monotonic()
+        if abs(self.cents) <= IN_TUNE:
+            if self.in_tune_since is None:
+                self.in_tune_since = now
+            elif (now - self.in_tune_since >= LOCK_TIME and self.string is not None
+                  and self.string not in self.tuned):
+                self.tuned.add(self.string)
+                if self.vibrate:
+                    vibrate(40)
+        else:
+            self.in_tune_since = None
+
+    def tick(self, dt):
+        if self.target is not None:
+            goal = max(-50.0, min(50.0, self.cents))
+            self.needle += (goal - self.needle) * min(1.0, dt * 14)
+        now = time.monotonic()
+        if self.live():
+            self.trail.append((now, self.needle))
+        self.trail = [p for p in self.trail if now - p[0] < 1.2]
+
+    def live(self):
+        return time.monotonic() - self.heard < 0.35
+
+    # keys
+
+    def key(self, k):
+        n = len(self.strings)
+        if k in ("t", "T"):
+            self.tuning = (self.tuning + (1 if k == "t" else -1)) % len(TUNINGS)
+            self.locked, self.target, self.string = None, None, None
+            self.tuned.clear()
+            self.say(TUNINGS[self.tuning][0])
+        elif k == "c":
+            self.chromatic = not self.chromatic
+            self.say("Chromatic" if self.chromatic else "Guitar strings")
+        elif k == "a":
+            self.locked = None
+            self.say("Auto: nearest string")
+        elif k in "123456789" and int(k) <= n:
+            self.chromatic = False
+            self.locked = int(k) - 1
+            self.say(f"String {k} picked")
+        elif k in ("left", "right"):
+            self.chromatic = False
+            start = self.locked if self.locked is not None else (self.string or 0)
+            self.locked = (start + (1 if k == "right" else -1)) % n
+            self.say(f"String {self.locked + 1} picked")
+        elif k in ("+", "="):
+            self.a4 = min(450, self.a4 + 1)
+            self.say(f"A4 = {self.a4} Hz")
+        elif k in ("-", "_"):
+            self.a4 = max(430, self.a4 - 1)
+            self.say(f"A4 = {self.a4} Hz")
+        elif k == "v":
+            self.vibrate = not self.vibrate
+            self.say("Vibrate " + ("on" if self.vibrate else "off"))
+        elif k == "p":
+            if self.locked is not None:
+                midi = self.strings[self.locked]
+            elif self.target is not None:
+                midi = self.target
+            else:
+                midi = self.strings[0]
+            if play_tone(midi_freq(midi, self.a4)):
+                self.mute_until = time.monotonic() + 2.8
+                name, octave = note_name(midi)
+                self.say(f"♪ {name}{octave}  {midi_freq(midi, self.a4):.2f} Hz")
+            else:
+                self.say("pacat is missing")
+
+    # drawing
+
+    def draw(self, cols, rows):
+        live = self.live()
+        held = self.target is not None and time.monotonic() - self.heard < 2.5
+        tuned_now = live and abs(self.cents) <= IN_TUNE
+        accent = cents_colour(self.cents) if held else DIM
+        if held and not live:
+            accent = mix(accent, FAINT, 0.55)
+        half = 40 if cols >= 85 else 20       # cells either side of 0
+        width = 2 * half + 1
+        out = []
+
+        # header
+        head = Line().add(" ◉ ", MAGENTA, True).add("TUNER", TEXT, True)
+        head.add("  " + TUNINGS[self.tuning][0], CYAN)
+        head.add(f"  A4={self.a4}", DIM)
+        head.add("  ")
+        for i, ch in enumerate("▂▄▆█"):
+            on = self.level > GATE_DB + i * 9
+            head.add(ch, mix(GREEN, AMBER, i / 3) if on else FAINT)
+        out += [head, Line()]
+
+        # big note
+        if held:
+            name, octave = note_name(self.target)
+        else:
+            name, octave = "-", None
+        glyph = FONT[name[0]]
+        for r in range(5):
+            ln = Line().add(glyph[r].replace("█", "██").replace(" ", "  "), accent, True)
+            if len(name) > 1:
+                ln.add(" ").add(SHARP[r], accent, True)
+            if octave is not None:
+                ln.add(" ").add(str(octave) if r == 4 else " ", DIM, True)
+            out.append(ln)
+        out.append(Line())
+
+        # frequencies
+        ln = Line()
+        if held:
+            ln.add(f"{self.freq:7.2f} Hz", TEXT, True)
+            ln.add("   target ", DIM).add(f"{midi_freq(self.target, self.a4):.2f} Hz", CYAN)
+        else:
+            ln.add("play a string", DIM)
+        out += [ln, Line()]
+
+        # meter
+        mid = width // 2
+        pos = lambda c: round(mid + c / 50 * mid)
+        labels = [" "] * width
+        for c, txt in ((-50, "-50"), (-25, "-25"), (0, "0"), (25, "+25"), (50, "+50")):
+            p = pos(c) - len(txt) // 2
+            p = max(0, min(width - len(txt), p))
+            labels[p:p + len(txt)] = txt
+        out.append(Line().add("".join(labels), DIM))
+
+        ticks = Line()
+        for i in range(width):
+            major = i in (pos(-50), pos(-25), pos(0), pos(25), pos(50))
+            minor = (i - mid) % (half // 5) == 0
+            ch = "┃" if i == mid else ("╷" if major else ("·" if minor else " "))
+            ticks.add(ch, FAINT if i != mid else DIM)
+        out.append(ticks)
+
+        npos = pos(self.needle) if held else None
+        bar = Line()
+        for i in range(width):
+            c = (i - mid) / mid * 50
+            col = cents_colour(c)
+            if i == npos:
+                bar.add("█", mix(accent, (255, 255, 255), 0.25), True)
+            elif npos is not None and abs(i - npos) == 1:
+                bar.add("▐" if i < npos else "▌", accent)
+            else:
+                lit = held and (min(npos, mid) <= i <= max(npos, mid))
+                bar.add("━", col if lit else mix(col, (20, 20, 30), 0.72))
+        out.append(bar)
+
+        arrow = [" "] * width
+        if npos is not None:
+            arrow[npos] = "▲"
+        out.append(Line().add("".join(arrow), accent, True))
+
+        # fading trail of where the needle has been
+        now = time.monotonic()
+        for r, age in enumerate((0.3, 0.6, 0.9)):
+            row = [" "] * width
+            pts = [p for t, p in self.trail if age - 0.3 <= now - t < age]
+            for p in pts:
+                row[pos(p)] = "•" if r == 0 else ("∙" if r == 1 else "·")
+            fade = mix(accent if held else FAINT, FAINT, 0.35 + r * 0.25)
+            out.append(Line().add("".join(row), fade))
+
+        # status
+        st = Line()
+        if not held:
+            st.add("listening…", DIM)
+        elif tuned_now:
+            st.add(" ✓  IN TUNE ", (12, 20, 16), True, bg=GREEN)
+        else:
+            c = self.cents
+            sign = "+" if c > 0 else "−"
+            if c < 0:
+                st.add("▲ tighten  ", accent, True)
+            else:
+                st.add("▼ loosen  ", accent, True)
+            st.add(f"{sign}{abs(c):.1f}¢", accent, True)
+            st.add("  flat" if c < 0 else "  sharp", DIM)
+        out += [st, Line()]
+
+        # strings
+        if self.chromatic:
+            out += [Line().add("CHROMATIC", MAGENTA, True).add(" · any note", DIM),
+                    Line(), Line()]
+        else:
+            tops, mids, bots, marks = Line(), Line(), Line(), Line()
+            for i, m in enumerate(self.strings):
+                n, o = note_name(m)
+                label = f"{n}{o}".center(4)
+                active = held and self.string == i
+                picked = self.locked == i
+                done = i in self.tuned
+                if active:
+                    col = accent
+                elif picked:
+                    col = CYAN
+                elif done:
+                    col = mix(GREEN, FAINT, 0.35)
+                else:
+                    col = DIM
+                edge = col if (active or picked) else FAINT
+                gap = " " if i else ""
+                tops.add(gap + ("┏━━━━┓" if active or picked else "╭────╮"), edge)
+                mids.add(gap + ("┃" if active or picked else "│"), edge)
+                mids.add(label, col, active or picked)
+                mids.add("┃" if active or picked else "│", edge)
+                bots.add(gap + ("┗━━━━┛" if active or picked else "╰────╯"), edge)
+                marks.add(gap + ("  ✓   " if done else f"  {i + 1}   "),
+                          GREEN if done else FAINT, done)
+            out += [tops, mids, bots, marks]
+
+        mode = Line()
+        if self.chromatic:
+            mode.add("")
+        elif self.locked is not None:
+            mode.add(f"string {self.locked + 1} picked", CYAN).add(" · a for auto", DIM)
+        else:
+            mode.add("auto", CYAN).add(" · nearest string", DIM)
+        if not self.chromatic and len(self.tuned) == len(self.strings):
+            mode = Line().add("★ all strings in tune ★", GREEN, True)
+        out += [mode, Line()]
+
+        # message or key help
+        text, until = self.flash
+        if time.monotonic() < until:
+            out.append(Line().add(text, MAGENTA, True))
+        else:
+            out.append(Line().add("t", CYAN).add(" tuning  ", DIM).add("c", CYAN)
+                       .add(" chromatic  ", DIM).add("p", CYAN).add(" tone", DIM))
+            out.append(Line().add("1-6 ←→", CYAN).add(" string  ", DIM).add("± ", CYAN)
+                       .add("A4  ", DIM).add("q", CYAN).add(" quit", DIM))
+
+        top = max(0, (rows - len(out)) // 2)
+        lines = [""] * top + [ln.render(cols) for ln in out]
+        lines = lines[:rows]
+        return "\x1b[H" + "\x1b[K\r\n".join(lines) + "\x1b[K\x1b[J"
+
+
+# ── main loop ───────────────────────────────────────────────────────────
+
+def read_keys(buf):
+    keys, i = [], 0
+    while i < len(buf):
+        if buf.startswith("\x1b[C", i) or buf.startswith("\x1bOC", i):
+            keys.append("right"); i += 3
+        elif buf.startswith("\x1b[D", i) or buf.startswith("\x1bOD", i):
+            keys.append("left"); i += 3
+        elif buf[i] == "\x1b" and i + 2 < len(buf) and buf[i + 1] in "[O":
+            i += 3
+        else:
+            keys.append("esc" if buf[i] == "\x1b" else buf[i]); i += 1
+    return keys
+
+
+def main():
+    demo = "--demo" in sys.argv[1:]
+    if any(a in ("-h", "--help") for a in sys.argv[1:]):
+        print(__doc__.strip())
+        return 0
+    if not sys.stdin.isatty():
+        print("tuner: needs a terminal", file=sys.stderr)
+        return 2
+    global np
+    np = needs.numpy("tuner")
+    src = Demo() if demo else Live()
+    tuner = Tuner(src)
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    out = sys.stdout
+    try:
+        tty.setcbreak(fd)
+        out.write("\x1b]0;tuner\a\x1b[?1049h\x1b[?25l\x1b[2J")
+        out.flush()
+        src.start()
+        last = time.monotonic()
+        next_frame = last
+        while True:
+            now = time.monotonic()
+            wait = max(0.0, next_frame - now)
+            fds = [fd] + ([src.fileno()] if src.fileno() is not None else [])
+            ready, _, _ = select.select(fds, [], [], wait)
+            if fd in ready:
+                data = os.read(fd, 64).decode(errors="ignore")
+                for k in read_keys(data):
+                    if k in ("q", "Q", "esc", "\x03"):
+                        return 0
+                    tuner.key(k)
+            tuner.feed(src.read())
+            now = time.monotonic()
+            if now >= next_frame:
+                if getattr(src, "status", None):
+                    tuner.say(src.status)
+                tuner.tick(now - last)
+                last = now
+                cols, rows = shutil.get_terminal_size()
+                out.write(tuner.draw(cols, rows))
+                out.flush()
+                next_frame = now + 1 / FPS
+    except KeyboardInterrupt:
+        return 0
+    except RuntimeError as e:
+        out.write("\x1b[?25h\x1b[?1049l")
+        print(f"tuner: {e} (or try `tuner --demo`)", file=sys.stderr)
+        return 1
+    finally:
+        src.close()
+        out.write("\x1b[0m\x1b[?25h\x1b[?1049l")
+        out.flush()
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
