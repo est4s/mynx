@@ -62,7 +62,6 @@ import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
-import io.github.est4s.terminal.core.migrateOldNames
 import io.github.est4s.terminal.core.writeToolsProfile
 import java.io.File
 import java.util.WeakHashMap
@@ -70,14 +69,14 @@ import java.util.WeakHashMap
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
 private const val NOTICE_CHANNEL_ID = "notices"
-// `pc26 notify` notifications: one per tab, so a new one replaces the last.
+// `pocket notify` notifications: one per tab, so a new one replaces the last.
 private const val NOTICE_ID_BASE = 1000
 const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.pc26"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
-// How often to check whether waiting requests' `pc26`s have gone.
+// How often to check whether waiting requests' `pocket`s have gone.
 private const val SWEEP_MS = 2000L
 private const val ROTATION_SWEEP_MS = 1000L
 private val LOCATION_PERMISSIONS = arrayOf(
@@ -170,7 +169,7 @@ class TerminalService : Service() {
     private var recording = false
     private var micState: Mic = Mic.Off
     private val rotation = RotationLocks()
-    /** How `pc26 rotation lock` holds the screen; null: free. */
+    /** How `pocket rotation lock` holds the screen; null: free. */
     var rotationLock: Orientation? = null
         private set
     // A lock ends with its process: check now and then while one is held.
@@ -185,7 +184,7 @@ class TerminalService : Service() {
         sweepDue = false
         sweepRequests()
     }
-    // The PC26_SHELL number of each session, for `pc26 notify`.
+    // The PC26_SHELL number of each session, for `pocket notify`.
     private val shellIds = WeakHashMap<TerminalSession, Int>()
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     // Kept in a field: a FileObserver stops when it's garbage collected.
@@ -252,20 +251,14 @@ class TerminalService : Service() {
         applyWakelockSetting() // the settings file may have been edited by hand
     }
 
-    // Before any shell starts, so none runs old tools while they're replaced,
-    // and before anything reads the config (under its old name in old installs).
+    // Before any shell starts, so none runs old tools while they're replaced.
     private fun updateTools() {
-        // BUILD-INSTALLTIME-NAME: `pc26 about` shows the build and the name.
+        // BUILD-INSTALLTIME-NAME: `pocket about` shows the build and the name.
         val version = "${BuildConfig.VERSION_CODE}-${packageManager.getPackageInfo(packageName, 0).lastUpdateTime}-${BuildConfig.VERSION_NAME}"
-        val failures = listOfNotNull(
-            runCatching { migrateOldNames(File(rootfs)) }.exceptionOrNull()
-                ?.let { "Moving ~/.config/pocket-terminal to ~/.config/pc26 failed:\n" + it.stackTraceToString() },
-            runCatching {
-                tools.update(version) { assets.open(TOOLS_ASSET) }
-                writeToolsProfile(File(rootfs))
-            }.exceptionOrNull()?.stackTraceToString(),
-        )
-        toolsError = failures.joinToString("\n").ifEmpty { null }
+        toolsError = runCatching {
+            tools.update(version) { assets.open(TOOLS_ASSET) }
+            writeToolsProfile(File(rootfs))
+        }.exceptionOrNull()?.stackTraceToString()
     }
 
     @Suppress("DEPRECATION") // the File constructor needs API 29
@@ -281,7 +274,7 @@ class TerminalService : Service() {
         }.also { it.startWatching() }
     }
 
-    /** Answers waiting `pc26` requests, then applies what they changed. */
+    /** Answers waiting `pocket` requests, then applies what they changed. */
     fun processRequests() {
         val handled = runCatching { requests.processPending() }.getOrDefault(emptyList())
         for (request in handled) {
@@ -297,7 +290,7 @@ class TerminalService : Service() {
         scheduleSweep()
     }
 
-    // Stops waiting requests that `pc26` cancelled or whose `pc26` has gone.
+    // Stops waiting requests that `pocket` cancelled or whose `pocket` has gone.
     private fun sweepRequests() {
         runCatching { requests.sweep() }
         scheduleSweep()
@@ -517,7 +510,7 @@ class TerminalService : Service() {
         }
     }
 
-    // Answers `pc26 vibrate`: null when it vibrated, else why not.
+    // Answers `pocket vibrate`: null when it vibrated, else why not.
     private fun vibrate(ms: Long): String? {
         val vibrator = if (Build.VERSION.SDK_INT >= 31) {
             getSystemService(VibratorManager::class.java).defaultVibrator
@@ -531,15 +524,15 @@ class TerminalService : Service() {
 
     private val clipboard by lazy { getSystemService(ClipboardManager::class.java) }
 
-    // Answers `pc26 clipboard set`: null when copied, else why not.
+    // Answers `pocket clipboard set`: null when copied, else why not.
     private fun setClipboard(text: String): String? = try {
-        clipboard.setPrimaryClip(ClipData.newPlainText("pc26 clipboard", text))
+        clipboard.setPrimaryClip(ClipData.newPlainText("pocket clipboard", text))
         null
     } catch (e: RuntimeException) {
         "couldn't copy to the clipboard: ${e.message ?: e.javaClass.simpleName}"
     }
 
-    // Answers `pc26 clipboard get`. Android only lets the app in front read
+    // Answers `pocket clipboard get`. Android only lets the app in front read
     // the clipboard (it gives others nothing), so say that instead.
     private fun readClipboard(): Result<String> {
         if (activity?.onScreen != true) {
@@ -550,7 +543,7 @@ class TerminalService : Service() {
         return Result.success(text)
     }
 
-    // Answers `pc26 share`: null when the share sheet opened, else why not.
+    // Answers `pocket share`: null when the share sheet opened, else why not.
     private fun share(share: Share): String? {
         val shown = activity?.takeIf { it.onScreen }
             ?: return "the app must be on screen to share (Android only lets the app in front open the share sheet)"
@@ -576,7 +569,7 @@ class TerminalService : Service() {
         }
     }
 
-    // Answers `pc26 install-apk`: null when the installer opened, else why not.
+    // Answers `pocket install-apk`: null when the installer opened, else why not.
     private fun installApk(apk: File): String? {
         if (!BuildConfig.DEBUG) return "only debug builds of the app can install apps"
         val shown = activity?.takeIf { it.onScreen }
@@ -600,7 +593,7 @@ class TerminalService : Service() {
         }
     }
 
-    // Answers `pc26 notify`: null when shown, else why not.
+    // Answers `pocket notify`: null when shown, else why not.
     private fun showNotice(notice: Notice): String? {
         val manager = getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return "the app's notifications are off in Android's settings"

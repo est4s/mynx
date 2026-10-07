@@ -1,5 +1,5 @@
 """AI agent CLIs: how to install them with their official installers, and
-the hook entries that make them call `pc26 hook NAME`.
+the hook entries that make them call `pocket hook NAME`.
 
 Whether an agent notifies is only stored in the agent's own config (the
 hook entries are there or not), so the two can't disagree.
@@ -11,7 +11,7 @@ from collections import namedtuple
 
 from .client import TOOLS, Failure
 
-# events: the agent's hook event -> what it means for `pc26 hook`
+# events: the agent's hook event -> what it means for `pocket hook`
 # downloads: where its installer downloads silently (None: it shows progress)
 # needs: commands it runs that a fresh Debian may lack -> their package
 Agent = namedtuple("Agent", "name title command config events installer downloads needs",
@@ -71,23 +71,13 @@ def download_progress(title, before, size, showing):
 
 def hook_command(agent):
     # The full path: an agent may run hooks without the app's PATH.
-    return f"{os.path.join(TOOLS, 'bin', 'pc26')} hook {agent.name}"
-
-
-# pc26 was called pocket before the rename to PC-26; hooks set up then
-# run `pocket hook NAME` (/opt/pocket-terminal/bin/pocket, still there).
-COMMAND_NAMES = ("pc26", "pocket")
+    return f"{os.path.join(TOOLS, 'bin', 'pocket')} hook {agent.name}"
 
 
 def is_ours(handler, agent):
     command = handler.get("command") if isinstance(handler, dict) else None
-    return isinstance(command, str) and any(
-        command == f"{name} hook {agent.name}" or command.endswith(f"/{name} hook {agent.name}")
-        for name in COMMAND_NAMES)
-
-
-def is_old(handler):
-    return not handler["command"].split()[0].endswith("pc26")
+    ours = f"pocket hook {agent.name}"
+    return isinstance(command, str) and (command == ours or command.endswith("/" + ours))
 
 
 def load(text, agent):
@@ -116,8 +106,7 @@ def has_hooks(text, agent):
 
 
 def add_hooks(text, agent):
-    """Config [text] (None: no file yet) with our hook on each event, once:
-    one from before the rename is brought up to date in place."""
+    """Config [text] (None: no file yet) with our hook on each event, once."""
     config = load(text, agent)
     hooks = config.setdefault("hooks", {})
     for event in agent.events:
@@ -132,8 +121,6 @@ def add_hooks(text, agent):
                         if found:
                             continue
                         found = True
-                        if is_old(h):
-                            h = {**h, "command": hook_command(agent)}
                     handlers.append(h)
                 if not handlers and group["hooks"]:
                     continue
@@ -181,7 +168,7 @@ def read_config(agent):
 
 
 def status(agent):
-    """What `pc26 agent list` shows about [agent]."""
+    """What `pocket agent list` shows about [agent]."""
     installed = bool(shutil.which(agent.command)) or os.path.exists(
         os.path.expanduser(f"~/.local/bin/{agent.command}"))
     try:

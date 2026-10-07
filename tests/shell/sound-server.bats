@@ -8,7 +8,6 @@ setup() {
     STUBS="$BATS_TEST_TMPDIR/stubs"
     mkdir -p "$STUBS"
     export PC26_SOUND_DIR="$BATS_TEST_TMPDIR/sound"
-    export PC26_OLD_SOUND_DIR="$BATS_TEST_TMPDIR/old-sound"
 }
 
 teardown() {
@@ -75,28 +74,6 @@ old_server() {
     stub_pulseaudio
     old_server not-pulse
     old=$(cat "$PC26_SOUND_DIR/pid")
-    PATH="$STUBS:$PATH" run "$SERVER"
-    kill -0 "$old"
-}
-
-@test "sound-server stops a Pulse left by the app before the rename" {
-    stub_pulseaudio
-    old_server pulseaudio
-    old=$(cat "$PC26_SOUND_DIR/pid")
-    mkdir -p "$PC26_OLD_SOUND_DIR"
-    mv "$PC26_SOUND_DIR/pid" "$PC26_OLD_SOUND_DIR/pid"
-    PATH="$STUBS:$PATH" run "$SERVER"
-    [ "$status" -eq 0 ]
-    gone "$old"
-    [ ! -e "$PC26_OLD_SOUND_DIR/pid" ]
-}
-
-@test "sound-server leaves alone another program with the old pid from before the rename" {
-    stub_pulseaudio
-    old_server not-pulse
-    old=$(cat "$PC26_SOUND_DIR/pid")
-    mkdir -p "$PC26_OLD_SOUND_DIR"
-    mv "$PC26_SOUND_DIR/pid" "$PC26_OLD_SOUND_DIR/pid"
     PATH="$STUBS:$PATH" run "$SERVER"
     kill -0 "$old"
 }

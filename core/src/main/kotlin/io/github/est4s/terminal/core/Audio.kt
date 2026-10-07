@@ -8,7 +8,7 @@ const val MAX_RECORD_SECONDS = 86400
 const val MIN_RECORD_RATE = 8000
 const val MAX_RECORD_RATE = 48000
 
-/** What `pc26 audio record` can save, picked by the file's [extensions]; [rate] is the default. */
+/** What `pocket audio record` can save, picked by the file's [extensions]; [rate] is the default. */
 enum class AudioFormat(val extensions: List<String>, val rate: Int) {
     M4A(listOf("m4a"), 44100),
     AAC(listOf("aac"), 44100),
@@ -33,19 +33,19 @@ interface PlayReport {
     /** The file played to its end. */
     fun done(seconds: Double)
     fun fail(message: String)
-    /** `pc26` stopped waiting (Ctrl+C), or has gone: stop playing. */
+    /** `pocket` stopped waiting (Ctrl+C), or has gone: stop playing. */
     fun onCancel(block: () -> Unit)
 }
 
 /** Where the app reports a recording; any thread may use it. */
 interface RecordReport {
-    /** The microphone is on: `pc26` says it's recording. */
+    /** The microphone is on: `pocket` says it's recording. */
     fun started()
     /** [RecordQuery.partial] holds the whole recording: it becomes the target. */
     fun recorded(seconds: Double)
     fun fail(message: String)
     /**
-     * `pc26` stopped (Ctrl+C), or has gone: [block] must stop recording
+     * `pocket` stopped (Ctrl+C), or has gone: [block] must stop recording
      * and call [recorded] or [fail] before it returns.
      */
     fun onStop(block: () -> Unit)
@@ -53,7 +53,7 @@ interface RecordReport {
 
 /**
  * The `audio-play` and `audio-record` requests, for [Pc26Requests]'s
- * `later`; both run until they end or `pc26` stops them. Lines: the
+ * `later`; both run until they end or `pocket` stops them. Lines: the
  * Debian path, then for `audio-record` `seconds=N` and `rate=HZ`. [play]
  * and [record] start and must not block.
  */
@@ -75,7 +75,7 @@ fun audioRequests(
     val recording = Later(null) { args, reply ->
         val query = parseRecordQuery(args, rootfs).getOrElse { return@Later reply.refuse(it.message!!) }
         if (!loadSettings(settings).settings.androidMicrophone) {
-            return@Later reply.refuse("the microphone is off (pc26 set android-microphone on)")
+            return@Later reply.refuse("the microphone is off (pocket set android-microphone on)")
         }
         record(query, object : RecordReport {
             override fun started() = reply.line(obj("recording" to "true"))

@@ -170,7 +170,7 @@ class SoundRequestTest {
 
         assertEquals(0, starts)
         assertEquals(
-            """{"ok":false,"error":"the sound device is off (pc26 set sound-device on)"}""",
+            """{"ok":false,"error":"the sound device is off (pocket set sound-device on)"}""",
             File(dir, "8-1.reply").readText(),
         )
     }

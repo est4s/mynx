@@ -1,4 +1,4 @@
-"""The `pc26` command. `pc26 help` lists the commands."""
+"""The `pocket` command. `pocket help` lists the commands."""
 import contextlib
 import json
 import os
@@ -16,7 +16,7 @@ from . import agents
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
-usage: pc26 COMMAND [ARGS] [--json]
+usage: pocket COMMAND [ARGS] [--json]
 
 Commands:
   check      apply config changes now and list problems in them
@@ -112,17 +112,17 @@ def cmd_settings(args, as_json):
 
 def cmd_get(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pc26 get KEY")
+        raise Usage("usage: pocket get KEY")
     for s in request("settings")["settings"]:
         if s["key"] == args[0]:
             out(as_json, {"ok": True, "key": s["key"], "value": s["value"]}, s["value"])
             return 0
-    raise Failure(f"unknown setting '{args[0]}' (pc26 settings lists them)")
+    raise Failure(f"unknown setting '{args[0]}' (pocket settings lists them)")
 
 
 def cmd_set(args, as_json):
     if len(args) < 2:
-        raise Usage("usage: pc26 set KEY VALUE")
+        raise Usage("usage: pocket set KEY VALUE")
     answer = request("set", args[0], " ".join(args[1:]))
     out(as_json, answer, f"{answer['key']} = {answer['value']}")
     return 0
@@ -130,7 +130,7 @@ def cmd_set(args, as_json):
 
 def cmd_reset(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pc26 reset KEY|all")
+        raise Usage("usage: pocket reset KEY|all")
     answer = request("reset", args[0])
     if args[0] == "all":
         out(as_json, answer, "All settings back to their defaults")
@@ -165,7 +165,7 @@ def cmd_theme(args, as_json):
         answer = request("theme-reset")
         out(as_json, answer, f"Theme: {answer['name']} (the default)")
         return 0
-    raise Usage("usage: pc26 theme [list] | show NAME | set NAME | reset")
+    raise Usage("usage: pocket theme [list] | show NAME | set NAME | reset")
 
 
 def cmd_keybar(args, as_json):
@@ -189,14 +189,14 @@ def cmd_keybar(args, as_json):
         return 0
     if sub == "edit" and len(args) == 2:
         answer = request("keybar-edit", args[1])
-        out(as_json, answer, f"Edit {answer['file']}, then run pc26 check.\n"
-                             f"(pc26 edit keybars is an editor for it.)")
+        out(as_json, answer, f"Edit {answer['file']}, then run pocket check.\n"
+                             f"(pocket edit keybars is an editor for it.)")
         return 0
     if sub == "reset" and len(args) == 2:
         answer = request("keybar-reset", args[1])
         out(as_json, answer, f"{args[1]}: back to the built-in bar")
         return 0
-    raise Usage("usage: pc26 keybar [list] | show NAME | edit NAME | reset NAME")
+    raise Usage("usage: pocket keybar [list] | show NAME | edit NAME | reset NAME")
 
 
 def cmd_menu(args, as_json):
@@ -218,8 +218,8 @@ def cmd_menu(args, as_json):
             shutil.copyfile(built_in, user_menu())
             record("menu edit")
         out(as_json, {"ok": True, "file": "~/.config/pc26/menu.conf"},
-            "Edit ~/.config/pc26/menu.conf, then run pc26 check.\n"
-            "(pc26 edit menu is an editor for it.)")
+            "Edit ~/.config/pc26/menu.conf, then run pocket check.\n"
+            "(pocket edit menu is an editor for it.)")
         return 0
     if sub == "reset" and len(args) == 1:
         if not os.path.isfile(user_menu()):
@@ -228,12 +228,12 @@ def cmd_menu(args, as_json):
         record("menu reset")
         out(as_json, {"ok": True}, "Menu: back to the built-in one")
         return 0
-    raise Usage("usage: pc26 menu [show] | edit | reset")
+    raise Usage("usage: pocket menu [show] | edit | reset")
 
 
 def cmd_open(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pc26 open URL")
+        raise Usage("usage: pocket open URL")
     answer = request("open-url", args[0])
     out(as_json, answer, None)
     return 0
@@ -241,7 +241,7 @@ def cmd_open(args, as_json):
 
 def cmd_vibrate(args, as_json):
     if len(args) > 1:
-        raise Usage("usage: pc26 vibrate [MS]")
+        raise Usage("usage: pocket vibrate [MS]")
     answer = request("vibrate", *args)
     out(as_json, answer, None)
     return 0
@@ -265,7 +265,7 @@ def cmd_clipboard(args, as_json):
         answer = request("clipboard-set", urllib.parse.quote(text, safe=""))
         out(as_json, answer, f"Copied {len(text)} character{'' if len(text) == 1 else 's'}")
         return 0
-    raise Usage("usage: pc26 clipboard get | set [TEXT]")
+    raise Usage("usage: pocket clipboard get | set [TEXT]")
 
 
 def cmd_share(args, as_json):
@@ -275,7 +275,7 @@ def cmd_share(args, as_json):
         out(as_json, answer, f"Sharing {len(text)} character{'' if len(text) == 1 else 's'}: pick an app on the phone")
         return 0
     if not args:
-        raise Usage("usage: pc26 share FILE... | --text [TEXT]")
+        raise Usage("usage: pocket share FILE... | --text [TEXT]")
     # A request holds one value per line.
     if any("\n" in a for a in args):
         raise Failure("can't share a file whose name has a line break")
@@ -285,7 +285,7 @@ def cmd_share(args, as_json):
     return 0
 
 
-LOCATION_USAGE = "usage: pc26 location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
+LOCATION_USAGE = "usage: pocket location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
 
 
 def cmd_location(args, as_json):
@@ -328,7 +328,7 @@ def fix_text(fix):
     return f"{fix['latitude']}, {fix['longitude']}{accuracy} {fix['provider']} {when}"
 
 
-SENSOR_USAGE = "usage: pc26 sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
+SENSOR_USAGE = "usage: pocket sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
 
 
 def cmd_sensor(args, as_json):
@@ -386,7 +386,7 @@ def reading_text(reading):
     return f"{text} {reading['unit']}".rstrip()
 
 
-CAMERA_USAGE = "usage: pc26 camera FILE [--quick front|back]"
+CAMERA_USAGE = "usage: pocket camera FILE [--quick front|back]"
 
 
 def cmd_camera(args, as_json):
@@ -418,17 +418,17 @@ def size_text(size):
 
 def cmd_torch(args, as_json):
     if not (args[:1] == ["on"] and len(args) <= 2 or args == ["off"]):
-        raise Usage("usage: pc26 torch on [PERCENT] | off")
+        raise Usage("usage: pocket torch on [PERCENT] | off")
     answer = request("torch", *args)
     out(as_json, answer, None)
     return 0
 
 
-ROTATION_USAGE = "usage: pc26 rotation [status] | lock [portrait|landscape] [--pid PID] | unlock"
+ROTATION_USAGE = "usage: pocket rotation [status] | lock [portrait|landscape] [--pid PID] | unlock"
 
 
 def cmd_rotation(args, as_json):
-    """The lock is held by the program that ran pc26 (or --pid): it ends
+    """The lock is held by the program that ran pocket (or --pid): it ends
     when that program does, so a crash can't leave the screen stuck."""
     sub, rest = (args[0], list(args[1:])) if args else ("status", [])
     if sub == "lock":
@@ -452,7 +452,7 @@ def cmd_rotation(args, as_json):
     return 0
 
 
-AUDIO_USAGE = "usage: pc26 audio play FILE | record FILE [--seconds N] [--rate HZ]"
+AUDIO_USAGE = "usage: pocket audio play FILE | record FILE [--seconds N] [--rate HZ]"
 
 
 def cmd_audio(args, as_json):
@@ -484,7 +484,7 @@ def cmd_audio(args, as_json):
     return 0
 
 
-SOUND_USAGE = "usage: pc26 sound [status] | start | install [--yes]"
+SOUND_USAGE = "usage: pocket sound [status] | start | install [--yes]"
 # Keep in step with rootfs/Dockerfile, which puts them in new Debians.
 SOUND_PACKAGES = "pulseaudio pulseaudio-utils libasound2-plugins alsa-utils"
 SOUND_SERVER = "unix:/tmp/.pc26/sound/native"
@@ -510,11 +510,11 @@ def sound_status(as_json):
     if running:
         text = "on. Programs play through the phone's speaker."
     elif setting == "off":
-        text = "off (pc26 set sound-device on turns it on)"
+        text = "off (pocket set sound-device on turns it on)"
     elif not installed:
-        text = "not installed (pc26 sound install installs it)"
+        text = "not installed (pocket sound install installs it)"
     else:
-        text = "not running (pc26 sound start starts it)"
+        text = "not running (pocket sound start starts it)"
     out(as_json, {"ok": True, "setting": setting, "installed": installed, "running": running, "server": server},
         "Sound device: " + text)
     return 0
@@ -579,7 +579,7 @@ def install_sound(yes):
 # debug builds of the app answer it.
 def cmd_install_apk(args, as_json):
     if len(args) != 1:
-        raise Usage("usage: pc26 install-apk FILE")
+        raise Usage("usage: pocket install-apk FILE")
     answer = request("install-apk", os.path.abspath(args[0]))
     out(as_json, answer, "Installer opened on the phone.")
     return 0
@@ -591,11 +591,11 @@ def cmd_undo(args, as_json):
         keeps = f"keeps {answer['keep']}: undo-keep"
         lines = [f"{i}. {s['reason']}  ({time.strftime('%H:%M', time.localtime(s['time'] / 1000))})"
                  for i, s in enumerate(answer["steps"], 1)]
-        text = "\n".join(lines + [f"pc26 undo takes back 1. ({keeps})"]) if lines else f"Nothing to undo ({keeps})"
+        text = "\n".join(lines + [f"pocket undo takes back 1. ({keeps})"]) if lines else f"Nothing to undo ({keeps})"
         out(as_json, answer, text)
         return 0
     if args:
-        raise Usage("usage: pc26 undo [--list]")
+        raise Usage("usage: pocket undo [--list]")
     answer = request("undo")
     if answer["undone"] is None:
         out(as_json, answer, "Nothing to undo")
@@ -613,7 +613,7 @@ def cmd_notify(args, as_json):
     if_away = "--if-away" in args
     words = [a.replace("\n", " ") for a in args if a != "--if-away"]
     if not words:
-        raise Usage("usage: pc26 notify [--if-away] TITLE [TEXT]")
+        raise Usage("usage: pocket notify [--if-away] TITLE [TEXT]")
     answer = request("notify", words[0], " ".join(words[1:]), *notify_options(if_away))
     if answer["shown"]:
         out(as_json, answer, "Notification shown")
@@ -636,7 +636,7 @@ def cmd_hook(args, as_json):
     "keep working", and Gemini CLI wants JSON on stdout.
     """
     if len(args) != 1 or args[0] not in agents.AGENTS:
-        raise Usage("usage: pc26 hook claude|codex|gemini (reads the hook's JSON on stdin)")
+        raise Usage("usage: pocket hook claude|codex|gemini (reads the hook's JSON on stdin)")
     agent = agents.AGENTS[args[0]]
     try:
         agent_hook(agent, json.load(sys.stdin))
@@ -675,7 +675,7 @@ def agent_hook(agent, event):
         request("notify", agent.title, text, *options)
 
 
-AGENT_USAGE = ("usage: pc26 agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify]"
+AGENT_USAGE = ("usage: pocket agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify]"
                " | notify NAME on|off")
 
 
@@ -864,9 +864,9 @@ def install_agent(agent, yes, notify, then=None):
         notify = ask(f"Also set up notifications for {agent.title} (when it finishes or needs you)? [y/N]")
     if notify:
         agents.set_notify(agent, True)
-        print(f"Notifications: on (pc26 agent notify {agent.name} off turns them off)")
+        print(f"Notifications: on (pocket agent notify {agent.name} off turns them off)")
     else:
-        print(f"Notifications: off (pc26 agent notify {agent.name} on turns them on)")
+        print(f"Notifications: off (pocket agent notify {agent.name} on turns them on)")
     print(then if then is not None else f"\nStart it with: {agent.command}  (sign in with your own account)")
     return 0
 
@@ -1002,7 +1002,7 @@ def cmd_about(args, as_json):
         try:
             sys.stdout.write(text)
             sys.stdout.flush()
-        except BrokenPipeError:  # pc26 about | head
+        except BrokenPipeError:  # pocket about | head
             os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
     return 0
 
@@ -1038,7 +1038,7 @@ def main(argv):
         name = "help"
     try:
         if name not in COMMANDS:
-            raise Failure(f"unknown command '{name}' (pc26 help lists them)")
+            raise Failure(f"unknown command '{name}' (pocket help lists them)")
         return COMMANDS[name](args[1:], as_json)
     except Failure as e:
         if as_json:

@@ -62,7 +62,7 @@ class LaterRequestTest {
     }
 
     @Test
-    fun `a stream sends lines until pc26 cancels it`() {
+    fun `a stream sends lines until pocket cancels it`() {
         send("12-1", "feed")
         assertEquals("stream", file("12-1.wait").readText())
         val reply = started.single().second
@@ -89,7 +89,7 @@ class LaterRequestTest {
     }
 
     @Test
-    fun `a stream whose pc26 has gone stops and leaves nothing behind`() {
+    fun `a stream whose pocket has gone stops and leaves nothing behind`() {
         send("77-5", "feed")
         send("78-5", "feed")
         val reply = started.first().second

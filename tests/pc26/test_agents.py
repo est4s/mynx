@@ -13,7 +13,7 @@ from pc26.agents import (AGENTS, add_hooks, download_progress, has_hooks, instal
 from pc26.client import Failure  # noqa: E402
 
 CLAUDE = AGENTS["claude"]
-HOOK = "/opt/pc26/bin/pc26 hook claude"
+HOOK = "/opt/pc26/bin/pocket hook claude"
 
 
 def ours(command):
@@ -61,30 +61,9 @@ class HooksTest(unittest.TestCase):
         self.assertFalse(has_hooks(text, CLAUDE))  # only some events
 
     def test_recognises_its_hook_by_any_path(self):
-        text = json.dumps({"hooks": {e: [ours("pc26 hook claude")] for e in CLAUDE.events}})
+        text = json.dumps({"hooks": {e: [ours("pocket hook claude")] for e in CLAUDE.events}})
         self.assertTrue(has_hooks(text, CLAUDE))
         self.assertEqual(json.loads(remove_hooks(text, CLAUDE)), {})
-
-    def test_recognises_its_hook_from_before_the_rename(self):
-        for old in ["pocket hook claude", "/opt/pocket-terminal/bin/pocket hook claude"]:
-            text = json.dumps({"hooks": {e: [ours(old)] for e in CLAUDE.events}})
-            self.assertTrue(has_hooks(text, CLAUDE), old)
-            self.assertEqual(json.loads(remove_hooks(text, CLAUDE)), {}, old)
-        self.assertFalse(has_hooks(json.dumps({"hooks": {e: [ours("pocket hook codex")] for e in CLAUDE.events}}),
-                                   CLAUDE))
-
-    def test_turning_on_replaces_its_hook_from_before_the_rename(self):
-        old = "/opt/pocket-terminal/bin/pocket hook claude"
-        text = json.dumps({"model": "opus", "hooks": {
-            "Stop": [ours("say done"), {"hooks": [{"type": "command", "command": old, "timeout": 5}]}],
-            "UserPromptSubmit": [ours(old), ours(HOOK)],
-            "Notification": [ours(old)]}})
-        config = json.loads(add_hooks(text, CLAUDE))
-        self.assertEqual(config, {"model": "opus", "hooks": {
-            # In place, keeping what else the entry says.
-            "Stop": [ours("say done"), {"hooks": [{"type": "command", "command": HOOK, "timeout": 5}]}],
-            "UserPromptSubmit": [ours(HOOK)],
-            "Notification": [ours(HOOK)]}})
 
     def test_refuses_a_file_it_cant_read(self):
         for text in ["{oops", "[1, 2]", '{"hooks": []}', '{"hooks": {"Stop": {}}}']:
@@ -136,7 +115,7 @@ class InstallStepsTest(unittest.TestCase):
 
 
 class DownloadProgressTest(unittest.TestCase):
-    """The official installers download silently; pc26 shows what has arrived."""
+    """The official installers download silently; pocket shows what has arrived."""
 
     def test_shows_the_size_while_it_grows(self):
         self.assertEqual(download_progress("Claude Code", 0, 87_400_000, showing=False),

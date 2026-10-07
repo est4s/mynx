@@ -51,7 +51,7 @@ class PhoneRequestsTest {
         assertEquals("""{"ok":false,"error":"the phone has no vibrator"}""", ask("vibrate"))
     }
 
-    // pc26 sends the text percent-encoded, so it can hold line breaks.
+    // pocket sends the text percent-encoded, so it can hold line breaks.
     @Test
     fun `copies text to the clipboard, line breaks and all`() {
         assertEquals("""{"ok":true}""", ask("clipboard-set", "two%0Alines%20%2B%20%C3%A9%0D%0A"))
@@ -95,7 +95,7 @@ class PhoneRequestsTest {
         File(home, ".config/pc26").mkdirs()
         File(home, ".config/pc26/settings.conf").writeText("android-clipboard = off\n")
         clipboard = Result.success("secret")
-        val off = """{"ok":false,"error":"clipboard access is off (pc26 set android-clipboard on)"}"""
+        val off = """{"ok":false,"error":"clipboard access is off (pocket set android-clipboard on)"}"""
         assertEquals(off, ask("clipboard-get"))
         assertEquals(off, ask("clipboard-set", "x"))
         assertEquals(emptyList(), copied)
@@ -155,7 +155,7 @@ class PhoneRequestsTest {
         File(home, ".config/pc26").mkdirs()
         File(home, ".config/pc26/settings.conf").writeText("android-share = off\n")
         File(home, "a").writeText("a")
-        val off = """{"ok":false,"error":"sharing is off (pc26 set android-share on)"}"""
+        val off = """{"ok":false,"error":"sharing is off (pocket set android-share on)"}"""
         assertEquals(off, ask("share", "/root/a"))
         assertEquals(off, ask("share-text", "x"))
         assertEquals(emptyList(), shared)

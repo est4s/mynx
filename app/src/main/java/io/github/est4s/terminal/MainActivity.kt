@@ -137,7 +137,7 @@ class MainActivity : Activity() {
         }
     }
 
-    /** `pc26 rotation lock`: hold the screen as it is, or turned to a side; null frees it. */
+    /** `pocket rotation lock`: hold the screen as it is, or turned to a side; null frees it. */
     fun applyRotation(lock: Orientation?) {
         requestedOrientation = when (lock) {
             null -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -184,7 +184,7 @@ class MainActivity : Activity() {
         showLastCrash()
     }
 
-    // A tapped `pc26 notify` notification, while the activity exists.
+    // A tapped `pocket notify` notification, while the activity exists.
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         shellToShow = shellOf(intent)
@@ -658,7 +658,7 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Applies the config files now: `pc26 check` asked. [quiet]: `pc26`
+     * Applies the config files now: `pocket check` asked. [quiet]: `pocket`
      * reports the problems itself, so no dialogs pop up over the terminal.
      */
     fun reloadConfig(quiet: Boolean) {
@@ -782,11 +782,11 @@ class MainActivity : Activity() {
         }
     }
 
-    // The terminal works without the tools; only `pc26` and the editors are missing.
+    // The terminal works without the tools; only `pocket` and the editors are missing.
     private fun showToolsError(trace: String) {
         AlertDialog.Builder(this)
             .setTitle("Couldn't update the app's tools")
-            .setMessage("pc26 and the editors may be missing or old.\n\n$trace")
+            .setMessage("pocket and the editors may be missing or old.\n\n$trace")
             .setPositiveButton("OK", null)
             .show()
     }

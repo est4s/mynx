@@ -31,8 +31,7 @@ else
 fi
 
 # Launcher menu (/usr/local/bin/menu). Its Exit item returns 10: close
-# the tab. The app sets PC26_MENU in the first tab of a fresh start (and
-# POCKET_MENU, its name before the rename, for older copies of this file).
+# the tab. The app sets PC26_MENU in the first tab of a fresh start.
 menu() {
     keybar menu menu "$@"
     local rc=$?
@@ -40,6 +39,6 @@ menu() {
     return $rc
 }
 if [[ -n ${PC26_MENU-} ]]; then
-    unset PC26_MENU POCKET_MENU
+    unset PC26_MENU
     menu --boot
 fi

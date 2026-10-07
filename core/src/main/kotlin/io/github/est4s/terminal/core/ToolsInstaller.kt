@@ -5,14 +5,8 @@ import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption.ATOMIC_MOVE
 
-/** Where Debian sees the app's tools (`pc26`, editors, themes). */
+/** Where Debian sees the app's tools (`pocket`, editors, themes). */
 const val TOOLS_MOUNT = "/opt/pc26"
-
-/**
- * The tools' path before the rename to PC-26, still mounted: users' own
- * notes and agent hooks in old installs name it.
- */
-const val OLD_TOOLS_MOUNT = "/opt/pocket-terminal"
 
 /**
  * Keeps the app's own tools (a `.tar.xz` in the APK) in `<baseDir>/tools`,
@@ -44,7 +38,7 @@ class ToolsInstaller(baseDir: File) {
 // Debian's /etc/profile sets root's PATH from scratch, dropping what the
 // app passed in, and then sources /etc/profile.d.
 private val TOOLS_PROFILE = """
-    |# Written by the app at every start: puts its tools (pc26, menu,
+    |# Written by the app at every start: puts its tools (pocket, menu,
     |# the editors) first on the PATH and loads their bash setup. Changes
     |# here are overwritten.
     |case ":${'$'}PATH:" in
@@ -59,12 +53,10 @@ private val TOOLS_PROFILE = """
 
 /**
  * Writes `/etc/profile.d/pc26.sh` into [rootfs] unless it's
- * already current, and deletes its copy from before the rename. Apart from runtime files in /tmp, the only file the
+ * already current. Apart from runtime files in /tmp, the only file the
  * app writes in an installed Debian, and it's the app's own.
  */
 fun writeToolsProfile(rootfs: File) {
-    // Its name before the rename; it would put the old path first.
-    File(rootfs, "etc/profile.d/pocket-terminal.sh").delete()
     val script = File(rootfs, "etc/profile.d/pc26.sh")
     if (runCatching { script.readText() }.getOrNull() == TOOLS_PROFILE) return
     script.parentFile.mkdirs()

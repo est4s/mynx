@@ -2,7 +2,7 @@ package io.github.est4s.terminal.core
 
 import java.io.File
 
-/** A change `pc26 undo` can take back: what it was and when (epoch ms). */
+/** A change `pocket undo` can take back: what it was and when (epoch ms). */
 data class UndoStep(val reason: String, val time: Long)
 
 private const val MAX_TRACKED_SIZE = 256 * 1024L
@@ -14,7 +14,7 @@ private val UNTRACKED_DIRS = setOf("fonts")
  * the copy it saw last (in [state]); if it changed, that copy becomes an
  * undo step named after the change, so every change is recorded however
  * it was made: by a request, an editor or by hand (seen at the next
- * `pc26 check`, app start or undo). [keep] is how many steps to keep.
+ * `pocket check`, app start or undo). [keep] is how many steps to keep.
  */
 class ConfigHistory(private val config: File, private val state: File, private val now: () -> Long = System::currentTimeMillis) {
     private val last = File(state, "last")

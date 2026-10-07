@@ -1,1 +1,1 @@
-"""The app's tools in Debian: the `pc26` command and the settings editors."""
+"""The app's tools in Debian: the `pocket` command and the settings editors."""

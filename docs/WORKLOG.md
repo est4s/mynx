@@ -23,15 +23,13 @@ Newest entries first. Rules for keeping it up to date: see
   rotation lock` (entry 50) and swiping between tabs (entry 51).
   Landscape with the keyboard up is confirmed (entry 54), and so is
   keeping clear of the camera cutout (entry 55).
-- **Step 10 (*Polish*) is built, not yet confirmed on the phone:**
-  10.1 first run (welcome page; built by CI), the **rename to PC-26**
+- **Step 10 (*Polish*) is confirmed on the phone** (2026-10-07,
+  entry 65): 10.1 first run (welcome page), the **rename to PC-26**
   (`pc26` command, `~/.config/pc26`, `/opt/pc26`, with the old names
   kept working), 10.2 wakelock setting and Settings launcher shortcut,
-  10.3 `pc26 about` and licence texts, 10.4 themed icon and signed
-  GitHub releases. Everything after 10.1 is **local only** (push
-  blocked: the gh token lacks the `workflow` scope), so the `app`
-  module hasn't been compiled with it; it was reviewed by hand
-  (entry 64). "Next" has the morning's ordered list.
+  10.3 `pocket about` and licence texts, 10.4 themed icon. Since
+  entry 66 the one command is `pocket` (no `pc26` command); paths keep
+  `pc26`. Left: the first signed release (`v0.1.0`), see "Next".
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`pocket notify`, `pocket hook`),
   `pocket agent` installs Claude Code, Codex and Gemini CLI with their
@@ -158,74 +156,20 @@ because of proot's GPL):**
   writes the steps), a workflow on `v*` tags publishing the APK to
   GitHub Releases, `versionName` from the tag.
 
-**Step 10 is built (10.1-10.4 and the rename); none of it is
-confirmed on the phone yet.** 10.1 went through CI (dd14d1a); the
-rename, 10.2, 10.3 and 10.4 (be204c9..a054307 and the docs after) are
-**local only**: the `app` module hasn't been compiled with them.
+**10.1-10.4 and the rename are confirmed on the phone** (build 76,
+2026-10-07, entry 65). Then the command became `pocket` only (entry
+66). Check on the phone after installing that build:
+- `pocket version` works, `pc26` is "command not found", `ls
+  /opt/pocket-terminal` fails; no error dialog at start.
+- Closing all tabs and restarting opens the menu (`PC26_MENU`).
+- A long Claude turn with the app in the background notifies
+  (hooks run `/opt/pc26/bin/pocket hook claude`).
+- `pocket edit` shows its key bar; `pocket sound` is on.
+- The owner's `torch` and `metronome` run again.
 
-**Morning, in order:**
+What's left of step 10 is the first release:
 
-1. **Push and let CI compile.** The gh token lost the `workflow`
-   scope, and the push was rejected because `build.yml` changed:
-   - `gh auth refresh -h github.com -s workflow`
-   - `git push origin main`
-   - `gh run watch` (about 10 min). If the build fails, fix what it
-     shows (entry 64 lists what the review couldn't check), commit,
-     push again.
-2. **Install:** `scripts/deliver.sh` with the app on screen. The
-   build on the phone is from before the rename, so the script falls
-   back to `pocket install-apk`; tap Install.
-3. **Phone checks** (one list for entries 60-63 and 10.1):
-   - *Rename (first PC-26 build over a Pocket Terminal one):*
-     1. The app starts with no error dialog, is called PC-26, and the
-        theme, font size and key bars are as before.
-     2. `ls -la ~/.config ~/.local/state` shows `pc26` folders and
-        `pocket-terminal -> pc26` links.
-     3. `pc26 undo --list` still lists the earlier changes; the
-        welcome page doesn't show again.
-     4. `ls /opt/pocket-terminal/bin` works; `pocket version` prints
-        the same as `pc26 version`.
-     5. `pc26 agent list` shows claude's notifications as on;
-        `pc26 agent notify claude on`, then `grep -c 'hook claude'
-        ~/.claude/settings.json` gives 3 (all `/opt/pc26`). A long
-        Claude turn with the app in the background still notifies.
-     6. Closing all tabs and restarting the app opens the menu in the
-        first tab (the old `~/.bashrc` reads `POCKET_MENU`).
-     7. `pc26 sound` says on; `pgrep -c pulseaudio` gives 1.
-     8. `/etc/profile.d/pocket-terminal.sh` is gone; `echo $PATH`
-        starts with `/opt/pc26/bin`.
-   - *10.1 first run:* Menu → Getting started and `pc26 welcome` show
-     the welcome page. (The themed setup screen only shows on a fresh
-     install; check it whenever Debian is next set up from scratch.)
-   - *10.2 wakelock:*
-     9. `pc26 set wakelock on`: the notification says "N terminals
-        running · wakelock held"; `pc26 set wakelock off`: it goes.
-     10. With it on, screen off for a few minutes while
-         `for i in $(seq 600); do date; sleep 1; done` runs: no gaps
-         longer than a few seconds.
-     11. `pc26 edit` → Settings lists `wakelock`; toggling it there
-         updates the notification.
-   - *10.2 Settings shortcut:*
-     12. Long-press the icon: a "Settings" shortcut. With the app
-         running it opens a new tab with the settings editors;
-         quitting them leaves a shell prompt in that tab. From a
-         closed app (Exit in the notification first): the menu tab
-         plus the settings tab. Ctrl+C in the editors also leaves a
-         shell.
-   - *10.3 About:*
-     13. `pc26 about` opens in `less`: "PC-26", "version 0.0.1
-         (build N)" with N matching `pc26 version`, the five
-         components, then the licence texts; `q` returns. Nothing
-         wraps at portrait width.
-     14. Menu → System → About shows the same; `q` returns to the
-         menu.
-     15. `pc26 about | head` is plain text; `pc26 about --json` is one
-         object with `"version_name": "0.0.1"`.
-     16. `ls /opt/pc26/licenses` lists the five `.txt` files.
-   - *10.4 icon:*
-     17. With themed icons on (Wallpaper & style → Themed icons), the
-         icon is a tinted ">_" like the others.
-4. **First release** (`docs/RELEASING.md`): make the key (1), back it
+1. **First release** (`docs/RELEASING.md`): make the key (1), back it
    up in two places (2), add the four `PC26_RELEASE_*` secrets (3),
    then `git tag v0.1.0 && git push origin v0.1.0` and `gh run watch`
    (4). The release page should have `pc26-0.1.0.apk`. That run is the
@@ -435,6 +379,60 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-07 (66): one command, `pocket`; old names dropped
+
+**Owner's decision:** people and agents must use the same commands, so
+the app has one command, **`pocket`** (the rename had made `pc26` the
+command and kept `pocket` as an alias that agents and old hooks still
+used). There is no `pc26` command any more. The app stays PC-26 and the
+paths keep `pc26` (`/opt/pc26`, `~/.config/pc26`, `/tmp/.pc26`,
+`PC26_*`); the Python package `tools/lib/pc26` and `Pc26Requests` keep
+their names (internal). The editors' key bar is `pocket-edit` again.
+
+Also dropped, with the owner's OK, everything kept for Debians from
+before the rename (no release had shipped; only the owner's phone had
+one): `migrateOldNames`/`OldNames.kt`, the `/opt/pocket-terminal`
+mount, `POCKET_MENU`, the old profile script clean-up, the old sound
+pid, the `pocket` shim and its bats tests, old-hook recognition in
+`agents.py` (now only `pocket hook NAME` is ours), and `deliver.sh`'s
+fallback.
+
+**Owner's phone, moved by hand** (backup in the session scratchpad):
+Claude hooks → `/opt/pc26/bin/pocket hook claude`; `~/.bashrc` reads
+`PC26_MENU`; `~/AGENTS.md`, `~/CLAUDE.md` → `/opt/pc26`; own programs
+in `~/.local/bin`: `metronome` and `torch` imported
+`pocket_terminal.client` from `/opt/pocket-terminal/lib`, broken since
+the rename, now `pc26.client` from `/opt/pc26/lib`; `flog` and
+`apps-menu` paths and `PC26_*` variables; the `~/.config` and
+`~/.local/state` `pocket-terminal` links removed.
+
+Tests: core green, 186 unittest, 87 bats.
+
+### 2026-10-07 (65): step 10 confirmed on the phone
+
+The owner pushed the overnight work; CI built it and build 76 was
+installed over the Pocket Terminal build. Checked from the terminal:
+config and state moved to `pc26` with `pocket-terminal` links, undo
+history kept, `/opt/pocket-terminal` and `pocket` still work, old
+profile script gone, PATH starts the tools before `/usr`, sound
+device on with one Pulse, `pc26 about` (build 76, `--json`
+`version_name` 0.0.1, five licence files; only the verbatim licence
+texts are wider than 56 columns, left as they are), `pc26 welcome`.
+Claude's hooks still named `/opt/pocket-terminal/bin/pocket hook`
+(they work); `pc26 agent notify claude on` rewrote all 3 to
+`/opt/pc26/bin/pc26 hook`, as designed. The owner confirmed the rest:
+no error dialog, name, theme/font/key bars kept, menu on a fresh
+start, Getting started and System → About, wakelock in the
+notification and over screen-off, the Settings editor, the launcher
+shortcut, the themed icon.
+
+**Found:** Getting started was missing from the menu because the
+owner has their own `~/.config/pc26/menu.conf` (from 2026-10-05), and
+a user's menu file replaces the built-in one, so new built-in items
+never appear. Added the line to the owner's file by hand. Idea, not
+built: `pc26 check` (or the menu editor) could mention built-in items
+missing from a user's menu.
 
 ### 2026-10-07 (64): review of the overnight work before the first push
 

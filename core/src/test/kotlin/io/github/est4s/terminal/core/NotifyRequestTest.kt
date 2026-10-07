@@ -74,7 +74,7 @@ class NotifyRequestTest {
     fun `agent notifications follow the agent-notify setting`() {
         config("agent-notify = off\n")
         assertEquals(
-            """{"ok":true,"shown":false,"reason":"agent-notify is off (pc26 set agent-notify on)"}""",
+            """{"ok":true,"shown":false,"reason":"agent-notify is off (pocket set agent-notify on)"}""",
             ask("notify", "Claude Code", "Your turn", "agent"),
         )
         assertEquals(emptyList(), posted)

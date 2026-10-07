@@ -66,7 +66,7 @@ git push origin v0.1.0
 ```
 
 - The tag gives the version name (`v0.1.0` → `0.1.0`, shown by
-  `pc26 about`); the version code is the workflow's run number.
+  `pocket about`); the version code is the workflow's run number.
 - A tag with a suffix (`v0.2.0-beta.1`) makes a pre-release.
 - The workflow runs all tests, builds the APK (about the same time as a
   debug build), checks its signature and creates the release with notes

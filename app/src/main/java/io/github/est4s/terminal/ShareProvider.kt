@@ -13,7 +13,7 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * Hands other apps the files `pc26 share` shared, read-only:
+ * Hands other apps the files `pocket share` shared, read-only:
  * `content://AUTHORITY/TOKEN/N/NAME`. Not exported: apps only get the
  * URIs they were granted with the share.
  */

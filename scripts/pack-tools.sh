@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Packs the app's tools for the APK into OUT_DIR/tools.tar.xz: tools/
-# (pc26, menu, the editors, …) plus core's built-in key bars and
+# (pocket, menu, the editors, …) plus core's built-in key bars and
 # themes, for reading and copying. The app unpacks it on each update;
 # Debian sees it at /opt/pc26.
 #

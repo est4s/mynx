@@ -100,13 +100,12 @@ class ProotLaunchTest {
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
         assertTrue("PC26_MENU=1" in shellEnv, shellEnv.toString())
-        // A .bashrc from before the rename checks the old name.
-        assertTrue("POCKET_MENU=1" in shellEnv, shellEnv.toString())
+        assertTrue(shellEnv.none { it.startsWith("POCKET_MENU=") }, shellEnv.toString())
     }
 
     @Test
     fun `opens no menu unless asked`() {
-        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_MENU=") || it.startsWith("POCKET_MENU=") })
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("PC26_MENU=") })
     }
 
     @Test
@@ -127,18 +126,9 @@ class ProotLaunchTest {
         val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
 
-        assertTrue("/data/files/tools:/opt/pc26" in argv.valuesAfter("-b"))
+        assertEquals(listOf("/data/files/tools:/opt/pc26"), argv.valuesAfter("-b").filter { it.startsWith("/data/files/tools:") })
         val path = shellEnv.single { it.startsWith("PATH=") }.removePrefix("PATH=").split(':')
         assertEquals("/opt/pc26/bin", path.first())
-    }
-
-    @Test
-    fun `also mounts the tools at their path from before the rename`() {
-        // Users' own notes and agent hooks name /opt/pocket-terminal.
-        val argv = prootLaunch(paths, toolsDir = "/data/files/tools").argv
-
-        assertTrue("/data/files/tools:/opt/pocket-terminal" in argv.valuesAfter("-b"))
-        assertTrue(prootLaunch(paths).argv.none { it.endsWith(":/opt/pocket-terminal") })
     }
 
     @Test
@@ -178,14 +168,14 @@ class ProotLaunchTest {
     @Test
     fun `a tab can run a program first, then its login shell`() {
         assertEquals(
-            listOf("/bin/bash", "--login", "-c", "trap : INT; pc26 edit; exec /bin/bash --login"),
-            runThenShell("pc26 edit"),
+            listOf("/bin/bash", "--login", "-c", "trap : INT; pocket edit; exec /bin/bash --login"),
+            runThenShell("pocket edit"),
         )
     }
 
     @Test
     fun `the settings tab runs the settings editors`() {
-        assertEquals(runThenShell("pc26 edit"), SETTINGS_TAB_COMMAND)
+        assertEquals(runThenShell("pocket edit"), SETTINGS_TAB_COMMAND)
     }
 
     @Test

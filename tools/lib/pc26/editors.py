@@ -1,10 +1,10 @@
-"""The settings editors: `pc26 edit [settings|theme|keybars [NAME]|menu]`.
+"""The settings editors: `pocket edit [settings|theme|keybars [NAME]|menu]`.
 
 Terminal programs on purpose: everything they change goes through the
-same requests and files as the `pc26` commands, so an agent can do
+same requests and files as the `pocket` commands, so an agent can do
 whatever a person does here. Keys: ↑ ↓ (or j k) move, Enter opens or
 changes, ← → change a value, q or Esc goes back; the app shows the
-`pc26-edit` key bar while an editor is open.
+`pocket-edit` key bar while an editor is open.
 """
 import curses
 import locale
@@ -17,7 +17,7 @@ from . import agents
 from .client import TOOLS, Failure, record, request
 from .models import ItemsFile, set_color
 
-KEY_BAR = "pc26-edit"
+KEY_BAR = "pocket-edit"
 HEX = re.compile(r"#[0-9a-fA-F]{6}")
 COLOR_KEYS = ["background", "foreground", "cursor"] + [f"color{i}" for i in range(16)]
 MENU_ACTIONS = ["shell", "files", "games", "settings", "agents", "system", "welcome", "exit"]
@@ -33,7 +33,7 @@ def main(args):
     }
     which = args[0] if args else None
     if which is not None and which not in editors:
-        raise Failure("usage: pc26 edit [settings|theme|keybars [NAME]|menu]")
+        raise Failure("usage: pocket edit [settings|theme|keybars [NAME]|menu]")
     editor = editors.get(which, hub)
     os.environ.setdefault("ESCDELAY", "25")  # Esc alone shouldn't wait a second
     locale.setlocale(locale.LC_ALL, "")
@@ -228,7 +228,7 @@ def hub(ui):
              ("Launcher menu", menu_editor), ("Check config", check_screen), ("Undo last change", undo_screen)]
     sel = 0
     while True:
-        key, sel = ui.list("Settings", "Everything here is also a pc26 command.",
+        key, sel = ui.list("Settings", "Everything here is also a pocket command.",
                            [label for label, _ in items], sel, "↑↓ move  Enter: open  q: quit")
         if key == "back":
             return

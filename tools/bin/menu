@@ -54,11 +54,11 @@ save_state() {
 }
 
 # --- colours ---------------------------------------------------------------
-# The 16 basic colours, which every theme sets (pc26 theme set …).
+# The 16 basic colours, which every theme sets (pocket theme set …).
 C_TITLE=$'\e[95m' C_ITEM=$'\e[96m' C_SUB=$'\e[35m' C_DIM=$'\e[90m'
 C_SEL=$'\e[1;30;105m' C_OK=$'\e[92m' C_BAD=$'\e[91m' C_OFF=$'\e[0m'
 
-theme_name() { # the theme the colours file was set from (see pc26 theme)
+theme_name() { # the theme the colours file was set from (see pocket theme)
   local first
   [[ -f $CONFIG_DIR/colors.properties ]] || { echo neon; return; }
   IFS= read -r first <"$CONFIG_DIR/colors.properties"
@@ -189,13 +189,13 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       ((${#ITEMS[@]})) || { ITEMS=("(no games yet)"); ACTS=(none); } ;;
     agents)
       local list name title installed
-      list=$(pc26 agent list --tsv 2>/dev/null) || list=
+      list=$(pocket agent list --tsv 2>/dev/null) || list=
       while IFS=$'\t' read -r name title installed; do
         [[ -n $name ]] || continue
         [[ -n $installed ]] || title+=" (install)"
         ITEMS+=("$title") ACTS+=("agent:$name")
       done <<<"$list"
-      ((${#ITEMS[@]})) || { ITEMS=("(pc26 isn't working)"); ACTS=(none); } ;;
+      ((${#ITEMS[@]})) || { ITEMS=("(pocket isn't working)"); ACTS=(none); } ;;
     system)
       ITEMS=("Update all" "System info" About)
       ACTS=(update info about) ;;
@@ -347,7 +347,7 @@ run() { # run <cmd...>: hand the terminal to a program, then come back to the me
 act_none() { :; }
 act_welcome() { welcome_page; }
 act_files() { run files; }
-act_settings() { run pc26 edit; }
+act_settings() { run pocket edit; }
 act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   run bash -c "$1"
   local rc=$?
@@ -363,10 +363,10 @@ act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
 }
 act_game() { run play "$1"; }
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
-  run pc26 agent start "$1" || pause
+  run pocket agent start "$1" || pause
 }
 
-act_about() { run pc26 about || pause; }  # in less; a failure stays on screen
+act_about() { run pocket about || pause; }  # in less; a failure stays on screen
 
 act_update() {
   run bash -c 'apt update && apt upgrade -y'
@@ -437,7 +437,7 @@ show() { # show <menu> <breadcrumb>
     term_cols
     update_status && drawn=
     if [[ $drawn != "$sel:$COLS" ]]; then
-      # Items only on a full redraw: some menus ask pc26 (slow) for them.
+      # Items only on a full redraw: some menus ask pocket (slow) for them.
       if [[ -z $drawn ]]; then
         menu_items "$name"; n=${#ITEMS[@]}
         ((sel < n)) || sel=0

@@ -80,12 +80,11 @@ stub() {
 
 @test "opens the menu with the splash when the app asks, once" {
     stub keybar 'shift; exec "$@"'
-    stub menu 'echo "menu $*"; echo "PC26_MENU=$PC26_MENU POCKET_MENU=$POCKET_MENU"'
-    # The app also sets POCKET_MENU, for a .bashrc from before the rename.
-    export PC26_MENU=1 POCKET_MENU=1
-    run in_shell 'echo "after: [$PC26_MENU$POCKET_MENU]"'
+    stub menu 'echo "menu $*"; echo "PC26_MENU=$PC26_MENU"'
+    export PC26_MENU=1
+    run in_shell 'echo "after: [$PC26_MENU]"'
     [ "${lines[0]}" = "menu --boot" ]
-    [ "${lines[1]}" = "PC26_MENU= POCKET_MENU=" ]
+    [ "${lines[1]}" = "PC26_MENU=" ]
     [ "${lines[2]}" = "after: []" ]
 }
 

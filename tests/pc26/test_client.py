@@ -2,7 +2,7 @@
 
 The app's side is core's PendingReply: next to ID.req it writes ID.wait
 (seconds, or "stream"), appends readings to ID.stream, and answers in
-ID.reply; pc26 cancels a stream by writing ID.cancel.
+ID.reply; pocket cancels a stream by writing ID.cancel.
 """
 import json
 import os

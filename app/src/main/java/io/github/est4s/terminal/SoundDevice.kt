@@ -41,7 +41,7 @@ class SoundDevice(
 
     /** Starts the server, or starts it again; null when it started, else why not. */
     fun start(): String? {
-        if (!installed()) return "PulseAudio isn't installed (pc26 sound install installs it)"
+        if (!installed()) return "PulseAudio isn't installed (pocket sound install installs it)"
         stop()
         run = Run().also { it.start() }
         return null

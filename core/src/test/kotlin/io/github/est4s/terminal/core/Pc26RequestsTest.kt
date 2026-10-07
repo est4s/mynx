@@ -156,7 +156,7 @@ class Pc26RequestsTest {
 
         assertEquals("""{"ok":true,"key":"font-size","value":"12"}""", ask("reset", "font-size"))
         assertEquals("# mine\ncursor-style = bar\n", File(home, "$CONFIG_DIR/settings.conf").readText())
-        assertEquals("""{"ok":false,"error":"unknown setting 'colour' (pc26 settings lists them)"}""", ask("reset", "colour"))
+        assertEquals("""{"ok":false,"error":"unknown setting 'colour' (pocket settings lists them)"}""", ask("reset", "colour"))
     }
 
     @Test
@@ -208,9 +208,9 @@ class Pc26RequestsTest {
 
     @Test
     fun `theme-show and theme-set refuse unknown themes`() {
-        assertEquals("""{"ok":false,"error":"no theme 'nope' (pc26 theme list shows them)"}""", ask("theme-set", "nope"))
-        assertEquals("""{"ok":false,"error":"no theme 'nope' (pc26 theme list shows them)"}""", ask("theme-show", "nope"))
-        assertEquals("""{"ok":false,"error":"no theme '../x' (pc26 theme list shows them)"}""", ask("theme-show", "../x"))
+        assertEquals("""{"ok":false,"error":"no theme 'nope' (pocket theme list shows them)"}""", ask("theme-set", "nope"))
+        assertEquals("""{"ok":false,"error":"no theme 'nope' (pocket theme list shows them)"}""", ask("theme-show", "nope"))
+        assertEquals("""{"ok":false,"error":"no theme '../x' (pocket theme list shows them)"}""", ask("theme-show", "../x"))
     }
 
     @Test
@@ -260,7 +260,7 @@ class Pc26RequestsTest {
         assertEquals("""{"ok":true,"name":"nnn","file":null,"text":${json(builtInKeyBarText("nnn")!!)}}""", ask("keybar-show", "nnn"))
         config("keybars/nnn.conf", "Quit = q\n")
         assertEquals("""{"ok":true,"name":"nnn","file":"~/.config/pc26/keybars/nnn.conf","text":"Quit = q\n"}""", ask("keybar-show", "nnn"))
-        assertEquals("""{"ok":false,"error":"no key bar 'nope' (pc26 keybar list shows them)"}""", ask("keybar-show", "nope"))
+        assertEquals("""{"ok":false,"error":"no key bar 'nope' (pocket keybar list shows them)"}""", ask("keybar-show", "nope"))
     }
 
     @Test

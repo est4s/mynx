@@ -69,9 +69,9 @@ keys() {
     [ "${ACTS[*]}" = "update info about" ]
 }
 
-@test "About shows pc26 about" {
+@test "About shows pocket about" {
     run keys 63
-    [[ $output == *"RUN: pc26 about"* ]]
+    [[ $output == *"RUN: pocket about"* ]]
 }
 
 @test "games come from both folders, named after their files" {
@@ -149,14 +149,14 @@ keys() {
 
 @test "Settings opens the settings editor" {
     run keys 4
-    [[ $output == *"RUN: pc26 edit"* ]]
+    [[ $output == *"RUN: pocket edit"* ]]
 }
 
-fake_pc26() { # a pc26 that lists Claude Code as installed, Codex not
+fake_pc26() { # a pocket that lists Claude Code as installed, Codex not
     mkdir -p "$BATS_TEST_TMPDIR/bin"
     printf '#!/bin/sh\n[ "$*" = "agent list --tsv" ] && printf "claude\\tClaude Code\\tinstalled\\ncodex\\tCodex\\t\\n"\n' \
-        >"$BATS_TEST_TMPDIR/bin/pc26"
-    chmod +x "$BATS_TEST_TMPDIR/bin/pc26"
+        >"$BATS_TEST_TMPDIR/bin/pocket"
+    chmod +x "$BATS_TEST_TMPDIR/bin/pocket"
     export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
 }
 
@@ -172,18 +172,18 @@ fake_pc26() { # a pc26 that lists Claude Code as installed, Codex not
 @test "picking an agent starts it (or offers to install it)" {
     fake_pc26
     run keys 52
-    [[ $output == *"RUN: pc26 agent start codex"* ]]
+    [[ $output == *"RUN: pocket agent start codex"* ]]
 }
 
-@test "moving through AI agents doesn't ask pc26 again on each key" {
+@test "moving through AI agents doesn't ask pocket again on each key" {
     fake_pc26
-    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pc26"
+    sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/pocket"
     run keys 5jjjkqq
     [ "$status" -eq 0 ]
     [ "$(wc -l <"$BATS_TEST_TMPDIR/calls")" -eq 1 ]
 }
 
-@test "AI agents without a working pc26 says so" {
+@test "AI agents without a working pocket says so" {
     export PATH="$BATS_TEST_TMPDIR/empty:/usr/bin:/bin"
     source "$MENU"
     menu_items agents
@@ -238,7 +238,7 @@ fake_pc26() { # a pc26 that lists Claude Code as installed, Codex not
     output=$(welcome_page <<<x)  # the menu's own run() replaces bats' run
     [[ $output == *"Getting started"* ]]
     [[ $output == *"A real Debian on your phone"* ]]
-    [[ $output == *"pc26 welcome."* ]]
+    [[ $output == *"pocket welcome."* ]]
 }
 
 @test "a welcome page taller than the screen comes in pages" {
@@ -247,7 +247,7 @@ fake_pc26() { # a pc26 that lists Claude Code as installed, Codex not
     output=$(welcome_page <<<"xx")
     [[ $output == *"A real Debian on your phone"* ]]
     [[ $output == *"more"* ]]
-    [[ $output == *"pc26 welcome."* ]]
+    [[ $output == *"pocket welcome."* ]]
 }
 
 @test "the first boot shows the welcome page, later ones don't" {

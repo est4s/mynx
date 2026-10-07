@@ -67,12 +67,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
-@test "the guide documents every pc26 command" {
-    pc26="$BATS_TEST_DIRNAME/../../tools/bin/pc26"
-    commands=$(python3 "$pc26" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
+@test "the guide documents every pocket command" {
+    pocket="$BATS_TEST_DIRNAME/../../tools/bin/pocket"
+    commands=$(python3 "$pocket" help | sed -n '/^Commands:/,/^$/s/^  \([a-z-]*\) .*/\1/p')
     [ -n "$commands" ]
     for name in $commands; do
-        grep -qF "pc26 $name" "$GUIDE" || { echo "not in the guide: pc26 $name"; false; }
+        grep -qF "pocket $name" "$GUIDE" || { echo "not in the guide: pocket $name"; false; }
     done
 }
 

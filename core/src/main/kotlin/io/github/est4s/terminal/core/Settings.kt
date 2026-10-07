@@ -11,7 +11,7 @@ data class Settings(
     val agentNotify: Boolean = true,
     /** Seconds an agent's turn must take before its end notifies. */
     val agentNotifyAfter: Int = 30,
-    /** How many config changes `pc26 undo` can take back. */
+    /** How many config changes `pocket undo` can take back. */
     val undoKeep: Int = 1,
     /** Whether programs in Debian may read and change the phone's clipboard. */
     val androidClipboard: Boolean = true,
@@ -57,7 +57,7 @@ data class Settings(
 
 data class ParsedSettings(val settings: Settings, val problems: List<String>)
 
-/** One setting: what `pc26 settings` and the editors show. [choices] is null for free values. */
+/** One setting: what `pocket settings` and the editors show. [choices] is null for free values. */
 data class SettingDef(
     val key: String,
     val description: String,
@@ -116,43 +116,43 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(agentNotifyAfter = it.toInt()) },
     ),
     SettingDef(
-        "undo-keep", "How many config changes pc26 undo can take back (0-$MAX_UNDO_KEEP; 0 turns undo off).",
+        "undo-keep", "How many config changes pocket undo can take back (0-$MAX_UNDO_KEEP; 0 turns undo off).",
         "1", null,
         { if (it.toIntOrNull() in 0..MAX_UNDO_KEEP) null else "undo-keep must be a whole number from 0 to $MAX_UNDO_KEEP" },
         { copy(undoKeep = it.toInt()) },
     ),
     SettingDef(
-        "android-clipboard", "Whether programs in Debian can read and change the phone's clipboard (pc26 clipboard).",
+        "android-clipboard", "Whether programs in Debian can read and change the phone's clipboard (pocket clipboard).",
         "on", listOf("on", "off"),
         oneOf("android-clipboard", listOf("on", "off")),
         { copy(androidClipboard = it == "on") },
     ),
     SettingDef(
-        "android-share", "Whether programs in Debian can share files and text with other apps (pc26 share).",
+        "android-share", "Whether programs in Debian can share files and text with other apps (pocket share).",
         "on", listOf("on", "off"),
         oneOf("android-share", listOf("on", "off")),
         { copy(androidShare = it == "on") },
     ),
     SettingDef(
-        "android-location", "Whether programs in Debian can ask for the phone's location (pc26 location).",
+        "android-location", "Whether programs in Debian can ask for the phone's location (pocket location).",
         "on", listOf("on", "off"),
         oneOf("android-location", listOf("on", "off")),
         { copy(androidLocation = it == "on") },
     ),
     SettingDef(
-        "android-sensors", "Whether programs in Debian can read the phone's sensors (pc26 sensor).",
+        "android-sensors", "Whether programs in Debian can read the phone's sensors (pocket sensor).",
         "on", listOf("on", "off"),
         oneOf("android-sensors", listOf("on", "off")),
         { copy(androidSensors = it == "on") },
     ),
     SettingDef(
-        "android-camera", "Whether programs in Debian can take photos with the phone's cameras (pc26 camera).",
+        "android-camera", "Whether programs in Debian can take photos with the phone's cameras (pocket camera).",
         "on", listOf("on", "off"),
         oneOf("android-camera", listOf("on", "off")),
         { copy(androidCamera = it == "on") },
     ),
     SettingDef(
-        "android-microphone", "Whether programs in Debian can record from the phone's microphone (pc26 audio record, the sound device).",
+        "android-microphone", "Whether programs in Debian can record from the phone's microphone (pocket audio record, the sound device).",
         "on", listOf("on", "off"),
         oneOf("android-microphone", listOf("on", "off")),
         { copy(androidMicrophone = it == "on") },
@@ -185,8 +185,8 @@ val SETTINGS: List<SettingDef> = listOf(
 
 private val SETTINGS_BY_KEY = SETTINGS.associateBy { it.key }
 
-private const val SETTINGS_HEADER = """# App settings: one "key = value" per line. `pc26 settings` lists
-# them all, `pc26 set KEY VALUE` changes one, `pc26 check` applies
+private const val SETTINGS_HEADER = """# App settings: one "key = value" per line. `pocket settings` lists
+# them all, `pocket set KEY VALUE` changes one, `pocket check` applies
 # edits made by hand.
 """
 
@@ -224,7 +224,7 @@ fun loadSettings(file: File): ParsedSettings =
  * message for people if the key or value is wrong.
  */
 fun setSetting(text: String?, key: String, value: String): Result<String> = runCatching {
-    val def = SETTINGS_BY_KEY[key] ?: error("unknown setting '$key' (pc26 settings lists them)")
+    val def = SETTINGS_BY_KEY[key] ?: error("unknown setting '$key' (pocket settings lists them)")
     def.check(value)?.let { error(it) }
     val newLine = "$key = $value"
     val lines = (text ?: SETTINGS_HEADER).lines().dropLastWhile { it.isEmpty() }.toMutableList()
@@ -241,7 +241,7 @@ fun setSetting(text: String?, key: String, value: String): Result<String> = runC
 
 /** [text] (the settings file) without [key]'s lines, so it's back to its default. */
 fun unsetSetting(text: String, key: String): Result<String> = runCatching {
-    if (key !in SETTINGS_BY_KEY) error("unknown setting '$key' (pc26 settings lists them)")
+    if (key !in SETTINGS_BY_KEY) error("unknown setting '$key' (pocket settings lists them)")
     text.lines().dropLastWhile { it.isEmpty() }.filterNot { isLineFor(it, key) }
         .joinToString("\n", postfix = "\n")
 }

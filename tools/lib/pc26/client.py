@@ -14,7 +14,7 @@ TOOLS = os.environ.get("PC26_TOOLS", "/opt/pc26")
 
 
 class Failure(Exception):
-    """Something to tell the user; `pc26` prints it and exits with 2."""
+    """Something to tell the user; `pocket` prints it and exits with 2."""
 
 
 def request(name, *args, on_line=None, answer_on_interrupt=False):
@@ -29,7 +29,7 @@ def request(name, *args, on_line=None, answer_on_interrupt=False):
     """
     folder = os.environ.get("PC26_REQUESTS")
     if not folder or not os.path.isdir(folder):
-        raise Failure("pc26 only works inside the app's terminal")
+        raise Failure("pocket only works inside the app's terminal")
     if any("\n" in a for a in args):
         raise Failure("values can't contain line breaks")
     ident = f"{os.getpid()}-{time.time_ns()}"
@@ -131,7 +131,7 @@ def touch(path):
 
 
 def record(reason):
-    """Tells the app the config changed (for `pc26 undo`, which names
+    """Tells the app the config changed (for `pocket undo`, which names
     the change [reason]) and applies it. Changes made with no app
     answering still count; the app sees them at its next start."""
     try:

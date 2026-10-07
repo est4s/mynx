@@ -129,7 +129,7 @@ Event 'remove' on source-output #0" PATH="$STUBS:$PATH" "$WATCH" "$PULSE" &
     [[ $(cat "$PC26_SOUND_DIR/inputs") == *"Source Output #3"* ]]
 }
 
-# `pc26 sound start` returns once Pulse answers, and a recording
+# `pocket sound start` returns once Pulse answers, and a recording
 # started right then came before the watcher's subscription: nothing
 # listed it until the next source event, ~5 s later.
 @test "sound-watch sees a recording that starts while it subscribes" {

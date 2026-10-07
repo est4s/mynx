@@ -32,5 +32,5 @@ agent() { # agent NAME: a fake installed agent
     source "$SETUP"
     run claude
     [ "$status" -eq 127 ]
-    [ "$output" = "claude isn't installed; pc26 agent install claude installs it" ]
+    [ "$output" = "claude isn't installed; pocket agent install claude installs it" ]
 }

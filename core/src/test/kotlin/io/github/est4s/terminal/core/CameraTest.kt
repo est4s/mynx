@@ -61,7 +61,7 @@ class CameraRequestTest {
     }
 
     @Test
-    fun `a photo after pc26 stopped waiting is thrown away`() {
+    fun `a photo after pocket stopped waiting is thrown away`() {
         send("7-1", "camera", "/root/a.jpg")
         var stopped = false
         asked.single().second.onCancel { stopped = true }
@@ -97,7 +97,7 @@ class CameraRequestTest {
         send("7-1", "camera", "/root/a.jpg")
         send("7-2", "camera-quick", "/root/a.jpg", "back")
         assertTrue(asked.isEmpty())
-        val off = """{"ok":false,"error":"the camera is off (pc26 set android-camera on)"}"""
+        val off = """{"ok":false,"error":"the camera is off (pocket set android-camera on)"}"""
         assertEquals(off, file("7-1.reply").readText())
         assertEquals(off, file("7-2.reply").readText())
     }

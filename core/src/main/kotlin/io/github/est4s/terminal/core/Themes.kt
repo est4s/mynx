@@ -19,6 +19,6 @@ fun builtInThemeText(name: String): String? =
 fun themeNameOf(colorsFile: String): String? =
     THEME_LINE.matchEntire(colorsFile.lineSequence().firstOrNull().orEmpty())?.groupValues?.get(1)
 
-/** What `pc26 theme set` writes into the colours file. */
+/** What `pocket theme set` writes into the colours file. */
 internal fun colorsFileFor(theme: String, text: String) =
-    "# theme: $theme\n# Set by `pc26 theme set $theme`; edit freely.\n$text"
+    "# theme: $theme\n# Set by `pocket theme set $theme`; edit freely.\n$text"

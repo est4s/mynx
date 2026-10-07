@@ -16,4 +16,4 @@ AI agents menu → AI agents installs Claude Code,
           Codex or Gemini CLI. Ask one to change
           your setup; it reads ~/AGENTS.md.
 Again     menu → Getting started, or type
-          pc26 welcome.
+          pocket welcome.

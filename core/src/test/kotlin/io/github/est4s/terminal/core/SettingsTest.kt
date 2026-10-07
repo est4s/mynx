@@ -116,7 +116,7 @@ class SettingsTest {
 
     @Test
     fun `refuses unknown keys and bad values, with the reason`() {
-        assertEquals("unknown setting 'colour' (pc26 settings lists them)",
+        assertEquals("unknown setting 'colour' (pocket settings lists them)",
             setSetting("", "colour", "red").exceptionOrNull()?.message)
         assertEquals("font-size must be a whole number from 6 to 40",
             setSetting("", "font-size", "100").exceptionOrNull()?.message)
@@ -127,7 +127,7 @@ class SettingsTest {
         assertEquals("# mine\ncursor-style = bar\n",
             unsetSetting("# mine\nfont-size = 16\ncursor-style = bar\nfont-size = 8\n", "font-size").getOrThrow())
         assertEquals("font-size = 16\n", unsetSetting("font-size = 16\n", "cursor-blink").getOrThrow())
-        assertEquals("unknown setting 'x' (pc26 settings lists them)", unsetSetting("", "x").exceptionOrNull()?.message)
+        assertEquals("unknown setting 'x' (pocket settings lists them)", unsetSetting("", "x").exceptionOrNull()?.message)
     }
 
     @Test

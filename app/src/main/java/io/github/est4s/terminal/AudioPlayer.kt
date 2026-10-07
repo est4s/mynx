@@ -7,7 +7,7 @@ import io.github.est4s.terminal.core.PlayQuery
 import io.github.est4s.terminal.core.PlayReport
 import java.io.FileInputStream
 
-/** Answers `pc26 audio play` with Android's MediaPlayer, on [handler]'s thread. */
+/** Answers `pocket audio play` with Android's MediaPlayer, on [handler]'s thread. */
 class AudioPlayer(private val handler: Handler) {
     private val players = mutableSetOf<MediaPlayer>()
 

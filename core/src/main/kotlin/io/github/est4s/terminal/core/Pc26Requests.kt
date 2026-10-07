@@ -5,11 +5,11 @@ import java.net.URLDecoder
 
 private val REQUEST_FILE = Regex("[A-Za-z0-9_-]{1,64}\\.req")
 
-/** A request from `pc26`: its [name] and the lines after it. */
+/** A request from `pocket`: its [name] and the lines after it. */
 data class Pc26Request(val name: String, val args: List<String>)
 
 /**
- * A notification `pc26 notify` asks for. [shell] is the tab it came
+ * A notification `pocket notify` asks for. [shell] is the tab it came
  * from (`PC26_SHELL`); with [ifAway], skip it while that tab is on
  * screen.
  */
@@ -19,13 +19,13 @@ private const val MAX_NOTICE_TITLE = 100
 private const val MAX_NOTICE_TEXT = 1000
 private const val DEFAULT_VIBRATE_MS = 300L
 private const val MAX_VIBRATE_MS = 5000L
-/** The longest text `pc26 clipboard set` copies (Android's clipboard goes through Binder, which has a ~1 MB limit). */
+/** The longest text `pocket clipboard set` copies (Android's clipboard goes through Binder, which has a ~1 MB limit). */
 const val MAX_CLIPBOARD_TEXT = 200_000
 
 private class Refused(message: String) : Exception(message)
 
 /**
- * Answers the `pc26` command. It writes a request to [dir] as `ID.req`
+ * Answers the `pocket` command. It writes a request to [dir] as `ID.req`
  * (renamed into place when complete): the request name on the first
  * line, one argument per line after it. The answer goes to `ID.reply` as
  * JSON, also renamed into place, and the request is removed. [home] is
@@ -37,12 +37,12 @@ private class Refused(message: String) : Exception(message)
  * the clipboard's text or fails with the reason. [share] opens
  * Android's share sheet for a [Share]; [torch] turns the flashlight on
  * (at a strength in percent, or the phone's default) or off.
- * [startSound] (re)starts the sound server (`pc26 sound install`).
+ * [startSound] (re)starts the sound server (`pocket sound install`).
  * [rotation] holds the screen's rotation locks; [rotationChanged] gets
  * the orientation to hold (null: none) after each change.
  *
  * Requests in [later] are answered later, or stream (see [Later]).
- * [sweep] cancels those whose `pc26` cancelled them or has gone
+ * [sweep] cancels those whose `pocket` cancelled them or has gone
  * ([alive] says whether a process still runs).
  */
 class Pc26Requests(
@@ -120,7 +120,7 @@ class Pc26Requests(
     /** Whether a [Later] request is still running: while one is, call [sweep] now and then. */
     fun hasOpen(): Boolean = synchronized(open) { open.isNotEmpty() }
 
-    /** Cancels the [Later] requests that `pc26` cancelled (`ID.cancel`) or whose `pc26` has gone. */
+    /** Cancels the [Later] requests that `pocket` cancelled (`ID.cancel`) or whose `pocket` has gone. */
     fun sweep() {
         for (reply in synchronized(open) { open.toList() }) {
             val pid = pidOfRequest(reply.id)
@@ -164,7 +164,7 @@ class Pc26Requests(
                     ok("key" to json("all"))
                 } else {
                     val def = SETTINGS.firstOrNull { it.key == key }
-                        ?: throw Refused("unknown setting '$key' (pc26 settings lists them)")
+                        ?: throw Refused("unknown setting '$key' (pocket settings lists them)")
                     if (settingsFile.isFile) {
                         writeAtomically(settingsFile, unsetSetting(settingsFile.readText(), key).getOrThrow())
                     }
@@ -324,7 +324,7 @@ class Pc26Requests(
             }
             "sound-start" -> {
                 if (!loadSettings(settingsFile).settings.soundDevice) {
-                    throw Refused("the sound device is off (pc26 set sound-device on)")
+                    throw Refused("the sound device is off (pocket set sound-device on)")
                 }
                 startSound()?.let { throw Refused(it) }
                 ok()
@@ -354,7 +354,7 @@ class Pc26Requests(
         }
         if (agent) {
             val settings = loadSettings(settingsFile).settings
-            if (!settings.agentNotify) return notShown("agent-notify is off (pc26 set agent-notify on)")
+            if (!settings.agentNotify) return notShown("agent-notify is off (pocket set agent-notify on)")
             if (took != null && took < settings.agentNotifyAfter) {
                 return notShown("the turn took ${took}s; agent-notify-after is ${settings.agentNotifyAfter}s")
             }
@@ -373,13 +373,13 @@ class Pc26Requests(
 
     private fun shareAllowed() {
         if (!loadSettings(settingsFile).settings.androidShare) {
-            throw Refused("sharing is off (pc26 set android-share on)")
+            throw Refused("sharing is off (pocket set android-share on)")
         }
     }
 
     private fun clipboardAllowed() {
         if (!loadSettings(settingsFile).settings.androidClipboard) {
-            throw Refused("clipboard access is off (pc26 set android-clipboard on)")
+            throw Refused("clipboard access is off (pocket set android-clipboard on)")
         }
     }
 
@@ -387,7 +387,7 @@ class Pc26Requests(
 
     private fun String.cut(max: Int) = if (length <= max) this else take(max - 1) + "…"
 
-    // The name of the change a request makes, for `pc26 undo`; null if it changes nothing.
+    // The name of the change a request makes, for `pocket undo`; null if it changes nothing.
     private fun changeName(request: Pc26Request): String? {
         val args = request.args.joinToString(" ")
         return when (request.name) {
@@ -431,7 +431,7 @@ class Pc26Requests(
     /** A theme's text and where it comes from; the user's wins. */
     private fun theme(name: String): Pair<String, String> {
         userThemes()[name]?.let { return it.readText() to debianPath(it) }
-        val builtIn = builtInThemeText(name) ?: throw Refused("no theme '$name' (pc26 theme list shows them)")
+        val builtIn = builtInThemeText(name) ?: throw Refused("no theme '$name' (pocket theme list shows them)")
         return builtIn to "built-in"
     }
 
@@ -451,7 +451,7 @@ class Pc26Requests(
     private fun userKeyBar(name: String): File? =
         if (isKeyBarName(name)) File(keyBarsDir, "$name.conf").takeIf { it.isFile } else null
 
-    private fun noKeyBar(name: String) = "no key bar '$name' (pc26 keybar list shows them)"
+    private fun noKeyBar(name: String) = "no key bar '$name' (pocket keybar list shows them)"
 
     private fun debianPath(file: File) = "~/" + file.relativeTo(home).invariantSeparatorsPath
 

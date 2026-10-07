@@ -2,9 +2,9 @@ package io.github.est4s.terminal.core
 
 import java.io.File
 
-/** How long `pc26 camera` waits for the camera app: people take their time framing a shot. */
+/** How long `pocket camera` waits for the camera app: people take their time framing a shot. */
 const val CAMERA_APP_SECONDS = 600
-/** How long `pc26 camera --quick` waits for its shot. */
+/** How long `pocket camera --quick` waits for its shot. */
 const val QUICK_SHOT_SECONDS = 30
 const val MAX_TORCH_PERCENT = 100
 // A quick shot lets exposure and focus settle at least this long, at most the longer.
@@ -14,7 +14,7 @@ private const val MAX_SETTLE_MS = 2500L
 enum class Facing { FRONT, BACK }
 
 /**
- * A photo `pc26 camera` asks for, to be saved in [target] (on the host;
+ * A photo `pocket camera` asks for, to be saved in [target] (on the host;
  * [path] is its name in Debian): through the phone's camera app, or with
  * [quick], straight from that camera with no screen.
  */
@@ -25,7 +25,7 @@ interface PhotoReport {
     /** The photo is in [file], a temporary file: it's moved to the target. */
     fun taken(file: File)
     fun fail(message: String)
-    /** `pc26` stopped waiting, or has gone: a photo taken after this is thrown away. */
+    /** `pocket` stopped waiting, or has gone: a photo taken after this is thrown away. */
     fun onCancel(block: () -> Unit)
 }
 
@@ -42,7 +42,7 @@ fun cameraRequests(home: File, take: (PhotoQuery, PhotoReport) -> Unit): Map<Str
             return@Later
         }
         if (!loadSettings(settings).settings.androidCamera) {
-            reply.refuse("the camera is off (pc26 set android-camera on)")
+            reply.refuse("the camera is off (pocket set android-camera on)")
             return@Later
         }
         var cancelled = false

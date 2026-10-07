@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Debug builds only: `pc26 install-apk` (scripts/deliver.sh) installs new
+<!-- Debug builds only: `pocket install-apk` (scripts/deliver.sh) installs new
      builds from inside the app. Release builds can't install apps. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

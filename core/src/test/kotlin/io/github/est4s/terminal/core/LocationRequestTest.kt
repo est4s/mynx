@@ -101,7 +101,7 @@ class LocationRequestTest {
         send("7-1", "location")
         send("7-2", "location-stream")
         assertTrue(asked.isEmpty())
-        val off = """{"ok":false,"error":"location is off (pc26 set android-location on)"}"""
+        val off = """{"ok":false,"error":"location is off (pocket set android-location on)"}"""
         assertEquals(off, file("7-1.reply").readText())
         assertEquals(off, file("7-2.reply").readText())
     }
