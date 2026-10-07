@@ -356,6 +356,12 @@ See README "How it works". The details:
 - **`/dev/fd` in the dev Debian (proot-distro) is a frozen copy of one
   process's fd folder**, so `cat <(echo hi)` fails there. The app's own
   Debian is fine (checked on the phone in 3.2).
+- **Don't `mv` a git repo (or anything with hard links) in proot.**
+  proot fakes hard links with symlinks to `.l2s.*` files holding the
+  absolute path, so a moved repo's loose objects all break ("bad object
+  HEAD"), and those links can't be rewritten. Copy with `cp -rL` from
+  the old place, delete the `.l2s.*` files in the copy, `git fsck`,
+  then remove the original.
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the owner can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.

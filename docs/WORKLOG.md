@@ -394,7 +394,15 @@ left in the owner's rootfs; new installs never had it).
 
 **Repository renamed** to `est4s/PC-26` (owner's request), with the
 local remote updated. GitHub redirects the old URL; nothing in the repo
-named it. The local clone stays at `~/pocket-terminal-app`.
+named it.
+
+**Local clone moved** to `~/PC-26`. A plain `mv` broke git: proot's
+fake hard links (`.l2s.*` symlinks) hold the old absolute path. Moved
+it back, copied with `cp -rL`, deleted the stray `.l2s.*` copies,
+`git fsck` clean, then removed the old folder. Noted in AGENTS.md's
+proot notes. Claude's project data (memory, history) was copied to
+`~/.claude/projects/-root-PC-26`, and its `~/.claude.json` entry to
+`/root/PC-26`.
 
 ### 2026-10-07 (66): one command, `pocket`; old names dropped
 
