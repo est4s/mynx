@@ -25,7 +25,8 @@ import threading
 import time
 import tty
 
-sys.path.insert(0, "/opt/pc26/lib")
+# the app's own library, next to the apps folder (/opt/pc26/lib)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
 from pc26.client import Failure, request  # noqa: E402
 
 STATE = os.path.expanduser("~/.config/torch/state.json")

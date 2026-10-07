@@ -47,6 +47,12 @@ class AppsTest(unittest.TestCase):
         for name in ["mic.py", "needs.py"]:
             self.assertFalse(os.access(os.path.join(APPS, name), os.X_OK), name)
 
+    def test_apps_find_the_apps_library_next_to_them(self):
+        # Not at the installed path: that would test the installed copy, or nothing.
+        for name in NAMES:
+            with open(os.path.join(APPS, name)) as f:
+                self.assertNotIn('"/opt/pc26/lib"', f.read(), name)
+
     def test_help_prints_what_the_app_does(self):
         for name in NAMES:
             run = run_app(name, "--help")
