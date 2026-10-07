@@ -891,7 +891,7 @@ def pick_and_install():
         try:
             code = install_agent(agent, yes=False, notify=None)
         except Failure as e:
-            print(f"pc26: {e}", file=sys.stderr)
+            print(f"pocket: {e}", file=sys.stderr)
             code = 2
         print("\nPress Enter to go back.", end=" ", flush=True)
         sys.stdin.readline()
@@ -1051,5 +1051,5 @@ def main(argv):
         if as_json:
             print(json.dumps({"ok": False, "error": str(e)}))
         else:
-            print(f"pc26: {e}", file=sys.stderr)
+            print(f"pocket: {e}", file=sys.stderr)
         return 2

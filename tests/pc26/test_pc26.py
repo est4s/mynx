@@ -167,6 +167,11 @@ class Pc26Test(unittest.TestCase):
         run = self.pocket("check")
         self.assertEqual(run.returncode, 2)
         self.assertIn("unknown request 'check'", run.stderr)
+        self.assertTrue(run.stderr.startswith("pocket: "), run.stderr)
+
+    def test_errors_are_named_after_the_command(self):
+        with open(os.path.join(os.path.dirname(PC26), "..", "lib", "pc26", "cli.py")) as f:
+            self.assertNotIn('"pc26: ', f.read())
 
     # --- help and version --------------------------------------------------
 
@@ -903,7 +908,7 @@ class Pc26Test(unittest.TestCase):
         self.start_app({"location": {"ok": False, "error": "no fix within 60 s"}})
         run = self.pocket("location")
         self.assertEqual(run.returncode, 2)
-        self.assertEqual(run.stderr, "pc26: no fix within 60 s\n")
+        self.assertEqual(run.stderr, "pocket: no fix within 60 s\n")
 
     def test_location_usage(self):
         usage = "usage: pocket location [--gps] [--timeout SECONDS] | --stream [--every SECONDS] [--gps]"
@@ -979,7 +984,7 @@ class Pc26Test(unittest.TestCase):
         self.start_app({"sensor": {"ok": False, "error": "the phone has no pressure sensor"}})
         run = self.pocket("sensor", "pressure")
         self.assertEqual(run.returncode, 2)
-        self.assertEqual(run.stderr, "pc26: the phone has no pressure sensor\n")
+        self.assertEqual(run.stderr, "pocket: the phone has no pressure sensor\n")
 
     def test_sensor_usage(self):
         usage = "usage: pocket sensor list | NAME [--timeout SECONDS] | NAME --stream [--rate HZ]"
@@ -1013,7 +1018,7 @@ class Pc26Test(unittest.TestCase):
         self.start_app({"camera": {"ok": False, "error": "no photo was taken"}})
         run = self.pocket("camera", "/srv/a.jpg")
         self.assertEqual(run.returncode, 2)
-        self.assertEqual(run.stderr, "pc26: no photo was taken\n")
+        self.assertEqual(run.stderr, "pocket: no photo was taken\n")
 
     def test_camera_stops_quietly_on_ctrl_c(self):
         self.start_app({"camera-quick": {"ok": True, "_lines": [], "_hold": True}})
@@ -1236,7 +1241,7 @@ class Pc26Test(unittest.TestCase):
         self.start_app({"audio-record": {"ok": False, "error": "the microphone is off (pocket set android-microphone on)"}})
         run = self.pocket("audio", "record", "/srv/a.m4a")
         self.assertEqual(run.returncode, 2)
-        self.assertEqual(run.stderr, "pc26: the microphone is off (pocket set android-microphone on)\n")
+        self.assertEqual(run.stderr, "pocket: the microphone is off (pocket set android-microphone on)\n")
 
     def test_audio_usage(self):
         usage = "usage: pocket audio play FILE | record FILE [--seconds N] [--rate HZ]"

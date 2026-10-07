@@ -433,7 +433,14 @@ apps-menu", whose audio folder lists four of these apps). Then check
 on the phone: menu → Apps lists the seven by label, each opens with
 its bar, `tuner` offers numpy on a Debian without it.
 
-Tests: core green, 199 unittest, 92 bats.
+**CI caught a path bug** (run 37621007026): `torch` and `metronome`
+put `/opt/pc26/lib` on `sys.path`. On the phone that's the installed
+copy, so the tests passed against it; CI has no `/opt/pc26`. They now
+use the `lib` next to their own folder (8bcda33), and a test forbids
+the fixed path. Lesson: tests run on the phone can silently use
+`/opt/pc26`; code in `tools/` must find its files relative to itself.
+
+Tests: core green, 200 unittest, 92 bats.
 
 ### 2026-10-07 (68): GPL-3.0 licence; making the repo user ready
 
