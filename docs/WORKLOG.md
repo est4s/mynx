@@ -423,7 +423,14 @@ menu**, like Games.
   `incline` draw and quit with `q` (torch, metronome and dbmeter not
   run here: they'd switch on the light, speaker or mic).
 
-**After installing that build, on the owner's phone** (not done yet):
+**Done 2026-10-07 on build 81:** the duplicates are removed (the 7
+apps, `mic.py` and their bars; backed up in that session's
+scratchpad), the owner's menu has `Apps = apps` after Files, and My
+apps holds only Field Logs and Brush teeth. **The owner confirmed
+menu → Apps works on the phone.** Not checked: `tuner` offering numpy
+on a Debian without it (the owner's has numpy).
+
+**After installing that build, on the owner's phone** (was):
 the owner's own copies in `~/.local/bin` come first on the PATH, and
 their bars in `~/.config/pc26/keybars/` now show as "edited" copies of
 the built-in ones (same buttons). Offer to remove the duplicates (keep
