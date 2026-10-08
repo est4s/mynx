@@ -109,9 +109,9 @@ building.
    `mynx install-apk` exists only in debug builds today.
 2. **Report a bug from the app.** A way to send a bug report from
    inside the app, e.g. a menu item and a `mynx` command. To settle:
-   where reports go (GitHub issues, email), what they carry (app
-   version, Android version and phone from `mynx about`, recent
-   crash text), and asking before anything is sent.
+   where reports go (GitHub issues, email), what they carry (the
+   app's version from `mynx about`, Android version, phone model,
+   recent crash text), and asking before anything is sent.
 
 ### Roadmap step 9: Android integration
 
