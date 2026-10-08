@@ -418,6 +418,14 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-08 (75): README leads with the idea
+
+At the maintainer's request the README opens with what Mynx is for: a
+new way to use a phone, where you make your own tools and apps (with an
+AI agent or by hand) instead of putting up with store apps' ads and
+tracking. Three points follow (no ads/tracking/accounts, yours to
+change, Debian underneath), then the feature list as before.
+
 ### 2026-10-08 (74): the app is MIT now, not GPL-3.0
 
 **Maintainer's decision:** Mynx is under the **MIT License**. Nothing
