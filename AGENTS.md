@@ -66,11 +66,13 @@ Consequences:
 
 ### Build → install loop
 
-1. Commit and push to `main` (or open a PR). `.github/workflows/build.yml`
-   builds a debug APK (~2.5 min). Pushes that only change
-   Markdown files skip the build.
+1. Commit on a feature branch, push it and open a PR (`main` takes no
+   direct pushes, see "Branches"). `.github/workflows/build.yml`
+   builds a debug APK for the PR and again on `main` after the merge
+   (~7.5 min). Markdown-only changes skip the build.
 2. Run `scripts/deliver.sh` in the app's Debian, with the app on screen.
-   It waits for HEAD's run, downloads the APK, copies it to the phone's
+   It waits for HEAD's run (on the current branch: a PR's, or
+   `main`'s; or give it a run ID), downloads the APK, copies it to the phone's
    Download folder and opens Android's installer with `mynx install-apk`.
    The maintainer just taps **Install**. The build installs as **Mynx
    Dev**, a separate app (see "Naming"): run from Mynx Dev, the app
@@ -521,11 +523,18 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
 
 - **Commits:** short imperative subject line, with a body explaining why when
   it isn't obvious. Commit and push only when the maintainer asks.
-- **Branches: trunk-based** (maintainer's decision, 2026-10-08; not
-  switched on yet, see the work log): each feature on a short-lived
-  branch, a PR into `main`, CI builds it, the maintainer tests that
-  build in Mynx Dev, then it's merged. `main` will be protected (PRs
-  and green CI). No long-lived `dev` branch.
+- **Branches: trunk-based** (maintainer's decision, 2026-10-08): each
+  feature on a short-lived branch, a PR into `main`, CI builds it, the
+  maintainer tests that build in Mynx Dev, then it's merged. No
+  long-lived `dev` branch. **`main` is protected** by the ruleset
+  "Protect main" (on since 2026-10-08, maintainer's choice of "PRs
+  only"): no direct pushes for anyone, the maintainer and agents
+  included; a PR needs the `build` check green (no approvals: a solo
+  maintainer can't approve their own PR); no force-pushes or deleting
+  `main`. Admins may merge a PR without the check, which Markdown-only
+  PRs need (they don't build). So work-log commits go through a PR
+  too, usually with the work they describe. Only collaborators can
+  push or merge at all; others fork and open PRs.
 - **Releases:** only the maintainer tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
 - **README:** short, for users: what ships today, install, licence.
