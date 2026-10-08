@@ -204,6 +204,20 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-09 (86): Bluetooth on the roadmap
+
+Maintainer's decision: Bluetooth joins the "later" plans
+(`docs/ROADMAP.md`, "Bluetooth", and step 11). Debian can't reach the
+Bluetooth hardware (no BlueZ under proot on Android), so it goes
+through the app: classic serial (SPP) over the USB serial bridge, so
+build that bridge first, and BLE as `mynx ble` requests and streams.
+Ideas for the USB bridge from the same talk: a pseudo-terminal bound
+at `/dev/ttyUSB0`; DTR/RTS (bootloader reset) can't cross a
+pseudo-terminal, so either serve RFC 2217 on localhost (pyserial and
+`esptool` take `rfc2217://`) or have proot catch the modem ioctls on
+that port. Raw USB: `libusb_wrap_sys_device` on the fd Android hands
+the app. Docs only, nothing built.
+
 ### 2026-10-08 (85): Docs cleaned up
 
 The maintainer asked to drop what's old or no longer relevant from the
