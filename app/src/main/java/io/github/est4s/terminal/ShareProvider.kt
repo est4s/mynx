@@ -19,7 +19,7 @@ import java.io.FileNotFoundException
  */
 class ShareProvider : ContentProvider() {
     companion object {
-        const val AUTHORITY = "io.github.est4s.terminal.share"
+        const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.share"
         val shared = SharedFiles()
 
         fun uris(files: List<File>): List<Uri> {

@@ -67,17 +67,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Authorities follow the application ID, so Mynx Dev (.dev) installs beside Mynx. -->
         <!-- Serves the files `mynx share` shares, only to the apps granted them. -->
         <provider
             android:name=".ShareProvider"
-            android:authorities="io.github.est4s.terminal.share"
+            android:authorities="${applicationId}.share"
             android:exported="false"
             android:grantUriPermissions="true" />
 
         <!-- The camera app writes the photo `mynx camera` asked for here. -->
         <provider
             android:name=".PhotoProvider"
-            android:authorities="io.github.est4s.terminal.photo"
+            android:authorities="${applicationId}.photo"
             android:exported="false"
             android:grantUriPermissions="true" />
 

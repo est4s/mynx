@@ -78,11 +78,15 @@ git push origin v0.1.0
 
 ## Debug and release builds on one phone
 
-Both use the application ID `io.github.est4s.terminal` (the launcher
-shortcut names it, and it can never change) but different keys, so
-Android won't install one over the other. To try a release build on the
-development phone, uninstall the debug build first, which **deletes its
-Debian**; going back to debug builds means uninstalling again.
+Debug builds are a separate app, **Mynx Dev**, with the application ID
+`io.github.est4s.terminal.dev` (`applicationIdSuffix`), so they install
+beside the release (`io.github.est4s.terminal`), each with its own
+Debian. The release keeps the ID it can never change.
+
+Builds from before Mynx Dev (up to build 87) are debug-signed with the
+release's ID. Android won't install a release over one of those:
+uninstall it first, which **deletes its Debian** (back up `/root`
+before).
 
 ## Later: Google Play
 

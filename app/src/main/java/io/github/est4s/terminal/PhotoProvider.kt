@@ -16,7 +16,7 @@ import java.util.UUID
  */
 class PhotoProvider : ContentProvider() {
     companion object {
-        private const val AUTHORITY = "io.github.est4s.terminal.photo"
+        private const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.photo"
 
         @Volatile
         private var current: Pair<String, File>? = null

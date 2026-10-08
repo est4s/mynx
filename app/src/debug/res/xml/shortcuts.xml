@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Long-press the app icon: Settings opens the settings editors (mynx edit) in a new tab.
-     Mynx Dev has a copy in src/debug/res/xml: change both. -->
+<!-- Mynx Dev's copy of main/res/xml/shortcuts.xml: shortcut XML can't follow the
+     application ID, so the target package is written out. Change both. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:shortcutId="settings"
@@ -9,7 +9,7 @@
         android:shortcutShortLabel="@string/shortcut_settings">
         <intent
             android:action="io.github.est4s.terminal.SETTINGS"
-            android:targetPackage="io.github.est4s.terminal"
+            android:targetPackage="io.github.est4s.terminal.dev"
             android:targetClass="io.github.est4s.terminal.MainActivity" />
     </shortcut>
 </shortcuts>

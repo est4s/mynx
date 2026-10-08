@@ -105,13 +105,45 @@ yet, no hurry: the browser path without gh (`gh auth logout`, then
 `y` opens GitHub's filled-in new-issue page, `n` says "Nothing was
 sent."), and a report after a crash (none to force).
 
-**Updates (proposed, not built yet):** the release APK needs
-`REQUEST_INSTALL_PACKAGES` and the installer provider, which today
-are only in debug builds (`app/src/debug/`). Fine for GitHub; a Play
-build later needs a variant without them. The check reads GitHub's
-latest-release API (`/repos/est4s/mynx/releases/latest`), compares
-the version name (logic in core). The repo is public since
-2026-10-08, so the API answers without a token.
+**Updates: the plan (maintainer's decisions, 2026-10-08).**
+1. **Mynx Dev** (entry 80, built, not yet on the phone): debug builds
+   are a separate app, `io.github.est4s.terminal.dev`, with their own
+   Debian. Check: `scripts/deliver.sh` from this app (build 87)
+   installs "Mynx Dev" *beside* it, not over it; Mynx Dev unpacks a
+   fresh Debian and shows the welcome page; long-press its icon →
+   Settings opens the editors in Mynx Dev (not here); `mynx share`
+   and `mynx camera` work in it (they use the providers whose names
+   changed).
+2. **Updates**, built test-first: the check and download live in the
+   app, not Debian, so a broken Debian (python3, certificates) can't
+   block the update that would fix it. Release builds only; Mynx Dev
+   says it updates from CI. Core parses GitHub's latest-release JSON
+   (`/repos/est4s/mynx/releases/latest`, no token: the repo is
+   public), compares version names and keeps the last check time
+   (about daily while the service runs). A new release: a
+   notification, and "Update available" in the launcher menu. Both
+   run `mynx update` in a tab: it shows the version and notes, asks,
+   downloads (progress streamed, size and GitHub's sha256 digest
+   checked) and opens the installer. `REQUEST_INSTALL_PACKAGES` and
+   `ApkProvider` move to the main manifest (a Play build later needs
+   a variant without them). Probably an `update-check` on/off setting.
+3. **What's new and release notes** (maintainer's decision): after
+   every update, a What's new page shows the notes of the versions
+   since the one before (the tools' version change already marks an
+   update). The menu gets "Release notes": all of GitHub's release
+   notes. Proposed: the release workflow writes the notes of every
+   release so far, plus the new one, into the tools
+   (`/opt/mynx/release-notes`), so both work offline and match
+   GitHub. Generated notes are commit subjects; maybe the maintainer
+   edits them in the release before tagging (decide then).
+4. The maintainer tags **v0.1.0**, and moves: back up `/root`,
+   uninstall this app (build 87 and older are debug-signed with the
+   release ID, so a release can't install over them), install the
+   release, restore. From then on: develop in Mynx, test in Mynx Dev.
+5. **Trunk-based** (decided): protect `main` (PRs, green CI; the
+   maintainer can let admins push doc commits), `deliver.sh` learns to
+   install a PR's build, AGENTS.md updated.
+6. Test updates for real by tagging v0.1.1.
 
 ### Next feature: guided GitHub setup (2026-10-08)
 
@@ -425,6 +457,28 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (80): Mynx Dev, a separate debug app
+
+Planned app updates with the maintainer (see "Next"). Release APKs
+can't install over debug builds (different keys), so the maintainer
+asked for debug builds as a separate app, to have both on the phone,
+and for a branch flow; offered git-flow (a `dev` branch) or
+trunk-based. **Decided: trunk-based** (feature branch → PR → test the
+PR's build in Mynx Dev → merge), switched on after v0.1.0. Also
+decided: a What's new page after every update and release notes in
+the menu.
+- `app/build.gradle.kts`: debug `applicationIdSuffix = ".dev"`;
+  `app/src/debug/res/values/strings.xml`: "Mynx Dev".
+- Provider authorities (`share`, `photo`, `apk`) follow the ID:
+  `${applicationId}` in the manifests, `BuildConfig.APPLICATION_ID` in
+  code. Two installed apps can't share an authority.
+- The launcher shortcut's XML can't use the ID, so
+  `app/src/debug/res/xml/shortcuts.xml` is a copy naming the dev ID.
+- Intent actions (`…SETTINGS`, `…EXIT`, `…SHELL`) stay: they're sent
+  to an explicit package or component.
+- Docs: AGENTS.md (naming, install loop, branches), RELEASING.md.
+- Not checked on the phone yet (no local Android builds).
 
 ### 2026-10-08 (79): Bug reports confirmed on the phone
 

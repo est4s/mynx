@@ -17,7 +17,7 @@ import java.io.FileNotFoundException
  */
 class ApkProvider : ContentProvider() {
     companion object {
-        const val AUTHORITY = "io.github.est4s.terminal.apk"
+        const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.apk"
         const val MIME = "application/vnd.android.package-archive"
         private const val NAME = "app.apk"
         val uri: Uri = Uri.parse("content://$AUTHORITY/$NAME")

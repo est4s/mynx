@@ -32,6 +32,13 @@ without a trace in the code; the work log has the history.
   (`app_name`). Don't hardcode it elsewhere in code.
 - The application ID `io.github.est4s.terminal` is deliberately name-neutral,
   because an ID can never change after publishing. **Never change it.**
+- Debug builds are a separate app, **Mynx Dev**
+  (`io.github.est4s.terminal.dev`, maintainer's decision, 2026-10-08), so
+  they install beside the release with a Debian of their own. Its name is
+  `app_name` in `app/src/debug/res/values/strings.xml`. Anything that
+  names the app ID follows `${applicationId}` / `BuildConfig.APPLICATION_ID`;
+  the launcher shortcut can't, so `app/src/debug/res/xml/shortcuts.xml`
+  is a copy with the dev ID.
 - Avoid "Debian", "Linux" and "Termux" in any future product name; they're
   fine in descriptions.
 
@@ -65,7 +72,10 @@ Consequences:
 2. Run `scripts/deliver.sh` in the app's Debian, with the app on screen.
    It waits for HEAD's run, downloads the APK, copies it to the phone's
    Download folder and opens Android's installer with `mynx install-apk`.
-   The maintainer just taps **Install** (the app restarts as the new build).
+   The maintainer just taps **Install**. The build installs as **Mynx
+   Dev**, a separate app (see "Naming"): run from Mynx Dev, the app
+   restarts as the new build; run from Mynx, Mynx Dev installs or
+   updates beside it.
 
 Notes on why the script does what it does:
 - `mynx install-apk FILE` (left out of `mynx help` and the user guide)
@@ -488,6 +498,11 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
 
 - **Commits:** short imperative subject line, with a body explaining why when
   it isn't obvious. Commit and push only when the maintainer asks.
+- **Branches: trunk-based** (maintainer's decision, 2026-10-08; not
+  switched on yet, see the work log): each feature on a short-lived
+  branch, a PR into `main`, CI builds it, the maintainer tests that
+  build in Mynx Dev, then it's merged. `main` will be protected (PRs
+  and green CI). No long-lived `dev` branch.
 - **Releases:** only the maintainer tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
 - **README:** short, for users: what ships today, install, licence.

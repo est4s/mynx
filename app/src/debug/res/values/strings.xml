@@ -1,0 +1,4 @@
+<resources>
+    <!-- Debug builds are a separate app beside the release (applicationIdSuffix .dev). -->
+    <string name="app_name">Mynx Dev</string>
+</resources>
