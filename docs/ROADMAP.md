@@ -173,6 +173,21 @@ cable, using standard tools.
   `mynx usb` command; covered by the agent docs, so an agent can write,
   build and flash firmware.
 
+### Bluetooth *(later)*
+Talk to Bluetooth devices from Debian, through the app. Android doesn't
+let apps reach the Bluetooth hardware, so BlueZ and `bluetoothctl` can't
+run; the app uses Android's Bluetooth API instead.
+- **Bluetooth serial** (classic SPP): HC-05/HC-06 modules, ESP32
+  `BluetoothSerial` and the like appear in Debian as a serial port, through
+  the same bridge as USB serial, so `picocom` and other serial tools work.
+- **Bluetooth Low Energy:** `mynx ble` scans for devices, connects, and
+  reads, writes and subscribes to characteristics, with `--json` and
+  streams like `mynx sensor`. Devices with the Nordic UART service can
+  also appear as a serial port.
+- Covered by the agent docs, so an agent can find a device and talk to it.
+- Bluetooth keyboards and headphones already work through Android (the
+  sound device plays through whatever Android plays to).
+
 ### Included extras
 - The default **Neon** profile comes with a synthwave theme and a few terminal
   games, each with its own key bar.
@@ -233,3 +248,5 @@ Steps 1-7, 9 and 10 are done; step 8 is parked.
     - optional tap support in the file manager (settings toggle)
     - development boards: USB serial bridge, flashing Arduino/ESP32/UF2
       boards, serial monitor tab
+    - Bluetooth: serial (SPP) through the same bridge, BLE through
+      `mynx ble`
