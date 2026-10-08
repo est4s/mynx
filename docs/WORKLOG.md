@@ -94,9 +94,8 @@ bars and the menu kept; closing all tabs and restarting opens the
 menu (`MYNX_MENU`); a long Claude turn with the app in the background
 notifies; `mynx edit` shows its key bar (`mynx-edit`); `mynx sound`
 is on; the menu's banner says MYNX (entry 72; needs the next build,
-or `scripts/deliver.sh`). Then delete `~/PC-26` (the old clone: clean, matches
-`origin/main`, no stashes; kept until the maintainer says so) and
-`~/mynx-migrate.sh`.
+or `scripts/deliver.sh`). `~/PC-26` and `~/mynx-migrate.sh` were
+deleted 2026-10-08 (entry 73).
 
 ### Roadmap step 9: Android integration
 
@@ -398,6 +397,8 @@ instead of "the owner": `AGENTS.md`, this log (old entries too),
 `docs/SCREENSHOTS.md`, `docs/RELEASING.md`, `.gitignore`. File
 ownership in code (`TarUnpacker.kt`, tar flags) and the Apache
 licence text are unchanged. AGENTS.md's conventions now say so.
+At the maintainer's request, deleted the old clone `~/PC-26` (clean,
+nothing unpushed) and `~/mynx-migrate.sh`.
 
 ### 2026-10-07 (72): the menu's banner still said PC-26
 
