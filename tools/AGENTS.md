@@ -110,7 +110,7 @@ their own.
 | `mynx welcome` | the welcome page new users see: what's here and how to get around |
 | `mynx about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
 | `mynx version` | the version of the app's tools |
-| `mynx report [TEXT]` | report a bug in the app: shows the report, asks, then opens a prefilled GitHub issue (see "More of the setup") |
+| `mynx report [TEXT]` | report a bug in the app: shows the report, asks, then sends it with `gh` if signed in, else opens a prefilled GitHub issue (see "More of the setup") |
 | `mynx help` | all commands |
 
 `--json` on any command prints `{"ok": true, ...}` or
@@ -463,9 +463,12 @@ shows the generic game bar until `my-tool.conf` exists.
   System → Report a bug) builds a report: the description, the app's
   version, the Android version and phone model, and the app's last
   crash, if any (`--no-crash` leaves it out). It shows all of it and
-  asks; on yes it opens a new GitHub issue in the phone's browser,
-  filled in. Nothing is sent until the user submits it there with
-  their own GitHub account. With no TEXT it asks what went wrong.
+  asks. When `gh` is installed and signed in, yes sends it as a new
+  GitHub issue from that account; if that fails, it offers the
+  browser instead. Without `gh`, yes opens a new GitHub issue in the
+  phone's browser, filled in, and nothing is sent until the user
+  submits it there with their own GitHub account. With no TEXT it
+  asks what went wrong.
   For agents: `mynx report TEXT --json` gives `title`, `what`,
   `details` and `url` and opens nothing; show the user the report and
   only `mynx open URL` once they agree.

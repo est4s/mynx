@@ -1,0 +1,19 @@
+# Labels issues sent by `mynx report` through gh: GitHub drops labels
+# that people without write access set, so the report carries a marker
+# (REPORT_MARK in tools/lib/mynx/cli.py) instead.
+name: Label app reports
+on:
+  issues:
+    types: [opened]
+permissions:
+  issues: write
+jobs:
+  label:
+    if: contains(github.event.issue.body, '<!-- mynx report -->')
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue edit "$NUMBER" --repo "$REPO" --add-label bug,from-app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}

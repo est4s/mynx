@@ -790,10 +790,78 @@ class MynxTest(unittest.TestCase):
              "crash": "java.lang.IllegalStateException: boom\n\tat X.y(X.kt:1)",
              "crash_time": 1760000000000}
 
-    def report(self, *args, info=None, input=""):
+    # A gh that isn't signed in, so the real one (the machine running the
+    # tests may have it) never files an issue.
+    GH_SIGNED_OUT = 'echo "You are not logged into any GitHub hosts." >&2; exit 1'
+
+    def fake_gh(self, login="est4s", create="ok"):
+        """A signed-in gh that records `issue create` (its args and body)."""
+        log = os.path.join(self.tmp.name, "gh")
+        return f'''
+case "$1 $2" in
+  "api user") echo {login} ;;
+  "issue create")
+    printf '%s\\n' "$@" > {log}.args; cat > {log}.body
+    {'echo https://github.com/est4s/mynx/issues/7' if create == "ok" else 'echo "HTTP 502: Bad Gateway" >&2; exit 1'} ;;
+  *) exit 1 ;;
+esac'''
+
+    def gh_created(self):
+        """The `issue create` gh got: its args and the body, or None."""
+        log = os.path.join(self.tmp.name, "gh")
+        if not os.path.exists(log + ".args"):
+            return None
+        with open(log + ".args") as a, open(log + ".body") as b:
+            return a.read().split("\n")[:-1], b.read()
+
+    def report(self, *args, info=None, input="", gh=None):
         self.write(os.path.join(self.tools, ".version"), "85-1760000000-0.1.0\n")
         self.start_app({"report-info": info or self.PIXEL, "open-url": {"ok": True}})
-        return self.mynx("report", *args, input=input, env={"TZ": "UTC"})
+        path = self.fake_commands(gh=gh or self.GH_SIGNED_OUT)
+        return self.mynx("report", *args, input=input, env={"TZ": "UTC", "PATH": path})
+
+    def test_report_sends_it_with_gh_when_signed_in(self):
+        run = self.report("The tab froze", input="y\n", gh=self.fake_gh())
+        self.assertEqual(run.returncode, 0, run.stderr)
+        args, body = self.gh_created()
+        self.assertEqual(args, ["issue", "create", "--repo", "est4s/mynx", "--title", "The tab froze",
+                                "--body-file", "-"])
+        self.assertEqual(body,
+                         "### What happened\n\nThe tab froze\n\n### App and phone\n\n```text\n"
+                         "Mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10\n\n"
+                         "Last crash, 2025-10-09 08:53 UTC:\n"
+                         "java.lang.IllegalStateException: boom\n\tat X.y(X.kt:1)\n```\n\n"
+                         "<!-- mynx report -->\n")
+        self.assertIn("Sent: https://github.com/est4s/mynx/issues/7", run.stdout)
+        self.assertIsNone(self.opened())
+
+    def test_report_with_gh_says_who_sends_it_and_asks(self):
+        run = self.report("The tab froze", input="n\n", gh=self.fake_gh())
+        text = " ".join(run.stdout.split())
+        self.assertIn("This sends it as a new issue on GitHub (github.com/est4s/mynx) as @est4s", text)
+        self.assertIn("Send it? [y/N]", text)
+        self.assertIn("Nothing was sent.", text)
+        self.assertIsNone(self.gh_created())
+        self.assertIsNone(self.opened())
+
+    def test_report_with_gh_keeps_a_long_crash_whole(self):
+        crash = "java.lang.Error: deep\n" + "".join(f"\tat a.b.C{i}.method(C{i}.kt:{i})\n" for i in range(300))
+        self.report("x", info=dict(self.PIXEL, crash=crash), input="y\n", gh=self.fake_gh())
+        body = self.gh_created()[1]
+        self.assertIn("C299.method", body)
+        self.assertNotIn("cut to fit", body)
+
+    def test_report_offers_the_browser_when_gh_fails(self):
+        run = self.report("The tab froze", input="y\ny\n", gh=self.fake_gh(create="fail"))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("HTTP 502", run.stdout + run.stderr)
+        self.assertIn("Open it in the browser instead? [y/N]", run.stdout)
+        self.assertEqual(self.opened()["title"], "The tab froze")
+
+    def test_report_json_sends_nothing_with_gh(self):
+        run = self.report("The tab froze", "--json", gh=self.fake_gh())
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIsNone(self.gh_created())
 
     def opened(self):
         urls = [r[1] for r in self.app.requests if r[0] == "open-url"]

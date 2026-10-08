@@ -44,7 +44,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
-  report     report [TEXT]: report a bug (shows it, asks, then opens GitHub)
+  report     report [TEXT]: report a bug (shows it, asks, then sends it with gh or opens GitHub)
   about      version, credits and licences
   version    the app tools' version
   help       this list
@@ -1021,6 +1021,10 @@ ISSUES_URL = APP_SOURCE + "/issues/new"
 # Longer links get cut off by browsers or refused by GitHub.
 MAX_REPORT_URL = 8000
 CUT_NOTE = "… (cut to fit the link)"
+# GitHub's limit for an issue's body is 65536 characters.
+MAX_REPORT_BODY = 60000
+REPORT_REPO = APP_SOURCE.split("://")[1]
+REPORT_MARK = "<!-- mynx report -->"
 
 
 def cmd_report(args, as_json):
@@ -1043,16 +1047,56 @@ def cmd_report(args, as_json):
     if as_json:
         out(True, {"ok": True, "title": title, "what": what, "details": details, "url": url}, None)
         return 0
+    login = gh_login()
+    if login:
+        details = with_crash(report_details(info), crash, info.get("crash_time"),
+                             lambda text: len(report_body(what, text)) <= MAX_REPORT_BODY)
     print(f"\nWhat happened:\n{what}\n\n{details}\n")
-    print(wrap("This opens a new issue on GitHub (" + APP_SOURCE.split("://")[1] + ") in the "
-               "phone's browser, filled in with the report above. Nothing is sent until "
-               "you submit it there, with your own GitHub account.", ""))
-    if not ask("Open it? [y/N]"):
-        print("Nothing was sent.")
-        return 0
+    if login:
+        print(wrap(f"This sends it as a new issue on GitHub ({REPORT_REPO}) as @{login}, "
+                   "signed in with gh. Anyone can read it there.", ""))
+        if not ask("Send it? [y/N]"):
+            print("Nothing was sent.")
+            return 0
+        sent = subprocess.run(["gh", "issue", "create", "--repo", REPORT_REPO.split("/", 1)[1],
+                               "--title", title, "--body-file", "-"],
+                              input=report_body(what, details), capture_output=True, text=True)
+        if sent.returncode == 0:
+            print("Sent: " + sent.stdout.strip())
+            return 0
+        print("gh couldn't send it: " + (sent.stderr.strip() or f"exit {sent.returncode}"))
+        if not ask("Open it in the browser instead? [y/N]"):
+            print("Nothing was sent.")
+            return 0
+    else:
+        print(wrap(f"This opens a new issue on GitHub ({REPORT_REPO}) in the "
+                   "phone's browser, filled in with the report above. Nothing is sent until "
+                   "you submit it there, with your own GitHub account.", ""))
+        if not ask("Open it? [y/N]"):
+            print("Nothing was sent.")
+            return 0
     request("open-url", url)
     print("Opened in the phone's browser.")
     return 0
+
+
+def gh_login():
+    """The GitHub account gh is signed in to, or None (no gh, signed out, offline)."""
+    if not shutil.which("gh"):
+        return None
+    try:
+        run = subprocess.run(["gh", "api", "user", "--jq", ".login"], capture_output=True, text=True,
+                             timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return run.stdout.strip() if run.returncode == 0 and run.stdout.strip() else None
+
+
+def report_body(what, details):
+    """The issue as GitHub's form (app-report.yml) would write it, marked
+    so a workflow can label it: GitHub drops labels set by non-members."""
+    return (f"### What happened\n\n{what}\n\n### App and phone\n\n```text\n{details}\n```\n\n"
+            f"{REPORT_MARK}\n")
 
 
 def ask_what_went_wrong():
@@ -1085,27 +1129,32 @@ def report_details(info):
 
 
 def report_link(title, what, details, crash, crash_time):
-    """The details with the crash, and the link to a prefilled issue;
-    a crash too long for the link loses lines from its end."""
+    """The details with the crash, and the link to a prefilled issue."""
     def link(text):
         query = urllib.parse.urlencode({"template": "app-report.yml", "title": title,
                                         "what": what, "details": text})
         return f"{ISSUES_URL}?{query}"
 
+    full = with_crash(details, crash, crash_time, lambda text: len(link(text)) <= MAX_REPORT_URL)
+    return full, link(full)
+
+
+def with_crash(details, crash, crash_time, fits):
+    """The details with the crash; a crash that doesn't fit loses lines from its end."""
     if not crash:
-        return details, link(details)
+        return details
     when = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(crash_time / 1000)) if crash_time else "time unknown"
     head = f"{details}\n\nLast crash, {when}:\n"
     lines = crash.rstrip("\n").split("\n")
     full = head + "\n".join(lines)
-    if len(link(full)) <= MAX_REPORT_URL:
-        return full, link(full)
+    if fits(full):
+        return full
     while lines:
         lines.pop()
         text = head + "\n".join(lines + [CUT_NOTE])
-        if len(link(text)) <= MAX_REPORT_URL:
-            return text, link(text)
-    return details, link(details)
+        if fits(text):
+            return text
+    return details
 
 
 def cmd_version(args, as_json):

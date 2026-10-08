@@ -97,10 +97,15 @@ Newest entries first. Rules for keeping it up to date: see
    GitHub issues, labelled as coming from the app. Always ask before
    anything is sent.
 
-**Bug reports are built** (entry 77), not yet tried on the phone.
-To check after the next build (`scripts/deliver.sh`):
+**Bug reports are built** (entries 77-78), not yet tried on the
+phone. With gh signed in (it is in the maintainer's Debian), menu →
+System → Report a bug should say "as @est4s", ask "Send it?", and
+print the new issue's link; within a minute the workflow adds `bug`
+and `from-app` (check the Actions tab if not). Close the test issue.
+Without gh (or signed out, `gh auth logout`), after the next build
+(`scripts/deliver.sh`):
 - menu → System → Report a bug: type a line, an empty line; the
-  report shows the app version, Android 16 (SDK 36), Google Pixel 10
+  report shows the app version, Android 17 (SDK 37), Google Pixel 10
   and asks `[y/N]`; `n` says "Nothing was sent."
 - `y` opens GitHub's new-issue page with the title and both fields
   filled in, and the issue gets the `bug` and `from-app` labels
@@ -132,8 +137,8 @@ Not built yet. Proposed shape (agreed in principle):
 - Mynx never stores a token: `gh` keeps its own login.
 
 Ties in with bug reports (above): with `gh` signed in, `mynx report`
-can file the issue itself (still asking first) instead of opening a
-prefilled page. Later, maybe: back up `~/apps` to a private repo
+already files the issue itself (entry 78), so the setup makes bug
+reports one tap. Later, maybe: back up `~/apps` to a private repo
 (toward the parked profiles step); not decided.
 
 ### Roadmap step 9: Android integration
@@ -428,6 +433,32 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (78): Bug reports send through `gh`
+
+The maintainer installed build 86 (bug reports) and asked for reports
+that send without opening GitHub. Options offered: the user's own
+`gh` login, or a relay server holding a token (no account needed,
+but a server to run and spam to handle; a token in the APK is out).
+**Maintainer's decision: `gh`.**
+- `mynx report`: when `gh api user` answers (gh installed, signed
+  in, online), it says it sends as @login, asks `Send it? [y/N]`,
+  then `gh issue create --repo est4s/mynx --title … --body-file -`
+  and prints the issue's link. The body copies what the issue form
+  writes (`### What happened`, `### App and phone` in a `text`
+  block), with the crash whole (cut only past 60000 characters), and
+  ends with `<!-- mynx report -->`. If gh fails, it shows why and
+  offers the browser page. Without gh it's unchanged. `--json` still
+  sends nothing.
+- **Labels:** GitHub drops labels set by people without write
+  access, so `.github/workflows/label-reports.yml` adds `bug` and
+  `from-app` to new issues carrying the marker.
+- Crash cutting moved into `with_crash(…, fits)`, shared by the link
+  and the body. Tests: 5 new in `test_mynx.py`; the report tests now
+  put a signed-out fake `gh` first on the PATH, so they never file a
+  real issue from a machine where gh is signed in.
+- Checked from the terminal on build 86: `mynx report --json` gives
+  Android 17 (SDK 37), Google Pixel 10, build 86.
 
 ### 2026-10-08 (77): Bug reports (`mynx report`)
 
