@@ -47,6 +47,12 @@ are in git history: the full log up to entry 84 is
    uninstall, install the release, `restore-root.sh` (entry 84). Then:
    `mynx about` says 0.1.0, `mynx install-apk` refuses (debug only).
    From then on: develop in Mynx, test in Mynx Dev.
+   **After the move** (maintainer's decision, 2026-10-08): keep the two
+   scripts (a new phone or a reinstall needs them again), but trim
+   RELEASING.md's "Debug and release builds on one phone" to Mynx Dev
+   plus a short general note ("moving to a new phone: `backup-root.sh`,
+   then `restore-root.sh`"), drop its builds-up-to-87 steps, and drop
+   this item.
 
 ### 2. Test updates for real: v0.1.1
 
