@@ -44,5 +44,5 @@ next.
   one row of 3-4 screenshots in an HTML table, each `width="200"`,
   with a one-word caption, right after the intro. More shots go in a
   second row, not more text.
-- Commit them with `PRIVACY.md` and the README change, when the maintainer
-  asks.
+- Commit them with the README change, on a branch with a PR (`main`
+  takes no direct pushes), when the maintainer asks.

@@ -201,11 +201,16 @@ Because Debian runs through `proot` rather than a virtual machine:
 
 ## Distribution
 - **APK downloads** from GitHub Releases, signed, built by CI from version tags.
+- **Updates from the app:** it checks GitHub Releases about once a day,
+  says when there's a new version (a notification and the launcher
+  menu), and `mynx update` downloads and installs it, keeping Debian.
 - **Google Play** later, once the app is stable.
 
 ---
 
 ## Roadmap
+Steps 1-7, 9 and 10 are done; step 8 is parked.
+
 1. **Core:** app opens a terminal into the built-in Debian.
 2. **Tabs:** Windows Terminal-style tab strip, sessions, background service.
 3. **Default setup:** Neon theme, fonts, launcher menu, games.
@@ -222,7 +227,8 @@ Because Debian runs through `proot` rather than a virtual machine:
 8. **Profiles:** multiple profiles, switching, export/import.
 9. **Android integration:** notifications, clipboard, share, storage,
    location, sensors, camera and flashlight, speaker and microphone.
-10. **Polish:** first-run experience, settings, icon, signed releases.
+10. **Polish:** first-run experience, settings, icon, signed releases,
+    updates from GitHub Releases.
 11. **Later:**
     - optional tap support in the file manager (settings toggle)
     - development boards: USB serial bridge, flashing Arduino/ESP32/UF2

@@ -21,13 +21,19 @@ to do next.
 - rewrite "Next" so a fresh agent can continue without asking
 - commit it together with the work it describes
 
+**Keep it short** (maintainer's decision, 2026-10-08): the log holds
+recent work. Once an entry's work is confirmed on the phone and what it
+taught is in this file (decisions, gotchas), the entry can go; done
+plans leave "Next" when they're done. Git history keeps everything
+(the full log up to entry 84: `git show 72b8512:docs/WORKLOG.md`).
+
 ## Naming
 
 The app is called **Mynx**, and so are its command, **`mynx`**, and
 its paths: `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`, the `MYNX_*`
 variables (maintainer's decision, 2026-10-07: one name everywhere; people
 and agents use the same command). Earlier working names were dropped
-without a trace in the code; the work log has the history.
+without a trace in the code; git history has them.
 - Keep the display name in one place: `app/src/main/res/values/strings.xml`
   (`app_name`). Don't hardcode it elsewhere in code.
 - The application ID `io.github.est4s.terminal` is deliberately name-neutral,
@@ -47,9 +53,8 @@ without a trace in the code; the work log has the history.
 ## Development environment
 
 The maintainer develops on a **phone**: Claude Code runs in the app's own
-Debian (a debug build of this app, from CI), on a Pixel 10 (arm64,
-Android 16). Until 2026-10-04 it ran in Debian under `proot-distro`
-inside Termux. The terminal is about 56 columns wide in portrait.
+Debian, on a Pixel 10 (arm64, Android 16). The terminal is about 56
+columns wide in portrait.
 
 Consequences:
 - **No local Android builds.** Google's `aapt2` only exists for x86-64, so
@@ -387,19 +392,44 @@ See `docs/ROADMAP.md` "How it works". The details:
 - App data paths come in two spellings (`/data/user/0/<app>` from
   `filesDir`, `/data/data/<app>` from the kernel). Don't compare paths by
   prefix across the two.
-- **`/dev/fd` in the dev Debian (proot-distro) is a frozen copy of one
-  process's fd folder**, so `cat <(echo hi)` fails there. The app's own
-  Debian is fine (checked on the phone in 3.2).
 - **Don't `mv` a git repo (or anything with hard links) in proot.**
   proot fakes hard links with symlinks to `.l2s.*` files holding the
   absolute path, so a moved repo's loose objects all break ("bad object
   HEAD"), and those links can't be rewritten. Copy with `cp -rL` from
   the old place, delete the `.l2s.*` files in the copy, `git fsck`,
-  then remove the original.
+  then remove the original. tar is fine: proot shows each linked file
+  as a plain one, so tar stores its contents, and the `.l2s.*` files
+  can be left out (`scripts/backup-root.sh`).
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the maintainer can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.
   Remove it once the bug is fixed.
+
+### Lessons from the phone
+
+Bugs that took a phone round to find; keep them from coming back.
+- **`app/` only compiles in CI**, so read Kotlin for what the compiler
+  would catch: e.g. `var tabs = newTabs()`, where `newTabs()`'s lambda
+  reads `tabs`, is a recursive type inference error.
+- **Code in `tools/` finds its files relative to itself**, never
+  through `/opt/mynx`: on the phone that's the installed copy, so tests
+  pass there against old code (CI has no `/opt/mynx`).
+- **A view with no height loses focus for good:** Android takes focus
+  from it and doesn't give it back, so typing goes nowhere. Landscape
+  with the keyboard up left the terminal no rows; the key bar now drops
+  to one row and the tab strip hides first (`fitAroundTerminal()`),
+  and the terminal takes focus back when it has height again.
+- **Insets:** the root view pads for the system bars, the keyboard
+  *and* `displayCutout()` (API 30+); without the cutout, landscape text
+  ran under the camera hole while the keyboard didn't.
+- **Shares from a browser** carry the link as `EXTRA_TEXT` and the
+  site's icon in the ClipData as a preview: with text and no
+  `EXTRA_STREAM`, the clip isn't a file to save (`filesToSave()`).
+- **The app can't read `/storage/emulated/0/DCIM`** (or other apps'
+  media) without a media permission; test shares with files it made.
+- **The first `assembleRelease` is the first time lint-vital runs**:
+  debug builds skip it, so a release can fail on something debug
+  builds never showed.
 
 ### Design rules from day one
 
@@ -479,13 +509,8 @@ does this automatically through `.claude/settings.json`.)
   `\x1b[A`). Keep file logic in `models.py`, unit-tested.
 - **Shell code** (the menu and other commands in `tools/bin/`, root's
   dotfiles in `rootfs/root/`):
-  tests with `bats` in `tests/shell/`. CI runs real bats, and so does the
-  app's own Debian (`bats tests/shell/*.bats`). In the old proot-distro
-  Debian, use `scripts/bats-lite.sh tests/shell/*.bats`: real bats needs
-  process substitution, which its `/dev/fd` breaks (see "proot notes");
-  bats-lite supports only `@test`, `setup`, `run`, `skip`,
-  `$output`, `$lines`, `$status` and the temp/dir variables. Build scripts
-  are checked by the CI build itself.
+  tests with `bats` in `tests/shell/` (`bats tests/shell/*.bats`, here
+  and in CI). Build scripts are checked by the CI build itself.
 
 When you add a tested source set, add its `source test` pair to
 `scripts/check-tdd.sh`.
