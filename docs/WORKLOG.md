@@ -106,7 +106,7 @@ yet, no hurry: the browser path without gh (`gh auth logout`, then
 sent."), and a report after a crash (none to force).
 
 **Updates: the plan (maintainer's decisions, 2026-10-08).**
-1. **Mynx Dev** (entry 80, built, not yet on the phone): debug builds
+1. **Mynx Dev** (entry 80): **confirmed on the phone** (entry 82): debug builds
    are a separate app, `io.github.est4s.terminal.dev`, with their own
    Debian. Check: `scripts/deliver.sh` from this app (build 87)
    installs "Mynx Dev" *beside* it, not over it; Mynx Dev unpacks a
@@ -114,12 +114,9 @@ sent."), and a report after a crash (none to force).
    Settings opens the editors in Mynx Dev (not here); `mynx share`
    and `mynx camera` work in it (they use the providers whose names
    changed).
-2. **Updates: built** (entry 81, branch `updates-core`, not merged,
-   not on the phone). What can be checked before a release exists:
-   CI builds the branch; in Mynx Dev, `mynx update` says "this build
-   of the app doesn't update from GitHub releases" and `mynx settings`
-   lists `update-check`; Settings shortcut still opens the editors.
-   The real test is step 6. The original plan: the check and download live in the
+2. **Updates: built** (entry 81, branch `updates-core`, not merged).
+   What Mynx Dev can show is confirmed (entry 82); the real test is
+   step 6. Next: merge `updates-core` into `main`. The original plan: the check and download live in the
    app, not Debian, so a broken Debian (python3, certificates) can't
    block the update that would fix it. Release builds only; Mynx Dev
    says it updates from CI. Core parses GitHub's latest-release JSON
@@ -462,6 +459,17 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (82): Mynx Dev and the updates branch confirmed
+
+CI run 37777568798 (`updates-core`, started by hand: branch pushes
+don't build) was green, the first compile of the app side. Delivered
+with `scripts/deliver.sh 37777568798`; it updated the Mynx Dev already
+installed from `main`, not Mynx. The maintainer confirmed: Mynx Dev
+installs beside Mynx with its own Debian (entry 80), its Settings
+shortcut opens the editors in Mynx Dev, `mynx share` and `mynx camera`
+work there, `mynx update` refuses ("this build of the app doesn't
+update from GitHub releases") and `mynx settings` lists `update-check`.
 
 ### 2026-10-08 (81): App updates, built (branch `updates-core`)
 
