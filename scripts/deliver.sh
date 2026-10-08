@@ -2,7 +2,8 @@
 # Download the latest CI build of the APK and hand it to Android's installer.
 # Runs in the app's own Debian on the phone (see AGENTS.md, "Build → install loop").
 #
-#   scripts/deliver.sh            wait for HEAD's run on main, then install
+#   scripts/deliver.sh            wait for HEAD's run (main, or the PR of this
+#                                 branch), then install
 #   scripts/deliver.sh <run-id>   use a specific run
 #   scripts/deliver.sh --no-open  copy to Download only, don't open the installer
 set -euo pipefail
@@ -20,13 +21,19 @@ cd "$(dirname "$0")/.."
 # have registered the new run yet, and the latest is the previous build.
 if [[ -z $run ]]; then
     head=$(git rev-parse HEAD)
+    # A PR's runs carry its branch's name.
+    branch=$(git branch --show-current)
     for _ in $(seq 30); do
-        run=$(gh run list --branch main --workflow build.yml --commit "$head" -L 1 \
+        run=$(gh run list --branch "${branch:-main}" --workflow build.yml --commit "$head" -L 1 \
             --json databaseId -q '.[0].databaseId')
         [[ -n $run ]] && break
         sleep 2
     done
-    [[ -n $run ]] || { echo "No build found for $(git rev-parse --short HEAD)."; exit 1; }
+    [[ -n $run ]] || {
+        echo "No build found for $(git rev-parse --short HEAD) on ${branch:-main}."
+        echo "Only main and pull requests build: push, and open a PR for a branch."
+        exit 1
+    }
 fi
 
 echo "Waiting for run $run…"

@@ -142,9 +142,8 @@ sent."), and a report after a crash (none to force).
    uninstall this app (build 87 and older are debug-signed with the
    release ID, so a release can't install over them), install the
    release, restore. From then on: develop in Mynx, test in Mynx Dev.
-5. **Trunk-based** (decided): protect `main` (PRs, green CI; the
-   maintainer can let admins push doc commits), `deliver.sh` learns to
-   install a PR's build, AGENTS.md updated.
+5. **Trunk-based: on** (entry 83). `main` is protected, `deliver.sh`
+   installs a PR's build.
 6. Test updates for real by tagging v0.1.1.
 
 ### Next feature: guided GitHub setup (2026-10-08)
@@ -459,6 +458,16 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (83): `main` is protected
+
+The maintainer asked for branch protection and picked "PRs only".
+Ruleset "Protect main" (id 24724125): PRs required (0 approvals),
+the `build` check required, no force-push or deletion; admins bypass
+only when merging a PR (Markdown-only PRs never get a `build` check).
+`scripts/deliver.sh` now finds the run of the current branch (a PR's)
+as well as `main`'s. AGENTS.md: the build loop and "Branches".
+`updates-core` goes in as the first PR.
 
 ### 2026-10-08 (82): Mynx Dev and the updates branch confirmed
 
