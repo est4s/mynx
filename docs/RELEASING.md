@@ -85,8 +85,23 @@ Debian. The release keeps the ID it can never change.
 
 Builds from before Mynx Dev (up to build 87) are debug-signed with the
 release's ID. Android won't install a release over one of those:
-uninstall it first, which **deletes its Debian** (back up `/root`
-before).
+uninstall it first, which **deletes its Debian**. To move to the
+release:
+
+1. In the old app: download the release APK
+   (`gh release download v0.1.0 -D /storage/emulated/0/Download`), then
+   `scripts/backup-root.sh`. It saves `/root` (without caches, which
+   rebuild themselves), the packages installed by hand and
+   `restore-root.sh` to `/storage/emulated/0/mynx-backup`, which survives
+   the uninstall. It never overwrites a backup that's there.
+2. Uninstall the app (not Mynx Dev); install the APK from the Files app.
+3. In the release's fresh Debian:
+   `bash /storage/emulated/0/mynx-backup/restore-root.sh`. It checks the
+   backup, asks, restores `/root`, then `apt-get install`s the packages
+   (naming any that fail).
+4. Check `gh auth status` and `claude`, open a new tab, then delete the
+   backup: it holds those logins, and other apps can read phone
+   storage.
 
 ## Later: Google Play
 

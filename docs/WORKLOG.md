@@ -138,7 +138,10 @@ sent."), and a report after a crash (none to force).
    (`/opt/mynx/release-notes`), so both work offline and match
    GitHub. Generated notes are commit subjects; maybe the maintainer
    edits them in the release before tagging (decide then).
-4. The maintainer tags **v0.1.0**, and moves: back up `/root`,
+4. The maintainer tags **v0.1.0**, and moves (`docs/RELEASING.md`,
+   "Debug and release builds on one phone": `scripts/backup-root.sh`
+   and `restore-root.sh`, entry 84; the release key and its four
+   secrets aren't set up yet): back up `/root`,
    uninstall this app (build 87 and older are debug-signed with the
    release ID, so a release can't install over them), install the
    release, restore. From then on: develop in Mynx, test in Mynx Dev.
@@ -458,6 +461,29 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (84): Backup and restore for the move to the release
+
+The maintainer asked for scripts for plan step 4 (uninstall the
+debug-signed Mynx, install v0.1.0). `scripts/backup-root.sh [FOLDER]`
+and `scripts/restore-root.sh [--yes]` (bats: `backup-root.bats`; the
+TDD check pairs both with `tests/shell/`). Docs: RELEASING.md.
+- Backup: `/root` as `root.tar.gz` without `~/.gradle`, `~/.cache`,
+  proot's `.l2s.*` files and Claude Code versions other than the one
+  `~/.local/bin/claude` points to; `apt-mark showmanual` as
+  `packages.txt`; `SHA256SUMS`; `restore-root.sh` beside it. Refuses
+  a folder that isn't empty, or one inside the home.
+- Restore: checks `SHA256SUMS`, asks, extracts over `/root` (other
+  files stay), `apt-get update` and installs the packages (one by one
+  only if all at once fails, to name the failures).
+- **proot's hard links survive tar:** proot shows each linked file as
+  a plain file, so tar stores its contents; the `.l2s.*` files it keeps
+  behind them can be left out. Checked: a tar of the repo without them
+  passes `git fsck`.
+- **Tried on this Debian:** backed up the real `/root` in 52 s, 156 MB
+  (from 1.6 GB), restored it into a scratch home with apt stubbed: the
+  repo is intact, the `claude` link works, `gh`'s login is back. The
+  scratch copies were deleted (they hold logins).
 
 ### 2026-10-08 (83): `main` is protected
 
