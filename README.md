@@ -1,8 +1,20 @@
 # Mynx
 
-An Android terminal app with **Debian Linux built in**. Install it, open
-it, and you're at a real Debian shell: no root, no Termux, no setup
-scripts.
+**Your phone, your tools.** Mynx is a new way to use a smartphone:
+instead of searching an app store for something close enough and
+putting up with its ads, tracking and subscriptions, you make the tool
+you want, the way you want it. Describe it to an AI agent, or write it
+yourself, and it runs right there on your phone, with its camera,
+sensors, microphone, speaker and flashlight.
+
+- **No ads, no tracking, no accounts.** Mynx collects nothing
+  ([`PRIVACY.md`](PRIVACY.md)), and it's free and open source.
+- **Yours to change.** Every app it ships is a short program you can
+  read and copy, and every setting is a text file. Change anything, or
+  ask an agent to.
+- **A real computer underneath:** Debian Linux is built in. No root,
+  no Termux, no setup scripts: install it, open it, and you're at a
+  Debian shell.
 
 > **Status:** in development, not released yet.
 
@@ -18,9 +30,11 @@ scripts.
 - **A ready setup:** a launcher menu, a file manager
   ([nnn](https://github.com/jarun/nnn)), ten themes, a Nerd Font, the
   starship prompt and a few terminal games.
-- **Example apps** that use the phone: a compass, a spirit level, a
+- **Example apps to start from:** a compass, a spirit level, a
   flashlight, a sound spectrum, a sound meter, a guitar tuner and a
-  metronome, in Python, to run, read and copy.
+  metronome, each a short Python program that uses the phone. Run
+  them, read them, or copy one into `~/apps` and make it your own: it
+  shows up in the menu, and can have its own key bar.
 - **Plain-text config** in `~/.config/mynx/`, changed with the `mynx`
   command or its editors (`mynx edit`), checked before it applies,
   with undo.
