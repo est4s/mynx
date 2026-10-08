@@ -8,8 +8,8 @@ Newest entries first. Rules for keeping it up to date: see
 
 ## Current status
 
-- **Roadmap steps 1-7 are done** and confirmed on the owner's phone.
-  Step 8 (*Profiles*) is planned but **parked** by the owner
+- **Roadmap steps 1-7 are done** and confirmed on the maintainer's phone.
+  Step 8 (*Profiles*) is planned but **parked** by the maintainer
   (2026-10-04): step 9 (*Android integration*) comes first and is
   planned; see "Next". **9.1 is confirmed** (vibration, clipboard,
   waiting/streaming requests); **9.2 (sharing) is confirmed**
@@ -31,7 +31,7 @@ Newest entries first. Rules for keeping it up to date: see
 - **Renamed to Mynx** (entry 70, 2026-10-07): app name, command
   `mynx`, paths `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`,
   `MYNX_*`, repo `est4s/mynx`. **Installed on the phone** and the
-  owner's Debian moved over (entry 71); checks left: see "Next".
+  maintainer's Debian moved over (entry 71); checks left: see "Next".
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`mynx notify`, `mynx hook`),
   `mynx agent` installs Claude Code, Codex and Gemini CLI with their
@@ -51,7 +51,7 @@ Newest entries first. Rules for keeping it up to date: see
   guide live in the app's tools at `/opt/mynx` (replaced on
   each app update, first on the PATH); `~/AGENTS.md` points to the guide.
 - **Step 5 (*Game and program key bars*):** game bars, `play`, `keybar
-  NAME,FALLBACK`, bars any program can bring, hold-to-repeat. The owner
+  NAME,FALLBACK`, bars any program can bring, hold-to-repeat. The maintainer
   dropped the in-app keyboard.
 - **Step 4 (*File manager*):** nnn as `files`, and the always-visible
   two-row key bar that follows the running program.
@@ -88,21 +88,21 @@ Newest entries first. Rules for keeping it up to date: see
 
 ### Check the Mynx build on the phone (entries 70-71)
 
-Installed and the owner's Debian moved over (entry 71). Left for the
-owner to check on the phone: the app is named Mynx; theme, font, key
+Installed and the maintainer's Debian moved over (entry 71). Left for the
+maintainer to check on the phone: the app is named Mynx; theme, font, key
 bars and the menu kept; closing all tabs and restarting opens the
 menu (`MYNX_MENU`); a long Claude turn with the app in the background
 notifies; `mynx edit` shows its key bar (`mynx-edit`); `mynx sound`
 is on; the menu's banner says MYNX (entry 72; needs the next build,
 or `scripts/deliver.sh`). Then delete `~/PC-26` (the old clone: clean, matches
-`origin/main`, no stashes; kept until the owner says so) and
+`origin/main`, no stashes; kept until the maintainer says so) and
 `~/mynx-migrate.sh`.
 
 ### Roadmap step 9: Android integration
 
-README section "Android integration". Planned with the owner
+README section "Android integration". Planned with the maintainer
 2026-10-04, ahead of the parked step 8. Build test-first, with an
-owner test after each part.
+maintainer test after each part.
 
 **9.1 is done** (confirmed on the phone 2026-10-04, log entry 28).
 **9.2 is done** (confirmed on the phone 2026-10-05, entries 29-31).
@@ -123,10 +123,10 @@ The camera cutout fix is confirmed (entry 55).
 
 ### Roadmap step 10: Polish (chosen 2026-10-06)
 
-The owner picked step 10 over the parked step 8. Build test-first,
-with an owner test after each part.
+The maintainer picked step 10 over the parked step 8. Build test-first,
+with a maintainer test after each part.
 
-**Owner's decisions (2026-10-06):**
+**Maintainer's decisions (2026-10-06):**
 - **All four parts:** first-run experience, settings gaps, About +
   licenses, icon + signed releases.
 - **Welcome in the terminal:** after Debian is set up, the first tab
@@ -143,10 +143,10 @@ with an owner test after each part.
 - **Settings from Android:** a launcher shortcut (long-press the app
   icon → Settings) opens `mynx edit` in a new tab. No other entry
   points.
-- **Overnight work (2026-10-06):** the owner is away; build as much of
+- **Overnight work (2026-10-06):** the maintainer is away; build as much of
   step 10 as possible, committing and pushing to `main` as each part
   is done. Anything that needs the phone goes into a check list for
-  the owner.
+  the maintainer.
 
 **Parts, in order (About must land before the first release,
 because of proot's GPL):**
@@ -161,7 +161,7 @@ because of proot's GPL):**
   2.0), the font (OFL), Debian; texts shipped with the tools.
 - **10.4 Icon + releases:** monochrome layer for themed icons; a
   release build type signed with a key from GitHub secrets (never
-  committed; **the owner makes it and backs it up**, the agent only
+  committed; **the maintainer makes it and backs it up**, the agent only
   writes the steps), a workflow on `v*` tags publishing the APK to
   GitHub Releases, `versionName` from the tag.
 
@@ -169,7 +169,7 @@ because of proot's GPL):**
 entry 65).
 
 **Make the repo user ready** (before `v0.1.0`, see entry 68):
-- **Screenshots:** the owner takes them later, guided by an agent:
+- **Screenshots:** the maintainer takes them later, guided by an agent:
   [`docs/SCREENSHOTS.md`](SCREENSHOTS.md) has the list and how to add
   them to the README. `PRIVACY.md` and `docs/images/icon.svg` are
   written and wait to be committed with them.
@@ -200,15 +200,15 @@ What's left of step 10 is the first release:
   or an offset) before the first Play upload.
 - **talloc (LGPL-3.0, linked statically into proot):** users must be
   able to relink it. Making this repo public at release (it has
-  `scripts/build-proot.sh`) covers that; the owner should decide
+  `scripts/build-proot.sh`) covers that; the maintainer should decide
   whether it goes public with `v0.1.0`.
 
 With all that done, step 10 is complete and the next step is the
-owner's choice (the parked step 8, or step 11).
+maintainer's choice (the parked step 8, or step 11).
 
 The step 9 plan below is kept for reference.
 
-**Owner's decisions (2026-10-04):**
+**Maintainer's decisions (2026-10-04):**
 - **Camera: both ways.** `mynx camera FILE` opens the phone's camera
   app to frame the shot (no camera permission needed); `--quick
   front|back` snaps straight to the file with no screen, for scripts
@@ -223,7 +223,7 @@ The step 9 plan below is kept for reference.
   9.3 location, 9.4 sensors, 9.5 camera + flashlight, 9.6 sound
   (added 2026-10-05).
 
-**Owner's decisions (2026-10-05):**
+**Maintainer's decisions (2026-10-05):**
 - **Flashlight** joins the camera part (`mynx torch`, through the
   camera service; no permission).
 - **Speaker: both, files first.** `mynx audio play FILE` (Android
@@ -236,7 +236,7 @@ The step 9 plan below is kept for reference.
   stream: it starts with the app on screen, the service adds the
   `microphone` foreground type, Android shows its mic indicator.
 
-**Design (agent's proposal, change it if the owner objects):**
+**Design (agent's proposal, change it if the maintainer objects):**
 - **Waiting and streaming requests.** Today a request is answered at
   once and `mynx` gives up after 5 s. New: the app may answer later
   (a GPS fix, a permission dialog, the camera app), and the client
@@ -296,16 +296,16 @@ done in step 7; phone storage is already at `/storage/emulated/0`.
 
 ### Parked: roadmap step 8, Profiles
 
-**Parked by the owner 2026-10-04** ("not such an important feature to
+**Parked by the maintainer 2026-10-04** ("not such an important feature to
 work on yet"): step 9 comes first. The plan below stands for when it's
 picked up again.
 
 README roadmap: "multiple profiles, switching, export/import"; README
-section "Profiles: share your setup". Planned with the owner
-2026-10-04. Build test-first, with an owner test after each part, as
+section "Profiles: share your setup". Planned with the maintainer
+2026-10-04. Build test-first, with a maintainer test after each part, as
 in step 7.
 
-**Owner's decisions (2026-10-04):**
+**Maintainer's decisions (2026-10-04):**
 - **All profiles share the one Debian** in step 8. A separate Debian
   per profile and full backup/restore of an environment come in a
   later step.
@@ -319,7 +319,7 @@ in step 7.
   sourced by `~/.bashrc` in that profile's tabs. The user's own
   dotfiles stay theirs.
 
-**Design (agent's proposal, change it if the owner objects):**
+**Design (agent's proposal, change it if the maintainer objects):**
 - A profile is `~/.config/mynx/profiles/NAME/`, with the
   same layout as the config folder (`settings.conf`,
   `colors.properties`, `keybars/`, `menu.conf`) plus `profile.conf`
@@ -365,7 +365,7 @@ in step 7.
   on arrows, each tab keeping its own bar.
 
 ### Hardware keyboard checks (later)
-The owner has no hardware keyboard, so these are untested. Run them when
+The maintainer has no hardware keyboard, so these are untested. Run them when
 one is available (Bluetooth/USB keyboard), or with a soft keyboard that
 sends real Ctrl/Alt key events (e.g. Hacker's Keyboard), or once the
 in-app keyboard (step 5) can send these combos:
@@ -391,24 +391,32 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-08 (73): "the maintainer", not "the owner"
+
+At the maintainer's request, the docs call them **the maintainer**
+instead of "the owner": `AGENTS.md`, this log (old entries too),
+`docs/SCREENSHOTS.md`, `docs/RELEASING.md`, `.gitignore`. File
+ownership in code (`TarUnpacker.kt`, tar flags) and the Apache
+licence text are unchanged. AGENTS.md's conventions now say so.
+
 ### 2026-10-07 (72): the menu's banner still said PC-26
 
-The owner saw the old name in the menu: its banner was spelled
+The maintainer saw the old name in the menu: its banner was spelled
 `▓▒░ P C - 2 6 ░▒▓`, letter-spaced, so the rename's searches for
 `pc26`/`pc-26` missed it. Now `▓▒░ M Y N X ░▒▓`, with a bats test.
-Swept the repo and the owner's Debian again, letter-spaced spellings
+Swept the repo and the maintainer's Debian again, letter-spaced spellings
 included: nothing else in the code. Rewrote the old names left in
-comments of the owner's `~/.config/mynx` files (`menu.conf`,
+comments of the maintainer's `~/.config/mynx` files (`menu.conf`,
 `keybars/agent.conf`, `colors.properties`, `settings.conf`; `mynx
 check` clean) and removed stale `/tmp/kotlin-compiler-in-pocketterminal-*`
 markers. Left on purpose: `~/PC-26`, `~/mynx-migrate.sh`, Claude's
 old project data (`~/.claude/projects/-root-PC-26`,
 `-root-pocket-terminal-app`, the `/root/PC-26` entry in
-`~/.claude.json`): history, for the owner to delete.
+`~/.claude.json`): history, for the maintainer to delete.
 
 ### 2026-10-07 (71): Mynx build installed, Debian moved over
 
-The owner installed the Mynx build. Ran `~/mynx-migrate.sh`: backup
+The maintainer installed the Mynx build. Ran `~/mynx-migrate.sh`: backup
 in `~/.cache/mynx-migrate-backup.tar.gz`; `~/.config/pc26` and
 `~/.local/state/pc26` moved to the `mynx` names (replacing the
 links), `/etc/profile.d/pc26.sh` removed, old names rewritten in the
@@ -421,7 +429,7 @@ deleted yet: `~/PC-26`, `~/mynx-migrate.sh`.
 
 ### 2026-10-07 (70): renamed to Mynx
 
-**Owner's decision:** the app is **Mynx**, everywhere: display name,
+**Maintainer's decision:** the app is **Mynx**, everywhere: display name,
 command (`pocket` → `mynx`), paths (`/opt/mynx`, `~/.config/mynx`,
 `~/.local/state/mynx`, `/tmp/.mynx`, `/etc/profile.d/mynx.sh`),
 variables (`MYNX_*`, incl. the release secrets, none of which were
@@ -429,7 +437,7 @@ set yet), the editors' bar (`mynx-edit`), the Python package
 (`tools/lib/mynx`, `tests/mynx`), `MynxRequests`, the APK names and
 the GitHub repo (`est4s/PC-26` → `est4s/mynx`, still private). The
 application ID stays `io.github.est4s.terminal`. No compatibility
-shims: no release has shipped, and the owner's Debian is moved by
+shims: no release has shipped, and the maintainer's Debian is moved by
 hand (`~/mynx-migrate.sh`, see "Next").
 
 A mechanical replacement over every file but this log's history
@@ -439,7 +447,7 @@ so they went: a Python test that `cli.py` had no `"mynx: "` literal
 (the prefix is now right; another test checks errors start with
 `mynx: `), and a core check that no `POCKET_MENU` was set.
 
-Prepared on the owner's phone for the morning (the old build keeps
+Prepared on the maintainer's phone for the morning (the old build keeps
 working): `~/.config/mynx` and `~/.local/state/mynx` as links to the
 `pc26` folders, so the new build finds the settings at its first
 start; `~/mynx-migrate.sh`; the clone copied to `~/mynx`.
@@ -448,24 +456,24 @@ Tests: core green, 200 unittest, 92 bats.
 
 ### 2026-10-07 (69): example apps ship with the app
 
-**Owner's decisions:** ship seven of the owner's own programs (from
+**Maintainer's decisions:** ship seven of the maintainer's own programs (from
 `~/.local/bin`) as example apps: `compass`, `incline`, `torch`,
 `spectrum`, `dbmeter`, `tuner`, `metronome` (plus `mic.py`, shared by
-the microphone apps). Left out: `flog` (tied to the owner's Field Logs
+the microphone apps). Left out: `flog` (tied to the maintainer's Field Logs
 web app), `apps-menu` (hooks into the launcher's internals; the Apps
 menu replaces it), `brush` (no phone features). numpy is **offered on
 first run**, not added to the image. They show up in a **new Apps
 menu**, like Games.
 
 - `tools/apps/` → `/opt/pc26/apps` (app-owned, updated with the app).
-  Changes to the owner's code: a `# label:` line (the menu's name),
+  Changes to the maintainer's code: a `# label:` line (the menu's name),
   and `tuner`/`metronome` load numpy in `main()` through `needs.py`
   (asks, then `apt-get update && apt-get install -y python3-numpy`;
   without a terminal it only says how), so `--help` works without it.
   `mic.py` and `needs.py` aren't executable, so the menu skips them.
 - Commands in `tools/bin/` (`compass`, …): `keybar NAME,shell` around
   the app. Their bars are built in now (core resources,
-  `BUILT_IN_KEY_BARS`), copied from the owner's bars with the usual
+  `BUILT_IN_KEY_BARS`), copied from the maintainer's bars with the usual
   header.
 - Menu: `apps` action and Apps submenu (built-in menu: Terminal,
   Files, **Apps**, Games, …), listing executables in `/opt/pc26/apps`
@@ -481,17 +489,17 @@ menu**, like Games.
 
 **Done 2026-10-07 on build 81:** the duplicates are removed (the 7
 apps, `mic.py` and their bars; backed up in that session's
-scratchpad), the owner's menu has `Apps = apps` after Files, and My
-apps holds only Field Logs and Brush teeth. **The owner confirmed
+scratchpad), the maintainer's menu has `Apps = apps` after Files, and My
+apps holds only Field Logs and Brush teeth. **The maintainer confirmed
 menu → Apps works on the phone.** Not checked: `tuner` offering numpy
-on a Debian without it (the owner's has numpy).
+on a Debian without it (the maintainer's has numpy).
 
-**After installing that build, on the owner's phone** (was):
-the owner's own copies in `~/.local/bin` come first on the PATH, and
+**After installing that build, on the maintainer's phone** (was):
+the maintainer's own copies in `~/.local/bin` come first on the PATH, and
 their bars in `~/.config/pc26/keybars/` now show as "edited" copies of
 the built-in ones (same buttons). Offer to remove the duplicates (keep
 `flog`, `brush`, `apps-menu`, their bars), and to add `Apps = apps` to
-the owner's own `~/.config/pc26/menu.conf` (it has "My apps = run
+the maintainer's own `~/.config/pc26/menu.conf` (it has "My apps = run
 apps-menu", whose audio folder lists four of these apps). Then check
 on the phone: menu → Apps lists the seven by label, each opens with
 its bar, `tuner` offers numpy on a Debian without it.
@@ -507,7 +515,7 @@ Tests: core green, 200 unittest, 92 bats.
 
 ### 2026-10-07 (68): GPL-3.0 licence; making the repo user ready
 
-**Owner's decision:** the app is **GPL-3.0-only** (forks that are
+**Maintainer's decision:** the app is **GPL-3.0-only** (forks that are
 distributed must publish their source under the same licence).
 `LICENSE` is the GPL-3.0 text (Debian's `common-licenses/GPL-3`, same
 as `tools/licenses/GPL-3.0.txt`). `pocket about` states it with the
@@ -515,14 +523,14 @@ source link (`APP_LICENSE`, `APP_SOURCE`, also in `--json`); the README's
 License section says so and asks forks for their own name and icon.
 
 Reviewed what a user-ready public repo needs before `v0.1.0` (the repo
-is still private). Still open, waiting on the owner:
-- screenshots (owner takes them)
+is still private). Still open, waiting on the maintainer:
+- screenshots (maintainer takes them)
 - `docs/WORKLOG.md`: keep, move to `docs/dev/`, or drop from the
-  public repo (owner to decide)
+  public repo (maintainer to decide)
 - `CONTRIBUTING.md`, `SECURITY.md`, issue templates, CI badge
 - make the repo public at the release (suggested)
 
-**README cut to what ships** (owner: "way too long"), 249 → 60 lines:
+**README cut to what ships** (maintainer: "way too long"), 249 → 60 lines:
 what you get, install, limitations, roadmap pointer, licence. The full
 scope (features as planned, How it works, roadmap) moved to
 `docs/ROADMAP.md`, with a note on what isn't built; AGENTS.md now
@@ -535,24 +543,24 @@ collects nothing and connects nowhere itself (no network code, no
 analytics; INTERNET is for Debian's programs), with a table of each
 permission and what uses it. **`docs/images/icon.svg`**: the launcher
 icon's own paths on its background, for the README header.
-**Screenshots** wait for the owner: `docs/SCREENSHOTS.md` lists them
+**Screenshots** wait for the maintainer: `docs/SCREENSHOTS.md` lists them
 and how to add them.
 
 Tests: 187 unittest, 87 bats.
 
 ### 2026-10-07 (67): build 77 (one command, `pocket`) installed
 
-The owner installed build 77 (27058ec). Checked from the terminal:
+The maintainer installed build 77 (27058ec). Checked from the terminal:
 `pocket` is the only command (`/opt/pc26/bin/pocket`, no `pc26`),
 `pocket check` clean, Claude's 3 hooks run
 `/opt/pc26/bin/pocket hook claude`, PATH puts the tools before `/usr`,
-sound device on with one Pulse, `pc26.client` imports for the owner's
+sound device on with one Pulse, `pc26.client` imports for the maintainer's
 own programs, the editors' bar is `pocket-edit`, nothing in the home
 dotfiles, `~/.local/bin` or `~/.config/pc26` names the old paths.
 Removed the empty `/opt/pocket-terminal` folder (the old mount point,
-left in the owner's rootfs; new installs never had it).
+left in the maintainer's rootfs; new installs never had it).
 
-**Repository renamed** to `est4s/PC-26` (owner's request), with the
+**Repository renamed** to `est4s/PC-26` (maintainer's request), with the
 local remote updated. GitHub redirects the old URL; nothing in the repo
 named it.
 
@@ -566,7 +574,7 @@ proot notes. Claude's project data (memory, history) was copied to
 
 ### 2026-10-07 (66): one command, `pocket`; old names dropped
 
-**Owner's decision:** people and agents must use the same commands, so
+**Maintainer's decision:** people and agents must use the same commands, so
 the app has one command, **`pocket`** (the rename had made `pc26` the
 command and kept `pocket` as an alias that agents and old hooks still
 used). There is no `pc26` command any more. The app stays PC-26 and the
@@ -574,15 +582,15 @@ paths keep `pc26` (`/opt/pc26`, `~/.config/pc26`, `/tmp/.pc26`,
 `PC26_*`); the Python package `tools/lib/pc26` and `Pc26Requests` keep
 their names (internal). The editors' key bar is `pocket-edit` again.
 
-Also dropped, with the owner's OK, everything kept for Debians from
-before the rename (no release had shipped; only the owner's phone had
+Also dropped, with the maintainer's OK, everything kept for Debians from
+before the rename (no release had shipped; only the maintainer's phone had
 one): `migrateOldNames`/`OldNames.kt`, the `/opt/pocket-terminal`
 mount, `POCKET_MENU`, the old profile script clean-up, the old sound
 pid, the `pocket` shim and its bats tests, old-hook recognition in
 `agents.py` (now only `pocket hook NAME` is ours), and `deliver.sh`'s
 fallback.
 
-**Owner's phone, moved by hand** (backup in the session scratchpad):
+**Maintainer's phone, moved by hand** (backup in the session scratchpad):
 Claude hooks → `/opt/pc26/bin/pocket hook claude`; `~/.bashrc` reads
 `PC26_MENU`; `~/AGENTS.md`, `~/CLAUDE.md` → `/opt/pc26`; own programs
 in `~/.local/bin`: `metronome` and `torch` imported
@@ -595,7 +603,7 @@ Tests: core green, 186 unittest, 87 bats.
 
 ### 2026-10-07 (65): step 10 confirmed on the phone
 
-The owner pushed the overnight work; CI built it and build 76 was
+The maintainer pushed the overnight work; CI built it and build 76 was
 installed over the Pocket Terminal build. Checked from the terminal:
 config and state moved to `pc26` with `pocket-terminal` links, undo
 history kept, `/opt/pocket-terminal` and `pocket` still work, old
@@ -605,16 +613,16 @@ device on with one Pulse, `pc26 about` (build 76, `--json`
 texts are wider than 56 columns, left as they are), `pc26 welcome`.
 Claude's hooks still named `/opt/pocket-terminal/bin/pocket hook`
 (they work); `pc26 agent notify claude on` rewrote all 3 to
-`/opt/pc26/bin/pc26 hook`, as designed. The owner confirmed the rest:
+`/opt/pc26/bin/pc26 hook`, as designed. The maintainer confirmed the rest:
 no error dialog, name, theme/font/key bars kept, menu on a fresh
 start, Getting started and System → About, wakelock in the
 notification and over screen-off, the Settings editor, the launcher
 shortcut, the themed icon.
 
 **Found:** Getting started was missing from the menu because the
-owner has their own `~/.config/pc26/menu.conf` (from 2026-10-05), and
+maintainer has their own `~/.config/pc26/menu.conf` (from 2026-10-05), and
 a user's menu file replaces the built-in one, so new built-in items
-never appear. Added the line to the owner's file by hand. Idea, not
+never appear. Added the line to the maintainer's file by hand. Idea, not
 built: `pc26 check` (or the menu editor) could mention built-in items
 missing from a user's menu.
 
@@ -693,7 +701,7 @@ Built, committed locally, not pushed:
   release on one phone, Play later. `.gitignore` blocks `*.jks`,
   `*.p12`, `*.keystore` (not the debug one).
 - AGENTS.md: Build setup (version name, signing, releases), a
-  Conventions line (only the owner tags releases). README: Distribution.
+  Conventions line (only the maintainer tags releases). README: Distribution.
 
 Not sure without a CI run: the Gradle DSL in `app/build.gradle.kts`
 (`signingConfigs.create`/`findByName`, `buildTypes.getByName`) and
@@ -701,7 +709,7 @@ whether `assembleRelease`'s lint-vital step finds anything fatal. The
 next push's debug build checks the first; the first tag checks the
 second.
 
-**Owner steps:**
+**Maintainer steps:**
 1. Make and back up the release key, add the four secrets
    (`docs/RELEASING.md` 1-3).
 2. After the phone checks below: `git tag v0.1.0 && git push origin
@@ -747,7 +755,7 @@ Built test-first, committed locally, not pushed:
   README "License", AGENTS.md "Licenses" rule (keep `COMPONENTS` and
   the texts in step with `build-proot.sh` and the other pins).
 
-Open question for the owner: talloc is LGPL and linked statically, so
+Open question for the maintainer: talloc is LGPL and linked statically, so
 strictly the user should be able to relink proot; the app's repo
 (with `scripts/build-proot.sh`) being public at release covers that.
 
@@ -861,7 +869,7 @@ row leave one `sound-server` proot, one Pulse and its two
   they now wait for what they check, up to 5 s, and the fake Pulse of
   "lists them again" lives long enough. Commit those test fixes on
   their own, before the fix. sound-watch.bats green 5 runs in a row.
-- Not committed (owner's call).
+- Not committed (maintainer's call).
 
 ### 2026-10-06 (57): sound restarts left a hung proot behind
 
@@ -887,7 +895,7 @@ killing the watcher let proot exit by itself.
 
 ### 2026-10-06 (56): issue #1, mic stall and processes left by closed tabs
 
-GitHub issue #1 (the owner's): recording through the sound device's
+GitHub issue #1 (the maintainer's): recording through the sound device's
 `mic` got no data until `pocket sound start`; that command returned
 before the server answered; `keybar` spun at ~48% CPU.
 - **Mic stall, cause:** `sound-server` starts `sound-watch` with its
@@ -925,13 +933,13 @@ before the server answered; `keybar` spun at ~48% CPU.
 
 ### 2026-10-06 (55): camera cutout confirmed on the phone
 
-The owner checked entry 54: in landscape, with the camera on either
+The maintainer checked entry 54: in landscape, with the camera on either
 side, the terminal and key bar keep clear of the cutout; portrait is
 unchanged. No code changes.
 
 ### 2026-10-06 (54): landscape confirmed; keep clear of the camera cutout
 
-The owner checked entry 53 on the phone: terminal rows show in
+The maintainer checked entry 53 on the phone: terminal rows show in
 landscape with the keyboard up, typing works, hiding the keyboard
 brings back two bar rows and the strip, and portrait works with no
 tap. Swiping the one-row bar couldn't be tried: the shell bar's
@@ -944,7 +952,7 @@ to the system bars and keyboard (API 30+). App code only; builds in CI.
 
 ### 2026-10-06 (53): landscape with the keyboard up: the terminal had no room
 
-The owner found: in landscape with the keyboard up, no terminal row
+The maintainer found: in landscape with the keyboard up, no terminal row
 showed and typing did nothing (`date > /tmp/landscape-test` typed blind
 didn't run); back in portrait, typing still did nothing until the
 terminal was tapped. Cause: the status bar, keyboard (~250 dp), tab
@@ -952,7 +960,7 @@ strip and two-row key bar leave the terminal no height in ~410 dp, and
 Android takes focus from a view with no height and doesn't give it
 back, so the keyboard had nothing to type into. (The library already
 sets `IME_FLAG_NO_FULLSCREEN`, so it wasn't the fullscreen keyboard.)
-- Owner's choice: the key bar drops to one row first; if the terminal
+- Maintainer's choice: the key bar drops to one row first; if the terminal
   still gets too little, the tab strip hides too. Worked out from the
   height actually there, so other aspect ratios only give up what
   they must.
@@ -970,7 +978,7 @@ sets `IME_FLAG_NO_FULLSCREEN`, so it wasn't the fullscreen keyboard.)
 
 ### 2026-10-06 (52): microphone, rotation lock and tab swiping confirmed on the phone
 
-Build 69 (b05309b). The owner ran every check from entries 49-51 on
+Build 69 (b05309b). The maintainer ran every check from entries 49-51 on
 the phone and all passed:
 - **A. Sound device's microphone** (entry 49): no indicator while
   idle; `arecord` records the voice with the indicator and the
@@ -989,7 +997,7 @@ README's status line now says steps 1-7 and 9 work.
 
 ### 2026-10-05 (51): swipe sideways to switch tabs
 
-The owner asked for it (2026-10-05) and chose: on the terminal, **on
+The maintainer asked for it (2026-10-05) and chose: on the terminal, **on
 by default** (an exception to "touch off by default", noted in
 AGENTS.md). Not yet run on the phone.
 - core: `TabSwipe` classifies one finger's touch: at least 60 dp
@@ -1006,7 +1014,7 @@ AGENTS.md). Not yet run on the phone.
 
 ### 2026-10-05 (50): pocket rotation lock
 
-For the owner's inclinometer app. Owner's choice: the program asks.
+For the maintainer's inclinometer app. Maintainer's choice: the program asks.
 Not yet run on the phone.
 - `pocket rotation lock [portrait|landscape] [--pid PID]` | `unlock`
   | `status`. The lock belongs to `pocket`'s parent (the program, or
@@ -1049,7 +1057,7 @@ Built test-first from entry 48's plan; not yet run on the phone.
 
 ### 2026-10-05 (48): microphone half planned
 
-The owner worried about Android's microphone indicator; the plan
+The maintainer worried about Android's microphone indicator; the plan
 opens the microphone only while a program records from Pulse, names
 the program in the notification and keeps `android-microphone off`
 as the switch (built in entry 49; see AGENTS.md, "Sound device"). Checked here with the real Pulse 17: a
@@ -1059,7 +1067,7 @@ no silence), and `pactl list source-outputs` shows `Source: N`,
 
 ### 2026-10-05 (47): sound device (speaker half) confirmed on the phone
 
-Build 67 (1ea1e12). The owner heard all four tones, clean: `paplay`
+Build 67 (1ea1e12). The maintainer heard all four tones, clean: `paplay`
 and `aplay` (2.4 s and 2.8 s for a 2 s tone), after
 `sound-device off`/`on` (no `pulseaudio` left while off: the pid
 stop works) and after `pkill -9 pulseaudio` (back within 2 s).
@@ -1085,12 +1093,12 @@ next start would compete with it.
 
 Built test-first from the spike's design (entries 43-44); not yet
 run on the phone.
-- **Owner's decisions:** the packages go in the image (plus `pocket
+- **Maintainer's decisions:** the packages go in the image (plus `pocket
   sound install` for existing Debians); PulseAudio **starts with the
   app**. First chosen: on demand, but Pulse refuses to autospawn as
   root ("Not doing autospawn since we are root"), so on demand would
   need a listener holding the socket, ~9 MB of Python, more than an
-  idle Pulse (5.5 MB RSS, 0 CPU ticks in 10 s). The owner picked
+  idle Pulse (5.5 MB RSS, 0 CPU ticks in 10 s). The maintainer picked
   starting with the app after hearing that.
 - `tools/lib/sound-server`: PulseAudio with `-n`, pipe sink `phone`
   (48 kHz s16 stereo) at `/tmp/.pocket-terminal/sound/out`, native
@@ -1121,7 +1129,7 @@ run on the phone.
 
 Spike build 65 (run 37330111521, `c401742`), `~/snd-spike.sh` run
 twice with the app on screen:
-- The owner heard the 2 s tone **both times, clean**.
+- The maintainer heard the 2 s tone **both times, clean**.
 - `paplay` took 2.35 s and 2.32 s (≈2.3 s expected): the AudioTrack
   paces the pipe sink. No underruns in the trace.
 - Second run: the trace shows `eof` when Pulse stopped, then the
@@ -1129,7 +1137,7 @@ twice with the app on screen:
 Thrown away: branch `spike/sound-device` (local and remote),
 `~/snd-spike.sh`, `~/spike-tone.wav`, `~/.asoundrc`. The Pulse,
 sox and ALSA packages from entry 43 stay installed in the dev
-Debian. Next: plan the real sound device with the owner.
+Debian. Next: plan the real sound device with the maintainer.
 
 ### 2026-10-05 (43): sound device spike, Debian side
 
@@ -1172,10 +1180,10 @@ The files half of 9.6 is done; the sound device is next.
 
 ### 2026-10-05 (41): 9.6 tested on the phone; Ctrl+C on a stream fixed
 
-**Checks** (build 62, `c00a5a5`), steps from "Next", with the owner
+**Checks** (build 62, `c00a5a5`), steps from "Next", with the maintainer
 listening:
 1. pass: 7 s recorded (6.9 s saved), played back clearly. The very
-   first take (owner away) saved 3.3 s of an 8 s run, likely the
+   first take (maintainer away) saved 3.3 s of an 8 s run, likely the
    permission dialog. Playback reports ~0.3 s less than the recorder.
 2. pass: plays to the end; `--json` gives file and seconds.
 3. pass: `a.wav` 16-bit mono 16000 Hz, 3.0 s, plays.
@@ -1194,7 +1202,7 @@ listening:
    `test_a_second_ctrl_c_doesnt_take_the_cancel_back`), and
    `scheduleSweep()` never puts off a due sweep (app only, untested
    locally).
-6. pass: 25 s recording with the owner in another app; mic indicator
+6. pass: 25 s recording with the maintainer in another app; mic indicator
    stayed on, the speech from while away is in it. Background
    playback not checked yet.
 7. pass (by accident, twice): with the screen off, "the app must be
@@ -1206,7 +1214,7 @@ listening:
 
 ### 2026-10-05 (40): 9.6 started, `pocket audio play` and `record`
 
-- **Files first**, per the owner's plan. `pocket audio play FILE`
+- **Files first**, per the maintainer's plan. `pocket audio play FILE`
   (MediaPlayer, the file opened by the app and handed over as an fd)
   waits until the sound ends; Ctrl+C stops it. `pocket audio record
   FILE [--seconds N] [--rate HZ]`: the ending picks the format, `.m4a`/
@@ -1255,7 +1263,7 @@ next `--quick back` shot saved (2.0 MB). Step 9.5 is done.
 the agent running each command and reading the photos:
 1. pass: camera app, photos upright in portrait and landscape, back
    and front (2256x4000, 4000x2256, 3840x2160).
-2. pass (after the owner first took photos by mistake): backing out
+2. pass (after the maintainer first took photos by mistake): backing out
    gave "no photo was taken", exit 2, `a.jpg` unchanged.
 3. pass: `--quick back` 1.9 s, `--quick front` 3.3 s, exposed and
    in focus, upright in portrait and landscape (keyboard lettering
@@ -1270,7 +1278,7 @@ the agent running each command and reading the photos:
 5. pass: on, 10 % dimmer, 100 % brighter, off; and `torch off` works
    with the app in the background, so the guide now says so.
 6. pass: "the camera is off (pocket set android-camera on)", exit 2.
-7. pass (owner, after the commit): with the camera denied in the
+7. pass (maintainer, after the commit): with the camera denied in the
    app's Android settings, `pocket camera --quick back ~/x.jpg` gave
    "the camera wasn't allowed (allow it in the app's Android
    settings)", exit 2.
@@ -1292,7 +1300,7 @@ the agent running each command and reading the photos:
 - **Decision:** CAMERA is in the manifest for `--quick`, and Android
   then refuses `ACTION_IMAGE_CAPTURE` to an app that hasn't been
   granted it, so the camera-app way asks for the permission too (the
-  owner's plan said it needed none: not possible with `--quick` in the
+  maintainer's plan said it needed none: not possible with `--quick` in the
   same app). `uses-feature camera` is `required="false"`.
 - `pocket torch on [PERCENT] | off`: `setTorchMode`, or
   `turnOnTorchWithStrengthLevel` with `torchLevel()` mapping percent
@@ -1350,7 +1358,7 @@ columns (17 sensors, `compass` last), and `pocket sensor accelerometer
 ### 2026-10-05 (34): step 9.4, sensors
 
 **Done**
-- Owner added scope (commit 4786346): flashlight with the camera
+- Maintainer added scope (commit 4786346): flashlight with the camera
   (9.5), sound as 9.6 (play/record files first, then a PulseAudio
   sound device through FIFOs), recording may go on in the background.
   README and "Next" updated.
@@ -1384,7 +1392,7 @@ columns (17 sensors, `compass` last), and `pocket sensor accelerometer
 
 ### 2026-10-05 (33): 9.3 confirmed on the phone
 
-The owner went through all eight checks from entry 32 (one fix,
+The maintainer went through all eight checks from entry 32 (one fix,
 `--json`, `--gps`, a stream kept going in the background, `| head
 -3`, the setting off, phone location off, starting off screen,
 approximate and denied). After "Don't allow" in the app's Android
@@ -1415,7 +1423,7 @@ network`. Step 9.3 is done.
 - Guide: command, setting, "The phone" text. Repo guide: Location.
 
 **Decisions**
-- Owner: accept whichever fix comes first; `--gps` insists on GPS.
+- Maintainer: accept whichever fix comes first; `--gps` insists on GPS.
 - Agent's choices: no last-known location (always a fresh fix);
   locating must *start* with the app on screen (Android gives "while
   in use" location only then, or to a service already locating in the
@@ -1430,23 +1438,23 @@ came back when re-run, so it looked like load, not a bug.
 
 ### 2026-10-05 (31): 9.2 confirmed on the phone
 
-Build 55 (commit 9a1becd). The owner shared a web page from the
+Build 55 (commit 9a1becd). The maintainer shared a web page from the
 browser: `~/Shared` got `Polkukengät Nike ACG Zegama -
 Top4Running.fi.txt` (named after the page title, non-ASCII kept)
 holding only the link, with a trailing newline. Entry 30's fix works,
 so 9.2 is fully confirmed. Older test files from entry 30 are still in
-the owner's `~/Shared`, left alone.
+the maintainer's `~/Shared`, left alone.
 
 ### 2026-10-05 (30): 9.2 tested on the phone; browser share fixed
 
-Tested build 54 (commit 197d67e) with the owner, the agent running
+Tested build 54 (commit 197d67e) with the maintainer, the agent running
 the commands. Checklist from entry 29:
 - 1-2: `pocket share --text`, also from stdin with line breaks: the
   share sheet opens and the text arrives, lines kept.
 - 3-4: one image (a generated PNG; the app can't read
   `/storage/emulated/0/DCIM` without a media permission) shows its
   preview and name; an image and a `.txt` together both arrive by mail.
-- 5: with the owner still in the receiving app, `pocket share` refused
+- 5: with the maintainer still in the receiving app, `pocket share` refused
   ("the app must be on screen"), exit 2. 6: `android-share off`
   refuses, exit 2.
 - 7: a Gallery photo shared to the app shows the box and notification
@@ -1497,7 +1505,7 @@ Built test-first; committed as 7108d5c, with 197d67e fixing the share intent (`s
 - Tests: core 259 (was 239), pocket 132 (was 126), bats 63. The app
   module only builds in CI.
 
-**Owner's checklist for 9.2** (after installing the build):
+**Maintainer's checklist for 9.2** (after installing the build):
 1. `pocket share --text "hello from Debian"`: the share sheet opens;
    send it to a chat or notes app and check the text arrives.
 2. `echo -e "a\nb" | pocket share --text`: line breaks arrive.
@@ -1519,11 +1527,11 @@ Built test-first; committed as 7108d5c, with 197d67e fixing the share intent (`s
 
 ### 2026-10-04 (28): 9.1 confirmed on the phone
 
-Tested build 52 (commit b9bb696) with the owner, the agent running the
+Tested build 52 (commit b9bb696) with the maintainer, the agent running the
 commands from the app's Debian:
 - `pocket vibrate`, `1500` and `--json vibrate 200` all buzz; `0` and
   `6000` refuse with exit 2. A buzz started from a timer while the
-  owner was in another app worked too.
+  maintainer was in another app worked too.
 - `clipboard set` (stdin with line breaks, and TEXT) works; pasting
   elsewhere gives the text; Android shows its own "copied" pop-up.
   `set` works from the background too.
@@ -1577,10 +1585,10 @@ phone: see "Next".
 ### 2026-10-04 (26): `pocket install-apk` and 7.3 confirmed; step 7 done
 
 **Done**
-- The owner installed build 51 (HEAD `1bec701`) through `pocket
+- The maintainer installed build 51 (HEAD `1bec701`) through `pocket
   install-apk`: installing from the app's own Debian works. The tools
   in `/opt/pocket-terminal` match `tools/`.
-- At the owner's request the agent ran the 7.3 checks itself in the
+- At the maintainer's request the agent ran the 7.3 checks itself in the
   app's Debian (config and menu state backed up first, restored after);
   all passed:
   - `pocket theme set nord` → `pocket undo` brings Neon back; a second
@@ -1600,7 +1608,7 @@ phone: see "Next".
     `n` → "Not installed.", exit 1, so the menu pauses on the message.
   - `pocket open` and `xdg-open` with https links succeed; `file://`
     and non-URLs are refused (exit 2).
-- The owner confirmed on screen: `pocket open` opened the browser, and
+- The maintainer confirmed on screen: `pocket open` opened the browser, and
   tapping links in the terminal works.
 - **Step 7 is done.** README status updated to steps 1-7.
 
@@ -1609,7 +1617,7 @@ No code changes.
 ### 2026-10-04 (25): dev setup in the app's own Debian; `pocket install-apk`
 
 **Done**
-- The owner now runs Claude Code in the app's own Debian instead of
+- The maintainer now runs Claude Code in the app's own Debian instead of
   Termux. Installed there: `git`, `gh` (logged in as `est4s`), JDK 21,
   `bats`. Baseline: 217 core, 113 `pocket` (after this work) and 63
   bats tests pass; real bats works here (its `/dev/fd` is fine).
@@ -1628,14 +1636,14 @@ No code changes.
   provider are declared only in `app/src/debug/AndroidManifest.xml`.
 
 **Decisions**
-- Owner's choice (2026-10-04): a debug-only install request rather than
+- Maintainer's choice (2026-10-04): a debug-only install request rather than
   copying the APK and tapping it by hand. Release builds must not get
   `REQUEST_INSTALL_PACKAGES` (Play restricts it).
 - A tiny `ContentProvider` instead of androidx `FileProvider`: no new
   dependency for one file.
 
 **Not checked:** the app module can't build here; CI checks it compiles.
-The installer flow needs the owner's check (see "Next").
+The installer flow needs the maintainer's check (see "Next").
 
 **Commits:** see git log (this entry's commit)
 
@@ -1666,7 +1674,7 @@ The installer flow needs the owner's check (see "Next").
 
 **Decisions**
 - Undo has no redo; undo itself isn't recorded as a step.
-- The owner's request (2026-10-04): picking an installed agent in the
+- The maintainer's request (2026-10-04): picking an installed agent in the
   menu starts it, a missing one asks to install it.
 - Python tests use a PATH of `/usr/bin:/bin` plus fakes when agents are
   involved: the dev phone has the real `claude` on its PATH.
@@ -1715,7 +1723,7 @@ The installer flow needs the owner's check (see "Next").
 ### 2026-10-04 (22): step 7 planned; 7.1, `pocket notify` and agent hooks
 
 **Done**
-- Planned step 7 with the owner (decisions under "Next").
+- Planned step 7 with the maintainer (decisions under "Next").
 - `pocket notify [--if-away] TITLE [TEXT]`: a `notify` request
   (`PocketRequests`, options `shell=N`, `if-away`, `agent`, `took=N`);
   the service posts it on a new high-importance channel, one
@@ -1746,14 +1754,14 @@ The installer flow needs the owner's check (see "Next").
 
 ### 2026-10-04 (21): step 6 done
 
-**Owner confirmed** the round 2 fixes: readable light themes, htop and
+**Maintainer confirmed** the round 2 fixes: readable light themes, htop and
 failing menu commands, reset in every editor. **Step 6 done.** The
-owner wants step 7 done by another agent: "Next" now describes it for a
+maintainer wants step 7 done by another agent: "Next" now describes it for a
 fresh start. Docs updated: work log status, README status.
 
-### 2026-10-04 (20): owner's first round on step 6
+### 2026-10-04 (20): maintainer's first round on step 6
 
-**Owner found:** (1) with solarized-light the key bar's labels were
+**Maintainer found:** (1) with solarized-light the key bar's labels were
 white on a light background; (2) a menu item running `htop` said
 nothing useful: htop isn't installed; (3) wanted "reset to default" in
 every settings editor. Claude Code not installed yet, so the agent test
@@ -1777,9 +1785,9 @@ waits.
 
 ### 2026-10-04 (19): step 6.2-6.6 built in one go
 
-**Owner confirmed 6.1** on the phone (after the PATH fix): `pocket
+**Maintainer confirmed 6.1** on the phone (after the PATH fix): `pocket
 version`, `pocket check`, live colours, problems listed with no dialog.
-Owner asked for the rest of step 6 in one go, tested at the end; I
+Maintainer asked for the rest of step 6 in one go, tested at the end; I
 pushed in pieces and watched CI myself.
 
 **Done**
@@ -1828,7 +1836,7 @@ work log commit after them.
 
 ### 2026-10-04 (18): step 6 planned; 6.1, the app's tools and `pocket`
 
-**Decided with the owner:** start a small `pocket` now, in step 6;
+**Decided with the maintainer:** start a small `pocket` now, in step 6;
 editors are terminal programs; the aim is that AI coding CLIs can work
 on every setting. Plan in "Next".
 
@@ -1859,7 +1867,7 @@ on every setting. Plan in "Next".
   home-docs test fails if a `pocket` command isn't documented there),
   repo `AGENTS.md` (architecture, tests), README.
 
-**Bug found by the owner:** `pocket: command not found`. Debian's
+**Bug found by the maintainer:** `pocket: command not found`. Debian's
 `/etc/profile` sets root's PATH from scratch, dropping the app's
 `/opt/pocket-terminal/bin` (the test only checked the env the app
 passes). Fix: the app writes `/etc/profile.d/pocket-terminal.sh` at
@@ -1900,18 +1908,18 @@ start (tested by sourcing it with `sh`).
   `play`, fallbacks, `Repeat`, and how programs (or agents setting one
   up) bring their own bar.
 
-**Owner's check found:** `~/games` didn't exist in a fresh install, so
+**Maintainer's check found:** `~/games` didn't exist in a fresh install, so
 the generic-bar check's `printf … > ~/games/test-game` failed. The image
 now creates it (empty).
 
-**Bug found by the owner:** the test game (`read -r x`) kept the menu's
+**Bug found by the maintainer:** the test game (`read -r x`) kept the menu's
 bar until a tab switch. The bar was only rechecked on output, and a
 program that starts quietly prints nothing after `keybar` writes the
 file. Fix: `MainActivity` also polls the bar file every 250 ms while
 visible (one stat; stopped in `onStop`). Not unit-testable (Android
-glue); covered by the owner's generic-bar check.
+glue); covered by the maintainer's generic-bar check.
 
-**Owner confirmed on the phone:** game bars and pages, hold-to-repeat
+**Maintainer confirmed on the phone:** game bars and pages, hold-to-repeat
 in games/nnn/menu/shell, the generic bar (after the polling fix),
 swipes. **Step 5 done.**
 
@@ -1920,7 +1928,7 @@ swipes. **Step 5 done.**
 ### 2026-10-04 (16): step 4, nnn and the key bar
 
 **Done**
-- Owner compared the Debian-packaged file managers (nnn, lf, ranger,
+- Maintainer compared the Debian-packaged file managers (nnn, lf, ranger,
   vifm, broot; yazi/xplr not packaged) and tried nnn and lf in the app.
   Decision: nnn, plus an always-visible key bar for its actions.
 - 4.1, rootfs (bats, `tests/shell/files.bats` + menu/bashrc/docs tests):
@@ -1961,7 +1969,7 @@ swipes. **Step 5 done.**
   improve them without a rootfs migration; users override per bar.
 - Not yet: key repeat on held buttons (arrows), opening non-text files
   in Android apps (needs a Debian → app channel).
-- 4.3 (owner's feedback): `keyBarPages()` in core, test-first (4
+- 4.3 (maintainer's feedback): `keyBarPages()` in core, test-first (4
   tests): always two rows (an empty second row keeps its height, so the
   terminal never resizes), first half on top, extra buttons on more
   pages. The app picks buttons per row from the widest label (min 44 dp)
@@ -1971,7 +1979,7 @@ swipes. **Step 5 done.**
   bottom edge. nnn's bar gained ↑ ↓; built-in bars reordered so the
   halves make sense as rows.
 
-**Owner confirmed on the phone:** all 4.2 and 4.3 checks (two rows,
+**Maintainer confirmed on the phone:** all 4.2 and 4.3 checks (two rows,
 ↑ ↓ in nnn, no terminal resize on bar changes, pages with dots and
 swipe, landscape). **Step 4 done.**
 
@@ -1993,12 +2001,12 @@ swipe, landscape). **Step 4 done.**
   user-facing paths are mentioned in `AGENTS.md`, so the docs can't
   silently fall behind. Repo AGENTS.md's design rule points at them.
 
-**Owner's first check:** `less` didn't exist (the base image has no pager
+**Maintainer's first check:** `less` didn't exist (the base image has no pager
 or editor), so `less` and `nano` are now installed. `ls
 /storage/emulated/0` lists the phone's folders, so the docs' claim that
 storage needs a permission was wrong; replaced with the path.
 
-**Owner confirmed on the phone** (after clearing data), together with
+**Maintainer confirmed on the phone** (after clearing data), together with
 step 3's final checks: `CLAUDE.md` imports `AGENTS.md`, `less` and `nano`
 work, menu on the first tab only, starship/eza/folder titles, no debconf
 warnings, tab folder restore after force-stop. **Step 3 done.**
@@ -2008,7 +2016,7 @@ warnings, tab folder restore after force-stop. **Step 3 done.**
 ### 2026-10-03 (14): step 3.3, launcher menu
 
 **Done**
-- `rootfs/bin/menu` → `/usr/local/bin/menu`: the owner's Termux menu,
+- `rootfs/bin/menu` → `/usr/local/bin/menu`: the maintainer's Termux menu,
   ported to run inside Debian. Main: Terminal, Files (`mc ~`), Games,
   System, Exit. System: Update all (`apt update && apt upgrade -y`),
   System info, Theme (neon/amber/phosphor). State in
@@ -2044,7 +2052,7 @@ the same order whatever the locale.
 official installer, don't bundle; belongs with AI agent support), a
 backup that works without proot-distro.
 
-**Owner confirmed on the phone:** all the 3.3 checks above pass.
+**Maintainer confirmed on the phone:** all the 3.3 checks above pass.
 
 **Commits:** `726ade9`, `9969039`
 
@@ -2082,9 +2090,9 @@ Debian too; on the check list.
   user files; scores stay in `~`.
 - Title is the folder name only: tabs are narrow on a phone.
 - No QEMU-built image locally (no docker on the phone): the Dockerfile is
-  verified by the CI build and the owner's checks.
+  verified by the CI build and the maintainer's checks.
 
-**Owner confirmed on the phone** (after clearing data): starship prompt
+**Maintainer confirmed on the phone** (after clearing data): starship prompt
 with icons, folder-named tabs, eza aliases, all three games, no debconf
 warnings on `apt install`, Neon colours file in place, `mc`, tab folder
 restore after force-stop, and `cat <(echo ok)` works in the app's Debian
@@ -2100,7 +2108,7 @@ restore after force-stop, and `cat <(echo ok)` works in the app's Debian
   reads Termux's `colors.properties` (`background`, `foreground`,
   `cursor`, `color0`–`color255`, `#rrggbb`, `#`/`!` comments) on top of a
   base scheme; bad lines are skipped and reported with line numbers.
-  `NEON` comes from the resource `neon.colors.properties` (the owner's
+  `NEON` comes from the resource `neon.colors.properties` (the maintainer's
   Termux file with a user-facing header). `loadColorScheme(file)` lays a
   file over neon (neon alone if missing). `stripColors()` derives the tab
   strip colours: background, `color0` selected, cursor accent, `color6`
@@ -2114,7 +2122,7 @@ restore after force-stop, and `cat <(echo ok)` works in the app's Debian
 - Font: JetBrains Mono Nerd Font Mono for the terminal and the tab strip.
   `scripts/fetch-font.sh` downloads Nerd Fonts v3.5.1's
   `JetBrainsMono.tar.xz` (sha256-pinned) in CI and unpacks the TTF and
-  `OFL.txt` into `app/src/main/assets/fonts/` (gitignored). The owner's
+  `OFL.txt` into `app/src/main/assets/fonts/` (gitignored). The maintainer's
   Termux font is byte-identical to the release file (same sha256).
   Builds without the font fall back to monospace.
 
@@ -2123,7 +2131,7 @@ restore after force-stop, and `cat <(echo ok)` works in the app's Debian
   rootfs; the hash pin keeps it reproducible. APK grows by ~1.2 MB
   (2.6 MB TTF, compressed).
 - Reading the user's colours file now rather than waiting for 3.2: it
-  was small, and lets the owner try theme edits right away.
+  was small, and lets the maintainer try theme edits right away.
 - No new shell tests: `fetch-font.sh` is a build script verified by the
   CI build, like `build-proot.sh`.
 
@@ -2140,7 +2148,7 @@ the scheme background too, like Termux (the library never paints
 default-background cells). `scripts/deliver.sh` now waits for the run
 of HEAD: right after a push it had picked the previous run.
 
-**Owner confirmed on the phone:** neon palette, Nerd Font icons, strip
+**Maintainer confirmed on the phone:** neon palette, Nerd Font icons, strip
 colours, pinch zoom, a colours file in Debian recolours every tab on
 return, a bad line shows the problems dialog, deleting the file brings
 neon back.
@@ -2149,7 +2157,7 @@ neon back.
 
 ### 2026-10-03 (11): rename tabs
 
-Owner asked for renaming without a hardware keyboard before starting
+Maintainer asked for renaming without a hardware keyboard before starting
 step 3, so the README's "long-press a tab for rename" came forward (the
 rest of that long-press menu, colour/duplicate/close others, is still
 later).
@@ -2163,7 +2171,7 @@ later).
 - Long-press a tab → "Rename tab" dialog with the keyboard up; IME Done
   saves; **Automatic** button only on renamed tabs.
 
-**Owner confirmed on the phone:** rename shows in the strip; clearing goes
+**Maintainer confirmed on the phone:** rename shows in the strip; clearing goes
 back to "Tab N"; renamed tabs keep their names after a force-stop (the
 step 2 restore check that couldn't be run before); a rename beats the
 shell's OSC title and **Automatic** brings the shell title back; typing
@@ -2196,7 +2204,7 @@ files dir, readable from Debian under `/storage/emulated/0/Android/data/`
 reports its folder: `PROMPT_COMMAND` writes `$PWD` to
 `/tmp/.pocket-terminal/cwd-N`, which the service reads.
 
-**Owner confirmed on the phone:** after force-stop, 3 tabs come back with
+**Maintainer confirmed on the phone:** after force-stop, 3 tabs come back with
 the same tab selected and `pwd` = `/etc` and `/tmp/x` in the right tabs;
 a deleted folder opens in `/root` without errors; Exit then reopen gives
 one fresh tab; `PROMPT_COMMAND` shows the printf line, prompt otherwise
@@ -2222,7 +2230,7 @@ tests). Hardware keyboard shortcuts (see "Hardware keyboard checks").
 - `ViewClient.onKeyDown` runs tab shortcuts before the terminal sees the
   key; key repeats are consumed but ignored.
 
-**Owner confirmed on the phone:** + opens and selects tabs; `top` keeps
+**Maintainer confirmed on the phone:** + opens and selects tabs; `top` keeps
 running across switches; ● and 🔔 appear on background tabs; closing a
 middle tab selects its right neighbour; closing the last tab closes the
 app; "Tab N" titles; typing still reaches the terminal after tapping the
@@ -2252,7 +2260,7 @@ strip. Hardware keyboard shortcuts not tested (no keyboard), listed under
   Fixed with explicit types (`01cb1ac`). `app/` can't compile on the
   phone, so read Kotlin carefully for inference cycles like this.
 
-**Owner confirmed on the phone:** `exit` closes the app and the
+**Maintainer confirmed on the phone:** `exit` closes the app and the
 notification; `exit 1` stays open with the message and Enter restarts;
 killing a child shell changes nothing; notification Exit, Back and
 rotation still work.
@@ -2280,7 +2288,7 @@ rotation still work.
 - Crash reporter moved to `TerminalApp` (`Application`) so it covers the
   service too. White `>_` notification icon (`ic_notification.xml`).
 
-**Owner confirmed on the phone:** notification permission prompt and
+**Maintainer confirmed on the phone:** notification permission prompt and
 "1 terminal running" with Exit; `htop` keeps running after Back and
 reopening; rotation keeps the session; shell alive after a few minutes
 with the screen off; Exit removes app and notification, reopening gives a
@@ -2304,10 +2312,10 @@ fresh shell.
   `/proc/{loadavg,stat,uptime,version,vmstat}` into `filesDir/fake-proc`,
   only for files the app can't read (probed at each start with a real
   read), and `prootLaunch(fakeProc = …)` binds them over the originals.
-  On the owner's Android 16 all five are blocked (`9e5c713`).
+  On the maintainer's Android 16 all five are blocked (`9e5c713`).
 - A `workflow_dispatch` rebuild installed as an update kept `htop`.
 
-**Owner confirmed on the phone:** short opening screen, `apt install`
+**Maintainer confirmed on the phone:** short opening screen, `apt install`
 works, `htop` draws, updates keep installed packages. All of step 1's
 "Done when" checks pass.
 
@@ -2324,7 +2332,7 @@ works, `htop` draws, updates keep installed packages. All of step 1's
   `.tar.xz` (commons-compress 1.28.0 + xz 1.12) into `debian.partial`,
   writes `etc/resolv.conf` (1.1.1.1, 8.8.8.8) and `etc/hosts`, then renames
   it to `debian`. Hard links become copies; symlinks are kept verbatim;
-  device nodes/FIFOs are skipped; the owner always keeps rw (and x on
+  device nodes/FIFOs are skipped; the maintainer always keeps rw (and x on
   dirs) so apt can replace files later. Refuses `..` paths and writing
   through symlinks; refuses to install over an existing `debian`; clearing a
   stale `debian.partial` doesn't follow symlinks. Progress in percent of
@@ -2340,7 +2348,7 @@ works, `htop` draws, updates keep installed packages. All of step 1's
   the end, instead of a separate marker file: same guarantee, one less
   thing to get out of sync.
 
-**Owner confirmed on the phone:** progress screen then terminal, ~5 s;
+**Maintainer confirmed on the phone:** progress screen then terminal, ~5 s;
 `os-release` says trixie; `resolv.conf` written. Interrupt-and-reopen not
 tried yet.
 
@@ -2427,7 +2435,7 @@ tried yet.
 - No spike branch: this step is pure Android glue with no logic for `core`,
   so there was nothing to rebuild test-first. No tests added for it.
 
-**Owner confirmed on the phone:** keyboard, rendering, colours, pinch zoom,
+**Maintainer confirmed on the phone:** keyboard, rendering, colours, pinch zoom,
 rotation and shell restart work. The first build drew under the status bar;
 fixed in `d7952ea` and confirmed (status bar and keyboard both clear).
 
@@ -2436,7 +2444,7 @@ fixed in `d7952ea` and confirmed (status bar and keyboard both clear).
 ### 2026-10-03: scope, build pipeline, TDD
 
 **Done**
-- Wrote the product scope in `README.md` with the owner: built-in Debian,
+- Wrote the product scope in `README.md` with the maintainer: built-in Debian,
   Windows Terminal-style tabs, in-app keyboard, phone-sized keyboard-driven
   terminal file manager (`pocket files`), customization, shareable profiles,
   Android integration (incl. location, camera, sensors), AI agent support,
@@ -2458,7 +2466,7 @@ fixed in `d7952ea` and confirmed (status bar and keyboard both clear).
 - App ID `io.github.est4s.terminal` is name-neutral; "Pocket Terminal" is a
   working name (taken on the Play Store), to be renamed before release.
 - Keyboard-first everywhere; tap support later, behind a settings toggle.
-- Owner tried Android's built-in Linux Terminal (VM): too slow. The app
+- Maintainer tried Android's built-in Linux Terminal (VM): too slow. The app
   stays proot-based.
 - Repo is private for now; docs-only pushes skip CI to save build minutes.
 

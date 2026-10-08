@@ -16,7 +16,7 @@ app/src/main/assets/tools.tar.xz
 # Python bytecode from running the tools and their tests.
 __pycache__/
 
-# Release keys stay with the owner and in GitHub secrets (docs/RELEASING.md).
+# Release keys stay with the maintainer and in GitHub secrets (docs/RELEASING.md).
 # signing/debug.keystore is committed on purpose.
 *.jks
 *.p12

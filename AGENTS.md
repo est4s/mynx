@@ -25,7 +25,7 @@ to do next.
 
 The app is called **Mynx**, and so are its command, **`mynx`**, and
 its paths: `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`, the `MYNX_*`
-variables (owner's decision, 2026-10-07: one name everywhere; people
+variables (maintainer's decision, 2026-10-07: one name everywhere; people
 and agents use the same command). Earlier working names were dropped
 without a trace in the code; the work log has the history.
 - Keep the display name in one place: `app/src/main/res/values/strings.xml`
@@ -39,7 +39,7 @@ without a trace in the code; the work log has the history.
 
 ## Development environment
 
-The owner develops on a **phone**: Claude Code runs in the app's own
+The maintainer develops on a **phone**: Claude Code runs in the app's own
 Debian (a debug build of this app, from CI), on a Pixel 10 (arm64,
 Android 16). Until 2026-10-04 it ran in Debian under `proot-distro`
 inside Termux. The terminal is about 56 columns wide in portrait.
@@ -50,7 +50,7 @@ Consequences:
   try to install the Android SDK locally. The plain-Kotlin `core` module
   **does** build and test locally: that's where the TDD loop runs.
 - **No emulator, no `adb`** (yet). You can't see the screen or read logcat;
-  the owner installs the build and reports back. Ask for specific observations
+  the maintainer installs the build and reports back. Ask for specific observations
   ("what does the screen show after tapping X?") and make failures visible in
   the UI (show error text and stack traces on screen) rather than only in logs.
 - JDK 21 (`openjdk-21-jdk-headless`) and `bats` are installed locally;
@@ -65,7 +65,7 @@ Consequences:
 2. Run `scripts/deliver.sh` in the app's Debian, with the app on screen.
    It waits for HEAD's run, downloads the APK, copies it to the phone's
    Download folder and opens Android's installer with `mynx install-apk`.
-   The owner just taps **Install** (the app restarts as the new build).
+   The maintainer just taps **Install** (the app restarts as the new build).
 
 Notes on why the script does what it does:
 - `mynx install-apk FILE` (left out of `mynx help` and the user guide)
@@ -91,7 +91,7 @@ Notes on why the script does what it does:
 | SDK | `compileSdk`/`targetSdk` 36, `minSdk` 26 |
 | Version code | `GITHUB_RUN_NUMBER`, so every CI build installs as an update |
 | Version name | `MYNX_VERSION_NAME` (the release workflow sets it from the tag, `v0.1.0` → `0.1.0`), else `0.0.1` |
-| Signing | Debug: shared key in `signing/debug.keystore` (password `android`). Release: the owner's key from GitHub secrets |
+| Signing | Debug: shared key in `signing/debug.keystore` (password `android`). Release: the maintainer's key from GitHub secrets |
 
 **Signing:** the debug key is committed on purpose, so every CI build installs
 over the previous one and keeps the app's data. It's only for development.
@@ -101,7 +101,7 @@ from the `MYNX_RELEASE_*` secrets into a temp file and passes it to Gradle in
 `MYNX_RELEASE_KEY_ALIAS` and `MYNX_RELEASE_KEY_PASSWORD`; without them a
 release build is unsigned and debug builds don't notice. That key must never
 be committed (`.gitignore` blocks `*.jks`, `*.keystore` but the debug one),
-and losing it means the app can never be updated. The owner makes and keeps
+and losing it means the app can never be updated. The maintainer makes and keeps
 it: `docs/RELEASING.md`. Debug and release builds have the same application
 ID but different keys, so one can't install over the other (uninstall
 first, which deletes Debian).
@@ -267,7 +267,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   `sound-server`) writes Pulse's sources and source outputs to
   `sound/inputs` on every change; `MicFeeder` watches it and, through
   core's `micUsers()`/`micState()` (`Mic.kt`), opens an AudioRecord
-  only while a program records from `mic` (owner's decision: the
+  only while a program records from `mic` (maintainer's decision: the
   indicator shows only then). It feeds paced zeros (`Silence`) when
   it can't record, or the microphone fails (`MicInput` tries it
   again every 2 s): with no writer, Pulse gives recorders nothing and
@@ -305,8 +305,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   App updates may only apply additive, versioned migrations. This is a hard
   rule: users' files and installed packages must survive every update.
 - **Names:** the app, its command and its paths are all `mynx`
-  (owner's decision, 2026-10-07). Nothing from before the rename is
-  kept: no release had shipped, and the owner's Debian was moved over
+  (maintainer's decision, 2026-10-07). Nothing from before the rename is
+  kept: no release had shipped, and the maintainer's Debian was moved over
   by hand.
 
 ### Termux library notes (v0.118.3, checked in their source)
@@ -362,7 +362,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   the old place, delete the `.l2s.*` files in the copy, `git fsck`,
   then remove the original.
 - **On-device debugging without logcat:** write a trace file to
-  `getExternalFilesDir(null)`; the owner can `cat` it from the app's own
+  `getExternalFilesDir(null)`; the maintainer can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.
   Remove it once the bug is fixed.
 
@@ -371,12 +371,12 @@ See `docs/ROADMAP.md` "How it works". The details:
 These come from the scope (`docs/ROADMAP.md`) and apply to every feature:
 - **Keyboard-first.** Everything must work from the keyboard (the in-app
   keyboard, once it exists). Tap/touch support is a low priority: add it later,
-  off by default, behind a settings toggle. Exception (owner's decision,
+  off by default, behind a settings toggle. Exception (maintainer's decision,
   2026-10-05): swiping between tabs (`tab-swipe`) is on by default.
 - **Plain-text config.** Every setting lives in a readable, commented text
   file inside Debian, so users and AI agents can edit it.
 - **A `mynx` command for everything** the settings UI can do, with `--json`
-  output. Settings editors are terminal programs (owner's decision,
+  output. Settings editors are terminal programs (maintainer's decision,
   2026-10-04), built on `mynx`, so an AI agent can change everything a
   person can. `tests/shell/home-docs.bats` fails if a `mynx` command
   isn't in the home `AGENTS.md`.
@@ -390,13 +390,13 @@ These come from the scope (`docs/ROADMAP.md`) and apply to every feature:
 - **Don't bundle third-party agent CLIs** (Claude Code, Codex, …). Offer to
   install them with their official installers; users sign in with their own
   accounts.
-- **Licence:** the app is GPL-3.0-only (owner's decision, 2026-10-07;
+- **Licence:** the app is GPL-3.0-only (maintainer's decision, 2026-10-07;
   `LICENSE`). `mynx about` states it (`APP_LICENSE`, `APP_SOURCE` in
   `tools/lib/mynx/cli.py`). The name and icon aren't covered: forks
   use their own.
 - **Licenses:** keep GPL components (proot) as separate executables and link
   their source from About (`mynx about`, the menu's System → About, in
-  the terminal: owner's decision). Its credits are `COMPONENTS` in
+  the terminal: maintainer's decision). Its credits are `COMPONENTS` in
   `tools/lib/mynx/cli.py`; the licence texts ship in `tools/licenses/`
   (`/opt/mynx/licenses`). When you add, upgrade or patch a bundled
   component (proot or talloc versions in `scripts/build-proot.sh`, the
@@ -486,12 +486,14 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
 ## Conventions
 
 - **Commits:** short imperative subject line, with a body explaining why when
-  it isn't obvious. Commit and push only when the owner asks.
-- **Releases:** only the owner tags a release (`docs/RELEASING.md`); an
+  it isn't obvious. Commit and push only when the maintainer asks.
+- **Releases:** only the maintainer tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
 - **README:** short, for users: what ships today, install, licence.
-  The full scope and roadmap are `docs/ROADMAP.md`; when the owner
+  The full scope and roadmap are `docs/ROADMAP.md`; when the maintainer
   changes scope, update it in the same commit, and the README when a
   feature ships.
 - Don't describe in user-facing docs how this app itself is developed.
+- In docs, call the person who runs the project **the maintainer**
+  (not "the owner"; the maintainer's choice, 2026-10-08).
 - Keep code comments sparse and about *why*, matching the existing files.

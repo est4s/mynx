@@ -1,7 +1,7 @@
 # Screenshots for the README
 
 A guide for taking the README's screenshots on the phone, written so
-an agent running in the app's Debian can walk the owner through it.
+an agent running in the app's Debian can walk the maintainer through it.
 
 ## Before you start
 
@@ -12,13 +12,13 @@ an agent running in the app's Debian can walk the owner through it.
   public repo.
 - Android saves screenshots in
   `/storage/emulated/0/Pictures/Screenshots/`. That folder holds the
-  owner's other screenshots too: **only look at files newer than the
+  maintainer's other screenshots too: **only look at files newer than the
   start of the session** (e.g. `touch` a marker file first, then
   `find … -newer marker`), never browse or open older ones.
 
 ## The shots
 
-Take them one at a time, and check each with the owner before the
+Take them one at a time, and check each with the maintainer before the
 next.
 
 1. **Menu:** a fresh tab with the launcher menu (`menu`).
@@ -39,10 +39,10 @@ next.
 - Shrink them: `apt install pngquant`, then
   `pngquant --quality 65-85 --strip --ext .png --force docs/images/*.png`.
   Aim for under ~300 KB each.
-- README layout (keep it short; owner's request): the icon
+- README layout (keep it short; maintainer's request): the icon
   (`docs/images/icon.svg`, already there) centred above the title, then
   one row of 3-4 screenshots in an HTML table, each `width="200"`,
   with a one-word caption, right after the intro. More shots go in a
   second row, not more text.
-- Commit them with `PRIVACY.md` and the README change, when the owner
+- Commit them with `PRIVACY.md` and the README change, when the maintainer
   asks.

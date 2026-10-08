@@ -6,7 +6,7 @@ and published on GitHub Releases as `mynx-0.1.0.apk`.
 
 The release key is the app's identity. **Every update must be signed with
 the same key: if it's lost, the app can never be updated again** (people
-would have to uninstall, which deletes their Debian). Only the owner makes
+would have to uninstall, which deletes their Debian). Only the maintainer makes
 and holds it. It is never committed; `.gitignore` blocks `*.jks`,
 `*.p12` and `*.keystore` (except `signing/debug.keystore`).
 
