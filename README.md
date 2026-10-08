@@ -51,7 +51,9 @@ sensors, microphone, speaker and flashlight.
 
 Needs an **arm64** phone with **Android 8** or newer. Download the APK
 from [Releases](../../releases) and open it. The first launch unpacks
-Debian; after that the app opens straight into the menu.
+Debian; after that the app opens straight into the menu. Mynx checks
+GitHub for a new version once a day and tells you; `mynx update`
+installs it, keeping Debian and your files.
 
 ## Limitations
 
