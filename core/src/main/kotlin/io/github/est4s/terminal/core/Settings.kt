@@ -33,6 +33,8 @@ data class Settings(
     val tabSwipe: Boolean = true,
     /** Whether the service keeps the CPU awake (a partial wakelock) while it runs. */
     val wakelock: Boolean = false,
+    /** Whether the app checks GitHub about once a day for a new version (release builds). */
+    val updateCheck: Boolean = true,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -52,6 +54,7 @@ data class Settings(
         "share-folder" to shareFolder,
         "tab-swipe" to if (tabSwipe) "on" else "off",
         "wakelock" to if (wakelock) "on" else "off",
+        "update-check" to if (updateCheck) "on" else "off",
     )
 }
 
@@ -180,6 +183,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "off", listOf("on", "off"),
         oneOf("wakelock", listOf("on", "off")),
         { copy(wakelock = it == "on") },
+    ),
+    SettingDef(
+        "update-check", "Whether the app checks GitHub about once a day for a new version and tells you (mynx update updates).",
+        "on", listOf("on", "off"),
+        oneOf("update-check", listOf("on", "off")),
+        { copy(updateCheck = it == "on") },
     ),
 )
 

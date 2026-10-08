@@ -90,6 +90,9 @@ fun runThenShell(command: String): List<String> =
 /** The tab the launcher shortcut "Settings" opens: the settings editors, then a shell. */
 val SETTINGS_TAB_COMMAND: List<String> = runThenShell("mynx edit")
 
+/** The tab the "update available" notification opens: `mynx update`, then a shell. */
+val UPDATE_TAB_COMMAND: List<String> = runThenShell("mynx update")
+
 /** How long a proot gets to stop what it runs before it's killed outright. */
 const val PROOT_STOP_GRACE_MS = 2000L
 private const val SIGQUIT = 3

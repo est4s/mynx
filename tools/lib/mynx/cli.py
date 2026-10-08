@@ -44,6 +44,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
+  update     update [--check] [--yes]: update the app to its latest release
   report     report [TEXT]: report a bug (shows it, asks, then sends it with gh or opens GitHub)
   about      version, credits and licences
   version    the app tools' version
@@ -584,6 +585,63 @@ def cmd_install_apk(args, as_json):
     answer = request("install-apk", os.path.abspath(args[0]))
     out(as_json, answer, "Installer opened on the phone.")
     return 0
+
+
+UPDATE_USAGE = "usage: mynx update [--check] [--yes]"
+
+
+def cmd_update(args, as_json):
+    """The app checks and downloads (so a broken Debian can't stop the
+    update that fixes it); this shows what it found and asks."""
+    if any(a not in ("--check", "--yes") for a in args):
+        raise Usage(UPDATE_USAGE)
+    check_only, yes = "--check" in args, "--yes" in args
+    if as_json and not (check_only or yes):
+        raise Usage("mynx update --json needs --check or --yes (it can't ask)")
+    found = request("update-check")
+    if check_only or not found.get("available"):
+        if found.get("available"):
+            text = f"{APP_NAME} {found['latest']} is available (you have {found['current']})."
+        else:
+            text = f"{APP_NAME} {found['current']} is up to date."
+        out(as_json, found, text)
+        return 0
+    version = found["latest"]
+    if not as_json:
+        print(f"{APP_NAME} {version} is available (you have {found['current']}).")
+        published = found.get("published")
+        when = time.strftime(" on %Y-%m-%d", time.localtime(published / 1000)) if published else ""
+        print(f"Released{when}; the download is {size_text(found['size'])}.\n")
+        notes = (found.get("notes") or "").strip()
+        if notes:
+            print(notes + "\n")
+        if not yes and not ask("Download and install it? [y/N]"):
+            print("Nothing was changed.")
+            return 0
+    answer = request("update-install", version, on_line=None if as_json else download_progress())
+    if not as_json:
+        print(file=sys.stderr)
+    out(as_json, answer, "Android's installer is open: tap Update. The app closes while it "
+                         "updates; open it again afterwards and your tabs come back.")
+    return 0
+
+
+def download_progress():
+    """Prints the download's progress on one line (a terminal), or once."""
+    tty = sys.stderr.isatty()
+    started = False
+
+    def show(line):
+        nonlocal started
+        bytes_, total = line.get("bytes", 0), line.get("total")
+        if tty:
+            part = f" {bytes_ * 100 // total}% of {size_text(total)}" if total else f" {size_text(bytes_)}"
+            print(f"\rDownloading…{part}   ", end="", file=sys.stderr, flush=True)
+        elif not started:
+            print("Downloading…", end="", file=sys.stderr, flush=True)
+        started = True
+
+    return show
 
 
 def cmd_undo(args, as_json):
@@ -1176,7 +1234,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
-    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "about": cmd_about, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 
 

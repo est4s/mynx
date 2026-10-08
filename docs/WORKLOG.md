@@ -114,7 +114,12 @@ sent."), and a report after a crash (none to force).
    Settings opens the editors in Mynx Dev (not here); `mynx share`
    and `mynx camera` work in it (they use the providers whose names
    changed).
-2. **Updates**, built test-first: the check and download live in the
+2. **Updates: built** (entry 81, branch `updates-core`, not merged,
+   not on the phone). What can be checked before a release exists:
+   CI builds the branch; in Mynx Dev, `mynx update` says "this build
+   of the app doesn't update from GitHub releases" and `mynx settings`
+   lists `update-check`; Settings shortcut still opens the editors.
+   The real test is step 6. The original plan: the check and download live in the
    app, not Debian, so a broken Debian (python3, certificates) can't
    block the update that would fix it. Release builds only; Mynx Dev
    says it updates from CI. Core parses GitHub's latest-release JSON
@@ -457,6 +462,38 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (81): App updates, built (branch `updates-core`)
+
+Plan step 2 ("Updates" in "Next"), test-first, on the branch
+`updates-core` (worktree `.claude/worktrees/agent-a6b292baa176cfe22`).
+The first session crashed after the core pieces; nothing was lost.
+- Core: a small JSON reader, semver `Version`, `parseRelease()` for
+  GitHub's latest-release JSON (`mynx-X.Y.Z.apk` asset, sha256
+  digest), `fetchLatestRelease()`, `downloadApk()` (through `.part`,
+  size and sha256 checked, redirects followed by hand), `UpdateState`
+  (daily, an hour after a failure, notify once per version), and
+  `Updater`, which ties them together: background checks, the menu's
+  notice file, and the [Later] `update-check` and `update-install`
+  requests (progress streamed, a checked download reused, only the
+  version the user saw is installed).
+- Setting `update-check` (on): only the daily check; `mynx update`
+  works either way.
+- App: `TerminalService` ticks hourly, posts "Mynx X is available"
+  (channel "App updates"); tapping it opens a tab running `mynx
+  update` (`UPDATE_TAB_COMMAND`; MainActivity's settings-tab code is
+  now `tabToOpen`). `REQUEST_INSTALL_PACKAGES` and `ApkProvider` moved
+  to the main manifest (`app/src/debug/AndroidManifest.xml` is gone);
+  `install-apk` stays debug-only. Release builds only: Mynx Dev
+  refuses ("this build of the app doesn't update from GitHub
+  releases").
+- `mynx update [--check] [--yes] [--json]`; the menu starts with
+  "Update available" while `/tmp/.mynx/update-available` exists.
+- Docs: `tools/AGENTS.md` ("Updates", the setting, the command),
+  AGENTS.md (architecture, why the permission is in the main
+  manifest).
+- The `app` module isn't compiled locally: the first CI build of the
+  branch is its first compile.
 
 ### 2026-10-08 (80): Mynx Dev, a separate debug app
 

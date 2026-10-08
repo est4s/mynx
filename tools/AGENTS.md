@@ -110,6 +110,7 @@ their own.
 | `mynx welcome` | the welcome page new users see: what's here and how to get around |
 | `mynx about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
 | `mynx version` | the version of the app's tools |
+| `mynx update` | update the app to its latest release: shows the version and its notes, asks, downloads it and opens Android's installer (`--check` only says; `--yes` skips the question; see "Updates") |
 | `mynx report [TEXT]` | report a bug in the app: shows the report, asks, then sends it with `gh` if signed in, else opens a prefilled GitHub issue (see "More of the setup") |
 | `mynx help` | all commands |
 
@@ -167,6 +168,9 @@ One `key = value` per line; `mynx settings` describes each.
   phone's CPU awake while it runs, so long jobs (builds, downloads)
   don't pause when the screen goes off. It uses more battery; the
   app's notification says "wakelock held" while it's on.
+- `update-check`: `on` (default) or `off`: whether the app checks
+  GitHub about once a day for a new version and tells you (see
+  "Updates"). `mynx update` works either way.
 
 ### Undo
 
@@ -459,6 +463,19 @@ shows the generic game bar until `my-tool.conf` exists.
 - **Games:** `play GAME [args]` runs a game with the bar named after its
   file (`my-game.py` → `my-game`), else the generic `game` bar. `rogue`,
   `drive` and `flap` use it.
+- **Updates:** the app updates from its GitHub releases. About once
+  a day (the `update-check` setting) it asks GitHub for the latest
+  one; when it's newer, a notification says so and the launcher menu
+  starts with **Update available**. Both run `mynx update`: it shows
+  the new version, its release notes and the download's size, asks,
+  then the app downloads the APK (checking its size and GitHub's
+  sha256) and opens Android's installer; tap Update there. The first
+  time, Android asks to allow the app to install apps. The app closes
+  while it updates; your tabs, Debian and everything in it stay.
+  `mynx update --check` only says whether there's one (`--json`:
+  `current`, `latest`, `available`, and with one `tag`, `notes`,
+  `size`, `published`). The check and download run in the app, not
+  Debian, so they work even if Debian's network tools are broken.
 - **Bug reports:** `mynx report "what went wrong"` (or the menu's
   System → Report a bug) builds a report: the description, the app's
   version, the Android version and phone model, and the app's last

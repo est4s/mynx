@@ -23,6 +23,9 @@
     <!-- mynx audio record; a recording started on screen keeps going in the background. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- mynx update opens Android's installer for the APK it downloaded from GitHub
+         (and debug builds' mynx install-apk for a CI build). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- The camera and microphone permissions would otherwise hide the app from phones without one. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
@@ -79,6 +82,13 @@
         <provider
             android:name=".PhotoProvider"
             android:authorities="${applicationId}.photo"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <!-- Hands the installer the one APK being installed. -->
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="${applicationId}.apk"
             android:exported="false"
             android:grantUriPermissions="true" />
 
