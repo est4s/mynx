@@ -12,9 +12,16 @@ and holds it. It is never committed; `.gitignore` blocks `*.jks`,
 
 ## 1. Make the key (once)
 
-In the app's Debian (`keytool` comes with the JDK) or on a computer:
+Do steps 1-3 yourself, in a tab of your own (or on a computer). An AI
+agent can walk you through them, but never give it the password or run
+these through it: what an agent runs ends up in its conversation.
+
+First make a long random password in your password manager (24+
+characters) and save the entry. Then, in the app's Debian (`keytool`
+comes with the JDK) or on a computer:
 
 ```sh
+mkdir -m 700 ~/release-key && cd ~/release-key
 keytool -genkeypair -v \
   -keystore mynx-release.jks -storetype PKCS12 \
   -alias mynx -keyalg RSA -keysize 4096 -validity 18250 \
@@ -22,13 +29,16 @@ keytool -genkeypair -v \
 ```
 
 - RSA 4096, valid for 50 years (Android wants at least 25).
-- It asks for a password. A PKCS12 keystore has one password for the
-  store and the key, so the store password and the key password are the
-  same. Use a long random one and keep it in your password manager.
+- It asks for the password twice (paste it; nothing shows). A PKCS12
+  keystore has one password for the store and the key, so the store
+  password and the key password are the same.
 - `-dname` only goes into the certificate; change it as you like.
 
-Check it: `keytool -list -v -keystore mynx-release.jks` (alias `mynx`,
-RSA 4096, the dates).
+Check it: `keytool -list -v -keystore mynx-release.jks | head -20`:
+alias `mynx`, `PrivateKeyEntry`, a 4096-bit RSA key, valid until about
+50 years from now. Save its `SHA256:` fingerprint in the password
+manager entry: it's how you can tell later that an APK was signed with
+this key (`apksigner verify --print-certs`).
 
 ## 2. Back it up (before anything else)
 
@@ -37,24 +47,34 @@ example:
 1. a USB stick kept at home, and
 2. a second one (or an encrypted backup) somewhere else.
 
-A password manager entry with the file attached can be a third copy.
+A password manager entry with the file attached can be a third copy
+(copy the file to `Download` to attach it, then delete it there).
 Don't keep it only on the phone: losing the phone must not lose the key.
-Then remove any copy you don't need (e.g. in `Download`).
+Check that a backup copy opens: `keytool -list -keystore COPY` with the
+password.
 
 ## 3. Give GitHub the key (once)
 
-From the folder with the keystore, in this repo (`gh` is logged in):
+From the folder with the keystore (`gh` is logged in; `-R` names the
+repo, since that folder isn't in it):
 
 ```sh
-base64 -w0 mynx-release.jks | gh secret set MYNX_RELEASE_KEYSTORE_BASE64
-gh secret set MYNX_RELEASE_STORE_PASSWORD   # paste the password when asked
-gh secret set MYNX_RELEASE_KEY_PASSWORD     # the same password
-gh secret set MYNX_RELEASE_KEY_ALIAS --body mynx
-gh secret list                              # the four MYNX_RELEASE_* names
+base64 -w0 mynx-release.jks | gh secret set MYNX_RELEASE_KEYSTORE_BASE64 -R est4s/mynx
+gh secret set MYNX_RELEASE_STORE_PASSWORD -R est4s/mynx   # paste the password when asked
+gh secret set MYNX_RELEASE_KEY_PASSWORD -R est4s/mynx     # the same password
+gh secret set MYNX_RELEASE_KEY_ALIAS -R est4s/mynx --body mynx
+gh secret list -R est4s/mynx                              # the four MYNX_RELEASE_* names
 ```
 
 Typing the passwords at the prompt keeps them out of the shell history.
-The workflow stops with an error naming any secret that's missing.
+GitHub never shows a secret again, and only the release workflow (on
+tags, which only collaborators can push) gets them. The workflow stops
+with an error naming any secret that's missing.
+
+Then delete the key from the phone: `rm -r ~/release-key` (GitHub and
+your backups have it; left in `/root`, it would also go into a
+`backup-root.sh` backup on phone storage). Copy something else to the
+clipboard so the password isn't left there.
 
 ## 4. Cut a release
 
