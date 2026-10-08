@@ -50,6 +50,10 @@ import io.github.est4s.terminal.core.loadSettings
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.ToolsInstaller
+import io.github.est4s.terminal.core.UPDATE_NOTICE
+import io.github.est4s.terminal.core.Updater
+import io.github.est4s.terminal.core.downloadApk
+import io.github.est4s.terminal.core.fetchLatestRelease
 import io.github.est4s.terminal.core.parseColorScheme
 import io.github.est4s.terminal.core.Tabs
 import io.github.est4s.terminal.core.closesOnExit
@@ -66,6 +70,7 @@ import io.github.est4s.terminal.core.writeFakeProc
 import io.github.est4s.terminal.core.writeToolsProfile
 import java.io.File
 import java.util.WeakHashMap
+import java.util.concurrent.CountDownLatch
 
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
@@ -73,6 +78,12 @@ private const val NOTICE_CHANNEL_ID = "notices"
 // `mynx notify` notifications: one per tab, so a new one replaces the last.
 private const val NOTICE_ID_BASE = 1000
 const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
+/** Opens a tab running `mynx update` (the update notification). */
+const val ACTION_UPDATE = "io.github.est4s.terminal.UPDATE"
+private const val UPDATE_CHANNEL_ID = "updates"
+private const val UPDATE_NOTIFICATION_ID = 2
+// How often to see whether an update check is due (the Updater decides: about daily).
+private const val UPDATE_TICK_MS = 3_600_000L
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.mynx"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
@@ -128,8 +139,31 @@ class TerminalService : Service() {
             later = locationRequests(File(rootfs, "root"), locator::locate) +
                 sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
                 cameraRequests(File(rootfs, "root"), camera::take) +
-                audioRequests(File(rootfs, "root"), player::play, recorder::record),
+                audioRequests(File(rootfs, "root"), player::play, recorder::record) +
+                updater.requests { apk -> onMain { openInstaller(apk) } },
         )
+    }
+    // Release builds update from GitHub releases; Mynx Dev from CI (scripts/deliver.sh).
+    private val updater by lazy {
+        val version = BuildConfig.VERSION_NAME
+        Updater(
+            stateFile = File(filesDir, "state/update-state"),
+            noticeFile = File(rootfs, UPDATE_NOTICE),
+            downloads = File(cacheDir, "updates"),
+            current = version,
+            releases = !BuildConfig.DEBUG,
+            fetch = { fetchLatestRelease(appVersion = version) },
+            download = { apk, dest, cancelled, progress ->
+                downloadApk(apk.url, dest, version, apk.size, apk.sha256, cancelled = cancelled, progress = progress)
+            },
+            notify = { available -> mainHandler.post { showUpdateNotice(available) } },
+        )
+    }
+    private val updateTick = object : Runnable {
+        override fun run() {
+            runCatching { updater.checkIfDue(currentSettings()?.updateCheck ?: true) }
+            mainHandler.postDelayed(this, UPDATE_TICK_MS)
+        }
     }
     private val camera by lazy { CameraShooter(this) { activity?.takeIf { it.onScreen } } }
     private val locator by lazy {
@@ -206,6 +240,9 @@ class TerminalService : Service() {
         watchRequests()
         applySoundSetting()
         applyWakelockSetting()
+        // After cwdDir is cleared: the menu's update notice lives there too.
+        runCatching { updater.start() }
+        mainHandler.post(updateTick)
     }
 
     // Held while the `wakelock` setting is on, so jobs keep running with the screen off.
@@ -341,6 +378,7 @@ class TerminalService : Service() {
         requestWatcher?.stopWatching()
         mainHandler.removeCallbacks(sweep)
         mainHandler.removeCallbacks(rotationSweep)
+        mainHandler.removeCallbacks(updateTick)
         locator.stopAll()
         sensors.stopAll()
         player.stopAll()
@@ -575,6 +613,11 @@ class TerminalService : Service() {
     // Answers `mynx install-apk`: null when the installer opened, else why not.
     private fun installApk(apk: File): String? {
         if (!BuildConfig.DEBUG) return "only debug builds of the app can install apps"
+        return openInstaller(apk)
+    }
+
+    // Opens Android's installer for an APK (an update, or a CI build): null if it did, else why not.
+    private fun openInstaller(apk: File): String? {
         val shown = activity?.takeIf { it.onScreen }
             ?: return "the app must be on screen to open the installer"
         if (!packageManager.canRequestPackageInstalls()) {
@@ -594,6 +637,38 @@ class TerminalService : Service() {
         } catch (e: ActivityNotFoundException) {
             "no app on the phone installs apps"
         }
+    }
+
+    // Runs [block] on the main thread and waits for it: Updater installs from its own thread.
+    private fun <T> onMain(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return block()
+        val done = CountDownLatch(1)
+        var result: Result<T>? = null
+        mainHandler.post {
+            result = runCatching(block)
+            done.countDown()
+        }
+        done.await()
+        return result!!.getOrThrow()
+    }
+
+    // A new release: tapping opens a tab running `mynx update`, which shows the notes and asks.
+    private fun showUpdateNotice(version: String) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(UPDATE_CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT))
+        val open = Intent(this, MainActivity::class.java)
+            .setAction(ACTION_UPDATE)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val tap = PendingIntent.getActivity(this, UPDATE_NOTIFICATION_ID, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(UPDATE_NOTIFICATION_ID, Notification.Builder(this, UPDATE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("${getString(R.string.app_name)} $version is available")
+            .setContentText("Tap to see what's new and update")
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build())
     }
 
     // Answers `mynx notify`: null when shown, else why not.

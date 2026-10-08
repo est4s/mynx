@@ -9,6 +9,7 @@ setup() {
     export HOME="$BATS_TEST_TMPDIR/home"
     export MENU_GAME_DIRS="$BATS_TEST_TMPDIR/games:$HOME/games"
     export MENU_APP_DIRS="$BATS_TEST_TMPDIR/apps:$HOME/apps"
+    export MENU_UPDATE_FILE="$BATS_TEST_TMPDIR/update-available"
     mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games" "$BATS_TEST_TMPDIR/apps"
 }
 
@@ -61,6 +62,25 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_DIRNAME/../../tools/menu.conf"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
+}
+
+@test "an available update comes first in the main menu, in the user's menu too" {
+    echo 0.2.0 >"$MENU_UPDATE_FILE"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[0]}" = "Update available" ]
+    [ "${ACTS[0]}" = appupdate ]
+    [ "${ITEMS[1]}" = Terminal ]
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Shell = shell\n' >"$HOME/.config/mynx/menu.conf"
+    menu_items main
+    [ "${ITEMS[*]}" = "Update available Shell" ]
+}
+
+@test "Update available runs mynx update" {
+    echo 0.2.0 >"$MENU_UPDATE_FILE"
+    run keys 1
+    [[ $output == *"RUN: mynx update"* ]]
 }
 
 @test "system menu" {

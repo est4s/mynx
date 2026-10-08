@@ -178,6 +178,11 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `the update tab runs mynx update`() {
+        assertEquals(runThenShell("mynx update"), UPDATE_TAB_COMMAND)
+    }
+
+    @Test
     fun `tells programs where the sound server is`() {
         val argv = prootLaunch(paths, soundSocket = "/tmp/.mynx/sound/native").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

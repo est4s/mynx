@@ -978,6 +978,79 @@ esac'''
     def test_open_needs_one_link(self):
         self.assertIn("usage: mynx open URL", self.mynx("open").stderr)
 
+    # --- update ---------------------------------------------------------------
+
+    AVAILABLE = {"ok": True, "current": "0.1.0", "latest": "0.2.0", "available": True, "tag": "v0.2.0",
+                 "notes": "## What's new\n- Updates", "size": 2621440, "published": 1791462600000}
+    INSTALLED = {"ok": True, "_lines": [{"bytes": 0, "total": 2621440}, {"bytes": 2621440, "total": 2621440}],
+                 "version": "0.2.0", "bytes": 2621440}
+
+    def test_update_when_up_to_date(self):
+        for latest in ("0.1.0", None):
+            self.start_app({"update-check": {"ok": True, "current": "0.1.0", "latest": latest, "available": False}})
+            run = self.mynx("update")
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout, "Mynx 0.1.0 is up to date.\n")
+            self.assertEqual(self.app.seen, ["update-check"])
+            self.app.stop.set()
+            self.app.thread.join()
+
+    def test_update_check_only_says_what_is_available(self):
+        self.start_app({"update-check": self.AVAILABLE})
+        run = self.mynx("update", "--check")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Mynx 0.2.0 is available (you have 0.1.0).\n")
+        self.assertEqual(self.app.seen, ["update-check"])
+
+    def test_update_shows_the_notes_and_asks(self):
+        self.start_app({"update-check": self.AVAILABLE, "update-install": self.INSTALLED})
+        run = self.mynx("update", input="n\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("Mynx 0.2.0 is available (you have 0.1.0).", run.stdout)
+        self.assertIn("## What's new\n- Updates", run.stdout)
+        self.assertIn("2.5 MB", run.stdout)
+        self.assertIn("Download and install it? [y/N]", run.stdout)
+        self.assertIn("Nothing was changed.", run.stdout)
+        self.assertEqual(self.app.seen, ["update-check"])
+
+    def test_update_downloads_and_opens_the_installer(self):
+        self.start_app({"update-check": self.AVAILABLE, "update-install": self.INSTALLED})
+        run = self.mynx("update", input="y\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.app.requests, [["update-check"], ["update-install", "0.2.0"]])
+        self.assertIn("Downloading", run.stderr)
+        self.assertIn("Android's installer is open: tap Update.", run.stdout)
+
+    def test_update_yes_skips_the_question(self):
+        self.start_app({"update-check": self.AVAILABLE, "update-install": self.INSTALLED})
+        run = self.mynx("update", "--yes")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertNotIn("[y/N]", run.stdout)
+        self.assertEqual(self.app.seen, ["update-check", "update-install"])
+
+    def test_update_json(self):
+        self.start_app({"update-check": self.AVAILABLE, "update-install": self.INSTALLED})
+        run = self.mynx("update", "--check", "--json")
+        self.assertEqual(json.loads(run.stdout), self.AVAILABLE)
+        run = self.mynx("update", "--yes", "--json")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "version": "0.2.0", "bytes": 2621440})
+        run = self.mynx("update", "--json")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("--json needs --check or --yes", json.loads(run.stdout)["error"])
+
+    def test_update_says_what_went_wrong(self):
+        self.start_app({"update-check": self.AVAILABLE,
+                        "update-install": {"ok": False, "error": "the download failed: sha256 doesn't match"}})
+        run = self.mynx("update", "--yes")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("mynx: the download failed: sha256 doesn't match", run.stderr)
+
+    def test_update_usage(self):
+        for args in [("now",), ("--fast",)]:
+            run = self.mynx("update", *args)
+            self.assertEqual(run.returncode, 2)
+            self.assertIn("usage: mynx update [--check] [--yes]", run.stderr)
+
     # --- install-apk (debug builds) ------------------------------------------
 
     def test_install_apk_sends_the_full_path(self):

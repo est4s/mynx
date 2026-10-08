@@ -79,10 +79,13 @@ Consequences:
 
 Notes on why the script does what it does:
 - `mynx install-apk FILE` (left out of `mynx help` and the user guide)
-  asks the app to open the installer. Only **debug builds** can:
-  `app/src/debug/AndroidManifest.xml` adds `REQUEST_INSTALL_PACKAGES` and
-  `ApkProvider`, which serves just that one file to the installer. Release
-  builds have neither (Play restricts that permission).
+  asks the app to open the installer, through `ApkProvider`, which
+  serves just that one file to it. Only **debug builds** answer it
+  (`BuildConfig.DEBUG`); release builds use the same installer path for
+  `mynx update` (see "Updates" under Architecture), so
+  `REQUEST_INSTALL_PACKAGES` and `ApkProvider` are in the main manifest
+  (maintainer's decision, 2026-10-08). Play restricts that permission: a
+  Play build would need a variant without them.
 - The first time, Android asks to allow the app to install apps; the
   request opens that setting and says to try again.
 - If the request fails (an older build, the app not on screen), the APK
@@ -120,8 +123,9 @@ first, which deletes Debian).
 the same assets as `build.yml` (its steps are copied: change both),
 `assembleRelease`, checks the signature and publishes `mynx-X.Y.Z.apk` on
 GitHub Releases with generated notes (a `-suffix` tag makes a pre-release).
-Release builds have no `REQUEST_INSTALL_PACKAGES`/`ApkProvider` (debug
-manifest only) and no minify (R8 problems would only show on the phone).
+The release workflow must keep attaching `mynx-X.Y.Z.apk` under that
+name: installed apps find their update by it (`apkName()`). Release
+builds have no minify (R8 problems would only show on the phone).
 The version name reaches Debian in the tools' `.version`
 (`BUILD-INSTALLTIME-NAME`), which `mynx about` shows.
 
@@ -297,6 +301,25 @@ See `docs/ROADMAP.md` "How it works". The details:
   `ShareActivity`, which stays open while it copies (the read grant
   lasts as long as the activity) into the `share-folder` (`Inbox`:
   safe names, never overwrites) and posts a notification.
+- **Updates** (`core/.../Updater.kt`, `Release.kt`, `Updates.kt`,
+  `UpdateState.kt`): release builds only (`BuildConfig.DEBUG` off;
+  Mynx Dev updates from CI). The check and download live in the app,
+  not Debian, so a broken Debian can't block the update that would fix
+  it. The service ticks hourly; `Updater.checkIfDue()` asks GitHub's
+  latest-release API (no token: the repo is public) about once a day
+  (an hour after a failure, at once if the clock went back), keeps
+  what it found in `filesDir/state/update-state`, writes the newer
+  version to `/tmp/.mynx/update-available` for the menu ("Update
+  available" comes first while it's there) and posts a notification
+  once per version; tapping it opens a tab running `mynx update`
+  (`UPDATE_TAB_COMMAND`, like the Settings shortcut). `mynx update`
+  sends the [Later] `update-check` (checks now, answers with the
+  notes) and `update-install VERSION` (a stream of download progress,
+  only the version the user saw): the APK goes to
+  `cacheDir/updates/mynx-X.Y.Z.apk` through `downloadApk()` (size and
+  GitHub's sha256 checked; a complete one is reused), then the
+  installer opens through `ApkProvider`. Old downloads go at the next
+  start. `update-check` (setting, on) only turns off the daily check.
 - **Wakelock** (`wakelock` setting, off by default): `TerminalService`
   holds a `PARTIAL_WAKE_LOCK` ("mynx:service") while it runs and the
   setting is on, re-read with the sound setting (reloading requests)

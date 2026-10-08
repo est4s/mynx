@@ -50,6 +50,7 @@ import io.github.est4s.terminal.core.swipeTarget
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.SETTINGS_TAB_COMMAND
+import io.github.est4s.terminal.core.UPDATE_TAB_COMMAND
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
 import io.github.est4s.terminal.core.hostPath
@@ -115,8 +116,9 @@ class MainActivity : Activity() {
     val onScreen get() = visible
     // A tapped notification's tab, selected once the service is connected.
     private var shellToShow: Int? = null
-    // The launcher shortcut "Settings": opens the editors in a new tab once the service is connected.
-    private var settingsToOpen = false
+    // The launcher shortcut "Settings" (the editors) or the update notification
+    // (`mynx update`): a new tab running it, once the service is connected.
+    private var tabToOpen: List<String>? = null
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
 
@@ -128,7 +130,7 @@ class MainActivity : Activity() {
             applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
             showShellFromNotification()
-            openSettingsTab()
+            openCommandTab()
             s.toolsError?.let { showToolsError(it) }
         }
 
@@ -179,7 +181,7 @@ class MainActivity : Activity() {
 
         shellToShow = shellOf(intent)
         // Not when Android recreates the activity: that tab is open already.
-        settingsToOpen = savedInstanceState == null && intent?.action == ACTION_SETTINGS
+        tabToOpen = if (savedInstanceState == null) commandOf(intent) else null
         if (installer.isInstalled) connectService() else installDebian()
         showLastCrash()
     }
@@ -189,15 +191,21 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         shellToShow = shellOf(intent)
         showShellFromNotification()
-        settingsToOpen = intent.action == ACTION_SETTINGS
-        openSettingsTab()
+        tabToOpen = commandOf(intent)
+        openCommandTab()
     }
 
-    private fun openSettingsTab() {
-        if (!settingsToOpen) return
+    private fun commandOf(intent: Intent?): List<String>? = when (intent?.action) {
+        ACTION_SETTINGS -> SETTINGS_TAB_COMMAND
+        ACTION_UPDATE -> UPDATE_TAB_COMMAND
+        else -> null
+    }
+
+    private fun openCommandTab() {
+        val command = tabToOpen ?: return
         val service = service ?: return
-        settingsToOpen = false
-        service.newSession(SETTINGS_TAB_COMMAND)
+        tabToOpen = null
+        service.newSession(command)
     }
 
     private fun shellOf(intent: Intent?): Int? =

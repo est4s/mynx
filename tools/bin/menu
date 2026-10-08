@@ -14,9 +14,12 @@
 # menu --boot plays the boot splash first (the app does this on a fresh start),
 #   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
 # Exit closes the tab: the menu exits with 10 and ~/.bashrc exits the shell.
+# Update available: the app writes the version of a newer release to
+#   /tmp/.mynx/update-available; while it's there, the main menu starts with
+#   "Update available" (mynx update).
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
-# MENU_APP_DIRS (colon-separated) override where games and apps are found
-# (all for testing).
+# MENU_APP_DIRS (colon-separated) override where games and apps are found,
+# MENU_UPDATE_FILE the app's update notice (all for testing).
 
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/mynx
 STATE=$STATE_DIR/menu
@@ -24,6 +27,7 @@ CONFIG_DIR=$HOME/.config/mynx
 DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
 WELCOME=${DEFAULT_MENU%/*}/welcome.txt
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
+UPDATE_FILE=${MENU_UPDATE_FILE:-/tmp/.mynx/update-available}
 IFS=: read -r -a APP_DIRS <<<"${MENU_APP_DIRS:-${DEFAULT_MENU%/*}/apps:$HOME/apps}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
 export LC_COLLATE=C       # games in the same order whatever the locale
@@ -191,10 +195,15 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       for file in "$CONFIG_DIR/menu.conf" "$DEFAULT_MENU"; do
         [[ -r $file ]] || continue
         read_menu_file "$file"
-        ((${#ITEMS[@]})) && return
+        ((${#ITEMS[@]})) && break
       done
-      ITEMS=(Terminal Files Apps Games Settings "AI agents" System "Getting started" Exit)
-      ACTS=(exit files menu:apps menu:games settings menu:agents menu:system welcome quit_session) ;;
+      if ! ((${#ITEMS[@]})); then
+        ITEMS=(Terminal Files Apps Games Settings "AI agents" System "Getting started" Exit)
+        ACTS=(exit files menu:apps menu:games settings menu:agents menu:system welcome quit_session)
+      fi
+      if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
+        ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
+      fi ;;
     apps)
       local dir f
       for dir in "${APP_DIRS[@]}"; do
@@ -398,6 +407,7 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 
 act_about() { run mynx about || pause; }  # in less; a failure stays on screen
 act_report() { run mynx report; pause; }  # it asks; its answer stays on screen
+act_appupdate() { run mynx update; pause; }  # shows the notes and asks
 
 act_update() {
   run bash -c 'apt update && apt upgrade -y'

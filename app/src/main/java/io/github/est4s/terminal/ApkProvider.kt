@@ -11,9 +11,9 @@ import java.io.File
 import java.io.FileNotFoundException
 
 /**
- * Hands Android's installer the one APK `mynx install-apk` asked for.
- * Only debug builds declare it (app/src/debug/AndroidManifest.xml), along
- * with the permission to install apps.
+ * Hands Android's installer the one APK being installed: an update
+ * `mynx update` downloaded, or (debug builds) a CI build from
+ * `mynx install-apk`.
  */
 class ApkProvider : ContentProvider() {
     companion object {
