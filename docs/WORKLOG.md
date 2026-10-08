@@ -28,6 +28,8 @@ Newest entries first. Rules for keeping it up to date: see
   and Settings launcher shortcut, 10.3 `mynx about` and licence
   texts, 10.4 themed icon. Left: the first signed release
   (`v0.1.0`), see "Next".
+- **Bug reports** (`mynx report`, menu → System → Report a bug)
+  are confirmed on the phone through gh (build 87, entry 79).
 - **Renamed to Mynx** (entry 70, 2026-10-07): app name, command
   `mynx`, paths `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`,
   `MYNX_*`, repo `est4s/mynx`. **Confirmed on the phone**
@@ -97,21 +99,11 @@ Newest entries first. Rules for keeping it up to date: see
    GitHub issues, labelled as coming from the app. Always ask before
    anything is sent.
 
-**Bug reports are built** (entries 77-78), not yet tried on the
-phone. With gh signed in (it is in the maintainer's Debian), menu →
-System → Report a bug should say "as @est4s", ask "Send it?", and
-print the new issue's link; within a minute the workflow adds `bug`
-and `from-app` (check the Actions tab if not). Close the test issue.
-Without gh (or signed out, `gh auth logout`), after the next build
-(`scripts/deliver.sh`):
-- menu → System → Report a bug: type a line, an empty line; the
-  report shows the app version, Android 17 (SDK 37), Google Pixel 10
-  and asks `[y/N]`; `n` says "Nothing was sent."
-- `y` opens GitHub's new-issue page with the title and both fields
-  filled in, and the issue gets the `bug` and `from-app` labels
-  (both exist; `from-app` created 2026-10-08).
-- After a crash (none to force yet): the dialog shows once, and
-  `mynx report` still includes it.
+**Bug reports are confirmed on the phone** (build 87, entry 79):
+sent through gh, and the issue got `bug` and `from-app`. Not tried
+yet, no hurry: the browser path without gh (`gh auth logout`, then
+`y` opens GitHub's filled-in new-issue page, `n` says "Nothing was
+sent."), and a report after a crash (none to force).
 
 **Updates (proposed, not built yet):** the release APK needs
 `REQUEST_INSTALL_PACKAGES` and the installer provider, which today
@@ -433,6 +425,15 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (79): Bug reports confirmed on the phone
+
+The maintainer installed build 87 (`95e445c`). `mynx report --json`
+from the terminal gave build 87, Android 17 (SDK 37), Google Pixel 10.
+The maintainer sent a report from menu → System → Report a bug,
+signed in to gh: the issue (#2) was filed and the workflow added
+`bug` and `from-app`. Closed #2 as a test. The browser path without
+gh is still untried (see "Next").
 
 ### 2026-10-08 (78): Bug reports send through `gh`
 
