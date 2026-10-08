@@ -33,6 +33,9 @@ are in git history: the full log up to entry 84 is
 
 ### 1. The first release, v0.1.0
 
+**First, the maintainer's changes before the release** (2026-10-08:
+"a couple more things"; they'll say what, with a fresh agent). Then:
+
 1. **The release key** (`docs/RELEASING.md` 1-3): the maintainer makes
    it, backs it up offline in two places, and sets the four
    `MYNX_RELEASE_*` secrets. An agent can guide (it did on
@@ -222,6 +225,11 @@ docs (git history keeps it).
   only happen on a yes, how to turn the check off, the install-apps
   permission, and what a bug report contains and when it's sent.
 - ROADMAP and README mention updates; ROADMAP marks the done steps.
+- RELEASING.md (PR #6): `gh secret set` needs `-R est4s/mynx` (run
+  from the key's folder, outside the repo); the key steps now say to
+  make it in your own tab (never through an agent), save the SHA-256
+  fingerprint, check a backup opens, and delete it from the phone
+  afterwards. The maintainer hasn't made the key yet.
 
 ### 2026-10-08 (84): Backup and restore for the move to the release
 
