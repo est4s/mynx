@@ -30,8 +30,8 @@ Newest entries first. Rules for keeping it up to date: see
   (`v0.1.0`), see "Next".
 - **Renamed to Mynx** (entry 70, 2026-10-07): app name, command
   `mynx`, paths `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`,
-  `MYNX_*`, repo `est4s/mynx`. **Installed on the phone** and the
-  maintainer's Debian moved over (entry 71); checks left: see "Next".
+  `MYNX_*`, repo `est4s/mynx`. **Confirmed on the phone**
+  (build 85, 2026-10-08, entry 76).
 - **Step 7 (*Agent support*), confirmed 2026-10-04:** phone
   notifications from agents' hooks (`mynx notify`, `mynx hook`),
   `mynx agent` installs Claude Code, Codex and Gemini CLI with their
@@ -85,17 +85,6 @@ Newest entries first. Rules for keeping it up to date: see
 
 
 ## Next
-
-### Check the Mynx build on the phone (entries 70-71)
-
-Installed and the maintainer's Debian moved over (entry 71). Left for the
-maintainer to check on the phone: the app is named Mynx; theme, font, key
-bars and the menu kept; closing all tabs and restarting opens the
-menu (`MYNX_MENU`); a long Claude turn with the app in the background
-notifies; `mynx edit` shows its key bar (`mynx-edit`); `mynx sound`
-is on; the menu's banner says MYNX (entry 72; needs the next build,
-or `scripts/deliver.sh`). `~/PC-26` and `~/mynx-migrate.sh` were
-deleted 2026-10-08 (entry 73).
 
 ### Next features: app updates and bug reports (2026-10-08)
 
@@ -437,6 +426,17 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (76): Mynx build confirmed on the phone
+
+The maintainer installed build 85 (`72b4e71`, the MIT licence) and
+confirmed everything left from entries 70-72 works: the app is named
+Mynx, the menu's banner says M Y N X, closing all tabs and restarting
+opens the menu, `mynx edit` shows its key bar, and a long Claude turn
+in the background notifies. Checked from the terminal: `mynx about`
+(build 85, MIT), theme, font size and the maintainer's own key bars
+kept, `mynx check` clean, sound device on, Claude's hooks call
+`/opt/mynx/bin/mynx hook claude`. Next: app updates and bug reports.
 
 ### 2026-10-08 (75): README leads with the idea
 
