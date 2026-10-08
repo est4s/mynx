@@ -205,7 +205,7 @@ class MynxTest(unittest.TestCase):
 
     # --- about -------------------------------------------------------------
 
-    LICENSES = ["GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
+    LICENSES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
 
     def write_about_files(self):
         with open(os.path.join(self.tools, ".version"), "w") as f:
@@ -236,10 +236,11 @@ class MynxTest(unittest.TestCase):
         self.write_about_files()
         text = self.mynx("about").stdout
         credits = text[:text.index("Made with:")]
-        self.assertIn("GPL-3.0", credits)
+        self.assertIn("MIT License", credits)
+        self.assertNotIn("General Public License", credits)
         self.assertIn("https://github.com/est4s/mynx", credits)
         answer = json.loads(self.mynx("about", "--json").stdout)
-        self.assertEqual(answer["license"], "GPL-3.0-only")
+        self.assertEqual(answer["license"], "MIT")
         self.assertEqual(answer["source"], "https://github.com/est4s/mynx")
 
     def test_about_fits_the_phone_screen(self):

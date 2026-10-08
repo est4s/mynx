@@ -390,6 +390,18 @@ in-app keyboard (step 5) can send these combos:
 
 ## Log
 
+### 2026-10-08 (74): the app is MIT now, not GPL-3.0
+
+**Maintainer's decision:** Mynx is under the **MIT License**. Nothing
+to protect beyond the idea, which is public anyway; switched before
+any release, with the maintainer as the only author, so no copy was
+ever GPL. `LICENSE` is the MIT text (copyright 2026 Ensar
+Yerişenoğlu), also shipped as `tools/licenses/MIT.txt`; `mynx about`
+states MIT (`APP_LICENSE`) and shows its text first. Bundled parts keep
+their licences: `GPL-3.0.txt` stays, because talloc's LGPL-3.0 is
+GPL-3.0 plus extra permissions and needs both texts. README and
+AGENTS.md updated.
+
 ### 2026-10-08 (73): "the maintainer", not "the owner"
 
 At the maintainer's request, the docs call them **the maintainer**

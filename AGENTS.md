@@ -390,8 +390,9 @@ These come from the scope (`docs/ROADMAP.md`) and apply to every feature:
 - **Don't bundle third-party agent CLIs** (Claude Code, Codex, …). Offer to
   install them with their official installers; users sign in with their own
   accounts.
-- **Licence:** the app is GPL-3.0-only (maintainer's decision, 2026-10-07;
-  `LICENSE`). `mynx about` states it (`APP_LICENSE`, `APP_SOURCE` in
+- **Licence:** the app is MIT (maintainer's decision, 2026-10-08;
+  GPL-3.0-only before, never released under it; `LICENSE`, copied to
+  `tools/licenses/MIT.txt`). `mynx about` states it (`APP_LICENSE`, `APP_SOURCE` in
   `tools/lib/mynx/cli.py`). The name and icon aren't covered: forks
   use their own.
 - **Licenses:** keep GPL components (proot) as separate executables and link

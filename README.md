@@ -51,10 +51,9 @@ USB. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 
-Mynx is free software under the **GNU General Public License,
-version 3** (GPL-3.0-only): see [`LICENSE`](LICENSE). If you distribute
-a changed version, publish its full source under the same licence, and
-please give it its own name and icon.
+Mynx is free software under the **MIT License**: see
+[`LICENSE`](LICENSE). If you distribute a changed version, please give
+it its own name and icon.
 
 Bundled components keep their own licences: `proot` (GPL-2.0-or-later,
 run as a separate program) with `talloc` (LGPL-3.0-or-later), Termux's

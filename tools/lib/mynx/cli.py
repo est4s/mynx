@@ -917,7 +917,7 @@ APP_NAME = "Mynx"
 
 # What the app ships that others wrote. Licence texts are in
 # /opt/mynx/licenses/; proot's GPL needs its source linked.
-APP_LICENSE = "GPL-3.0-only"
+APP_LICENSE = "MIT"
 APP_SOURCE = "https://github.com/est4s/mynx"
 
 COMPONENTS = [
@@ -945,8 +945,9 @@ COMPONENTS = [
              "/usr/share/doc/PACKAGE/copyright; apt source PACKAGE fetches its source."},
 ]
 
-# The licence files in /opt/mynx/licenses/, in the order they're shown.
-LICENSE_FILES = ["GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
+# The licence files in /opt/mynx/licenses/, in the order they're shown:
+# the app's own first.
+LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
 
 
 def wrap(text, indent="  ", width=56):
@@ -970,8 +971,8 @@ def about_text(version):
                f"build {build}" if build else "version unknown")
     lines = [APP_NAME, heading, "",
              "A Debian terminal for Android.", "",
-             wrap(f"Free software under the GNU General Public License "
-                  f"version 3 ({APP_LICENSE}). Source:", ""), APP_SOURCE, "",
+             wrap("Free software under the MIT License (its text is "
+                  "first below). Source:", ""), APP_SOURCE, "",
              "Made with:", ""]
     for c in COMPONENTS:
         source = f"  Source: {c['source']}"
