@@ -97,21 +97,33 @@ is on; the menu's banner says MYNX (entry 72; needs the next build,
 or `scripts/deliver.sh`). `~/PC-26` and `~/mynx-migrate.sh` were
 deleted 2026-10-08 (entry 73).
 
-### Next features (added by the maintainer, 2026-10-08)
+### Next features: app updates and bug reports (2026-10-08)
 
-Not planned yet: talk each through with the maintainer before
-building.
-1. **The app receives updates.** The installed app finds out about a
-   new release and offers to install it. To settle: where updates
-   come from (GitHub Releases now; Play later would update on its
-   own), how it checks (at start, in the background, or only when
-   asked) and how it says so (notification, menu, `mynx` command).
-   `mynx install-apk` exists only in debug builds today.
-2. **Report a bug from the app.** A way to send a bug report from
-   inside the app, e.g. a menu item and a `mynx` command. To settle:
-   where reports go (GitHub issues, email), what they carry (the
-   app's version from `mynx about`, Android version, phone model,
-   recent crash text), and asking before anything is sent.
+**Maintainer's decisions (2026-10-08):**
+1. **Updates come from GitHub Releases**, checked about once a day.
+   A new release shows a phone notification and an extra item in the
+   launcher menu, "Update available" → "Update now", which downloads
+   the APK and opens Android's installer.
+2. **Bug reports:** a menu item and a `mynx` command. They go to
+   GitHub issues, labelled as coming from the app. Always ask before
+   anything is sent.
+
+**How (proposed, not built yet):**
+- **Updates:** the release APK needs `REQUEST_INSTALL_PACKAGES` and
+  the installer provider, which today are only in debug builds
+  (`app/src/debug/`). Fine for GitHub; a Play build later needs a
+  variant without them. The check reads GitHub's latest-release API
+  (`/repos/est4s/mynx/releases/latest`), compares the version name
+  (logic in core), and works only once the repo is public (it's
+  private).
+- **Bug reports:** the app can't hold a GitHub token (anyone could
+  pull it out of the APK), so `mynx report` builds the report (app
+  version, Android version, phone model, recent crash text, the
+  user's description), shows it in full and asks, then opens a
+  prefilled new-issue page in the phone's browser; the user submits
+  it with their own GitHub account. An issue form,
+  `.github/ISSUE_TEMPLATE/app-report.yml`, adds the `from-app` label
+  (a link's `labels=` only works for people with triage rights).
 
 ### Roadmap step 9: Android integration
 
