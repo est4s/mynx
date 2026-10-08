@@ -103,11 +103,8 @@ To check after the next build (`scripts/deliver.sh`):
   report shows the app version, Android 16 (SDK 36), Google Pixel 10
   and asks `[y/N]`; `n` says "Nothing was sent."
 - `y` opens GitHub's new-issue page with the title and both fields
-  filled in. **The repo is private**, so only the maintainer can see
-  the page until it's public. Check the `from-app` and `bug` labels
-  are applied; GitHub only applies labels that exist in the repo, so
-  create `from-app` first (`gh label create from-app`; not done:
-  asking the maintainer).
+  filled in, and the issue gets the `bug` and `from-app` labels
+  (both exist; `from-app` created 2026-10-08).
 - After a crash (none to force yet): the dialog shows once, and
   `mynx report` still includes it.
 
@@ -116,8 +113,8 @@ To check after the next build (`scripts/deliver.sh`):
 are only in debug builds (`app/src/debug/`). Fine for GitHub; a Play
 build later needs a variant without them. The check reads GitHub's
 latest-release API (`/repos/est4s/mynx/releases/latest`), compares
-the version name (logic in core), and works only once the repo is
-public.
+the version name (logic in core). The repo is public since
+2026-10-08, so the API answers without a token.
 
 ### Next feature: guided GitHub setup (2026-10-08)
 
@@ -453,8 +450,11 @@ Built the bug-report half of the maintainer's decision (Next, item 2).
 - **Issue form** `.github/ISSUE_TEMPLATE/app-report.yml`: fields
   `what` and `details` (rendered as text), labels `bug`, `from-app`.
 - Menu: System → Report a bug. Guide: `tools/AGENTS.md`.
-- Not done: filing through `gh` (waits for the guided GitHub setup),
-  creating the `from-app` label. Tests: core `ReportTest`, 13 in
+- Not done: filing through `gh` (waits for the guided GitHub setup).
+- Afterwards, at the maintainer's request: pushed, created the
+  `from-app` label, and **made `est4s/mynx` public**, after checking
+  the history: commits use the GitHub noreply address, no tokens or
+  keys besides the deliberate `signing/debug.keystore`. Tests: core `ReportTest`, 13 in
   `test_mynx.py`, one in `menu.bats`. Not on the phone yet.
 
 ### 2026-10-08 (76): Mynx build confirmed on the phone
