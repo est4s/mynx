@@ -125,6 +125,26 @@ deleted 2026-10-08 (entry 73).
   `.github/ISSUE_TEMPLATE/app-report.yml`, adds the `from-app` label
   (a link's `labels=` only works for people with triage rights).
 
+### Next feature: guided GitHub setup (2026-10-08)
+
+**Maintainer's decision (2026-10-08):** add a quick, guided GitHub
+setup. Optional: never part of the first run, and nothing needs it.
+Not built yet. Proposed shape (agreed in principle):
+- `mynx github` and a menu item (e.g. under System).
+- Installs `git` and `gh` from Debian if missing, asking first.
+- `gh auth login` in the browser (links already open in the phone's
+  browser); copy the one-time code to the clipboard (`mynx clipboard
+  set`) so it only needs pasting.
+- Sets git's `user.name` and `user.email` from the account, with
+  GitHub's noreply address so the real email stays out of commits.
+- Ends with a summary: who's signed in, what was set.
+- Mynx never stores a token: `gh` keeps its own login.
+
+Ties in with bug reports (above): with `gh` signed in, `mynx report`
+can file the issue itself (still asking first) instead of opening a
+prefilled page. Later, maybe: back up `~/apps` to a private repo
+(toward the parked profiles step); not decided.
+
 ### Roadmap step 9: Android integration
 
 README section "Android integration". Planned with the maintainer
