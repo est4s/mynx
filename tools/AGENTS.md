@@ -110,6 +110,7 @@ their own.
 | `mynx welcome` | the welcome page new users see: what's here and how to get around |
 | `mynx about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
 | `mynx version` | the version of the app's tools |
+| `mynx report [TEXT]` | report a bug in the app: shows the report, asks, then opens a prefilled GitHub issue (see "More of the setup") |
 | `mynx help` | all commands |
 
 `--json` on any command prints `{"ok": true, ...}` or
@@ -363,7 +364,7 @@ line, in order; labels up to 20 characters. Actions:
 | `games` | the Games menu |
 | `settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
-| `system` | Update all, System info, About (`mynx about`) |
+| `system` | Update all, System info, About (`mynx about`), Report a bug (`mynx report`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
@@ -458,6 +459,16 @@ shows the generic game bar until `my-tool.conf` exists.
 - **Games:** `play GAME [args]` runs a game with the bar named after its
   file (`my-game.py` → `my-game`), else the generic `game` bar. `rogue`,
   `drive` and `flap` use it.
+- **Bug reports:** `mynx report "what went wrong"` (or the menu's
+  System → Report a bug) builds a report: the description, the app's
+  version, the Android version and phone model, and the app's last
+  crash, if any (`--no-crash` leaves it out). It shows all of it and
+  asks; on yes it opens a new GitHub issue in the phone's browser,
+  filled in. Nothing is sent until the user submits it there with
+  their own GitHub account. With no TEXT it asks what went wrong.
+  For agents: `mynx report TEXT --json` gives `title`, `what`,
+  `details` and `url` and opens nothing; show the user the report and
+  only `mynx open URL` once they agree.
 - **Tab titles:** a program sets its tab's title with the escape code
   `\e]0;title\a`. The prompt sets it to the current folder name. A name
   the user gives a tab (long-press it) wins over these.

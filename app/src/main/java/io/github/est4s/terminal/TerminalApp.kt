@@ -1,7 +1,7 @@
 package io.github.est4s.terminal
 
 import android.app.Application
-import java.io.File
+import io.github.est4s.terminal.core.Crashes
 import kotlin.system.exitProcess
 
 class TerminalApp : Application() {
@@ -10,17 +10,17 @@ class TerminalApp : Application() {
         installCrashReporter()
     }
 
-    // There's no logcat on the dev phone: save crashes (from the activity or the
-    // service) and let MainActivity show them on next launch.
+    // Save crashes (from the activity or the service): MainActivity shows them
+    // on the next launch, and `mynx report` puts the last one in a bug report.
     private fun installCrashReporter() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, e ->
-            runCatching { crashFile(this).writeText(e.stackTraceToString()) }
+            runCatching { crashes(this).save(e.stackTraceToString()) }
             previous?.uncaughtException(thread, e) ?: exitProcess(1)
         }
     }
 
     companion object {
-        fun crashFile(app: Application) = File(app.filesDir, "last-crash.txt")
+        fun crashes(app: Application) = Crashes(app.filesDir)
     }
 }

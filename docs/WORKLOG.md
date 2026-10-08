@@ -97,22 +97,27 @@ Newest entries first. Rules for keeping it up to date: see
    GitHub issues, labelled as coming from the app. Always ask before
    anything is sent.
 
-**How (proposed, not built yet):**
-- **Updates:** the release APK needs `REQUEST_INSTALL_PACKAGES` and
-  the installer provider, which today are only in debug builds
-  (`app/src/debug/`). Fine for GitHub; a Play build later needs a
-  variant without them. The check reads GitHub's latest-release API
-  (`/repos/est4s/mynx/releases/latest`), compares the version name
-  (logic in core), and works only once the repo is public (it's
-  private).
-- **Bug reports:** the app can't hold a GitHub token (anyone could
-  pull it out of the APK), so `mynx report` builds the report (app
-  version, Android version, phone model, recent crash text, the
-  user's description), shows it in full and asks, then opens a
-  prefilled new-issue page in the phone's browser; the user submits
-  it with their own GitHub account. An issue form,
-  `.github/ISSUE_TEMPLATE/app-report.yml`, adds the `from-app` label
-  (a link's `labels=` only works for people with triage rights).
+**Bug reports are built** (entry 77), not yet tried on the phone.
+To check after the next build (`scripts/deliver.sh`):
+- menu → System → Report a bug: type a line, an empty line; the
+  report shows the app version, Android 16 (SDK 36), Google Pixel 10
+  and asks `[y/N]`; `n` says "Nothing was sent."
+- `y` opens GitHub's new-issue page with the title and both fields
+  filled in. **The repo is private**, so only the maintainer can see
+  the page until it's public. Check the `from-app` and `bug` labels
+  are applied; GitHub only applies labels that exist in the repo, so
+  create `from-app` first (`gh label create from-app`; not done:
+  asking the maintainer).
+- After a crash (none to force yet): the dialog shows once, and
+  `mynx report` still includes it.
+
+**Updates (proposed, not built yet):** the release APK needs
+`REQUEST_INSTALL_PACKAGES` and the installer provider, which today
+are only in debug builds (`app/src/debug/`). Fine for GitHub; a Play
+build later needs a variant without them. The check reads GitHub's
+latest-release API (`/repos/est4s/mynx/releases/latest`), compares
+the version name (logic in core), and works only once the repo is
+public.
 
 ### Next feature: guided GitHub setup (2026-10-08)
 
@@ -426,6 +431,31 @@ in-app keyboard (step 5) can send these combos:
 ---
 
 ## Log
+
+### 2026-10-08 (77): Bug reports (`mynx report`)
+
+Built the bug-report half of the maintainer's decision (Next, item 2).
+- **core** (`Report.kt`): `Crashes` keeps the app's last crash in
+  `filesDir`: `last-crash.txt` until the crash dialog has shown it,
+  then `seen-crash.txt`, until the next crash replaces it (before, the
+  dialog deleted it, so a report couldn't include it). The
+  `report-info` request gives `android`, `sdk`, `maker`, `model`,
+  `crash` (cut to 4000 characters) and `crash_time`. The app passes
+  `Build.*` and the `Crashes` in.
+- **`mynx report [TEXT] [--no-crash]`**: asks what went wrong if TEXT
+  is missing, shows the whole report, says where it goes, asks
+  `[y/N]`, then opens
+  `github.com/est4s/mynx/issues/new?template=app-report.yml&title=…&what=…&details=…`
+  through `open-url`. A crash too long for the link (8000 characters)
+  loses lines from its end. `--json` gives the report and the link and
+  opens nothing (for agents, who ask the user first: in the guide).
+  No `--yes`: the maintainer wants it always to ask.
+- **Issue form** `.github/ISSUE_TEMPLATE/app-report.yml`: fields
+  `what` and `details` (rendered as text), labels `bug`, `from-app`.
+- Menu: System → Report a bug. Guide: `tools/AGENTS.md`.
+- Not done: filing through `gh` (waits for the guided GitHub setup),
+  creating the `from-app` label. Tests: core `ReportTest`, 13 in
+  `test_mynx.py`, one in `menu.bats`. Not on the phone yet.
 
 ### 2026-10-08 (76): Mynx build confirmed on the phone
 

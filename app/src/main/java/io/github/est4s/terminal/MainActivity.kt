@@ -98,7 +98,7 @@ class MainActivity : Activity() {
     }
     private var service: TerminalService? = null
     private var bound = false
-    private val crashFile by lazy { TerminalApp.crashFile(application) }
+    private val crashes by lazy { TerminalApp.crashes(application) }
     // Only CI builds have the font; fall back so other builds still run.
     private val font by lazy {
         runCatching { Typeface.createFromAsset(assets, FONT_ASSET) }.getOrDefault(Typeface.MONOSPACE)
@@ -792,9 +792,8 @@ class MainActivity : Activity() {
     }
 
     private fun showLastCrash() {
-        if (!crashFile.exists()) return
-        val trace = crashFile.readText()
-        crashFile.delete()
+        val trace = crashes.unseen()?.text ?: return
+        crashes.seen()
         AlertDialog.Builder(this)
             .setTitle("The app crashed last time")
             .setMessage(trace)

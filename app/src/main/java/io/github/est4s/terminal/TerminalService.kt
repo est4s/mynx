@@ -29,6 +29,7 @@ import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Mic
 import io.github.est4s.terminal.core.Notice
 import io.github.est4s.terminal.core.Orientation
+import io.github.est4s.terminal.core.Phone
 import io.github.est4s.terminal.core.RotationLocks
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
@@ -122,6 +123,8 @@ class TerminalService : Service() {
             vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share, torch = camera::torch, startSound = sound::start,
             rotation = rotation, rotationChanged = ::setRotation,
+            phone = { Phone(Build.VERSION.RELEASE, Build.VERSION.SDK_INT, Build.MANUFACTURER, Build.MODEL) },
+            crashes = TerminalApp.crashes(application),
             later = locationRequests(File(rootfs, "root"), locator::locate) +
                 sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
                 cameraRequests(File(rootfs, "root"), camera::take) +

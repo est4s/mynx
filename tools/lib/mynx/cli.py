@@ -44,6 +44,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
+  report     report [TEXT]: report a bug (shows it, asks, then opens GitHub)
   about      version, credits and licences
   version    the app tools' version
   help       this list
@@ -1015,6 +1016,98 @@ def cmd_about(args, as_json):
     return 0
 
 
+REPORT_USAGE = "usage: mynx report [TEXT] [--no-crash]  (--json needs TEXT)"
+ISSUES_URL = APP_SOURCE + "/issues/new"
+# Longer links get cut off by browsers or refused by GitHub.
+MAX_REPORT_URL = 8000
+CUT_NOTE = "… (cut to fit the link)"
+
+
+def cmd_report(args, as_json):
+    no_crash = "--no-crash" in args
+    words = [a for a in args if a != "--no-crash"]
+    if any(w.startswith("--") for w in words) or (as_json and not words):
+        raise Usage(REPORT_USAGE)
+    what = " ".join(words).strip()
+    if not what:
+        what = ask_what_went_wrong()
+    if not what:
+        raise Failure("nothing to report")
+    try:
+        info = request("report-info")
+    except Failure:
+        info = {}
+    crash = None if no_crash else info.get("crash")
+    title = report_title(what)
+    details, url = report_link(title, what, report_details(info), crash, info.get("crash_time"))
+    if as_json:
+        out(True, {"ok": True, "title": title, "what": what, "details": details, "url": url}, None)
+        return 0
+    print(f"\nWhat happened:\n{what}\n\n{details}\n")
+    print(wrap("This opens a new issue on GitHub (" + APP_SOURCE.split("://")[1] + ") in the "
+               "phone's browser, filled in with the report above. Nothing is sent until "
+               "you submit it there, with your own GitHub account.", ""))
+    if not ask("Open it? [y/N]"):
+        print("Nothing was sent.")
+        return 0
+    request("open-url", url)
+    print("Opened in the phone's browser.")
+    return 0
+
+
+def ask_what_went_wrong():
+    print("What went wrong? (end with an empty line)")
+    lines = []
+    for line in sys.stdin:
+        if not line.strip():
+            break
+        lines.append(line.rstrip("\n"))
+    return "\n".join(lines).strip()
+
+
+def report_title(what, width=60):
+    first = what.splitlines()[0].strip()
+    return first if len(first) <= width else first[:width - 1].rstrip() + "…"
+
+
+def report_details(info):
+    try:
+        build, name = version_parts(tools_version())
+    except Failure:
+        build, name = None, None
+    lines = [f"{APP_NAME} " + (f"{name} (build {build})" if name else
+                               f"build {build}" if build else "version unknown")]
+    if info.get("android"):
+        maker, model = info.get("maker") or "", info.get("model") or ""
+        phone = model if model.lower().startswith(maker.lower()) else f"{maker} {model}".strip()
+        lines.append(f"Android {info['android']} (SDK {info.get('sdk')}), {phone}")
+    return "\n".join(lines)
+
+
+def report_link(title, what, details, crash, crash_time):
+    """The details with the crash, and the link to a prefilled issue;
+    a crash too long for the link loses lines from its end."""
+    def link(text):
+        query = urllib.parse.urlencode({"template": "app-report.yml", "title": title,
+                                        "what": what, "details": text})
+        return f"{ISSUES_URL}?{query}"
+
+    if not crash:
+        return details, link(details)
+    when = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(crash_time / 1000)) if crash_time else "time unknown"
+    head = f"{details}\n\nLast crash, {when}:\n"
+    lines = crash.rstrip("\n").split("\n")
+    full = head + "\n".join(lines)
+    if len(link(full)) <= MAX_REPORT_URL:
+        return full, link(full)
+    while lines:
+        lines.pop()
+        text = head + "\n".join(lines + [CUT_NOTE])
+        if len(link(text)) <= MAX_REPORT_URL:
+            return text, link(text)
+    return details, link(details)
+
+
 def cmd_version(args, as_json):
     version = tools_version()
     out(as_json, {"ok": True, "version": version}, version)
@@ -1034,7 +1127,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
-    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "about": cmd_about, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 
 

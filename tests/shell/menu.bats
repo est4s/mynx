@@ -66,13 +66,18 @@ keys() {
 @test "system menu" {
     source "$MENU"
     menu_items system
-    [ "${ITEMS[*]}" = "Update all System info About" ]
-    [ "${ACTS[*]}" = "update info about" ]
+    [ "${ITEMS[*]}" = "Update all System info About Report a bug" ]
+    [ "${ACTS[*]}" = "update info about report" ]
 }
 
 @test "About shows mynx about" {
     run keys 73
     [[ $output == *"RUN: mynx about"* ]]
+}
+
+@test "Report a bug runs mynx report" {
+    run keys 74
+    [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "games come from both folders, named after their files" {

@@ -39,7 +39,8 @@ private class Refused(message: String) : Exception(message)
  * (at a strength in percent, or the phone's default) or off.
  * [startSound] (re)starts the sound server (`mynx sound install`).
  * [rotation] holds the screen's rotation locks; [rotationChanged] gets
- * the orientation to hold (null: none) after each change.
+ * the orientation to hold (null: none) after each change. [phone] and
+ * [crashes] go into bug reports (`report-info`).
  *
  * Requests in [later] are answered later, or stream (see [Later]).
  * [sweep] cancels those whose `mynx` cancelled them or has gone
@@ -60,6 +61,8 @@ class MynxRequests(
     private val startSound: () -> String? = { "the sound device isn't available here" },
     private val rotation: RotationLocks = RotationLocks(),
     private val rotationChanged: (Orientation?) -> Unit = {},
+    private val phone: () -> Phone? = { null },
+    private val crashes: Crashes? = null,
     private val later: Map<String, Later> = emptyMap(),
     private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
 ) {
@@ -322,6 +325,7 @@ class MynxRequests(
                 }
                 ok("locked" to json(rotation.orientation?.word ?: "no"))
             }
+            "report-info" -> reportInfo(phone(), crashes?.last())
             "sound-start" -> {
                 if (!loadSettings(settingsFile).settings.soundDevice) {
                     throw Refused("the sound device is off (mynx set sound-device on)")

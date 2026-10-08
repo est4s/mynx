@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+import urllib.parse
 
 MYNX = os.path.join(os.path.dirname(__file__), "..", "..", "tools", "bin", "mynx")
 
@@ -782,6 +783,115 @@ class MynxTest(unittest.TestCase):
         self.mynx("menu", "edit")
         self.mynx("menu", "reset")
         self.assertEqual(self.app.requests, [["check", "menu edit"], ["check", "menu reset"]])
+
+    # --- report ------------------------------------------------------------
+
+    PIXEL = {"ok": True, "android": "16", "sdk": 36, "maker": "Google", "model": "Pixel 10",
+             "crash": "java.lang.IllegalStateException: boom\n\tat X.y(X.kt:1)",
+             "crash_time": 1760000000000}
+
+    def report(self, *args, info=None, input=""):
+        self.write(os.path.join(self.tools, ".version"), "85-1760000000-0.1.0\n")
+        self.start_app({"report-info": info or self.PIXEL, "open-url": {"ok": True}})
+        return self.mynx("report", *args, input=input, env={"TZ": "UTC"})
+
+    def opened(self):
+        urls = [r[1] for r in self.app.requests if r[0] == "open-url"]
+        if not urls:
+            return None
+        self.assertEqual(len(urls), 1)
+        url = urllib.parse.urlsplit(urls[0])
+        self.assertEqual(f"{url.scheme}://{url.netloc}{url.path}", "https://github.com/est4s/mynx/issues/new")
+        return dict(urllib.parse.parse_qsl(url.query))
+
+    def test_report_shows_it_all_then_opens_github(self):
+        run = self.report("The tab froze", input="y\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        for text in ("The tab froze", "Mynx 0.1.0 (build 85)", "Android 16 (SDK 36)",
+                     "Google Pixel 10", "Last crash, 2025-10-09 08:53",
+                     "IllegalStateException: boom", "\tat X.y(X.kt:1)"):
+            self.assertIn(text, run.stdout)
+        self.assertEqual(self.opened(), {
+            "template": "app-report.yml", "title": "The tab froze", "what": "The tab froze",
+            "details": "Mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10\n\n"
+                       "Last crash, 2025-10-09 08:53 UTC:\n"
+                       "java.lang.IllegalStateException: boom\n\tat X.y(X.kt:1)"})
+
+    def test_report_asks_before_anything_leaves_the_phone(self):
+        run = self.report("The tab froze", input="n\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("[y/N]", run.stdout)
+        self.assertIn("Nothing was sent.", run.stdout)
+        self.assertIsNone(self.opened())
+
+    def test_report_with_no_answer_sends_nothing(self):
+        run = self.report("The tab froze", input="")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIsNone(self.opened())
+
+    def test_report_says_where_it_goes(self):
+        text = " ".join(self.report("x", input="n\n").stdout.split())
+        self.assertIn("new issue on GitHub (github.com/est4s/mynx)", text)
+        self.assertIn("Nothing is sent until you submit it there, with your own GitHub account", text)
+
+    def test_report_asks_what_went_wrong(self):
+        run = self.report(input="The tab froze\nwhen I turned the phone\n\ny\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("What went wrong?", run.stdout)
+        found = self.opened()
+        self.assertEqual(found["what"], "The tab froze\nwhen I turned the phone")
+        self.assertEqual(found["title"], "The tab froze")
+
+    def test_report_needs_something_to_say(self):
+        run = self.report(input="\n")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("nothing to report", run.stderr)
+        self.assertIsNone(self.opened())
+
+    def test_report_title_is_short(self):
+        run = self.report("word " * 30, input="y\n")
+        title = self.opened()["title"]
+        self.assertLessEqual(len(title), 60)
+        self.assertTrue(title.endswith("…"))
+
+    def test_report_with_no_crash(self):
+        run = self.report("x", info=dict(self.PIXEL, crash=None, crash_time=None), input="y\n")
+        self.assertNotIn("crash", run.stdout.lower())
+        self.assertEqual(self.opened()["details"], "Mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10")
+
+    def test_report_can_leave_the_crash_out(self):
+        run = self.report("x", "--no-crash", input="y\n")
+        self.assertNotIn("boom", run.stdout)
+        self.assertNotIn("crash", self.opened()["details"].lower())
+
+    def test_report_names_the_phone_once(self):
+        info = dict(self.PIXEL, maker="samsung", model="samsung SM-S921B", crash=None)
+        self.report("x", info=info, input="y\n")
+        self.assertIn("Android 16 (SDK 36), samsung SM-S921B\n", self.opened()["details"] + "\n")
+
+    def test_report_cuts_a_long_crash_to_fit_the_link(self):
+        crash = "java.lang.Error: deep\n" + "".join(f"\tat a.b.C{i}.method(C{i}.kt:{i})\n" for i in range(300))
+        run = self.report("x", info=dict(self.PIXEL, crash=crash), input="y\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        url = [r[1] for r in self.app.requests if r[0] == "open-url"][0]
+        self.assertLessEqual(len(url), 8000)
+        details = self.opened()["details"]
+        self.assertIn("java.lang.Error: deep\n\tat a.b.C0.method", details)
+        self.assertTrue(details.endswith("(cut to fit the link)"), details[-80:])
+
+    def test_report_json_gives_the_report_and_sends_nothing(self):
+        run = self.report("The tab froze", "--json")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        answer = json.loads(run.stdout)
+        self.assertEqual(answer["title"], "The tab froze")
+        self.assertIn("IllegalStateException", answer["details"])
+        self.assertTrue(answer["url"].startswith("https://github.com/est4s/mynx/issues/new?template=app-report.yml"))
+        self.assertIsNone(self.opened())
+
+    def test_report_json_needs_the_text(self):
+        run = self.report("--json")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: mynx report", json.loads(run.stdout)["error"])
 
     # --- open --------------------------------------------------------------
 

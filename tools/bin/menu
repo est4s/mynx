@@ -223,8 +223,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
     system)
-      ITEMS=("Update all" "System info" About)
-      ACTS=(update info about) ;;
+      ITEMS=("Update all" "System info" About "Report a bug")
+      ACTS=(update info about report) ;;
   esac
 }
 
@@ -397,6 +397,7 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 }
 
 act_about() { run mynx about || pause; }  # in less; a failure stays on screen
+act_report() { run mynx report; pause; }  # it asks; its answer stays on screen
 
 act_update() {
   run bash -c 'apt update && apt upgrade -y'

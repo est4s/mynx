@@ -1,0 +1,19 @@
+# Filled in by `mynx report` (tools/lib/mynx/cli.py): the link sets the
+# title and the fields by their ids, `what` and `details`.
+name: Bug report from the app
+description: Sent from Mynx with `mynx report` or the menu's System → Report a bug.
+labels: ["bug", "from-app"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: App and phone
+      description: The app's version, Android and the phone, and the app's last crash.
+      render: text
