@@ -97,6 +97,22 @@ is on; the menu's banner says MYNX (entry 72; needs the next build,
 or `scripts/deliver.sh`). `~/PC-26` and `~/mynx-migrate.sh` were
 deleted 2026-10-08 (entry 73).
 
+### Next features (added by the maintainer, 2026-10-08)
+
+Not planned yet: talk each through with the maintainer before
+building.
+1. **The app receives updates.** The installed app finds out about a
+   new release and offers to install it. To settle: where updates
+   come from (GitHub Releases now; Play later would update on its
+   own), how it checks (at start, in the background, or only when
+   asked) and how it says so (notification, menu, `mynx` command).
+   `mynx install-apk` exists only in debug builds today.
+2. **Report a bug from the app.** A way to send a bug report from
+   inside the app, e.g. a menu item and a `mynx` command. To settle:
+   where reports go (GitHub issues, email), what they carry (app
+   version, Android version and phone from `mynx about`, recent
+   crash text), and asking before anything is sent.
+
 ### Roadmap step 9: Android integration
 
 README section "Android integration". Planned with the maintainer
