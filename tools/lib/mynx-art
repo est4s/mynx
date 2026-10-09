@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# MYNX title art: "mynx" in chunky pixel letters with a drop shadow,
+# mynx title art: "mynx" in chunky pixel letters with a drop shadow,
 # drawn with quadrant blocks (2x2 pixels per cell, two colours each).
 # The letters take the theme's cyan and the shadow its magenta, pushed
 # to full neon in 24-bit colour, so it follows `mynx theme set`;

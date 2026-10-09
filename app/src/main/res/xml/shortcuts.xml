@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Long-press the app icon: Settings opens the settings editors (mynx edit) in a new tab.
-     Mynx Dev has a copy in src/debug/res/xml: change both. -->
+     mynx dev has a copy in src/debug/res/xml: change both. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:shortcutId="settings"

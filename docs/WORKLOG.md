@@ -204,6 +204,18 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-09 (89): The name in small letters, the pixel title (PR #12, not on the phone yet)
+
+Maintainer's decisions: the name is written "mynx" everywhere it's
+shown (the app's label, "mynx dev", `mynx about` and update messages,
+the User-Agent, the docs; code names keep their case), and the menu's
+title is "mynx" in small pixel letters like the logo, without the
+shadow (3 rows, 23 columns, `TITLE_ART` in `tools/bin/menu`; the boot
+splash's text fallback is "m y n x"). The README's title is the whole
+logo, `docs/images/mynx.svg`, made by `scripts/mynx-svg.py`. To check
+on the phone: the launcher label "mynx dev", the menu's title and
+pages (Getting started still fits), `mynx about`.
+
 ### 2026-10-09 (88): Menu order (confirmed, #10)
 
 One of the changes before the release. The session that started it

@@ -49,7 +49,7 @@ class ApkDownloadTest {
         assertEquals(ApkDownload.Done(dest), result)
         assertTrue(apk.contentEquals(dest.readBytes()))
         assertFalse(part.exists())
-        assertEquals("Mynx/0.1.0", agent)
+        assertEquals("mynx/0.1.0", agent)
         assertEquals(0L to apk.size.toLong(), seen.first())
         assertEquals(apk.size.toLong() to apk.size.toLong(), seen.last())
         assertEquals(seen.map { it.first }.sorted(), seen.map { it.first })

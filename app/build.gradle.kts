@@ -51,7 +51,7 @@ android {
     }
 
     buildTypes {
-        // Debug builds are a separate app, "Mynx Dev", with their own
+        // Debug builds are a separate app, "mynx dev", with their own
         // Debian, so they install beside the release instead of over it.
         getByName("debug") {
             applicationIdSuffix = ".dev"

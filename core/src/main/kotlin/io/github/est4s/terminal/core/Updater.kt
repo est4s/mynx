@@ -18,7 +18,7 @@ private const val UNKNOWN_SIZE_STEP = 256 * 1024L
  * writes the available version to [noticeFile] for the launcher menu,
  * downloads APKs into [downloads]. [current] is this app's version
  * name; [releases] is false in builds that don't update from releases
- * (Mynx Dev), which then never check. [fetch] asks GitHub for the
+ * (mynx dev), which then never check. [fetch] asks GitHub for the
  * latest release and [download] fetches an APK (see [downloadApk]);
  * both block, so they run through [background]. [notify] tells the
  * user a version is available, once per version.

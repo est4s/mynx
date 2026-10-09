@@ -1,13 +1,13 @@
-<h1 align="center"><img src="docs/images/mynx.svg" width="440" alt="Mynx"></h1>
+<h1 align="center"><img src="docs/images/mynx.svg" width="440" alt="mynx"></h1>
 
-**Your phone, your tools.** Mynx is a new way to use a smartphone:
+**Your phone, your tools.** mynx is a new way to use a smartphone:
 instead of searching an app store for something close enough and
 putting up with its ads, tracking and subscriptions, you make the tool
 you want, the way you want it. Describe it to an AI agent, or write it
 yourself, and it runs right there on your phone, with its camera,
 sensors, microphone, speaker and flashlight.
 
-- **No ads, no tracking, no accounts.** Mynx collects nothing
+- **No ads, no tracking, no accounts.** mynx collects nothing
   ([`PRIVACY.md`](PRIVACY.md)), and it's free and open source.
 - **Yours to change.** Every app it ships is a short program you can
   read and copy, and every setting is a text file. Change anything, or
@@ -51,7 +51,7 @@ sensors, microphone, speaker and flashlight.
 
 Needs an **arm64** phone with **Android 8** or newer. Download the APK
 from [Releases](../../releases) and open it. The first launch unpacks
-Debian; after that the app opens straight into the menu. Mynx checks
+Debian; after that the app opens straight into the menu. mynx checks
 GitHub for a new version once a day and tells you; `mynx update`
 installs it, keeping Debian and your files.
 
@@ -67,7 +67,7 @@ USB. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## License
 
-Mynx is free software under the **MIT License**: see
+mynx is free software under the **MIT License**: see
 [`LICENSE`](LICENSE). If you distribute a changed version, please give
 it its own name and icon.
 

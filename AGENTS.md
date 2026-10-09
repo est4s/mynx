@@ -29,16 +29,19 @@ plans leave "Next" when they're done. Git history keeps everything
 
 ## Naming
 
-The app is called **Mynx**, and so are its command, **`mynx`**, and
+The app is called **mynx**, and so are its command, **`mynx`**, and
 its paths: `/opt/mynx`, `~/.config/mynx`, `/tmp/.mynx`, the `MYNX_*`
 variables (maintainer's decision, 2026-10-07: one name everywhere; people
-and agents use the same command). Earlier working names were dropped
+and agents use the same command). The name is written in small letters
+wherever it's shown, at the start of a sentence too: "mynx", "mynx dev"
+(maintainer's decision, 2026-10-09). Code names (`MynxRequests`, the
+`MYNX_*` variables) keep their case. Earlier working names were dropped
 without a trace in the code; git history has them.
 - Keep the display name in one place: `app/src/main/res/values/strings.xml`
   (`app_name`). Don't hardcode it elsewhere in code.
 - The application ID `io.github.est4s.terminal` is deliberately name-neutral,
   because an ID can never change after publishing. **Never change it.**
-- Debug builds are a separate app, **Mynx Dev**
+- Debug builds are a separate app, **mynx dev**
   (`io.github.est4s.terminal.dev`, maintainer's decision, 2026-10-08), so
   they install beside the release with a Debian of their own. Its name is
   `app_name` in `app/src/debug/res/values/strings.xml`. Anything that
@@ -79,9 +82,9 @@ Consequences:
    It waits for HEAD's run (on the current branch: a PR's, or
    `main`'s; or give it a run ID), downloads the APK, copies it to the phone's
    Download folder and opens Android's installer with `mynx install-apk`.
-   The maintainer just taps **Install**. The build installs as **Mynx
-   Dev**, a separate app (see "Naming"): run from Mynx Dev, the app
-   restarts as the new build; run from Mynx, Mynx Dev installs or
+   The maintainer just taps **Install**. The build installs as **mynx
+   Dev**, a separate app (see "Naming"): run from mynx dev, the app
+   restarts as the new build; run from mynx, mynx dev installs or
    updates beside it.
 
 Notes on why the script does what it does:
@@ -319,7 +322,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   safe names, never overwrites) and posts a notification.
 - **Updates** (`core/.../Updater.kt`, `Release.kt`, `Updates.kt`,
   `UpdateState.kt`): release builds only (`BuildConfig.DEBUG` off;
-  Mynx Dev updates from CI). The check and download live in the app,
+  mynx dev updates from CI). The check and download live in the app,
   not Debian, so a broken Debian can't block the update that would fix
   it. The service ticks hourly; `Updater.checkIfDue()` asks GitHub's
   latest-release API (no token: the repo is public) about once a day
@@ -559,7 +562,7 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
   it isn't obvious. Commit and push only when the maintainer asks.
 - **Branches: trunk-based** (maintainer's decision, 2026-10-08): each
   feature on a short-lived branch, a PR into `main`, CI builds it, the
-  maintainer tests that build in Mynx Dev, then it's merged. No
+  maintainer tests that build in mynx dev, then it's merged. No
   long-lived `dev` branch. **`main` is protected** by the ruleset
   "Protect main" (on since 2026-10-08, maintainer's choice of "PRs
   only"): no direct pushes for anyone, the maintainer and agents
