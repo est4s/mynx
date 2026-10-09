@@ -201,20 +201,22 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ((${#ITEMS[@]})) && break
       done
       if ! ((${#ITEMS[@]})); then
-        ITEMS=(Terminal Files Apps Games Settings "AI agents" System "Getting started" Exit)
-        ACTS=(exit files menu:apps menu:games settings menu:agents menu:system welcome quit_session)
+        ITEMS=(Shell "AI agents" Apps Games Files Settings System Exit)
+        ACTS=(exit menu:agents menu:apps menu:games files settings menu:system quit_session)
       fi
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
         ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
       fi ;;
     apps)
-      local dir f
-      for dir in "${APP_DIRS[@]}"; do
+      local dir f label
+      while IFS=$'\t' read -r label f; do   # by label, wherever they are
+        ITEMS+=("$label") ACTS+=("app:$f")
+      done < <(for dir in "${APP_DIRS[@]}"; do
         for f in "$dir"/*; do
           [[ -f $f && -x $f ]] || continue   # skips shared modules and data files
-          ITEMS+=("$(app_label "$f")") ACTS+=("app:$f")
+          printf '%s\t%s\n' "$(app_label "$f")" "$f"
         done
-      done
+      done | LC_ALL=C sort -f -t $'\t' -k1,1)
       ((${#ITEMS[@]})) || { ITEMS=("(no apps yet)"); ACTS=(none); } ;;
     games)
       local dir f
@@ -235,8 +237,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
     system)
-      ITEMS=("Update all" "System info" About "Report a bug")
-      ACTS=(update info about report) ;;
+      ITEMS=("Update all" "System info" "Getting started" About "Report a bug")
+      ACTS=(update info welcome about report) ;;
   esac
 }
 
