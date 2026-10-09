@@ -208,7 +208,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   app icon is its "m" (maintainer's choice, 2026-10-09): the launcher
   foreground, the themed and notification icons (no shadow) and
   `docs/images/icon.svg` are its pixels, one wide and two tall, cut
-  from `mynx-art --plain`. Change the art, regenerate them too.
+  from `mynx-art --plain`. The README's title,
+  `docs/images/mynx.svg`, is the whole art (`scripts/mynx-svg.py`).
+  Change the art, regenerate them too.
 - **Who checks what:** the program that reads a file checks it. The app
   (`core`) checks colours, themes, settings and key bars (`checkConfig`);
   the menu checks `menu.conf` (`menu --check FILE`); `mynx check`

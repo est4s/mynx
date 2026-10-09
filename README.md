@@ -1,6 +1,4 @@
-<p align="center"><img src="docs/images/icon.svg" width="128" alt="Mynx icon"></p>
-
-# Mynx
+<h1 align="center"><img src="docs/images/mynx.svg" width="440" alt="Mynx"></h1>
 
 **Your phone, your tools.** Mynx is a new way to use a smartphone:
 instead of searching an app store for something close enough and
