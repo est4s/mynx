@@ -16,9 +16,9 @@ are in git history: the full log up to entry 84 is
   agent support, Android integration (clipboard, sharing, location,
   sensors, camera, flashlight, sound in and out, rotation lock), and
   polish (welcome page, wakelock, Settings shortcut, `mynx about`,
-  themed icon). Also: the rename to Mynx, bug reports (`mynx
-  report`), and **Mynx Dev**, debug builds as a separate app (entry
-  82).
+  themed icon, the title art and "m" icon). Also: the rename to Mynx,
+  bug reports (`mynx report`), and **Mynx Dev**, debug builds as a
+  separate app (entry 82).
 - **Built, waiting for a release to test:** app updates from GitHub
   releases (`mynx update`, the daily check, entry 81). Mynx Dev
   doesn't update from releases, so only a release can try them.
@@ -204,7 +204,7 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-09 (87): The new splash, and its "m" as the icon
+### 2026-10-09 (87): The new splash, and its "m" as the icon (confirmed)
 
 The maintainer made a new title art, `mynx-art` ("mynx" in
 quadrant-block pixels, cyan letters, pink drop shadow, animated). It's
@@ -222,9 +222,8 @@ https://claude.ai/artifact/8woxiTt7jqsab8AAFMX5Pi). The launcher
 foreground, the themed (monochrome) icon, the notification icon and
 `docs/images/icon.svg` are now its pixels (1 wide, 2 tall, rows
 overlapping a hair so no seams show), cut from `mynx-art --plain`;
-the themed and notification icons leave the shadow out. Branch
-`icon-m`, to check in Mynx Dev: the boot splash (fresh start), the
-home screen icon, themed icons on, a notification.
+the themed and notification icons leave the shadow out. PR #8,
+confirmed on the phone in Mynx Dev; the details are in AGENTS.md.
 
 ### 2026-10-09 (86): Bluetooth on the roadmap
 

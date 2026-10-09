@@ -202,6 +202,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   resets root's PATH, so the PATH the app passes in doesn't survive a
   login shell. So fixes to them reach installed Debians without a
   migration. Put new app-owned commands there, not in the rootfs.
+- **Title art and icon:** the boot splash (`menu --boot`) plays
+  `tools/lib/mynx-art` ("mynx" in quadrant-block pixels, cyan with a
+  pink drop shadow; Neon's colours built in, a test checks them). The
+  app icon is its "m" (maintainer's choice, 2026-10-09): the launcher
+  foreground, the themed and notification icons (no shadow) and
+  `docs/images/icon.svg` are its pixels, one wide and two tall, cut
+  from `mynx-art --plain`. Change the art, regenerate them too.
 - **Who checks what:** the program that reads a file checks it. The app
   (`core`) checks colours, themes, settings and key bars (`checkConfig`);
   the menu checks `menu.conf` (`menu --check FILE`); `mynx check`
