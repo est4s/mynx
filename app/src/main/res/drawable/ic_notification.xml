@@ -1,19 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The launcher's ">_" prompt in white: Android only uses a notification icon's alpha. -->
+<!-- The launcher's "m" in white, without its shadow: Android only uses a
+     notification icon's alpha. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
     <path
-        android:pathData="M5,6 L11,12 L5,18"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:pathData="M13,18 L20,18"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M2.76,5.84h18.48v1.79h-18.48zM1.88,7.6h20.24v1.79h-20.24zM1,9.36h3.52v1.79h-3.52zM10.68,9.36h3.52v1.79h-3.52zM19.48,9.36h3.52v1.79h-3.52zM1,11.12h3.52v1.79h-3.52zM10.68,11.12h3.52v1.79h-3.52zM19.48,11.12h3.52v1.79h-3.52zM1,12.88h3.52v1.79h-3.52zM10.68,12.88h3.52v1.79h-3.52zM19.48,12.88h3.52v1.79h-3.52zM1,14.64h3.52v1.79h-3.52zM10.68,14.64h3.52v1.79h-3.52zM19.48,14.64h3.52v1.79h-3.52zM10.68,16.4h3.52v1.79h-3.52zM19.48,16.4h3.52v1.79h-3.52z" />
 </vector>

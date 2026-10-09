@@ -204,6 +204,20 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-09 (87): The icon is the splash's "m"
+
+The maintainer made a new splash (`~/.local/bin/mynx-art`, not in the
+repo yet: "mynx" in quadrant-block pixels, cyan letters, pink drop
+shadow) and picked the "m" from it as the logo, over a stacked
+"my/nx", the "x" alone and `>_` redrawn (concepts:
+https://claude.ai/artifact/8woxiTt7jqsab8AAFMX5Pi). The launcher
+foreground, the themed (monochrome) icon, the notification icon and
+`docs/images/icon.svg` are now its pixels (1 wide, 2 tall, rows
+overlapping a hair so no seams show), cut from `mynx-art --plain`;
+the themed and notification icons leave the shadow out. Branch
+`icon-m`, to check in Mynx Dev: home screen, themed icons on, a
+notification.
+
 ### 2026-10-09 (86): Bluetooth on the roadmap
 
 Maintainer's decision: Bluetooth joins the "later" plans

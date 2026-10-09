@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="21 21 66 66">
   <rect x="21" y="21" width="66" height="66" rx="15" fill="#0D0221"/>
-  <path d="M36,40 L50,54 L36,68" fill="none" stroke="#FF2BD6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M56,68 L74,68" fill="none" stroke="#2DE2E6" stroke-width="6" stroke-linecap="round"/>
+  <path d="M32.03,36.8h40.12v3.92h-40.12zM30.12,40.63h43.94v3.92h-43.94zM28.21,44.45h7.64v3.92h-7.64zM49.22,44.45h7.64v3.92h-7.64zM68.33,44.45h7.64v3.92h-7.64zM28.21,48.27h7.64v3.92h-7.64zM49.22,48.27h7.64v3.92h-7.64zM68.33,48.27h7.64v3.92h-7.64zM28.21,52.09h7.64v3.92h-7.64zM49.22,52.09h7.64v3.92h-7.64zM68.33,52.09h7.64v3.92h-7.64zM28.21,55.91h7.64v3.92h-7.64zM49.22,55.91h7.64v3.92h-7.64zM68.33,55.91h7.64v3.92h-7.64zM49.22,59.73h7.64v3.92h-7.64zM68.33,59.73h7.64v3.92h-7.64z" fill="#00EEFF" shape-rendering="crispEdges"/>
+  <path d="M37.76,48.27h9.55v3.92h-9.55zM58.78,48.27h7.64v3.92h-7.64zM37.76,52.09h1.91v3.92h-1.91zM58.78,52.09h1.91v3.92h-1.91zM77.88,52.09h1.91v3.92h-1.91zM37.76,55.91h1.91v3.92h-1.91zM58.78,55.91h1.91v3.92h-1.91zM77.88,55.91h1.91v3.92h-1.91zM37.76,59.73h1.91v3.92h-1.91zM58.78,59.73h1.91v3.92h-1.91zM77.88,59.73h1.91v3.92h-1.91zM32.03,63.55h7.64v3.92h-7.64zM58.78,63.55h1.91v3.92h-1.91zM77.88,63.55h1.91v3.92h-1.91zM53.04,67.37h7.64v3.92h-7.64zM72.15,67.37h7.64v3.92h-7.64z" fill="#FF1AC6" shape-rendering="crispEdges"/>
 </svg>
