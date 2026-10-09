@@ -26,7 +26,7 @@ for y, row in enumerate(pix):
 w, h = 2*PAD + len(pix[0])*W, 2*PAD + len(pix)*H
 if vector:
     out = ['<?xml version="1.0" encoding="utf-8"?>',
-           '<!-- Made by scripts/mynx-svg.py --vector from tools/lib/mynx-art: change the art, run it again. -->',
+           '<!-- Made from tools/lib/mynx-art by scripts/mynx-svg.py: change the art, run it again. -->',
            '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
            f'    android:width="{w}dp"', f'    android:height="{h}dp"',
            f'    android:viewportWidth="{w}"', f'    android:viewportHeight="{h}">']

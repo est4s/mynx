@@ -123,3 +123,7 @@ class GeneratedArtTest(unittest.TestCase):
         drawable = os.path.join(ROOT, "app", "src", "main", "res", "drawable", "mynx_title.xml")
         with open(drawable) as f:
             self.assertEqual(f.read(), self.generated("--vector"))
+
+    def test_the_setup_screens_title_is_well_formed_xml(self):
+        import xml.dom.minidom
+        xml.dom.minidom.parseString(self.generated("--vector"))

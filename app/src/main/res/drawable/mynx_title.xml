@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Made by scripts/mynx-svg.py --vector from tools/lib/mynx-art: change the art, run it again. -->
+<!-- Made from tools/lib/mynx-art by scripts/mynx-svg.py: change the art, run it again. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="408dp"
     android:height="88dp"
