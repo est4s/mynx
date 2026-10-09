@@ -19,13 +19,16 @@
 #   "Update available" (mynx update).
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
 # MENU_APP_DIRS (colon-separated) override where games and apps are found,
-# MENU_UPDATE_FILE the app's update notice (all for testing).
+# MENU_UPDATE_FILE the app's update notice, MENU_ART the boot splash's title
+# art (all for testing).
 
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/mynx
 STATE=$STATE_DIR/menu
 CONFIG_DIR=$HOME/.config/mynx
 DEFAULT_MENU=$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)/menu.conf
 WELCOME=${DEFAULT_MENU%/*}/welcome.txt
+ART=${MENU_ART:-${DEFAULT_MENU%/*}/lib/mynx-art}
+ART_W=52                  # the art's width in columns, with a margin
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
 UPDATE_FILE=${MENU_UPDATE_FILE:-/tmp/.mynx/update-available}
 IFS=: read -r -a APP_DIRS <<<"${MENU_APP_DIRS:-${DEFAULT_MENU%/*}/apps:$HOME/apps}"
@@ -298,11 +301,10 @@ boot_wait() { # boot_wait <seconds>: sleep, but return false if a key was presse
   IFS= read -rsn1 -t "$1" _
   (($? > 128))
 }
-boot() {
-  local t=$TITLE_TEXT glitch=$'#%&@$*!?/\\<>=+' f i g line n=0 games
-  cursor_hide; term_cols
+glitch_title() { # the text title glitching in; false if a key was pressed
+  local t=$TITLE_TEXT glitch=$'#%&@$*!?/\\<>=+' f i g
   local pad=$(((COLS - ${#t}) / 2)); ((pad < 0)) && pad=0
-  for f in 1 2 3 4 5 6 7; do                 # glitch the title, settling each frame
+  for f in 1 2 3 4 5 6 7; do                 # settling each frame
     g=
     for ((i = 0; i < ${#t}; i++)); do
       if ((RANDOM % 8 < 8 - f)) && [[ ${t:i:1} != ' ' ]]; then
@@ -312,9 +314,22 @@ boot() {
       fi
     done
     printf '\e[H\e[2J\n%*s%s%s%s\n' $pad '' "$C_TITLE" "$g" "$C_OFF"
-    boot_wait 0.07 || return
+    boot_wait 0.07 || return 1
   done
-  printf '\e[H\e[2J\n'; center "$C_TITLE" "$t"; echo
+  printf '\e[H\e[2J\n'; center "$C_TITLE" "$t"
+}
+boot() {
+  local line games pad rc=1
+  cursor_hide; term_cols
+  printf '\e[H\e[2J\n'
+  if ((COLS >= ART_W)); then                 # the title art; a key skips the rest
+    "$ART"; rc=$?
+    ((rc == 10)) && return
+  fi
+  if ((rc != 0)); then                       # too narrow, or the art failed
+    glitch_title || return
+  fi
+  echo
   menu_items games; [[ ${ACTS[0]} == none ]] || games=${#ITEMS[@]}
   local debian; debian=$(debian_version)
   local -a log=(

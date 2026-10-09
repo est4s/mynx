@@ -1,19 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Neon ">_" prompt, inside the adaptive icon safe zone (centre 66dp of 108dp). -->
+<!-- The splash's "m" (mynx-art): its pixels are one wide and two tall, the
+     shadow pink. Fits the adaptive icon safe zone (centre 66dp of 108dp). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:pathData="M36,40 L50,54 L36,68"
-        android:strokeColor="#FF2BD6"
-        android:strokeWidth="6"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:fillColor="#00EEFF"
+        android:pathData="M32.03,36.8h40.12v3.92h-40.12zM30.12,40.63h43.94v3.92h-43.94zM28.21,44.45h7.64v3.92h-7.64zM49.22,44.45h7.64v3.92h-7.64zM68.33,44.45h7.64v3.92h-7.64zM28.21,48.27h7.64v3.92h-7.64zM49.22,48.27h7.64v3.92h-7.64zM68.33,48.27h7.64v3.92h-7.64zM28.21,52.09h7.64v3.92h-7.64zM49.22,52.09h7.64v3.92h-7.64zM68.33,52.09h7.64v3.92h-7.64zM28.21,55.91h7.64v3.92h-7.64zM49.22,55.91h7.64v3.92h-7.64zM68.33,55.91h7.64v3.92h-7.64zM49.22,59.73h7.64v3.92h-7.64zM68.33,59.73h7.64v3.92h-7.64z" />
     <path
-        android:pathData="M56,68 L74,68"
-        android:strokeColor="#2DE2E6"
-        android:strokeWidth="6"
-        android:strokeLineCap="round" />
+        android:fillColor="#FF1AC6"
+        android:pathData="M37.76,48.27h9.55v3.92h-9.55zM58.78,48.27h7.64v3.92h-7.64zM37.76,52.09h1.91v3.92h-1.91zM58.78,52.09h1.91v3.92h-1.91zM77.88,52.09h1.91v3.92h-1.91zM37.76,55.91h1.91v3.92h-1.91zM58.78,55.91h1.91v3.92h-1.91zM77.88,55.91h1.91v3.92h-1.91zM37.76,59.73h1.91v3.92h-1.91zM58.78,59.73h1.91v3.92h-1.91zM77.88,59.73h1.91v3.92h-1.91zM32.03,63.55h7.64v3.92h-7.64zM58.78,63.55h1.91v3.92h-1.91zM77.88,63.55h1.91v3.92h-1.91zM53.04,67.37h7.64v3.92h-7.64zM72.15,67.37h7.64v3.92h-7.64z" />
 </vector>

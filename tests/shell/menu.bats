@@ -302,6 +302,43 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
     [[ $output == *"games: 1 found"* ]]
 }
 
+@test "the boot splash shows the title art in place of the title" {
+    source "$MENU"
+    boot_wait() { true; }
+    output=$(boot </dev/null)
+    [[ $output == *"█"* ]]
+    [[ $output != *"M Y N X"* ]]
+    [[ $output == *"mynx online"* ]]
+}
+
+@test "the boot splash falls back to the title when the art fails" {
+    export MENU_ART=false
+    source "$MENU"
+    boot_wait() { true; }
+    output=$(boot </dev/null)
+    [[ $output == *"M Y N X"* ]]
+    [[ $output == *"mynx online"* ]]
+}
+
+@test "the boot splash shows the title on a screen too narrow for the art" {
+    source "$MENU"
+    boot_wait() { true; }
+    term_cols() { COLS=40; }
+    output=$(boot </dev/null)
+    [[ $output != *"█"* ]]
+    [[ $output == *"M Y N X"* ]]
+}
+
+@test "a key that skips the art skips the whole boot splash" {
+    printf '#!/bin/sh\nexit 10\n' >"$BATS_TEST_TMPDIR/art"
+    chmod +x "$BATS_TEST_TMPDIR/art"
+    export MENU_ART="$BATS_TEST_TMPDIR/art"
+    source "$MENU"
+    boot_wait() { true; }
+    output=$(boot </dev/null)
+    [[ $output != *"mynx online"* ]]
+}
+
 @test "the welcome page fits the phone's width" {
     local line n=0
     export LC_ALL=C.UTF-8

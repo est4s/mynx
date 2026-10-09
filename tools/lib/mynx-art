@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+# MYNX title art: "mynx" in chunky pixel letters with a drop shadow,
+# drawn with quadrant blocks (2x2 pixels per cell, two colours each).
+# The letters take the theme's cyan and the shadow its magenta, pushed
+# to full neon in 24-bit colour, so it follows `mynx theme set`;
+# `--theme` uses the theme's 16 colours as they are. Centred on the
+# terminal's width. On a terminal it animates: the pixels sweep in, the
+# sign flickers on like a neon tube and a shine passes across; a key
+# skips to the end and exits 10, so the menu's boot splash can stop too.
+# `--static` just prints it, as it does when the screen is too short.
+# `mynx-art --plain` prints the pixel map.
+import colorsys, os, random, select, shutil, sys, termios, time, tty
+
+# The logo, one character per pixel: # letters, o shadow. Drawn after
+# the logo image; a pixel is half a cell wide and half a cell tall, so
+# about twice as tall as wide.
+PIX = [
+    '   #####################      ####           ####      ################       #######         ####### ',
+    '  #######################     ####           ####      #################        ########   ########   ',
+    ' ####       ####      ####    #### o         #### o    ####          ####          #############    oo',
+    ' #### ooooo #### oooo ####     ################## o    #### oooooooo ####             #######    oooo ',
+    ' #### o     #### o    #### o    ################# o    #### o        #### o        ############# o    ',
+    ' #### o     #### o    #### o                 #### o    #### o        #### o     ########   ########   ',
+    '      o     #### o    #### o      oooooooooo #### o    #### o        #### o   #######    o    ####### ',
+    '   oooo          o         o      ##############  o         o             o           oooo            ',
+    '              oooo      oooo       ############  oo      oooo          oooo     ooooooo         oooooo',
+    '                                                oo                                                    ',
+    '                                     oooooooooooo                                                     ',
+    '                                                                                                      ',
+]
+
+if "--plain" in sys.argv:
+    print("\n".join(PIX))
+    sys.exit()
+
+ROWS, COLS = len(PIX) // 2, len(PIX[0]) // 2
+size = shutil.get_terminal_size((54, 24))
+pad = max(0, (size.columns - COLS) // 2)
+
+# Colours ------------------------------------------------------------
+
+# Neon's colours, for the keys the theme leaves out (a test checks them
+# against Neon's file)
+NEON_DEFAULTS = {"background": "#14101f", "cursor": "#ff7edb", "color5": "#b967ff",
+                 "color13": "#d19bff", "color6": "#03edf9", "color14": "#6af4fb"}
+
+def theme_colours():
+    """The theme in use (keys it leaves out are Neon's), as RGB tuples"""
+    rgb = lambda v: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5))
+    cols = {k: rgb(v) for k, v in NEON_DEFAULTS.items()}
+    try:
+        for l in open(os.path.expanduser("~/.config/mynx/colors.properties")):
+            k, _, v = l.strip().partition("=")
+            if v.startswith("#") and len(v) == 7:
+                cols[k] = rgb(v)
+    except (OSError, ValueError):
+        pass
+    return cols
+
+def vivid(rgb, light):
+    """A colour pushed to full neon: saturated, and bright on a dark
+    background, deep on a light one"""
+    h, s, v = colorsys.rgb_to_hsv(*(c / 255 for c in rgb))
+    if s > 0.08:                                # leave greys grey
+        s = min(1, s * 1.4 + 0.25)
+    v = 0.6 if light else 1.0
+    return tuple(round(c * 255) for c in colorsys.hsv_to_rgb(h, s, v))
+
+TC = theme_colours()
+LIGHT = sum(TC.get("background", (0, 0, 0))) > 3 * 128
+BG = TC.get("background", (0, 0, 0))
+WHITE = (40, 40, 40) if LIGHT else (255, 255, 255)
+
+def pick(n):                                    # the more colourful of n, n+8
+    sat = lambda c: max(c) - min(c)
+    a, b = TC.get(f"color{n}"), TC.get(f"color{n + 8}")
+    return max((c for c in (a, b) if c), key=sat, default=(255, 255, 255))
+
+THEME = "--theme" in sys.argv
+def pinkest():
+    """The theme's colour closest to pink among its magentas and its
+    cursor (Neon's magentas are purple, its cursor pink)"""
+    def off(c):
+        h, s, v = colorsys.rgb_to_hsv(*(x / 255 for x in c))
+        return abs(h * 360 - 320) if s > 0.3 else 999
+    found = [c for c in (TC.get("color5"), TC.get("color13"), TC.get("cursor")) if c]
+    best = min(found, key=off, default=None)
+    return best if best and off(best) < 999 else pick(5)
+
+NEON = {"#": vivid(pick(6), LIGHT), "o": vivid(pinkest(), LIGHT)}
+INDEX = {"#": 14, "o": 13}                      # for --theme
+
+def mix(a, b, f):
+    return tuple(round(x + (y - x) * f) for x, y in zip(a, b))
+
+def colour(p, dim, shine, bg=False):
+    """The escape code parameters for pixel kind p as fore- or background"""
+    if THEME:
+        c = INDEX[p] - (8 if dim else 0)
+        if shine > 0.6:
+            c = 15
+        return str((100 if bg else 90) + c - 8 if c >= 8 else (40 if bg else 30) + c)
+    rgb = NEON[p]
+    if dim:
+        rgb = mix(rgb, BG, 0.6)
+    rgb = mix(rgb, WHITE, shine)
+    return f"{48 if bg else 38};2;{rgb[0]};{rgb[1]};{rgb[2]}"
+
+# Drawing -------------------------------------------------------------
+
+# Quadrant blocks by which pixels are set: 1 top left, 2 top right,
+# 4 bottom left, 8 bottom right
+QUAD = " ▘▝▀▖▌▞▛▗▚▐▜▄▙▟█"
+
+def frame(shown=None, dim=False, shine=None):
+    """shown: set of lit pixels (x, y), else all; dim: faded colours;
+    shine: where a light band moving across is, in columns"""
+    out = []
+    for cy in range(ROWS):
+        line = [" " * pad]
+        for cx in range(COLS):
+            px = [PIX[cy * 2 + j][cx * 2 + i] for j in (0, 1) for i in (0, 1)]
+            if shown is not None:
+                px = [p if (cx * 2 + n % 2, cy * 2 + n // 2) in shown else " "
+                      for n, p in enumerate(px)]
+            if set(px) == {"#", "o", " "}:     # all three: only two colours
+                # fit, so the shadow gives way, to the gap or into it; the
+                # letters never spread
+                fill = "o" if px.count("o") > px.count(" ") else " "
+                px = [fill if p != "#" else p for p in px]
+            kinds = [k for k in "#o" if k in px]
+            if not kinds:
+                line.append(" ")
+                continue
+            w = max(0, 1 - abs(cx + cy * 1.5 - shine) / 3) if shine is not None else 0
+            fgk = max(kinds, key=px.count)      # the main colour in front
+            mask = sum(1 << n for n, p in enumerate(px) if p == fgk)
+            code = colour(fgk, dim, w)
+            other = [k for k in kinds if k != fgk]
+            if other:                           # two colours: one behind
+                code += ";" + colour(other[0], dim, w, bg=True)
+            line.append(f"\x1b[0;{code}m{QUAD[mask]}")
+        out.append("".join(line) + "\x1b[0m\x1b[K")
+    return "\n".join(out)
+
+# Frames are redrawn in place by moving the cursor up, which only works
+# while the whole logo (and the line after it) fits on the screen
+if "--static" in sys.argv or not sys.stdout.isatty() or size.lines <= ROWS:
+    print(frame())
+    sys.exit()
+
+pixels = [(x, y) for y, row in enumerate(PIX) for x, p in enumerate(row) if p != " "]
+rnd = random.Random(7)
+pixels.sort(key=lambda p: p[0] + rnd.uniform(0, 14))   # left first, ragged
+
+frames = []
+for n in range(1, 25):                                 # sweep in
+    frames.append((frame(set(pixels[:len(pixels) * n // 24]), dim=True), 0.035))
+for d in (True, False, True, True, False, True, False):   # flicker on
+    frames.append((frame(dim=d), rnd.uniform(0.04, 0.09)))
+s = -8
+while s < COLS + 14:                                   # shine
+    frames.append((frame(shine=s), 0.025))
+    s += 1.5
+frames.append((frame(), 0))
+
+def key_pressed(seconds):
+    """Waits; true (and the key read) if one was pressed meanwhile"""
+    if not keys:
+        time.sleep(seconds)
+        return False
+    if select.select([sys.stdin], [], [], seconds)[0]:
+        os.read(sys.stdin.fileno(), 64)
+        return True
+    return False
+
+w = sys.stdout.write
+keys = sys.stdin.isatty()
+saved = termios.tcgetattr(sys.stdin) if keys else None
+skipped = False
+try:
+    if keys:
+        tty.setcbreak(sys.stdin)                       # keys without Enter, unechoed
+    w("\x1b[?25l" + "\n" * (ROWS - 1) + f"\x1b[{ROWS - 1}A\r")  # room, no cursor
+    for text, delay in frames:
+        w(text + f"\x1b[{ROWS - 1}A\r")
+        sys.stdout.flush()
+        if key_pressed(delay):
+            skipped = True
+            break
+except KeyboardInterrupt:
+    pass
+finally:
+    if keys:
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, saved)
+    w(frame() + "\x1b[0m\x1b[?25h\n")
+    sys.stdout.flush()
+sys.exit(10 if skipped else 0)

@@ -204,6 +204,28 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-09 (87): The new splash, and its "m" as the icon
+
+The maintainer made a new title art, `mynx-art` ("mynx" in
+quadrant-block pixels, cyan letters, pink drop shadow, animated). It's
+now `tools/lib/mynx-art`, and the boot splash (`menu --boot`) shows it
+in place of the glitching text title, with the boot log under it. A
+key skips the art and the rest of the boot (exit 10); on a screen under
+52 columns, or if the art fails, the old text title comes back. Its
+Neon colours are built in (a test checks them against Neon's file) so
+it doesn't read `/opt/mynx`. The maintainer's own copy in
+`~/.local/bin` is theirs to keep or delete.
+
+The maintainer also picked the "m" from it as the logo, over a stacked
+"my/nx", the "x" alone and `>_` redrawn (concepts:
+https://claude.ai/artifact/8woxiTt7jqsab8AAFMX5Pi). The launcher
+foreground, the themed (monochrome) icon, the notification icon and
+`docs/images/icon.svg` are now its pixels (1 wide, 2 tall, rows
+overlapping a hair so no seams show), cut from `mynx-art --plain`;
+the themed and notification icons leave the shadow out. Branch
+`icon-m`, to check in Mynx Dev: the boot splash (fresh start), the
+home screen icon, themed icons on, a notification.
+
 ### 2026-10-09 (86): Bluetooth on the roadmap
 
 Maintainer's decision: Bluetooth joins the "later" plans
