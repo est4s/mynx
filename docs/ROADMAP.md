@@ -78,8 +78,8 @@ always visible, so the phone's own keyboard is all you need for typing
 - **Themes:** colour schemes, fonts (Nerd Fonts supported), font size,
   cursor style.
 - **Key bars:** edit the built-in bars or add your own, for any program.
-- **Launcher menu:** a "Mynx" start menu (Terminal, Files, Games,
-  Settings, System, …) that you can edit and reorder, with items that run
+- **Launcher menu:** a "Mynx" start menu (Shell, AI agents, Apps, Games,
+  Files, Settings, System, …) that you can edit and reorder, with items that run
   any command.
 - **Editors in the terminal:** `mynx edit` (or the menu's Settings, or
   long-press the app icon → Settings, which opens them in a new tab) for

@@ -368,7 +368,7 @@ line, in order; labels up to 20 characters. Actions:
 | `games` | the Games menu |
 | `settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
-| `system` | Update all, System info, About (`mynx about`), Report a bug (`mynx report`) |
+| `system` | Update all, System info, Getting started (`mynx welcome`), About (`mynx about`), Report a bug (`mynx report`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |

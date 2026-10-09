@@ -26,8 +26,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Apps Games Settings AI agents System Getting started Exit" ]
-    [ "${ACTS[*]}" = "exit files menu:apps menu:games settings menu:agents menu:system welcome quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings System Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:apps menu:games files settings menu:system quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -45,7 +45,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Terminal Files Apps Games Settings AI agents System Getting started Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings System Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -70,7 +70,7 @@ keys() {
     menu_items main
     [ "${ITEMS[0]}" = "Update available" ]
     [ "${ACTS[0]}" = appupdate ]
-    [ "${ITEMS[1]}" = Terminal ]
+    [ "${ITEMS[1]}" = Shell ]
     mkdir -p "$HOME/.config/mynx"
     printf 'Shell = shell\n' >"$HOME/.config/mynx/menu.conf"
     menu_items main
@@ -86,17 +86,22 @@ keys() {
 @test "system menu" {
     source "$MENU"
     menu_items system
-    [ "${ITEMS[*]}" = "Update all System info About Report a bug" ]
-    [ "${ACTS[*]}" = "update info about report" ]
+    [ "${ITEMS[*]}" = "Update all System info Getting started About Report a bug" ]
+    [ "${ACTS[*]}" = "update info welcome about report" ]
 }
 
 @test "About shows mynx about" {
-    run keys 73
+    run keys 74
     [[ $output == *"RUN: mynx about"* ]]
 }
 
+@test "System has Getting started" {
+    run keys 73xxxxxxqq
+    [[ $output == *"A real Debian on your phone"* ]]
+}
+
 @test "Report a bug runs mynx report" {
-    run keys 74
+    run keys 75
     [[ $output == *"RUN: mynx report"* ]]
 }
 
@@ -133,9 +138,9 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     app "$HOME/apps/my-tool.py"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Sound meter Guitar tuner My Tool" ]
-    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/apps/dbmeter" ]
-    [ "${ACTS[2]}" = "app:$HOME/apps/my-tool.py" ]
+    [ "${ITEMS[*]}" = "Guitar tuner My Tool Sound meter" ]
+    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/apps/tuner" ]
+    [ "${ACTS[1]}" = "app:$HOME/apps/my-tool.py" ]
 }
 
 @test "a label is cut to 20 characters" {
@@ -160,6 +165,17 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/apps/tuner"* ]]
     run keys 32
     [[ $output == *"RUN: keybar my-tool,shell $HOME/apps/my-tool.py"* ]]
+}
+
+@test "Apps are sorted by label, wherever they are" {
+    mkdir -p "$HOME/apps"
+    app "$BATS_TEST_TMPDIR/apps/a-tool" "Zulu"
+    app "$BATS_TEST_TMPDIR/apps/b-tool" "Alpha"
+    app "$HOME/apps/c-tool" "Mike"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Alpha Mike Zulu" ]
+    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/apps/b-tool" ]
 }
 
 @test "menu --check accepts the apps action" {
@@ -211,12 +227,12 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 9
+    run keys 8
     [ "$status" -eq 10 ]
 }
 
 @test "Files opens the file manager" {
-    run keys 2
+    run keys 5
     [[ $output == *"RUN: files"* ]]
 }
 
@@ -227,7 +243,7 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 }
 
 @test "Settings opens the settings editor" {
-    run keys 5
+    run keys 6
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -250,14 +266,14 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
 
 @test "picking an agent starts it (or offers to install it)" {
     fake_mynx
-    run keys 62
+    run keys 22
     [[ $output == *"RUN: mynx agent start codex"* ]]
 }
 
 @test "moving through AI agents doesn't ask mynx again on each key" {
     fake_mynx
     sed -i "2i echo call >>'$BATS_TEST_TMPDIR/calls'" "$BATS_TEST_TMPDIR/bin/mynx"
-    run keys 6jjjkqq
+    run keys 2jjjkqq
     [ "$status" -eq 0 ]
     [ "$(wc -l <"$BATS_TEST_TMPDIR/calls")" -eq 1 ]
 }
