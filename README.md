@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/images/icon.svg" width="128" alt="Mynx icon"></p>
+
 # Mynx
 
 **Your phone, your tools.** Mynx is a new way to use a smartphone:
