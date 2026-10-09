@@ -212,7 +212,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   foreground, the themed and notification icons (no shadow) and
   `docs/images/icon.svg` are its pixels, one wide and two tall, cut
   from `mynx-art --plain`. The README's title,
-  `docs/images/mynx.svg`, is the whole art (`scripts/mynx-svg.py`).
+  `docs/images/mynx.svg`, and the setup screen's
+  (`res/drawable/mynx_title.xml`, `--vector`) are the whole art
+  (`scripts/mynx-svg.py`; `test_art.py` fails if they're out of date).
   Change the art, regenerate them too.
 - **Who checks what:** the program that reads a file checks it. The app
   (`core`) checks colours, themes, settings and key bars (`checkConfig`);

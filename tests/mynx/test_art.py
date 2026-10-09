@@ -106,3 +106,20 @@ class ArtTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GeneratedArtTest(unittest.TestCase):
+    """The pictures made from the art's pixels are up to date."""
+
+    def generated(self, *args):
+        return subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "mynx-svg.py"),
+                               *args, ART], capture_output=True, text=True, check=True).stdout
+
+    def test_the_readme_title_matches_the_art(self):
+        with open(os.path.join(ROOT, "docs", "images", "mynx.svg")) as f:
+            self.assertEqual(f.read(), self.generated())
+
+    def test_the_setup_screens_title_matches_the_art(self):
+        drawable = os.path.join(ROOT, "app", "src", "main", "res", "drawable", "mynx_title.xml")
+        with open(drawable) as f:
+            self.assertEqual(f.read(), self.generated("--vector"))

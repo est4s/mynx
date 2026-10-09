@@ -216,6 +216,12 @@ logo, `docs/images/mynx.svg`, made by `scripts/mynx-svg.py`. To check
 on the phone: the launcher label "mynx dev", the menu's title and
 pages (Getting started still fits), `mynx about`.
 
+Then (same PR): the setup screen ("Setting up Debian…", first start)
+shows the whole logo, as in the README, in place of the old
+"▓▒░ MYNX ░▒▓" text: a vector drawable made by `scripts/mynx-svg.py
+--vector`, kept in step by a test. To check: clear mynx dev's storage,
+open it.
+
 ### 2026-10-09 (88): Menu order (confirmed, #10)
 
 One of the changes before the release. The session that started it

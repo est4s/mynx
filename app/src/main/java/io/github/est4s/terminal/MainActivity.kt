@@ -30,6 +30,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
@@ -569,11 +570,10 @@ class MainActivity : Activity() {
     // First launch: unpack the Debian rootfs from the APK. An interrupted
     // install is simply redone next time (see RootfsInstaller).
     private fun installDebian() {
-        val title = TextView(this).apply {
-            text = "▓▒░ ${getString(R.string.app_name).uppercase()} ░▒▓"
-            styleText(NEON.palette.getValue(13))
-            textSize = 16f
-            gravity = Gravity.CENTER
+        val title = ImageView(this).apply {
+            setImageResource(R.drawable.mynx_title)
+            contentDescription = getString(R.string.app_name)
+            adjustViewBounds = true
         }
         val status = TextView(this).apply {
             text = "Setting up Debian…"
