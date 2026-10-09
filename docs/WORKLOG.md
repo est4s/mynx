@@ -204,7 +204,7 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-09 (88): Menu order (branch `menu-order`, not on the phone yet)
+### 2026-10-09 (88): Menu order (confirmed, #10)
 
 One of the changes before the release. The session that started it
 crashed after writing the tests; the next one finished it. The main
@@ -212,8 +212,8 @@ menu is now Shell (was Terminal), AI agents, Apps, Games, Files,
 Settings, System, Exit; Getting started moved into System (after
 System info); Apps are sorted by label across `/opt/mynx/apps` and
 `~/apps`. A user's own `menu.conf` is untouched. Welcome page, guide
-and roadmap follow. To check on the phone: the menu's order, System →
-Getting started, the Apps list in alphabetical order.
+and roadmap follow. Confirmed in Mynx Dev (build 99) after `mynx menu
+reset`: a copied `menu.conf` keeps the old order, by design.
 
 ### 2026-10-09 (87): The new splash, and its "m" as the icon (confirmed)
 
