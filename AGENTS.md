@@ -139,6 +139,12 @@ builds have no minify (R8 problems would only show on the phone).
 The version name reaches Debian in the tools' `.version`
 (`BUILD-INSTALLTIME-NAME`), which `mynx about` shows.
 
+**Docker Hub:** both workflows sign in with the `DOCKERHUB_USERNAME`
+and `DOCKERHUB_TOKEN` secrets (a read-only token the maintainer made,
+2026-10-09) before pulling `debian:trixie`: anonymous pulls share the
+runner's IP limit and ran out. Without the secrets (forks) they pull
+anonymously.
+
 **Dependencies:** prefer few, well-maintained ones. Plain Android views, no
 Jetpack Compose (smaller APK, faster CI, and the terminal library is
 View-based).

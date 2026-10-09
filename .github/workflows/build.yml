@@ -80,6 +80,18 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp build/proot/*.so app/src/main/jniLibs/arm64-v8a/
 
+      # Signed in, Docker Hub's pull limit is the account's, not the
+      # runner's shared IP's (anonymous pulls ran out, 2026-10-09). Forks'
+      # PRs get no secrets and pull anonymously.
+      - name: Sign in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          fi
+
       # The rootfs is built for arm64 and its RUN steps execute under QEMU.
       - uses: docker/setup-qemu-action@v4
         with:

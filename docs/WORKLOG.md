@@ -222,6 +222,10 @@ shows the whole logo, as in the README, in place of the old
 --vector`, kept in step by a test. To check: clear mynx dev's storage,
 open it.
 
+CI then failed twice on Docker Hub's anonymous pull limit (shared
+runner IPs). The maintainer made a read-only Docker Hub token; both
+workflows now `docker login` with the `DOCKERHUB_*` secrets.
+
 ### 2026-10-09 (88): Menu order (confirmed, #10)
 
 One of the changes before the release. The session that started it
