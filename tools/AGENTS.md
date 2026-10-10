@@ -26,6 +26,10 @@ and applies them. See "Changing settings" below.
   `/proc/loadavg`, `/proc/version`. CPU usage and uptime from tools like
   `htop` or `uptime` aren't real.
 - **Network works** (DNS: 1.1.1.1 and 8.8.8.8 in `/etc/resolv.conf`).
+- **The time zone is the phone's:** each new tab gets `TZ` set to it
+  (e.g. `Europe/Istanbul`), so `date` and the clock show local time.
+  Tabs opened before the phone changes zone keep the old one. Debian's
+  own `/etc/localtime` stays UTC; `export TZ=…` in `~/.bashrc` wins.
 - **Packages:** `apt update` first (the package lists aren't shipped),
   then `apt install <name>`. Everything installed stays across app
   updates.

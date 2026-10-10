@@ -352,6 +352,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   GitHub's sha256 checked; a complete one is reused), then the
   installer opens through `ApkProvider`. Old downloads go at the next
   start. `update-check` (setting, on) only turns off the daily check.
+- **Time zone** (`core/.../TimeZone.kt`): each tab gets `TZ` from
+  Android's default zone, read as the tab starts (`phoneTimeZone()`).
+  By name when Debian has its zoneinfo file, else a fixed POSIX offset
+  (`<+03>-3`). Debian's `/etc/localtime` is left alone (the user's
+  Debian), so programs started outside a tab, like the sound server,
+  stay on UTC.
 - **Wakelock** (`wakelock` setting, off by default): `TerminalService`
   holds a `PARTIAL_WAKE_LOCK` ("mynx:service") while it runs and the
   setting is on, re-read with the sound setting (reloading requests)

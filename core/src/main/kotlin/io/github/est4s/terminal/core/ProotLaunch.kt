@@ -28,8 +28,9 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * [toolsDir] (a host path) is mounted at [TOOLS_MOUNT], its `bin` first
  * on the PATH. [requestDir] (a Debian path) is where `mynx` sends requests.
  * [shellId] tells programs which tab they run in (`mynx notify`).
- * [soundSocket] (a Debian path) is the sound server's socket. [command]
- * runs instead of the login bash.
+ * [soundSocket] (a Debian path) is the sound server's socket. [timeZone]
+ * is the phone's, as [debianTimeZone] gives it. [command] runs instead
+ * of the login bash.
  */
 fun prootLaunch(
     paths: ProotPaths,
@@ -42,6 +43,7 @@ fun prootLaunch(
     requestDir: String? = null,
     shellId: Int? = null,
     soundSocket: String? = null,
+    timeZone: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
@@ -70,6 +72,8 @@ fun prootLaunch(
         requestDir?.let { add("MYNX_REQUESTS=$it") }
         shellId?.let { add("MYNX_SHELL=$it") }
         soundSocket?.let { add("PULSE_SERVER=unix:$it") }
+        // Debian's own zone is UTC; a TZ set in .bashrc still wins.
+        timeZone?.let { add("TZ=$it") }
         addAll(command)
     }
     val env = mapOf(

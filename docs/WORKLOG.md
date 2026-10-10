@@ -119,6 +119,12 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
+### 4a. Time zone: try it on the phone
+
+Built (entry 98). In mynx dev, a new tab's `date` should show the
+phone's local time and zone (`echo $TZ`: e.g. `Europe/Istanbul`), and
+so should the time in `ls -l` and in Claude Code. Then drop this item.
+
 ### 5. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
@@ -226,6 +232,18 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-10 (98): The phone's time zone in Debian
+
+Debian ran on UTC: nothing told it the phone's zone. Each tab now gets
+`TZ` from Android's default zone (`debianTimeZone()` in core's
+`TimeZone.kt`): the zone's name when Debian has its zoneinfo file,
+else a fixed POSIX offset (`<+0530>-5:30`, checked with `date`).
+Decided: `TZ` in each tab rather than pointing `/etc/localtime` at the
+zone, which would change the user's Debian; `TZ` in `.bashrc` still
+wins. Tabs read the zone when they start, so after travelling only new
+tabs follow. Tests: `TimeZoneTest`, `ProotLaunchTest`, `home-docs.bats`. Also installed
+the JDK, missing since the move. Not tried on the phone yet (Next 4a).
 
 ### 2026-10-10 (97): Claude Code: messaging socket and fullscreen
 
