@@ -200,6 +200,11 @@ class KeyBarTest {
         assertEquals(listOf("←", "Brake", "Nitro", "→", "Pause", "Again", "Quit"), labels("neon-drive"))
         assertEquals(listOf("Flap", "Quit"), labels("neon-flap"))
         assertEquals(listOf("←", "↓", "↑", "→", "Space", "Enter", "Esc", "y", "n", "q"), labels("game"))
+        // ↑ sits above ↓ (maintainer's layout, 2026-10-10).
+        assertEquals(
+            listOf("Esc", "Ctrl", "↑", "Tab", "Newline", "/", "←", "↓", "→", "Enter", "Mode", "Ctrl+C"),
+            labels("agent"),
+        )
     }
 
     @Test
