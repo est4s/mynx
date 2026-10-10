@@ -25,7 +25,7 @@ mkdir -m 700 ~/release-key && cd ~/release-key
 keytool -genkeypair -v \
   -keystore mynx-release.jks -storetype PKCS12 \
   -alias mynx -keyalg RSA -keysize 4096 -validity 18250 \
-  -dname "CN=Mynx"
+  -dname "CN=mynx"
 ```
 
 - RSA 4096, valid for 50 years (Android wants at least 25).
@@ -98,12 +98,12 @@ git push origin v0.1.0
 
 ## Debug and release builds on one phone
 
-Debug builds are a separate app, **Mynx Dev**, with the application ID
+Debug builds are a separate app, **mynx dev**, with the application ID
 `io.github.est4s.terminal.dev` (`applicationIdSuffix`), so they install
 beside the release (`io.github.est4s.terminal`), each with its own
 Debian. The release keeps the ID it can never change.
 
-Builds from before Mynx Dev (up to build 87) are debug-signed with the
+Builds from before mynx dev (up to build 87) are debug-signed with the
 release's ID. Android won't install a release over one of those:
 uninstall it first, which **deletes its Debian**. To move to the
 release:
@@ -114,7 +114,7 @@ release:
    rebuild themselves), the packages installed by hand and
    `restore-root.sh` to `/storage/emulated/0/mynx-backup`, which survives
    the uninstall. It never overwrites a backup that's there.
-2. Uninstall the app (not Mynx Dev); install the APK from the Files app.
+2. Uninstall the app (not mynx dev); install the APK from the Files app.
 3. In the release's fresh Debian:
    `bash /storage/emulated/0/mynx-backup/restore-root.sh`. It checks the
    backup, asks, restores `/root`, then `apt-get install`s the packages

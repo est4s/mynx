@@ -210,9 +210,18 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     [ "$(theme_name)" = custom ]
 }
 
-@test "the title names the app" {
+@test "the title is mynx in small pixel letters, like the logo" {
     run keys q
-    [[ $output == *"M Y N X"* ]]
+    [[ $output == *"▟▀▀█▀▀▙ █  █ █▀▀▙ ▀▙▄▟▀"* ]]
+    [[ $output == *"█  █  █ ▝▀▀█ █  █ ▄▛▀▜▄"* ]]
+    [[ $output == *"         ▀▀▀"* ]]
+    [[ $output != *"M Y N X"* ]]
+}
+
+@test "pages have the pixel title too" {
+    source "$MENU"
+    output=$(page "Confirm")
+    [[ $output == *"▟▀▀█▀▀▙ █  █ █▀▀▙ ▀▙▄▟▀"* ]]
 }
 
 @test "human sizes" {
@@ -323,7 +332,7 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
     boot_wait() { true; }
     output=$(boot </dev/null)
     [[ $output == *"█"* ]]
-    [[ $output != *"M Y N X"* ]]
+    [[ $output != *"m y n x"* ]]
     [[ $output == *"mynx online"* ]]
 }
 
@@ -332,7 +341,7 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
     source "$MENU"
     boot_wait() { true; }
     output=$(boot </dev/null)
-    [[ $output == *"M Y N X"* ]]
+    [[ $output == *"m y n x"* ]]
     [[ $output == *"mynx online"* ]]
 }
 
@@ -342,7 +351,7 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
     term_cols() { COLS=40; }
     output=$(boot </dev/null)
     [[ $output != *"█"* ]]
-    [[ $output == *"M Y N X"* ]]
+    [[ $output == *"m y n x"* ]]
 }
 
 @test "a key that skips the art skips the whole boot splash" {

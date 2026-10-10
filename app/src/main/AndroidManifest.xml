@@ -70,7 +70,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Authorities follow the application ID, so Mynx Dev (.dev) installs beside Mynx. -->
+        <!-- Authorities follow the application ID, so mynx dev (.dev) installs beside mynx. -->
         <!-- Serves the files `mynx share` shares, only to the apps granted them. -->
         <provider
             android:name=".ShareProvider"

@@ -58,7 +58,7 @@ class ReleaseFetchTest {
         assertIs<ReleaseCheck.Found>(check)
         assertEquals(Version(0, 2, 0), check.release.version)
         assertEquals("application/vnd.github+json", accept)
-        assertEquals("Mynx/0.1.0", agent)
+        assertEquals("mynx/0.1.0", agent)
         assertEquals("/repos/est4s/mynx/releases/latest", path)
     }
 

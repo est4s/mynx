@@ -143,7 +143,7 @@ class TerminalService : Service() {
                 updater.requests { apk -> onMain { openInstaller(apk) } },
         )
     }
-    // Release builds update from GitHub releases; Mynx Dev from CI (scripts/deliver.sh).
+    // Release builds update from GitHub releases; mynx dev from CI (scripts/deliver.sh).
     private val updater by lazy {
         val version = BuildConfig.VERSION_NAME
         Updater(

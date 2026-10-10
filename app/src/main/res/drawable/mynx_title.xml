@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Made from tools/lib/mynx-art by scripts/mynx-svg.py: change the art, run it again. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="408dp"
+    android:height="88dp"
+    android:viewportWidth="408"
+    android:viewportHeight="88">
+    <path android:fillColor="#FF0BBB" android:pathData="M140,16h4v8h-4zM200,16h4v8h-4zM400,16h8v8h-8zM24,24h20v8h-20zM68,24h16v8h-16zM200,24h4v8h-4zM240,24h32v8h-32zM388,24h16v8h-16zM24,32h4v8h-4zM68,32h4v8h-4zM108,32h4v8h-4zM200,32h4v8h-4zM240,32h4v8h-4zM296,32h4v8h-4zM388,32h4v8h-4zM24,40h4v8h-4zM68,40h4v8h-4zM108,40h4v8h-4zM200,40h4v8h-4zM240,40h4v8h-4zM296,40h4v8h-4zM24,48h4v8h-4zM68,48h4v8h-4zM108,48h4v8h-4zM136,48h40v8h-40zM200,48h4v8h-4zM240,48h4v8h-4zM296,48h4v8h-4zM356,48h4v8h-4zM12,56h16v8h-16zM68,56h4v8h-4zM108,56h4v8h-4zM200,56h4v8h-4zM240,56h4v8h-4zM296,56h4v8h-4zM344,56h16v8h-16zM56,64h16v8h-16zM96,64h16v8h-16zM196,64h8v8h-8zM228,64h16v8h-16zM284,64h16v8h-16zM320,64h28v8h-28zM384,64h24v8h-24zM192,72h8v8h-8zM148,80h48v8h-48z"/>
+    <path android:fillColor="#00F3FF" android:pathData="M12,0h84v8h-84zM120,0h16v8h-16zM180,0h16v8h-16zM220,0h64v8h-64zM312,0h28v8h-28zM376,0h28v8h-28zM8,8h92v8h-92zM120,8h16v8h-16zM180,8h16v8h-16zM220,8h68v8h-68zM320,8h32v8h-32zM364,8h32v8h-32zM4,16h16v8h-16zM48,16h16v8h-16zM88,16h16v8h-16zM120,16h16v8h-16zM180,16h16v8h-16zM220,16h16v8h-16zM276,16h16v8h-16zM332,16h52v8h-52zM4,24h16v8h-16zM48,24h16v8h-16zM88,24h16v8h-16zM124,24h72v8h-72zM220,24h16v8h-16zM276,24h16v8h-16zM344,24h28v8h-28zM4,32h16v8h-16zM48,32h16v8h-16zM88,32h16v8h-16zM128,32h68v8h-68zM220,32h16v8h-16zM276,32h16v8h-16zM332,32h52v8h-52zM4,40h16v8h-16zM48,40h16v8h-16zM88,40h16v8h-16zM180,40h16v8h-16zM220,40h16v8h-16zM276,40h16v8h-16zM320,40h32v8h-32zM364,40h32v8h-32zM48,48h16v8h-16zM88,48h16v8h-16zM180,48h16v8h-16zM220,48h16v8h-16zM276,48h16v8h-16zM312,48h28v8h-28zM376,48h28v8h-28zM136,56h56v8h-56zM140,64h48v8h-48z"/>
+</vector>

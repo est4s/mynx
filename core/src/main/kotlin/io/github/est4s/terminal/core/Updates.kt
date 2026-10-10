@@ -156,7 +156,7 @@ internal fun openHttp(url: String, appVersion: String, timeoutMs: Int): HttpURLC
     val connection = URL(url).openConnection() as? HttpURLConnection ?: throw IOException("not a web address: $url")
     connection.connectTimeout = timeoutMs
     connection.readTimeout = timeoutMs
-    connection.setRequestProperty("User-Agent", "Mynx/$appVersion")
+    connection.setRequestProperty("User-Agent", "mynx/$appVersion")
     return connection
 }
 

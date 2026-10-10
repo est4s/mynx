@@ -11,38 +11,32 @@ an agent running in the app's Debian can walk the maintainer through it.
   Disturb), no private file names, prompts or chat text. These go in a
   public repo.
 - Android saves screenshots in
-  `/storage/emulated/0/Pictures/Screenshots/`. That folder holds the
-  maintainer's other screenshots too: **only look at files newer than the
-  start of the session** (e.g. `touch` a marker file first, then
-  `find … -newer marker`), never browse or open older ones.
+  `/storage/emulated/0/Pictures/Screenshots/`, which also holds the
+  maintainer's other screenshots. Once they're shared to `~/Shared`,
+  **only look at files newer than the start of the session** (`touch`
+  a marker file first, then `find … -newer marker`), never older ones.
 
 ## The shots
 
-Take them one at a time, and check each with the maintainer before the
-next.
+The README shows eight, in two rows (taken 2026-10-10, mynx dev):
+**menu** (keyboard off), **agent** (Claude Code building something
+harmless, agent key bar), **compass**, **drive** (mid-game),
+**tuner**, **torch**, **spectrum**, and **themes** (`mynx edit` →
+Theme, the cursor on phosphor so the preview shows). To replace one,
+take it the same way and keep its file name.
 
-1. **Menu:** a fresh tab with the launcher menu (`menu`).
-2. **Files:** `files` in the home folder, with the nnn key bar
-   showing.
-3. **AI agent:** Claude Code (or another agent) working on something
-   harmless, with the agent key bar.
-4. **A game:** `rogue` mid-game, with its key bar.
-5. **Themes:** `mynx edit` → Theme, the cursor on a theme other
-   than Neon, so the live preview shows.
-6. *(Optional)* a phone feature: `mynx sensor compass --stream`,
-   or `mynx location` with the coordinates hidden.
+Android's screenshots folder isn't readable from Debian (no media
+permission): share the shots to mynx from Photos or Files, and they
+land in `~/Shared`.
 
 ## Putting them in the README
 
 - Copy the chosen files to `docs/images/` with plain names
-  (`menu.png`, `files.png`, `agent.png`, `game.png`, `themes.png`).
+  (`menu.png`, `agent.png`, …).
 - Shrink them: `apt install pngquant`, then
   `pngquant --quality 65-85 --strip --ext .png --force docs/images/*.png`.
   Aim for under ~300 KB each.
-- README layout (keep it short; maintainer's request): the icon
-  (`docs/images/icon.svg`, already there) centred above the title, then
-  one row of 3-4 screenshots in an HTML table, each `width="200"`,
-  with a one-word caption, right after the intro. More shots go in a
-  second row, not more text.
+- README layout: a table of two rows of four right after the intro,
+  each `width="200"` with a one-word caption.
 - Commit them with the README change, on a branch with a PR (`main`
   takes no direct pushes), when the maintainer asks.

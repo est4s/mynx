@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Mynx launcher menu.
+# mynx launcher menu.
 # Keys: arrows / j k move, Enter / → pick, ← / Esc / q back, 1-9 jump.
 # Items: ~/.config/mynx/menu.conf, else menu.conf next to this
 #   folder (/opt/mynx/menu.conf); format in that file.
@@ -250,17 +250,24 @@ center_len() { # center_len <visible-length> <string>: center a string with colo
   local pad=$(((COLS - $1) / 2)); ((pad < 0)) && pad=0
   printf '%*s%s\n' $pad '' "$2"
 }
-TITLE_TEXT="▓▒░ M Y N X ░▒▓"
+TITLE_TEXT="▓▒░ m y n x ░▒▓"   # the boot splash's fallback
+# "mynx" in the logo's style, small and without its shadow: quadrant
+# blocks, three rows of TITLE_W columns
+TITLE_ART=("▟▀▀█▀▀▙ █  █ █▀▀▙ ▀▙▄▟▀"
+           "█  █  █ ▝▀▀█ █  █ ▄▛▀▜▄"
+           "         ▀▀▀           ")
+TITLE_W=23
+title() { local l; for l in "${TITLE_ART[@]}"; do center_len $TITLE_W "$C_TITLE$l$C_OFF"; done; }
 
 draw() { # draw <menu> <selected-index> <breadcrumb>
   local i n=${#ITEMS[@]} row
   local pad=$(((COLS - ITEM_W) / 2)); ((pad < 0)) && pad=0
   clear_screen; echo                          # row 1
-  center "$C_TITLE" "$TITLE_TEXT"             # row 2
-  center_len "$STATUS_LEN" "$STATUS"          # row 3
-  center "$C_SUB" "$3"                        # row 4
-  echo                                        # row 5
-  for ((i = 0; i < n; i++)); do               # rows 6..
+  title                                       # rows 2-4
+  center_len "$STATUS_LEN" "$STATUS"          # row 5
+  center "$C_SUB" "$3"                        # row 6
+  echo                                        # row 7
+  for ((i = 0; i < n; i++)); do               # rows 8..
     if ((i == $2)); then
       printf -v row ' ▶ %d. %-20s' $((i + 1)) "${ITEMS[i]}"
       printf '%*s%s%s%s\n' $pad '' "$C_SEL" "$row" "$C_OFF"
@@ -279,7 +286,7 @@ draw() { # draw <menu> <selected-index> <breadcrumb>
 
 page() { # page <heading>: clear and print a title + heading, ready for body lines
   term_cols; clear_screen; echo
-  center "$C_TITLE" "$TITLE_TEXT"
+  title
   center "$C_SUB" "$1"
   echo
 }
@@ -358,7 +365,7 @@ welcome_page() { # welcome.txt in pages that fit the screen
   local -a lines; local i per pad line intro=1
   mapfile -t lines <"$WELCOME" 2>/dev/null || return 0
   term_rows
-  per=$((ROWS - 7)); ((per < 3)) && per=3
+  per=$((ROWS - 9)); ((per < 3)) && per=3
   for ((i = 0; i < ${#lines[@]}; i += per)); do
     page "Getting started"
     pad=$(((COLS - 48) / 2)); ((pad < 0)) && pad=0

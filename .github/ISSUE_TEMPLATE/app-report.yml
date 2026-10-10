@@ -1,7 +1,7 @@
 # Filled in by `mynx report` (tools/lib/mynx/cli.py): the link sets the
 # title and the fields by their ids, `what` and `details`.
 name: Bug report from the app
-description: Sent from Mynx with `mynx report` or the menu's System → Report a bug.
+description: Sent from mynx with `mynx report` or the menu's System → Report a bug.
 labels: ["bug", "from-app"]
 body:
   - type: textarea

@@ -221,7 +221,7 @@ class MynxTest(unittest.TestCase):
         run = self.mynx("about")
         self.assertEqual(run.returncode, 0, run.stderr)
         text = run.stdout
-        self.assertIn("Mynx", text)
+        self.assertIn("mynx", text)
         self.assertIn("build 57", text)
         for part in ["proot", "https://github.com/termux/proot", "GPL-2.0",
                      "talloc", "LGPL-3.0", "https://www.samba.org/ftp/talloc/",
@@ -255,7 +255,7 @@ class MynxTest(unittest.TestCase):
         self.write_about_files()
         answer = json.loads(self.mynx("about", "--json").stdout)
         self.assertTrue(answer["ok"])
-        self.assertEqual(answer["name"], "Mynx")
+        self.assertEqual(answer["name"], "mynx")
         self.assertEqual(answer["version"], "57-1700000000000")
         self.assertEqual(answer["build"], "57")
         by_name = {c["name"]: c for c in answer["components"]}
@@ -828,7 +828,7 @@ esac'''
                                 "--body-file", "-"])
         self.assertEqual(body,
                          "### What happened\n\nThe tab froze\n\n### App and phone\n\n```text\n"
-                         "Mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10\n\n"
+                         "mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10\n\n"
                          "Last crash, 2025-10-09 08:53 UTC:\n"
                          "java.lang.IllegalStateException: boom\n\tat X.y(X.kt:1)\n```\n\n"
                          "<!-- mynx report -->\n")
@@ -875,13 +875,13 @@ esac'''
     def test_report_shows_it_all_then_opens_github(self):
         run = self.report("The tab froze", input="y\n")
         self.assertEqual(run.returncode, 0, run.stderr)
-        for text in ("The tab froze", "Mynx 0.1.0 (build 85)", "Android 16 (SDK 36)",
+        for text in ("The tab froze", "mynx 0.1.0 (build 85)", "Android 16 (SDK 36)",
                      "Google Pixel 10", "Last crash, 2025-10-09 08:53",
                      "IllegalStateException: boom", "\tat X.y(X.kt:1)"):
             self.assertIn(text, run.stdout)
         self.assertEqual(self.opened(), {
             "template": "app-report.yml", "title": "The tab froze", "what": "The tab froze",
-            "details": "Mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10\n\n"
+            "details": "mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10\n\n"
                        "Last crash, 2025-10-09 08:53 UTC:\n"
                        "java.lang.IllegalStateException: boom\n\tat X.y(X.kt:1)"})
 
@@ -925,7 +925,7 @@ esac'''
     def test_report_with_no_crash(self):
         run = self.report("x", info=dict(self.PIXEL, crash=None, crash_time=None), input="y\n")
         self.assertNotIn("crash", run.stdout.lower())
-        self.assertEqual(self.opened()["details"], "Mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10")
+        self.assertEqual(self.opened()["details"], "mynx 0.1.0 (build 85)\nAndroid 16 (SDK 36), Google Pixel 10")
 
     def test_report_can_leave_the_crash_out(self):
         run = self.report("x", "--no-crash", input="y\n")
@@ -990,7 +990,7 @@ esac'''
             self.start_app({"update-check": {"ok": True, "current": "0.1.0", "latest": latest, "available": False}})
             run = self.mynx("update")
             self.assertEqual(run.returncode, 0, run.stderr)
-            self.assertEqual(run.stdout, "Mynx 0.1.0 is up to date.\n")
+            self.assertEqual(run.stdout, "mynx 0.1.0 is up to date.\n")
             self.assertEqual(self.app.seen, ["update-check"])
             self.app.stop.set()
             self.app.thread.join()
@@ -999,14 +999,14 @@ esac'''
         self.start_app({"update-check": self.AVAILABLE})
         run = self.mynx("update", "--check")
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(run.stdout, "Mynx 0.2.0 is available (you have 0.1.0).\n")
+        self.assertEqual(run.stdout, "mynx 0.2.0 is available (you have 0.1.0).\n")
         self.assertEqual(self.app.seen, ["update-check"])
 
     def test_update_shows_the_notes_and_asks(self):
         self.start_app({"update-check": self.AVAILABLE, "update-install": self.INSTALLED})
         run = self.mynx("update", input="n\n")
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertIn("Mynx 0.2.0 is available (you have 0.1.0).", run.stdout)
+        self.assertIn("mynx 0.2.0 is available (you have 0.1.0).", run.stdout)
         self.assertIn("## What's new\n- Updates", run.stdout)
         self.assertIn("2.5 MB", run.stdout)
         self.assertIn("Download and install it? [y/N]", run.stdout)

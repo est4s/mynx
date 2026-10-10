@@ -1,6 +1,6 @@
 # Privacy
 
-**Mynx collects nothing.** It has no accounts, no analytics, no ads
+**mynx collects nothing.** It has no accounts, no analytics, no ads
 and no automatic crash reporting, and it never sends anything about
 you or your phone anywhere. The one connection it makes on its own is
 asking GitHub whether there's a new version (see "Updates"), which you
@@ -34,7 +34,7 @@ settings.
 
 ## Updates
 
-About once a day, Mynx asks GitHub's API
+About once a day, mynx asks GitHub's API
 (`api.github.com/repos/est4s/mynx/releases/latest`) for the latest
 release. The request carries no data about you: only the app's
 version, in its user agent. Like any website, GitHub sees your IP
@@ -60,7 +60,7 @@ they send over the network is up to them and to you.
 
 ## Sharing
 
-Files and text you share to Mynx from other apps are saved in
+Files and text you share to mynx from other apps are saved in
 `~/Shared`. Files you send with `mynx share` go only to the app you
 pick in Android's share sheet.
 

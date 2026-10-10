@@ -972,7 +972,7 @@ def cmd_welcome(args, as_json):
     return 0
 
 
-APP_NAME = "Mynx"
+APP_NAME = "mynx"
 
 # What the app ships that others wrote. Licence texts are in
 # /opt/mynx/licenses/; proot's GPL needs its source linked.

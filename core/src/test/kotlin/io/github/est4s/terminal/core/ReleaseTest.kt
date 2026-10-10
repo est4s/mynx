@@ -14,7 +14,7 @@ internal fun releaseJson(
     body: String = "\"## What's new\\n- Updates\"",
     published: String = "\"2026-10-08T12:30:00Z\"",
 ) = """
-    {"url": "https://api.github.com/repos/est4s/mynx/releases/1", "tag_name": "$tag", "name": "Mynx $tag",
+    {"url": "https://api.github.com/repos/est4s/mynx/releases/1", "tag_name": "$tag", "name": "mynx $tag",
      "draft": $draft, "prerelease": $prerelease, "published_at": $published, "body": $body,
      "assets": [$assets]}
 """.trimIndent()

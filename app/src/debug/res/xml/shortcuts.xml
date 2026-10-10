@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mynx Dev's copy of main/res/xml/shortcuts.xml: shortcut XML can't follow the
+<!-- mynx dev's copy of main/res/xml/shortcuts.xml: shortcut XML can't follow the
      application ID, so the target package is written out. Change both. -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
