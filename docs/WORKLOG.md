@@ -22,7 +22,9 @@ are in git history: the full log up to entry 92 is
 - **Built, waiting for a release to test:** app updates from GitHub
   releases (`mynx update`, the daily check, entry 81). mynx dev
   doesn't update from releases, so only a release can try them.
-- **Not released yet:** no `v*` tag, and the release key isn't made.
+- **v0.1.0 is released** (2026-10-10, entry 96), signed with the
+  release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer is
+  moving their daily mynx to it (item 1).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -40,31 +42,41 @@ isn't the maintainer's Docker Hub name. Fix: a new read-only token,
 `mynx clipboard get | gh secret set DOCKERHUB_TOKEN`; the next build's
 "Sign in to Docker Hub" step should print "Login Succeeded".
 
-### 1. The first release, v0.1.0
+### 1. After v0.1.0: the move, then fix the move docs
 
-**First, the maintainer's changes before the release** (2026-10-08:
-"a couple more things"; they'll say what, with a fresh agent). Then:
+The release key is made and backed up, the secrets are set and
+`v0.1.0` is out (entry 96). Left:
 
-1. **The release key** (`docs/RELEASING.md` 1-3): the maintainer makes
-   it, backs it up offline in two places, and sets the four
-   `MYNX_RELEASE_*` secrets. An agent can guide (it did on
-   2026-10-08) but never sees the password.
-2. **Tag `v0.1.0`** (the maintainer; RELEASING.md 4). The run is the
-   first `assembleRelease`, so the first time lint-vital runs: fix
-   anything fatal on `main` and move the tag as RELEASING.md says. The
-   release page should have `mynx-0.1.0.apk`.
-3. **The move** (RELEASING.md, "Debug and release builds on one phone"):
-   the maintainer's mynx is a debug build with the release's ID, so
-   the release can't install over it. `scripts/backup-root.sh`,
-   uninstall, install the release, `restore-root.sh` (entry 84). Then:
-   `mynx about` says 0.1.0, `mynx install-apk` refuses (debug only).
-   From then on: develop in mynx, test in mynx dev.
-   **After the move** (maintainer's decision, 2026-10-08): keep the two
-   scripts (a new phone or a reinstall needs them again), but trim
-   RELEASING.md's "Debug and release builds on one phone" to mynx dev
-   plus a short general note ("moving to a new phone: `backup-root.sh`,
-   then `restore-root.sh`"), drop its builds-up-to-87 steps, and drop
-   this item.
+1. **The move** (the maintainer, no backup: everything that matters is
+   on GitHub). Uninstall the old debug-signed mynx (not mynx dev),
+   install `Download/mynx-0.1.0.apk`, then in the fresh Debian:
+   ```sh
+   apt update && apt install -y alsa-utils apt-utils bats chafa curl dialog eza gh git htop jq libasound2-plugins mc nano nnn openjdk-21-jdk-headless pngquant pulseaudio-utils python3-numpy python3-pil python3-pyte sox starship
+   gh auth login
+   gh repo clone est4s/mynx && cd mynx && scripts/setup.sh
+   mynx agent install claude
+   ```
+   Lost with the old Debian: `~/bin/claude` (the messaging-socket
+   wrapper, see the old `~/AGENTS.md`), Claude Code's memory, mynx
+   settings. Check: `mynx about` says 0.1.0, `mynx install-apk`
+   refuses (debug only). From then on: develop in mynx, test in mynx
+   dev.
+2. **Fix `scripts/backup-root.sh`** (found on the phone, entry 96): its
+   default folder, `/storage/emulated/0/mynx-backup`, can't be made
+   (apps can't create top-level folders: "Permission denied"), and
+   files the app writes to `Download` can't be read by another app
+   (mynx dev got "Permission denied" on them), so a reinstalled mynx
+   probably can't read its old backup either. What worked in theory
+   but wasn't tried: Files app → select the backup → Share → mynx,
+   which copies it to `~/Shared`; `restore-root.sh` finds files next
+   to itself. Change the default to `Download/mynx-backup`, make the
+   restore step "share the four files to mynx, then
+   `bash ~/Shared/restore-root.sh`", test it with mynx dev, and fix
+   `docs/RELEASING.md` to match.
+3. **Then trim RELEASING.md** (maintainer's decision, 2026-10-08): keep
+   the two scripts, but cut "Debug and release builds on one phone" to
+   mynx dev plus a short "moving to a new phone" note, and drop the
+   builds-up-to-87 steps. Drop this item.
 
 ### 2. Test updates for real: v0.1.1
 
@@ -214,6 +226,25 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-10 (96): The first release, v0.1.0
+
+The maintainer made the release key in their own tab (RSA 4096,
+PKCS12, alias `mynx`), backed it up on two offline copies (checked on
+Windows with KeyStore Explorer: same file hash and certificate
+fingerprint), set the four `MYNX_RELEASE_*` secrets and pushed
+`v0.1.0` at `cbbacc2`. The release run (38050617435) passed first time,
+lint-vital included, and published `mynx-0.1.0.apk` (106 MB); its
+signature check printed certificate SHA-256 `24b7fefa…2b40`, matching
+the key. The key was deleted from the phone.
+
+Lessons:
+- Long commands pasted into a 56-column tab broke at the screen edge
+  and ran in halves; guide with short lines (or variables) instead.
+- `backup-root.sh` can't use its default folder, and another app can't
+  read what it writes to `Download` (Next, item 1.2). The maintainer
+  chose to move without a backup; the backup was deleted.
+- Docker Hub sign-in still fails (item 0); builds pass anonymously.
 
 ### 2026-10-10 (95): Menu: a Settings submenu (branch `github-setup`)
 
