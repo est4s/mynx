@@ -81,11 +81,13 @@ Consequences:
 2. Run `scripts/deliver.sh` in the app's Debian, with the app on screen.
    It waits for HEAD's run (on the current branch: a PR's, or
    `main`'s; or give it a run ID), downloads the APK, copies it to the phone's
-   Download folder and opens Android's installer with `mynx install-apk`.
-   The maintainer just taps **Install**. The build installs as **mynx
-   Dev**, a separate app (see "Naming"): run from mynx dev, the app
-   restarts as the new build; run from mynx, mynx dev installs or
-   updates beside it.
+   Download folder as `mynx-dev-RUN.apk` and opens Android's installer
+   with `mynx install-apk`. The maintainer just taps **Install**. The
+   build installs as **mynx dev**, a separate app (see "Naming"): run
+   from mynx dev, the app restarts as the new build. Run from the
+   release mynx (where the maintainer develops), the installer can't
+   open: the script says to open the file in the Files app, and mynx
+   dev installs or updates beside it.
 
 Notes on why the script does what it does:
 - `mynx install-apk FILE` (left out of `mynx help` and the user guide)
@@ -96,6 +98,9 @@ Notes on why the script does what it does:
   `REQUEST_INSTALL_PACKAGES` and `ApkProvider` are in the main manifest
   (maintainer's decision, 2026-10-08). Play restricts that permission: a
   Play build would need a variant without them.
+- A new file name for each run: Android won't let the app overwrite a
+  file in Download that another app made (the old debug-signed mynx
+  left `mynx-build.apk`). The script deletes its own older builds.
 - The first time, Android asks to allow the app to install apps; the
   request opens that setting and says to try again.
 - If the request fails (an older build, the app not on screen), the APK
@@ -347,6 +352,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   GitHub's sha256 checked; a complete one is reused), then the
   installer opens through `ApkProvider`. Old downloads go at the next
   start. `update-check` (setting, on) only turns off the daily check.
+- **Time zone** (`core/.../TimeZone.kt`): each tab gets `TZ` from
+  Android's default zone, read as the tab starts (`phoneTimeZone()`).
+  By name when Debian has its zoneinfo file, else a fixed POSIX offset
+  (`<+03>-3`). Debian's `/etc/localtime` is left alone (the user's
+  Debian), so programs started outside a tab, like the sound server,
+  stay on UTC.
 - **Wakelock** (`wakelock` setting, off by default): `TerminalService`
   holds a `PARTIAL_WAKE_LOCK` ("mynx:service") while it runs and the
   setting is on, re-read with the sound setting (reloading requests)
@@ -453,6 +464,16 @@ Bugs that took a phone round to find; keep them from coming back.
   Installing it asks to turn the sandbox off (`Agent.sandbox`), and
   its installer runs with `CODEX_NON_INTERACTIVE=1`: otherwise it
   starts Codex inside the install step.
+- **Claude Code under proot** (`agents.launch()`): its cross-session
+  messaging needs `--messaging-socket-path` (no uid map, so it can't
+  check its own socket folder's owner), and its fullscreen "boot
+  canary" turns fullscreen off for the version after two starts that
+  die before the first healthy frame (`fullscreenAutoDisabled` in
+  `~/.claude.json`; closing a tab while it starts is enough), leaving
+  the inline mode that scrolls away. So `mynx agent start` (which the
+  shell's `claude` function calls) adds the flag and
+  `CLAUDE_CODE_NO_FLICKER=1`, unless settings.json says
+  `"tui": "default"`.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

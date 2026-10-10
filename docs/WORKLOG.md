@@ -227,6 +227,47 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-10 (98): The phone's time zone in Debian
+
+Debian ran on UTC: nothing told it the phone's zone. Each tab now gets
+`TZ` from Android's default zone (`debianTimeZone()` in core's
+`TimeZone.kt`): the zone's name when Debian has its zoneinfo file,
+else a fixed POSIX offset (`<+0530>-5:30`, checked with `date`).
+Decided: `TZ` in each tab rather than pointing `/etc/localtime` at the
+zone, which would change the user's Debian; `TZ` in `.bashrc` still
+wins. Tabs read the zone when they start, so after travelling only new
+tabs follow. Tests: `TimeZoneTest`, `ProotLaunchTest`, `home-docs.bats`. Also installed
+the JDK, missing since the move. Confirmed on the phone (mynx dev,
+run 38067778668): a new tab shows local time.
+
+### 2026-10-10 (97): Claude Code: messaging socket and fullscreen
+
+After the move, Claude Code in the fresh Debian said "Cross-session
+messaging is off" (no uid map under proot), and its input no longer
+stuck to the bottom: its boot canary had recorded two fullscreen starts
+that died early and turned fullscreen off for 2.1.296
+(`fullscreenAutoDisabled` in `~/.claude.json`). Now
+`mynx agent start NAME [ARGS…]` passes ARGS, and for Claude Code adds
+`--messaging-socket-path ~/.cache/mynx/claude-msg/PID-TIME.sock`
+(stale ones cleared) and `CLAUDE_CODE_NO_FLICKER=1` unless
+settings.json has `"tui": "default"` (what `/tui default` saves) or
+the variable is set. The shell's `claude`/`codex`/`gemini` functions
+now call `mynx agent start`, which already did the key bar. Decided:
+force fullscreen rather than clear the canary's record in
+`~/.claude.json`, which running sessions rewrite. Tests:
+`test_agents.py` (`LaunchTest`, `StaleSocketsTest`), `test_mynx.py`,
+`shell-setup.bats`. Confirmed on the phone (mynx dev, PR #18 build):
+`claude` from the shell and the menu starts with no messaging warning,
+input at the bottom; after `/tui default` a new `claude` is inline, as
+asked. The maintainer's `~/.local/claude-wrap` (see `~/AGENTS.md`) can
+go once a release has this.
+Also `scripts/deliver.sh`: after the move it failed copying to
+`Download/mynx-build.apk`, which the uninstalled debug-signed mynx made
+and this one can't overwrite. Each run is now `mynx-dev-RUN.apk` (its
+own older ones deleted), and from the release mynx, where
+`install-apk` is refused, it says to open the file in Files. Tried on
+the phone with run 38058304575.
+
 ### 2026-10-10 (96): The first release, v0.1.0
 
 The maintainer made the release key in their own tab (RSA 4096,

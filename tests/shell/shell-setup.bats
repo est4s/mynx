@@ -7,8 +7,8 @@ SETUP="$BATS_TEST_DIRNAME/../../tools/shell.bash"
 setup() {
     STUBS="$BATS_TEST_TMPDIR/stubs"
     mkdir -p "$STUBS"
-    printf '#!/bin/sh\necho "keybar $*"\n' >"$STUBS/keybar"
-    chmod +x "$STUBS/keybar"
+    printf '#!/bin/sh\necho "mynx $*"\n' >"$STUBS/mynx"
+    chmod +x "$STUBS/mynx"
     export PATH="$STUBS:/usr/bin:/bin"
 }
 
@@ -17,15 +17,17 @@ agent() { # agent NAME: a fake installed agent
     chmod +x "$STUBS/$1"
 }
 
-@test "typing an agent's name runs it under the agent key bar" {
+@test "typing an agent's name starts it like mynx agent start" {
+    # Which sets up its key bar, and for Claude Code a messaging socket
+    # and fullscreen.
     agent claude
     agent codex
     agent gemini
     source "$SETUP"
     run claude --resume "a b"
-    [ "$output" = "keybar claude,agent claude --resume a b" ]
-    [ "$(codex)" = "keybar codex,agent codex" ]
-    [ "$(gemini)" = "keybar gemini,agent gemini" ]
+    [ "$output" = "mynx agent start claude --resume a b" ]
+    [ "$(codex)" = "mynx agent start codex" ]
+    [ "$(gemini)" = "mynx agent start gemini" ]
 }
 
 @test "an agent that isn't installed says how to install it" {

@@ -26,6 +26,10 @@ and applies them. See "Changing settings" below.
   `/proc/loadavg`, `/proc/version`. CPU usage and uptime from tools like
   `htop` or `uptime` aren't real.
 - **Network works** (DNS: 1.1.1.1 and 8.8.8.8 in `/etc/resolv.conf`).
+- **The time zone is the phone's:** each new tab gets `TZ` set to it
+  (e.g. `Europe/Istanbul`), so `date` and the clock show local time.
+  Tabs opened before the phone changes zone keep the old one. Debian's
+  own `/etc/localtime` stays UTC; `export TZ=…` in `~/.bashrc` wins.
 - **Packages:** `apt update` first (the package lists aren't shipped),
   then `apt install <name>`. Everything installed stays across app
   updates.
@@ -102,7 +106,7 @@ their own.
 | `mynx audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
 | `mynx sound` | whether the sound device is on; `mynx sound start` starts it again, `mynx sound install` installs it (see "The phone") |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
-| `mynx agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
+| `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
 | `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify`, and for Codex `--sandbox-off`/`--sandbox-on`, skip the questions) |
 | `mynx agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
 | `mynx hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
@@ -211,6 +215,18 @@ codex` explains this and asks to turn it off; it then puts
 whether to install it anyway with the sandbox on. To turn it off later,
 add that line yourself (before any `[table]`), or run `codex -s
 danger-full-access`. Claude Code and Gemini CLI don't need this.
+
+**Claude Code under proot:** typed as `claude` in the shell, or started
+with `mynx agent start`, it gets two things it needs here. A socket
+for cross-session messaging (`--messaging-socket-path`, in
+`~/.cache/mynx/claude-msg/`): proot has no uid map, so Claude Code
+can't check its usual socket folder and says "Cross-session messaging
+is off". And fullscreen (`CLAUDE_CODE_NO_FLICKER=1`), which keeps its
+input at the bottom: Claude Code turns fullscreen off for good after
+starts that died early, such as a tab closed while it started. `/tui
+default` in Claude Code turns fullscreen off for real (it's saved as
+`"tui": "default"` in `~/.claude/settings.json`, which mynx follows);
+`/tui fullscreen` turns it back on.
 
 **Notifications:** with them on, the agent's hooks run `mynx hook
 NAME`, which posts a phone notification when a turn that took

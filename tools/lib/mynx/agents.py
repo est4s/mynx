@@ -105,6 +105,40 @@ def turn_sandbox_off(agent):
     os.replace(path + ".tmp", path)
 
 
+SOCKET_FLAG = "--messaging-socket-path"
+SOCKETS = "~/.cache/mynx/claude-msg"
+
+
+def launch(agent, args, environ, settings, socket):
+    """The arguments and extra environment that start [agent] with [args].
+    Claude Code: proot has no uid map, so it can't check the folder of its
+    cross-session messaging socket and needs [socket] given; and starts
+    that died early (a tab closed while it started) make it turn
+    fullscreen off for good, so it's on unless [environ] or its
+    [settings] (settings.json's text, or None) chose otherwise."""
+    if agent.name != "claude":
+        return args, {}
+    if not any(a == SOCKET_FLAG or a.startswith(SOCKET_FLAG + "=") for a in args):
+        args = [SOCKET_FLAG, socket] + args
+    try:
+        tui = json.loads(settings or "{}").get("tui")
+    except (ValueError, AttributeError):
+        tui = None
+    if "CLAUDE_CODE_NO_FLICKER" in environ or tui == "default":
+        return args, {}
+    return args, {"CLAUDE_CODE_NO_FLICKER": "1"}
+
+
+def stale_sockets(names, alive):
+    """Sockets in [names] (PID-TIME.sock) whose mynx process is gone."""
+    stale = []
+    for name in names:
+        pid = name.split("-")[0]
+        if name.endswith(".sock") and pid.isdigit() and not alive(int(pid)):
+            stale.append(name)
+    return stale
+
+
 def hook_command(agent):
     # The full path: an agent may run hooks without the app's PATH.
     return f"{os.path.join(TOOLS, 'bin', 'mynx')} hook {agent.name}"

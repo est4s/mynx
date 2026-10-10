@@ -91,3 +91,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF 'one row' "$GUIDE"
     grep -qF 'tab strip hides' "$GUIDE"
 }
+
+@test "the guide says the time zone is the phone's, and how to change it" {
+    grep -qF 'time zone is the phone' "$GUIDE"
+    grep -qF 'export TZ=' "$GUIDE"
+}

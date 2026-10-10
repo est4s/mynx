@@ -57,6 +57,7 @@ import io.github.est4s.terminal.core.fetchLatestRelease
 import io.github.est4s.terminal.core.parseColorScheme
 import io.github.est4s.terminal.core.Tabs
 import io.github.est4s.terminal.core.closesOnExit
+import io.github.est4s.terminal.core.debianTimeZone
 import io.github.est4s.terminal.core.hostPath
 import io.github.est4s.terminal.core.parseSavedTabs
 import io.github.est4s.terminal.core.restore
@@ -65,10 +66,12 @@ import io.github.est4s.terminal.core.snapshot
 import io.github.est4s.terminal.core.killProot
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
+import io.github.est4s.terminal.core.zoneInfoPath
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
 import io.github.est4s.terminal.core.writeToolsProfile
 import java.io.File
+import java.util.TimeZone
 import java.util.WeakHashMap
 import java.util.concurrent.CountDownLatch
 
@@ -495,7 +498,7 @@ class TerminalService : Service() {
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -511,6 +514,12 @@ class TerminalService : Service() {
             cwdFiles[it] = File(cwdDir, cwdName)
             keyBarFiles[it] = File(cwdDir, keyBarFileName)
         }
+    }
+
+    // Read for each new tab, so tabs opened after the phone changes zone follow it.
+    private fun phoneTimeZone(): String {
+        val zone = TimeZone.getDefault()
+        return debianTimeZone(zone.id, zone.getOffset(System.currentTimeMillis()) / 1000) { File(zoneInfoPath(rootfs, it)).isFile }
     }
 
     private fun prootPaths(): ProotPaths {

@@ -46,16 +46,19 @@ gh run watch "$run" --exit-status >/dev/null || {
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 gh run download "$run" -D "$tmp"
-# Not the name Termux used: Android won't let this app overwrite
-# another app's file in Download.
-apk=/storage/emulated/0/Download/mynx-build.apk
+# A new name for each run: Android won't let this app overwrite a file
+# in Download that another app made, such as an uninstalled mynx. Our own
+# older builds go (rm can't remove other apps' files, so it's quiet).
+dl=/storage/emulated/0/Download
+rm -f "$dl"/mynx-dev-*.apk 2>/dev/null || true
+apk=$dl/mynx-dev-$run.apk
 cp "$tmp"/*/*.apk "$apk"
 echo "Copied to $apk"
 
 [[ $open == 1 ]] || exit 0
-# Debug builds of the app answer this; older or release builds can't.
+# Only debug builds of the app (mynx dev) answer this; run from the
+# release mynx, it's refused and the file has to be opened by hand.
 if ! mynx install-apk "$apk"; then
-    echo "Open Download/$(basename "$apk") in the Files app to install it,"
-    echo "or try again: mynx install-apk $apk"
+    echo "Open Download/$(basename "$apk") in the Files app to install it."
     exit 1
 fi
