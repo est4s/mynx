@@ -119,12 +119,6 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
-### 4a. Time zone: try it on the phone
-
-Built (entry 98). In mynx dev, a new tab's `date` should show the
-phone's local time and zone (`echo $TZ`: e.g. `Europe/Istanbul`), and
-so should the time in `ls -l` and in Claude Code. Then drop this item.
-
 ### 5. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
@@ -243,7 +237,8 @@ Decided: `TZ` in each tab rather than pointing `/etc/localtime` at the
 zone, which would change the user's Debian; `TZ` in `.bashrc` still
 wins. Tabs read the zone when they start, so after travelling only new
 tabs follow. Tests: `TimeZoneTest`, `ProotLaunchTest`, `home-docs.bats`. Also installed
-the JDK, missing since the move. Not tried on the phone yet (Next 4a).
+the JDK, missing since the move. Confirmed on the phone (mynx dev,
+run 38067778668): a new tab shows local time.
 
 ### 2026-10-10 (97): Claude Code: messaging socket and fullscreen
 
