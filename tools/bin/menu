@@ -237,8 +237,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
     system)
-      ITEMS=("Update all" "System info" "Getting started" About "Report a bug")
-      ACTS=(update info welcome about report) ;;
+      ITEMS=("Update all" "System info" "Getting started" About "Report a bug" "GitHub setup")
+      ACTS=(update info welcome about report github) ;;
   esac
 }
 
@@ -431,6 +431,7 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 
 act_about() { run mynx about || pause; }  # in less; a failure stays on screen
 act_report() { run mynx report; pause; }  # it asks; its answer stays on screen
+act_github() { run mynx github; pause; }  # its summary stays on screen
 act_appupdate() { run mynx update; pause; }  # shows the notes and asks
 
 act_update() {

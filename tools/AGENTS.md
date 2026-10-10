@@ -112,6 +112,7 @@ their own.
 | `mynx version` | the version of the app's tools |
 | `mynx update` | update the app to its latest release: shows the version and its notes, asks, downloads it and opens Android's installer (`--check` only says; `--yes` skips the question; see "Updates") |
 | `mynx report [TEXT]` | report a bug in the app: shows the report, asks, then sends it with `gh` if signed in, else opens a prefilled GitHub issue (see "More of the setup") |
+| `mynx github [--yes]` | set up GitHub: installs `git` and `gh`, signs in in the browser (the code copied to the clipboard), sets git's name and noreply email; `mynx github status` shows the account and git's name and email (see "More of the setup") |
 | `mynx help` | all commands |
 
 `--json` on any command prints `{"ok": true, ...}` or
@@ -378,7 +379,7 @@ line, in order; labels up to 20 characters. Actions:
 | `games` | the Games menu |
 | `settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
-| `system` | Update all, System info, Getting started (`mynx welcome`), About (`mynx about`), Report a bug (`mynx report`) |
+| `system` | Update all, System info, Getting started (`mynx welcome`), About (`mynx about`), Report a bug (`mynx report`), GitHub setup (`mynx github`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
@@ -499,6 +500,19 @@ shows the generic game bar until `my-tool.conf` exists.
   For agents: `mynx report TEXT --json` gives `title`, `what`,
   `details` and `url` and opens nothing; show the user the report and
   only `mynx open URL` once they agree.
+- **GitHub:** `mynx github` (or the menu's System → GitHub setup)
+  installs `git` and `gh` if they're missing (asking first), signs in
+  with `gh auth login` in the phone's browser and copies the one-time
+  code to the clipboard, so it only needs pasting. Already signed in,
+  it asks whether to switch accounts. It sets git's `user.name` (the
+  account's name) and `user.email` (GitHub's noreply address,
+  `ID+login@users.noreply.github.com`), asking before it replaces
+  ones already set, and makes `git push` use gh's sign-in (`gh auth
+  setup-git`). `--yes` installs and replaces without asking (and
+  keeps the account). mynx stores no token: `gh` keeps its own
+  sign-in. `mynx github status` (`--json`: `gh`, `git`, `login`,
+  `name`, `email`) changes nothing. With `gh` signed in, `mynx
+  report` files issues itself.
 - **Tab titles:** a program sets its tab's title with the escape code
   `\e]0;title\a`. The prompt sets it to the current folder name. A name
   the user gives a tab (long-press it) wins over these.

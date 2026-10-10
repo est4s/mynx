@@ -2,6 +2,7 @@
 import contextlib
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -46,6 +47,7 @@ Commands:
   welcome    the welcome page: what's here and how to get around
   update     update [--check] [--yes]: update the app to its latest release
   report     report [TEXT]: report a bug (shows it, asks, then sends it with gh or opens GitHub)
+  github     github [status] [--yes]: install git and gh, sign in to GitHub, set git's name
   about      version, credits and licences
   version    the app tools' version
   help       this list
@@ -559,22 +561,30 @@ def server_answers(server):
 
 
 def install_sound(yes):
-    steps = ["apt-get update", f"apt-get install -y --no-install-recommends {SOUND_PACKAGES}"]
     print("Installing the sound device (PulseAudio) runs:\n")
+    if not apt_install(["--no-install-recommends", SOUND_PACKAGES], yes, "Run it?"):
+        print("Not installed.")
+        return 1
+    start_sound()
+    print("\nSound device: on. Programs play through the phone's speaker.")
+    return 0
+
+
+def apt_install(packages, yes, question):
+    """Shows the apt-get commands, asks [question] (unless [yes]), runs
+    them. False when the answer is no; a Failure when a command fails."""
+    steps = ["apt-get update", "apt-get install -y " + " ".join(packages)]
     for step in steps:
         print(f"  {step}")
     print()
-    if not yes and not ask("Run it? [y/N] (--yes skips this question)"):
-        print("Not installed.")
-        return 1
+    if not yes and not ask(f"{question} [y/N] (--yes skips this question)"):
+        return False
     for step in steps:
         sys.stdout.flush()
         code = subprocess.run(["bash", "-c", step]).returncode
         if code != 0:
             raise Failure(f"'{step}' failed (exit {code})")
-    start_sound()
-    print("\nSound device: on. Programs play through the phone's speaker.")
-    return 0
+    return True
 
 
 # Not in HELP: for installing builds of the app while developing it. Only
@@ -1191,6 +1201,177 @@ def gh_login():
     return run.stdout.strip() if run.returncode == 0 and run.stdout.strip() else None
 
 
+GITHUB_USAGE = "usage: mynx github [status] [--yes]  (--json with status)"
+GITHUB_PACKAGES = ("git", "gh")
+GH_LOGIN = ["gh", "auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https"]
+GH_CODE = re.compile(r"one-time code: (\S+)\s")
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+
+def cmd_github(args, as_json):
+    if args == ["status"]:
+        status = github_status()
+        out(as_json, dict(ok=True, **status), github_summary(status))
+        return 0
+    if as_json or any(a != "--yes" for a in args):
+        raise Usage(GITHUB_USAGE)
+    yes = "--yes" in args
+    missing = [p for p in GITHUB_PACKAGES if not shutil.which(p)]
+    if missing:
+        print(f"Setting up GitHub needs {' and '.join(missing)}, which "
+              f"{'isn' if len(missing) == 1 else 'aren'}'t installed. Installing "
+              f"{'it' if len(missing) == 1 else 'them'} runs:\n")
+        if not apt_install(missing, yes, f"Install {'it' if len(missing) == 1 else 'them'}?"):
+            print("Nothing was installed.")
+            return 1
+        print()
+    login = gh_login()
+    if not login or (not yes and ask(f"Signed in to GitHub as @{login}. Switch to another account? [y/N]")):
+        gh_sign_in()
+    user = gh_user()
+    if not user:
+        raise Failure("can't read the GitHub account (gh api user failed)")
+    email = f"{user['id']}+{user['login']}@users.noreply.github.com"
+    set_git_identity(user.get("name") or user["login"], email, yes)
+    # git push over HTTPS then signs in with gh's login.
+    subprocess.run(["gh", "auth", "setup-git"], capture_output=True)
+    status = github_status(login=user["login"])
+    print("\n" + github_summary(status))
+    if status["email"] == email:
+        print("\n" + wrap("The email is GitHub's noreply address for the account, so "
+                          "yours stays out of commits. git push uses gh's sign-in.", ""))
+    return 0
+
+
+def github_status(login=None):
+    gh, git = bool(shutil.which("gh")), bool(shutil.which("git"))
+    return {"gh": gh, "git": git, "login": login or (gh_login() if gh else None),
+            "name": git_config("user.name") if git else None,
+            "email": git_config("user.email") if git else None}
+
+
+def github_summary(status):
+    account = (f"signed in as @{status['login']}" if status["login"] else
+               "not signed in (mynx github signs in)" if status["gh"] else
+               "gh isn't installed (mynx github sets it up)")
+    unset = "(not set)" if status["git"] else "(git isn't installed)"
+    return (f"GitHub     {account}\ngit name   {status['name'] or unset}\n"
+            f"git email  {status['email'] or unset}")
+
+
+def git_config(key):
+    run = subprocess.run(["git", "config", "--global", key], capture_output=True, text=True)
+    return run.stdout.strip() or None
+
+
+def set_git_identity(name, email, yes):
+    old_name, old_email = git_config("user.name"), git_config("user.email")
+    if (old_name, old_email) == (name, email):
+        return
+    if (old_name or old_email) and not yes:
+        print(wrap(f"git commits are signed {old_name or '(no name)'} <{old_email or 'no email'}>.", ""))
+        if not ask(f"Change them to {name} <{email}>? [y/N]"):
+            return
+    for key, value in (("user.name", name), ("user.email", email)):
+        subprocess.run(["git", "config", "--global", key, value], check=True)
+
+
+def gh_user():
+    """gh's account: its id, login and name, or None."""
+    try:
+        run = subprocess.run(["gh", "api", "user"], capture_output=True, text=True, timeout=20)
+        return json.loads(run.stdout) if run.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+
+
+def gh_sign_in():
+    """gh auth login in the browser. gh runs on a terminal of its own, so
+    the one-time code it prints can be copied to the clipboard."""
+    print("Signing in to GitHub in the phone's browser.")
+    gh_for_git()
+    seen, note = [b""], [None]
+
+    def watch(data):
+        if seen[0] is not None:
+            seen[0] += data
+            found = GH_CODE.search(ANSI.sub("", seen[0].decode(errors="replace")))
+            if found:
+                seen[0] = None
+                try:
+                    request("clipboard-set", urllib.parse.quote(found.group(1), safe=""))
+                    note[0] = found.group(1).encode()
+                except Failure:
+                    pass
+        if note[0] is not None:
+            at = data.find(note[0])
+            line_end = data.find(b"\n", at + len(note[0]) if at >= 0 else 0)
+            if line_end >= 0:
+                note[0] = None
+                return (data[:line_end + 1] + b"  (The code is copied: paste it on GitHub's page.)\r\n"
+                        + data[line_end + 1:])
+        return data
+
+    code = run_in_pty(GH_LOGIN, watch)
+    if code != 0:
+        raise Failure(f"signing in to GitHub didn't work (gh exited with {code})")
+
+
+def gh_for_git():
+    """git signs in to GitHub with gh's login, set before gh auth login so it
+    doesn't ask; gh auth setup-git then writes it its own way."""
+    key = "credential.https://github.com.helper"
+    helpers = subprocess.run(["git", "config", "--global", "--get-all", key], capture_output=True, text=True)
+    if "gh auth git-credential" not in helpers.stdout:
+        for value in ("", "!gh auth git-credential"):  # "" drops other helpers for GitHub
+            subprocess.run(["git", "config", "--global", "--add", key, value], check=True)
+
+
+def run_in_pty(argv, watch):
+    """Runs [argv] on a pseudo-terminal, passing keys in and its output,
+    through watch(data), out. Returns its exit code."""
+    import fcntl
+    import pty
+    import select
+    import termios
+    import tty
+    sys.stdout.flush()
+    pid, fd = pty.fork()
+    if pid == 0:
+        try:
+            os.execvp(argv[0], argv)
+        finally:
+            os._exit(127)
+    with contextlib.suppress(OSError):
+        fcntl.ioctl(fd, termios.TIOCSWINSZ, fcntl.ioctl(1, termios.TIOCGWINSZ, b"\0" * 8))
+    saved = termios.tcgetattr(0) if os.isatty(0) else None
+    if saved:
+        tty.setraw(0)
+    inputs = [fd, 0]
+    try:
+        while True:
+            ready = select.select(inputs, [], [])[0]
+            if fd in ready:
+                try:
+                    data = os.read(fd, 4096)
+                except OSError:  # EIO: the program has ended
+                    data = b""
+                if not data:
+                    break
+                os.write(1, watch(data))
+            if 0 in ready:
+                data = os.read(0, 1024)
+                if not data:  # stdin ended: pass the end on, as Ctrl+D
+                    inputs.remove(0)
+                    data = b"\x04"
+                os.write(fd, data)
+    finally:
+        if saved:
+            termios.tcsetattr(0, termios.TCSAFLUSH, saved)
+        os.close(fd)
+    return os.waitstatus_to_exitcode(os.waitpid(pid, 0)[1])
+
+
 def report_body(what, details):
     """The issue as GitHub's form (app-report.yml) would write it, marked
     so a workflow can label it: GitHub drops labels set by non-members."""
@@ -1275,7 +1456,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
-    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 
 

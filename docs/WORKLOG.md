@@ -87,21 +87,20 @@ tools (`/opt/mynx/release-notes`), so both work offline and match
 GitHub. Generated notes are commit subjects; maybe the maintainer
 edits them in the release before tagging (decide then).
 
-### 4. Guided GitHub setup (planned, not built)
+### 4. Guided GitHub setup: try it on the phone
 
-Maintainer's decision (2026-10-08): a quick, optional GitHub setup,
-never part of the first run. Proposed shape (agreed in principle):
-- `mynx github` and a menu item (e.g. under System).
-- Installs `git` and `gh` from Debian if missing, asking first.
-- `gh auth login` in the browser; copy the one-time code to the
-  clipboard (`mynx clipboard set`) so it only needs pasting.
-- Sets git's `user.name` and `user.email` from the account, with
-  GitHub's noreply address so the real email stays out of commits.
-- Ends with a summary: who's signed in, what was set.
-- mynx never stores a token: `gh` keeps its own login.
-
-With `gh` signed in, `mynx report` already files issues itself, so this
-makes bug reports one tap.
+Built (entry 94, branch `github-setup`). In mynx dev, System →
+GitHub setup:
+- **Signed out:** after a moment `gh` shows the one-time code, with
+  "(The code is copied: paste it on GitHub's page.)" under it; Enter
+  opens the browser, paste, approve. Then the summary: the account,
+  git's name and noreply email. `git push` to a repo should work with
+  no password.
+- **Signed in:** it asks "Switch to another account?"; `n` keeps it.
+- **git name/email already set to something else:** it asks first.
+- **Without git or gh** (`apt remove gh`): it offers to install them.
+- Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
+  screen isn't garbled, nothing odd after `gh` ends.
 
 ### 5. Smaller things
 
@@ -210,6 +209,34 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-10 (94): Guided GitHub setup, built (branch `github-setup`)
+
+`mynx github` and System → GitHub setup (menu item at the end of
+System, so "Report a bug" keeps key 5). It installs `git` and `gh`
+from Debian if missing (asking; `apt_install()` now shared with
+`mynx sound install`), runs `gh auth login --web --hostname
+github.com --git-protocol https` on a pseudo-terminal of its own
+(`run_in_pty()`): it passes keys in, reads the `one-time code: XXXX-XXXX`
+line from gh's output, sends it to `clipboard-set` and adds a line
+saying so. Already signed in: asks to switch (maintainer's decision
+this session). Sets git's name (account name, else login) and email
+(`ID+login@users.noreply.github.com`), asking before replacing others;
+`--yes` installs and replaces without asking and keeps the account.
+Then `gh auth setup-git` and a summary. `mynx github status [--json]`
+changes nothing.
+- **Why the credential helper is set before signing in:** with no
+  gh helper in git's config, gh first asks "Authenticate Git with your
+  GitHub credentials?" (and queries the cursor position, which needs a
+  real terminal). `gh_for_git()` adds `""` and `!gh auth git-credential`
+  for `https://github.com`, so gh skips it.
+- Checked against the real gh 2.46 here (scratch `GH_CONFIG_DIR` and
+  HOME, signed in nowhere): the code was copied and the note shows
+  right under the code line. Not yet tried on the phone with a real
+  sign-in: Next 4.
+- Tests: `tests/mynx/test_mynx.py` (fake gh and git on a bare PATH),
+  `tests/shell/menu.bats`. The roadmap's "Guided GitHub setup" left
+  `docs/ROADMAP.md`; README and `tools/AGENTS.md` describe it.
 
 ### 2026-10-10 (93): Docs cleaned up again
 
