@@ -689,6 +689,14 @@ class MynxTest(unittest.TestCase):
         self.assertEqual(self.codex_config(), 'sandbox_mode = "danger-full-access"\n')
         self.assertIn("Sandbox: off", run.stdout)
 
+    def test_codex_installer_runs_without_its_own_questions(self):
+        # Its own "Start Codex now?" ran Codex inside the install step,
+        # and quitting Codex failed the step before the sandbox was off.
+        path = self.fake_commands(curl='echo "echo NON_INTERACTIVE=\\$CODEX_NON_INTERACTIVE"')
+        run = self.agent("install", "codex", "--yes", "--no-notify", "--sandbox-off", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("NON_INTERACTIVE=1", run.stdout)
+
     def test_codex_install_with_its_sandbox_on_when_asked_twice(self):
         path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
         run = self.agent("install", "codex", stdin="n\ny\ny\nn\n", path=path)

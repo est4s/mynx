@@ -949,7 +949,8 @@ def install_agent(agent, yes, notify, then=None, sandbox_off=None):
         sys.stdout.flush()
         # pipefail: a failed download in "curl … | bash" must fail the step
         with watch_download(agent):
-            code = subprocess.run(["bash", "-o", "pipefail", "-c", step]).returncode
+            code = subprocess.run(["bash", "-o", "pipefail", "-c", step],
+                                  env={**os.environ, **agent.installer_env}).returncode
         if code != 0:
             raise Failure(f"'{step}' failed (exit {code}); nothing else was run")
     print()

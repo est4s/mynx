@@ -246,6 +246,13 @@ works (tested), Codex works with its sandbox off (tested), Gemini CLI
 isn't tested (maintainer's wording). Already installed Codexes aren't
 touched; the guide says how to add the line.
 
+First phone round: Codex's installer asked its own "Start Codex now?"
+and ran Codex inside the install step; quitting it exited 1, so mynx
+called the install failed and never wrote the line (commands still
+failed). Now the installer runs with `CODEX_NON_INTERACTIVE=1`
+(`Agent.installer_env`) and mynx asks to start it, after the line is
+written.
+
 ### 2026-10-10 (90): README for users only (PR #12)
 
 Maintainer's request: only what's useful to users, like popular apps'

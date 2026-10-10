@@ -15,8 +15,9 @@ from .client import TOOLS, Failure
 # downloads: where its installer downloads silently (None: it shows progress)
 # needs: commands it runs that a fresh Debian may lack -> their package
 # sandbox: the config file that turns off a sandbox that can't work here
-Agent = namedtuple("Agent", "name title command config events installer downloads needs sandbox",
-                   defaults=[None, {}, None])
+# installer_env: for its installer; mynx asks its questions and starts it
+Agent = namedtuple("Agent", "name title command config events installer downloads needs sandbox "
+                   "installer_env", defaults=[None, {}, None, {}])
 
 AGENTS = {
     "claude": Agent("claude", "Claude Code", "claude", "~/.claude/settings.json",
@@ -27,7 +28,9 @@ AGENTS = {
                    "curl -fsSL https://chatgpt.com/codex/install.sh | sh", None,
                    {"ps": "procps"},  # to track its background server
                    # Its sandbox needs bubblewrap, which proot can't give namespaces.
-                   "~/.codex/config.toml"),
+                   "~/.codex/config.toml",
+                   # Else it asks to start Codex, inside the install step.
+                   {"CODEX_NON_INTERACTIVE": "1"}),
     "gemini": Agent("gemini", "Gemini CLI", "gemini", "~/.gemini/settings.json",
                     {"BeforeAgent": "start", "AfterAgent": "stop", "Notification": "attention"},
                     "npm install -g @google/gemini-cli"),
