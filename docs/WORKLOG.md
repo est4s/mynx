@@ -119,16 +119,6 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
-### 4a. Claude Code: socket and fullscreen, try it on the phone
-
-Built (entry 97). In mynx dev with Claude Code installed, `claude`
-typed in the shell and AI agents in the menu should both start it
-with no "Cross-session messaging is off" line and the input at the
-bottom, staying put while scrolling. `/tui default`, then a new
-`claude`: inline, as asked. `/tui fullscreen` puts it back. The
-maintainer's `~/.local/claude-wrap` (see `~/AGENTS.md`) does the
-socket part by hand and can go once this ships.
-
 ### 5. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
@@ -253,7 +243,11 @@ now call `mynx agent start`, which already did the key bar. Decided:
 force fullscreen rather than clear the canary's record in
 `~/.claude.json`, which running sessions rewrite. Tests:
 `test_agents.py` (`LaunchTest`, `StaleSocketsTest`), `test_mynx.py`,
-`shell-setup.bats`. Not tried on the phone yet (Next 4a).
+`shell-setup.bats`. Confirmed on the phone (mynx dev, PR #18 build):
+`claude` from the shell and the menu starts with no messaging warning,
+input at the bottom; after `/tui default` a new `claude` is inline, as
+asked. The maintainer's `~/.local/claude-wrap` (see `~/AGENTS.md`) can
+go once a release has this.
 Also `scripts/deliver.sh`: after the move it failed copying to
 `Download/mynx-build.apk`, which the uninstalled debug-signed mynx made
 and this one can't overwrite. Each run is now `mynx-dev-RUN.apk` (its
