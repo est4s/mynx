@@ -3,8 +3,8 @@
 Where the project stands, what's next, and what recent sessions did.
 Newest entries first. Rules for keeping it up to date (and short): see
 [`AGENTS.md`](../AGENTS.md#status-work-log-and-next-steps). Older entries
-are in git history: the full log up to entry 84 is
-`git show 72b8512:docs/WORKLOG.md`.
+are in git history: the full log up to entry 92 is
+`git show be3d232:docs/WORKLOG.md` (up to 84: `72b8512`).
 
 ---
 
@@ -31,15 +31,14 @@ are in git history: the full log up to entry 84 is
 
 ## Next
 
-### 0. Finish PR #12 (`readme-logo`)
+### 0. Docker Hub sign-in
 
-- Everything in entry 89 is confirmed on the phone.
-- **Docker Hub sign-in:** the maintainer makes a new read-only token
-  and runs `mynx clipboard get | gh secret set DOCKERHUB_TOKEN` (check
-  `DOCKERHUB_USERNAME`, `est4s`, is their Docker Hub name). Then a
-  build's "Sign in to Docker Hub" step should print "Login Succeeded",
-  not the warning.
-- Then merge.
+Both secrets are set, but builds still say "unauthorized: incorrect
+username or password" and pull anonymously (run 38036141815). The
+token is probably one since revoked, or `DOCKERHUB_USERNAME` (`est4s`)
+isn't the maintainer's Docker Hub name. Fix: a new read-only token,
+`mynx clipboard get | gh secret set DOCKERHUB_TOKEN`; the next build's
+"Sign in to Docker Hub" step should print "Login Succeeded".
 
 ### 1. The first release, v0.1.0
 
@@ -212,155 +211,18 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-10 (92): The agent bar takes the maintainer's layout (confirmed, PR #14)
+### 2026-10-10 (93): Docs cleaned up again
 
-Maintainer's request: the built-in `agent` bar becomes the copy they
-use (`~/.config/mynx/keybars/agent.conf`): Esc Ctrl ↑ Tab Newline / on
-top, ← ↓ → Enter Mode Ctrl+C below. New: Ctrl and Enter; ↑ sits above
-↓. `KeyBarTest` pins the labels. Confirmed on the phone in mynx dev.
-
-### 2026-10-10 (91): Codex asks to turn its sandbox off (confirmed, PR #13)
-
-Codex in mynx dev couldn't run any command: "error building bubblewrap
-command: cannot establish app-server socket mount isolation".
-Reproduced with Codex 0.162.1 in a scratch home: its bundled `bwrap`
-fails ("Can't read /proc/sys/kernel/overflowuid"), the legacy Landlock
-mode panics (it requires bubblewrap too), and only
-`danger-full-access` works. Maintainer's decision: tell the user during
-the install that Codex only runs with its sandbox off, say briefly what
-the sandbox is for, and ask; on no, ask whether to install it anyway
-with the sandbox on (else nothing is installed). Built:
-`Agent.sandbox` (Codex: `~/.codex/config.toml`), `sandbox_off()` puts
-`sandbox_mode = "danger-full-access"` at the top (replacing a
-top-level one, before any `[table]`), `--sandbox-off`/`--sandbox-on`
-for scripts. Guide and README updated: the README says Claude Code
-works (tested), Codex works with its sandbox off (tested), Gemini CLI
-isn't tested (maintainer's wording). Already installed Codexes aren't
-touched; the guide says how to add the line.
-
-First phone round: Codex's installer asked its own "Start Codex now?"
-and ran Codex inside the install step; quitting it exited 1, so mynx
-called the install failed and never wrote the line (commands still
-failed). Now the installer runs with `CODEX_NON_INTERACTIVE=1`
-(`Agent.installer_env`) and mynx asks to start it, after the line is
-written. Second round confirmed: the install finishes, mynx starts
-Codex, and its commands run (so Codex reads `sandbox_mode` from
-`config.toml`).
-
-### 2026-10-10 (90): README for users only (PR #12)
-
-Maintainer's request: only what's useful to users, like popular apps'
-READMEs. Dropped the Roadmap section (one "Want to help?" line links
-`docs/ROADMAP.md`); features ordered by what people come for, without
-internals; numbered install steps; new "Getting started", "Good to
-know" (proot, `wakelock`) and "Help and bug reports" (`mynx report`).
-No Credits section (maintainer's decision): `mynx about` lists the
-bundled components. Then the screenshots, taken by the
-maintainer in mynx dev and chosen together: two rows of four under the
-pitch (menu, agent, compass, drive; tuner, torch, spectrum, themes),
-pngquant'ed to 16-71 KB in `docs/images/`. `docs/SCREENSHOTS.md` now
-describes these.
-
-### 2026-10-09 (89): The name in small letters, the pixel title, the setup logo (confirmed, PR #12)
-
-Maintainer's decisions: the name is written "mynx" everywhere it's
-shown (the app's label, "mynx dev", `mynx about` and update messages,
-the User-Agent, the docs; code names keep their case), and the menu's
-title is "mynx" in small pixel letters like the logo, without the
-shadow (3 rows, 23 columns, `TITLE_ART` in `tools/bin/menu`; the boot
-splash's text fallback is "m y n x"). The README's title is the whole
-logo, `docs/images/mynx.svg`, made by `scripts/mynx-svg.py`. To check
-on the phone (all confirmed): the launcher label "mynx dev", the
-menu's title and pages (Getting started still fits), `mynx about`.
-
-Then (same PR): the setup screen ("Setting up Debian…", first start)
-shows the whole logo, as in the README, in place of the old
-"▓▒░ MYNX ░▒▓" text: a vector drawable made by `scripts/mynx-svg.py
---vector`, kept in step by a test. **Confirmed** on the phone
-(build of `9d2a359`, after clearing mynx dev's storage).
-
-CI then failed twice on Docker Hub's anonymous pull limit (shared
-runner IPs). The maintainer made a read-only Docker Hub token; both
-workflows now `docker login` with the `DOCKERHUB_*` secrets.
-The step retries and falls back to an anonymous pull with a warning
-(Docker's auth server timed out for a while that night). **Not
-working yet:** Docker Hub answers "incorrect username or password",
-probably because `DOCKERHUB_TOKEN` holds a token since deleted (the
-first one was pasted into a command by mistake and revoked). See
-Next.
-
-### 2026-10-09 (88): Menu order (confirmed, #10)
-
-One of the changes before the release. The session that started it
-crashed after writing the tests; the next one finished it. The main
-menu is now Shell (was Terminal), AI agents, Apps, Games, Files,
-Settings, System, Exit; Getting started moved into System (after
-System info); Apps are sorted by label across `/opt/mynx/apps` and
-`~/apps`. A user's own `menu.conf` is untouched. Welcome page, guide
-and roadmap follow. Confirmed in Mynx Dev (build 99) after `mynx menu
-reset`: a copied `menu.conf` keeps the old order, by design.
-
-### 2026-10-09 (87): The new splash, and its "m" as the icon (confirmed)
-
-The maintainer made a new title art, `mynx-art` ("mynx" in
-quadrant-block pixels, cyan letters, pink drop shadow, animated). It's
-now `tools/lib/mynx-art`, and the boot splash (`menu --boot`) shows it
-in place of the glitching text title, with the boot log under it. A
-key skips the art and the rest of the boot (exit 10); on a screen under
-52 columns, or if the art fails, the old text title comes back. Its
-Neon colours are built in (a test checks them against Neon's file) so
-it doesn't read `/opt/mynx`. The maintainer's own copy in
-`~/.local/bin` is theirs to keep or delete.
-
-The maintainer also picked the "m" from it as the logo, over a stacked
-"my/nx", the "x" alone and `>_` redrawn (concepts:
-https://claude.ai/artifact/8woxiTt7jqsab8AAFMX5Pi). The launcher
-foreground, the themed (monochrome) icon, the notification icon and
-`docs/images/icon.svg` are now its pixels (1 wide, 2 tall, rows
-overlapping a hair so no seams show), cut from `mynx-art --plain`;
-the themed and notification icons leave the shadow out. PR #8,
-confirmed on the phone in Mynx Dev; the details are in AGENTS.md.
-
-### 2026-10-09 (86): Bluetooth on the roadmap
-
-Maintainer's decision: Bluetooth joins the "later" plans
-(`docs/ROADMAP.md`, "Bluetooth", and step 11). Debian can't reach the
-Bluetooth hardware (no BlueZ under proot on Android), so it goes
-through the app: classic serial (SPP) over the USB serial bridge, so
-build that bridge first, and BLE as `mynx ble` requests and streams.
-Ideas for the USB bridge from the same talk: a pseudo-terminal bound
-at `/dev/ttyUSB0`; DTR/RTS (bootloader reset) can't cross a
-pseudo-terminal, so either serve RFC 2217 on localhost (pyserial and
-`esptool` take `rfc2217://`) or have proot catch the modem ioctls on
-that port. Raw USB: `libusb_wrap_sys_device` on the fd Android hands
-the app. Docs only, nothing built.
-
-### 2026-10-08 (85): Docs cleaned up
-
-The maintainer asked to drop what's old or no longer relevant from the
-docs (git history keeps it).
-- Work log: status rewritten as a short summary; "Next" keeps only
-  open work (the release, testing updates, What's new, GitHub setup,
-  small items) and the parked step 8 plan; the done step 9 and 10
-  plans and entries 1-79 are gone (`git show 72b8512:docs/WORKLOG.md`
-  has them).
-- AGENTS.md: a "Lessons from the phone" section keeps the bugs that
-  only showed on the phone (focus with no height, the cutout,
-  browser shares, DCIM, lint-vital, `tools/` paths, Kotlin inference
-  in CI); a "Keep it short" rule for the log; the old proot-distro
-  dev setup is gone, and so is `scripts/bats-lite.sh` (only that setup
-  needed it).
-- **PRIVACY.md was wrong since the updates (entry 81):** it said the
-  app connects to nothing. It now says what the daily update check
-  sends (only the app's version; GitHub sees the IP), that downloads
-  only happen on a yes, how to turn the check off, the install-apps
-  permission, and what a bug report contains and when it's sent.
-- ROADMAP and README mention updates; ROADMAP marks the done steps.
-- RELEASING.md (PR #6): `gh secret set` needs `-R est4s/mynx` (run
-  from the key's folder, outside the repo); the key steps now say to
-  make it in your own tab (never through an agent), save the SHA-256
-  fingerprint, check a backup opens, and delete it from the phone
-  afterwards. The maintainer hasn't made the key yet.
+Maintainer's request: drop what isn't needed. `docs/SCREENSHOTS.md`
+is gone (the images stay: the README shows them). `docs/ROADMAP.md`
+now holds only what's planned (next, profiles, tab strip and file
+manager extras, per-profile permissions, boards, Bluetooth, Play) plus
+"How it works"; the built features are the README's. The USB/BLE
+ideas from entry 86 moved into it. The maintainer added two plans:
+the guided GitHub setup (moved from "Next" to "Planned") and hidden
+tabs for background services and servers (new, not designed yet). Confirmed entries 80, 82, 83 and
+85-92 left the log (Codex's sandbox went into AGENTS.md's lessons);
+"Next 0" is now just the Docker Hub sign-in, which still fails.
 
 ### 2026-10-08 (84): Backup and restore for the move to the release
 
@@ -384,27 +246,6 @@ TDD check pairs both with `tests/shell/`). Docs: RELEASING.md.
   (from 1.6 GB), restored it into a scratch home with apt stubbed: the
   repo is intact, the `claude` link works, `gh`'s login is back. The
   scratch copies were deleted (they hold logins).
-
-### 2026-10-08 (83): `main` is protected
-
-The maintainer asked for branch protection and picked "PRs only".
-Ruleset "Protect main" (id 24724125): PRs required (0 approvals),
-the `build` check required, no force-push or deletion; admins bypass
-only when merging a PR (Markdown-only PRs never get a `build` check).
-`scripts/deliver.sh` now finds the run of the current branch (a PR's)
-as well as `main`'s. AGENTS.md: the build loop and "Branches".
-`updates-core` goes in as the first PR.
-
-### 2026-10-08 (82): Mynx Dev and the updates branch confirmed
-
-CI run 37777568798 (`updates-core`, started by hand: branch pushes
-don't build) was green, the first compile of the app side. Delivered
-with `scripts/deliver.sh 37777568798`; it updated the Mynx Dev already
-installed from `main`, not Mynx. The maintainer confirmed: Mynx Dev
-installs beside Mynx with its own Debian (entry 80), its Settings
-shortcut opens the editors in Mynx Dev, `mynx share` and `mynx camera`
-work there, `mynx update` refuses ("this build of the app doesn't
-update from GitHub releases") and `mynx settings` lists `update-check`.
 
 ### 2026-10-08 (81): App updates, built (branch `updates-core`)
 
@@ -438,24 +279,3 @@ The first session crashed after the core pieces; nothing was lost.
 - The `app` module isn't compiled locally: the first CI build of the
   branch is its first compile.
 
-### 2026-10-08 (80): Mynx Dev, a separate debug app
-
-Planned app updates with the maintainer (see "Next"). Release APKs
-can't install over debug builds (different keys), so the maintainer
-asked for debug builds as a separate app, to have both on the phone,
-and for a branch flow; offered git-flow (a `dev` branch) or
-trunk-based. **Decided: trunk-based** (feature branch → PR → test the
-PR's build in Mynx Dev → merge), switched on after v0.1.0. Also
-decided: a What's new page after every update and release notes in
-the menu.
-- `app/build.gradle.kts`: debug `applicationIdSuffix = ".dev"`;
-  `app/src/debug/res/values/strings.xml`: "Mynx Dev".
-- Provider authorities (`share`, `photo`, `apk`) follow the ID:
-  `${applicationId}` in the manifests, `BuildConfig.APPLICATION_ID` in
-  code. Two installed apps can't share an authority.
-- The launcher shortcut's XML can't use the ID, so
-  `app/src/debug/res/xml/shortcuts.xml` is a copy naming the dev ID.
-- Intent actions (`…SETTINGS`, `…EXIT`, `…SHELL`) stay: they're sent
-  to an explicit package or component.
-- Docs: AGENTS.md (naming, install loop, branches), RELEASING.md.
-- Not checked on the phone yet (no local Android builds).
