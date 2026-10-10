@@ -212,6 +212,34 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-10 (91): Codex asks to turn its sandbox off (confirmed, PR #13)
+
+Codex in mynx dev couldn't run any command: "error building bubblewrap
+command: cannot establish app-server socket mount isolation".
+Reproduced with Codex 0.162.1 in a scratch home: its bundled `bwrap`
+fails ("Can't read /proc/sys/kernel/overflowuid"), the legacy Landlock
+mode panics (it requires bubblewrap too), and only
+`danger-full-access` works. Maintainer's decision: tell the user during
+the install that Codex only runs with its sandbox off, say briefly what
+the sandbox is for, and ask; on no, ask whether to install it anyway
+with the sandbox on (else nothing is installed). Built:
+`Agent.sandbox` (Codex: `~/.codex/config.toml`), `sandbox_off()` puts
+`sandbox_mode = "danger-full-access"` at the top (replacing a
+top-level one, before any `[table]`), `--sandbox-off`/`--sandbox-on`
+for scripts. Guide and README updated: the README says Claude Code
+works (tested), Codex works with its sandbox off (tested), Gemini CLI
+isn't tested (maintainer's wording). Already installed Codexes aren't
+touched; the guide says how to add the line.
+
+First phone round: Codex's installer asked its own "Start Codex now?"
+and ran Codex inside the install step; quitting it exited 1, so mynx
+called the install failed and never wrote the line (commands still
+failed). Now the installer runs with `CODEX_NON_INTERACTIVE=1`
+(`Agent.installer_env`) and mynx asks to start it, after the line is
+written. Second round confirmed: the install finishes, mynx starts
+Codex, and its commands run (so Codex reads `sandbox_mode` from
+`config.toml`).
+
 ### 2026-10-10 (90): README for users only (PR #12)
 
 Maintainer's request: only what's useful to users, like popular apps'

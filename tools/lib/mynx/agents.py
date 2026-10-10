@@ -14,8 +14,10 @@ from .client import TOOLS, Failure
 # events: the agent's hook event -> what it means for `mynx hook`
 # downloads: where its installer downloads silently (None: it shows progress)
 # needs: commands it runs that a fresh Debian may lack -> their package
-Agent = namedtuple("Agent", "name title command config events installer downloads needs",
-                   defaults=[None, {}])
+# sandbox: the config file that turns off a sandbox that can't work here
+# installer_env: for its installer; mynx asks its questions and starts it
+Agent = namedtuple("Agent", "name title command config events installer downloads needs sandbox "
+                   "installer_env", defaults=[None, {}, None, {}])
 
 AGENTS = {
     "claude": Agent("claude", "Claude Code", "claude", "~/.claude/settings.json",
@@ -24,7 +26,11 @@ AGENTS = {
     "codex": Agent("codex", "Codex", "codex", "~/.codex/hooks.json",
                    {"UserPromptSubmit": "start", "Stop": "stop", "PermissionRequest": "attention"},
                    "curl -fsSL https://chatgpt.com/codex/install.sh | sh", None,
-                   {"ps": "procps"}),  # to track its background server
+                   {"ps": "procps"},  # to track its background server
+                   # Its sandbox needs bubblewrap, which proot can't give namespaces.
+                   "~/.codex/config.toml",
+                   # Else it asks to start Codex, inside the install step.
+                   {"CODEX_NON_INTERACTIVE": "1"}),
     "gemini": Agent("gemini", "Gemini CLI", "gemini", "~/.gemini/settings.json",
                     {"BeforeAgent": "start", "AfterAgent": "stop", "Notification": "attention"},
                     "npm install -g @google/gemini-cli"),
@@ -67,6 +73,36 @@ def download_progress(title, before, size, showing):
     if size > before:
         return f"\r\x1b[K  Downloading {title}: {size // 1_000_000} MB", True
     return ("\r\x1b[K" if showing else ""), False
+
+
+SANDBOX_OFF = 'sandbox_mode = "danger-full-access"'
+
+
+def sandbox_off(text):
+    """Codex config [text] (None: no file yet) with its sandbox off: a
+    top-level sandbox_mode replaced, else one added before any [table]."""
+    lines = (text or "").splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if stripped.startswith("["):
+            break
+        if stripped.startswith("sandbox_mode") and stripped[len("sandbox_mode"):].lstrip().startswith("="):
+            lines[i] = SANDBOX_OFF + "\n"
+            return "".join(lines)
+    return SANDBOX_OFF + "\n" + "".join(lines)
+
+
+def turn_sandbox_off(agent):
+    path = os.path.expanduser(agent.sandbox)
+    try:
+        with open(path) as f:
+            text = f.read()
+    except FileNotFoundError:
+        text = None
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w") as f:
+        f.write(sandbox_off(text))
+    os.replace(path + ".tmp", path)
 
 
 def hook_command(agent):

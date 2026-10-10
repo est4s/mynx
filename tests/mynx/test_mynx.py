@@ -673,6 +673,57 @@ class MynxTest(unittest.TestCase):
         self.assertIn("1) Claude Code", run.stdout)
         self.assertIn("RAN-INSTALLER", run.stdout)
 
+    def codex_config(self):
+        try:
+            with open(os.path.join(self.home, ".codex", "config.toml")) as f:
+                return f.read()
+        except FileNotFoundError:
+            return None
+
+    def test_codex_install_asks_to_turn_its_sandbox_off(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "codex", stdin="y\ny\nn\n", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("Codex can only run commands here with its sandbox\nturned off.", run.stdout)
+        self.assertLess(run.stdout.index("Turn Codex's sandbox off? [y/N]"), run.stdout.index("RAN-INSTALLER"))
+        self.assertEqual(self.codex_config(), 'sandbox_mode = "danger-full-access"\n')
+        self.assertIn("Sandbox: off", run.stdout)
+
+    def test_codex_installer_runs_without_its_own_questions(self):
+        # Its own "Start Codex now?" ran Codex inside the install step,
+        # and quitting Codex failed the step before the sandbox was off.
+        path = self.fake_commands(curl='echo "echo NON_INTERACTIVE=\\$CODEX_NON_INTERACTIVE"')
+        run = self.agent("install", "codex", "--yes", "--no-notify", "--sandbox-off", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("NON_INTERACTIVE=1", run.stdout)
+
+    def test_codex_install_with_its_sandbox_on_when_asked_twice(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "codex", stdin="n\ny\ny\nn\n", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("Install Codex anyway, with its sandbox on?", run.stdout)
+        self.assertIn("RAN-INSTALLER", run.stdout)
+        self.assertIsNone(self.codex_config())
+        self.assertIn("Sandbox: on", run.stdout)
+
+    def test_codex_not_installed_when_both_answers_are_no(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "codex", stdin="n\nn\n", path=path)
+        self.assertEqual(run.returncode, 1)
+        self.assertNotIn("RAN-INSTALLER", run.stdout)
+        self.assertIn("Not installed.", run.stdout)
+
+    def test_codex_install_without_questions(self):
+        path = self.fake_commands(curl='echo "echo RAN-INSTALLER"')
+        run = self.agent("install", "codex", "--yes", "--no-notify", "--sandbox-off", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.codex_config(), 'sandbox_mode = "danger-full-access"\n')
+        os.remove(os.path.join(self.home, ".codex", "config.toml"))
+        run = self.agent("install", "codex", "--yes", "--no-notify", "--sandbox-on", path=path)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIsNone(self.codex_config())
+        self.assertEqual(self.agent("install", "codex", "--sandbox-on", "--sandbox-off").returncode, 2)
+
     def test_agent_list_for_scripts(self):
         path = self.fake_commands(claude="true")
         self.assertEqual(self.agent("list", "--tsv", path=path).stdout,

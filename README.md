@@ -76,7 +76,13 @@ installs it, keeping Debian and your files.
 - The **menu** opens first: apps, games, AI agents, settings. `menu`
   brings it back from the shell.
 - **AI agents** in the menu installs and starts Claude Code, Codex or
-  Gemini CLI; sign in with your own account.
+  Gemini CLI; sign in with your own account. How well each works
+  here:
+  - **Claude Code:** works, tested.
+  - **Codex:** works, tested, with its sandbox turned off. Its sandbox
+    can't run under proot, so mynx asks to turn it off when it
+    installs Codex.
+  - **Gemini CLI:** not tested yet.
 - `apt update`, then `apt install` any Debian package.
 - `mynx edit` (the menu's Settings) changes the theme, font and key
   bars; `mynx help` lists everything the `mynx` command does.

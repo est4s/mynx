@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", 
 
 from mynx.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,
                                     missing_steps,  # noqa: E402
-                                    remove_hooks)
+                                    remove_hooks, sandbox_off)
 from mynx.client import Failure  # noqa: E402
 
 CLAUDE = AGENTS["claude"]
@@ -112,6 +112,31 @@ class InstallStepsTest(unittest.TestCase):
             self.assertEqual(install_steps(AGENTS["gemini"], curl=True, node=node),
                              ["apt-get update && apt-get install -y nodejs npm",
                               "npm install -g @google/gemini-cli"])
+
+
+class SandboxTest(unittest.TestCase):
+    """Codex's sandbox can't work under proot; sandbox_off() turns it off
+    in ~/.codex/config.toml, keeping the rest of the file."""
+    OFF = 'sandbox_mode = "danger-full-access"\n'
+
+    def test_a_new_file(self):
+        self.assertEqual(sandbox_off(None), self.OFF)
+        self.assertEqual(sandbox_off(""), self.OFF)
+
+    def test_goes_before_the_first_table(self):
+        # Top-level keys after a [table] would belong to the table.
+        text = 'model = "gpt-5"\n\n[projects."/root"]\ntrust_level = "trusted"\n'
+        self.assertEqual(sandbox_off(text), self.OFF + text)
+
+    def test_replaces_a_top_level_sandbox_mode(self):
+        text = 'model = "gpt-5"\nsandbox_mode = "workspace-write"\n[tui]\nsandbox_mode = "x"\n'
+        self.assertEqual(sandbox_off(text),
+                         'model = "gpt-5"\nsandbox_mode = "danger-full-access"\n[tui]\nsandbox_mode = "x"\n')
+
+    def test_only_codex_has_one(self):
+        self.assertEqual(AGENTS["codex"].sandbox, "~/.codex/config.toml")
+        self.assertIsNone(AGENTS["claude"].sandbox)
+        self.assertIsNone(AGENTS["gemini"].sandbox)
 
 
 class DownloadProgressTest(unittest.TestCase):

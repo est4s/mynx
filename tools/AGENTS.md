@@ -103,7 +103,7 @@ their own.
 | `mynx sound` | whether the sound device is on; `mynx sound start` starts it again, `mynx sound install` installs it (see "The phone") |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME]` | start an agent in this terminal; offers to install it first if it's missing |
-| `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify` skip the questions) |
+| `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify`, and for Codex `--sandbox-off`/`--sandbox-on`, skip the questions) |
 | `mynx agent notify NAME on\|off` | an agent's phone notifications (adds or removes its hooks) |
 | `mynx hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
 | `mynx edit` | the settings editors, for people (full screen) |
@@ -200,6 +200,16 @@ the app; the user signs in with their own account:
 
 `curl` is installed first if it's missing. Afterwards it asks whether
 to turn on the agent's notifications.
+
+**Codex's sandbox:** Codex runs its commands in a sandbox built on
+bubblewrap, which can't work under proot, so with the sandbox on every
+command Codex tries fails. Before installing, `mynx agent install
+codex` explains this and asks to turn it off; it then puts
+`sandbox_mode = "danger-full-access"` at the top of
+`~/.codex/config.toml` (keeping the rest of the file). Saying no asks
+whether to install it anyway with the sandbox on. To turn it off later,
+add that line yourself (before any `[table]`), or run `codex -s
+danger-full-access`. Claude Code and Gemini CLI don't need this.
 
 **Notifications:** with them on, the agent's hooks run `mynx hook
 NAME`, which posts a phone notification when a turn that took
