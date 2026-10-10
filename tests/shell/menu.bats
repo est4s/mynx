@@ -7,10 +7,18 @@ MENU="$BATS_TEST_DIRNAME/../../tools/bin/menu"
 
 setup() {
     export HOME="$BATS_TEST_TMPDIR/home"
+    unset XDG_CONFIG_HOME GH_CONFIG_DIR GIT_CONFIG_GLOBAL # CI's runner sets XDG_CONFIG_HOME
     export MENU_GAME_DIRS="$BATS_TEST_TMPDIR/games:$HOME/games"
     export MENU_APP_DIRS="$BATS_TEST_TMPDIR/apps:$HOME/apps"
     export MENU_UPDATE_FILE="$BATS_TEST_TMPDIR/update-available"
     mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games" "$BATS_TEST_TMPDIR/apps"
+    gh_set_up
+}
+
+gh_set_up() { # gh signed in and git's email set: GitHub setup moves to System
+    mkdir -p "$HOME/.config/gh"
+    printf 'github.com:\n    user: someone\n' >"$HOME/.config/gh/hosts.yml"
+    printf '[user]\n\temail = 1+someone@users.noreply.github.com\n' >"$HOME/.gitconfig"
 }
 
 game() {
@@ -26,8 +34,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings System Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:apps menu:games files settings menu:system quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:apps menu:games files menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -45,7 +53,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings System Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -53,7 +61,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, agents, system, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, app-settings, agents, system, help, welcome, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -83,26 +91,96 @@ keys() {
     [[ $output == *"RUN: mynx update"* ]]
 }
 
+@test "settings menu" {
+    source "$MENU"
+    menu_items settings
+    [ "${ITEMS[*]}" = "App settings System Help" ]
+    [ "${ACTS[*]}" = "settings menu:system menu:help" ]
+}
+
 @test "system menu" {
     source "$MENU"
     menu_items system
-    [ "${ITEMS[*]}" = "Update all System info Getting started About Report a bug" ]
-    [ "${ACTS[*]}" = "update info welcome about report" ]
+    [ "${ITEMS[*]}" = "Update all System info GitHub setup" ]
+    [ "${ACTS[*]}" = "update info github" ]
+}
+
+@test "help menu" {
+    source "$MENU"
+    menu_items help
+    [ "${ITEMS[*]}" = "Getting started Report a bug About" ]
+    [ "${ACTS[*]}" = "welcome report about" ]
 }
 
 @test "About shows mynx about" {
-    run keys 74
+    run keys 633
     [[ $output == *"RUN: mynx about"* ]]
 }
 
-@test "System has Getting started" {
-    run keys 73xxxxxxqq
+@test "Help has Getting started" {
+    run keys 631xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 75
+    run keys 632
     [[ $output == *"RUN: mynx report"* ]]
+}
+
+@test "GitHub setup runs mynx github" {
+    run keys 623
+    [[ $output == *"RUN: mynx github"* ]]
+}
+
+@test "until GitHub is set up, it's in the main menu after AI agents, not in System" {
+    rm "$HOME/.config/gh/hosts.yml"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Apps Games Files Settings Exit" ]
+    [ "${ACTS[2]}" = github ]
+    menu_items system
+    [ "${ITEMS[*]}" = "Update all System info" ]
+}
+
+@test "GitHub needs git's email too" {
+    rm "$HOME/.gitconfig"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[2]}" = "Set up GitHub" ]
+}
+
+@test "GitHub setup follows gh's config folder" {
+    export GH_CONFIG_DIR="$BATS_TEST_TMPDIR/gh"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[2]}" = "Set up GitHub" ]
+    mkdir -p "$GH_CONFIG_DIR"
+    cp "$HOME/.config/gh/hosts.yml" "$GH_CONFIG_DIR/"
+    menu_items main
+    [ "${ITEMS[2]}" = Apps ]
+}
+
+@test "Set up GitHub comes last in a menu without AI agents" {
+    rm "$HOME/.config/gh/hosts.yml"
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Shell = shell\nBye = exit\n' >"$HOME/.config/mynx/menu.conf"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[*]}" = "Shell Bye Set up GitHub" ]
+}
+
+@test "Set up GitHub runs mynx github" {
+    rm "$HOME/.config/gh/hosts.yml"
+    run keys 3
+    [[ $output == *"RUN: mynx github"* ]]
+}
+
+@test "a menu file can name the settings editors and the Help menu" {
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Look = app-settings\nInfo = help\n' >"$HOME/.config/mynx/menu.conf"
+    source "$MENU"
+    menu_items main
+    [ "${ACTS[*]}" = "settings menu:help" ]
 }
 
 @test "games come from both folders, named after their files" {
@@ -236,7 +314,7 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 8
+    run keys 7
     [ "$status" -eq 10 ]
 }
 
@@ -251,8 +329,8 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
-@test "Settings opens the settings editor" {
-    run keys 6
+@test "Settings → App settings opens the settings editors" {
+    run keys 61
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -316,7 +394,7 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
 }
 
 @test "Update all runs apt" {
-    run keys 71
+    run keys 621
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 

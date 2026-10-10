@@ -17,6 +17,8 @@
 # Update available: the app writes the version of a newer release to
 #   /tmp/.mynx/update-available; while it's there, the main menu starts with
 #   "Update available" (mynx update).
+# GitHub setup: in the main menu (after AI agents) until gh is signed in and
+#   git's email is set, then in Settings → System (mynx github).
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
 # MENU_APP_DIRS (colon-separated) override where games and apps are found,
 # MENU_UPDATE_FILE the app's update notice, MENU_ART the boot splash's title
@@ -82,7 +84,7 @@ theme_name() { # the theme the colours file was set from (see mynx theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, apps, games, settings, agents, system, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, games, settings, app-settings, agents, system, help, welcome, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -106,9 +108,11 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       files) action=files ;;
       apps) action=menu:apps ;;
       games) action=menu:games ;;
-      settings) action=settings ;;
+      settings) action=menu:settings ;;
+      app-settings) action=settings ;;
       agents) action=menu:agents ;;
       system) action=menu:system ;;
+      help) action=menu:help ;;
       welcome) action=welcome ;;
       exit) action=quit_session ;;
       run) PROBLEMS+=("line $n: run needs a command"); continue ;;
@@ -164,7 +168,8 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [system]=System)
+declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [settings]=Settings
+  [system]=System [help]=Help)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
   local name=${1##*/} label= w
@@ -186,6 +191,23 @@ app_label() { # app_label <file>: its "# label:" line, else named like a game
   game_label "$1"
 }
 
+github_ready() { # gh signed in (offline: its hosts file) and git's email set
+  local gh=${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}
+  [[ -s $gh/hosts.yml ]] && git config --global user.email >/dev/null 2>&1
+}
+
+offer_github() { # "Set up GitHub" after AI agents, else last
+  local i
+  for i in "${!ACTS[@]}"; do
+    if [[ ${ACTS[i]} == menu:agents ]]; then
+      ITEMS=("${ITEMS[@]:0:i+1}" "Set up GitHub" "${ITEMS[@]:i+1}")
+      ACTS=("${ACTS[@]:0:i+1}" github "${ACTS[@]:i+1}")
+      return
+    fi
+  done
+  ITEMS+=("Set up GitHub") ACTS+=(github)
+}
+
 menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
   # Actions: "menu:<name>" opens a submenu, "exit" drops to the shell,
   # "quit_session" closes the tab (exit code 10, handled in ~/.bashrc),
@@ -201,9 +223,10 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ((${#ITEMS[@]})) && break
       done
       if ! ((${#ITEMS[@]})); then
-        ITEMS=(Shell "AI agents" Apps Games Files Settings System Exit)
-        ACTS=(exit menu:agents menu:apps menu:games files settings menu:system quit_session)
+        ITEMS=(Shell "AI agents" Apps Games Files Settings Exit)
+        ACTS=(exit menu:agents menu:apps menu:games files menu:settings quit_session)
       fi
+      github_ready || offer_github
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
         ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
       fi ;;
@@ -236,9 +259,16 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ITEMS+=("$title") ACTS+=("agent:$name")
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
+    settings)
+      ITEMS=("App settings" System Help)
+      ACTS=(settings menu:system menu:help) ;;
     system)
-      ITEMS=("Update all" "System info" "Getting started" About "Report a bug")
-      ACTS=(update info welcome about report) ;;
+      ITEMS=("Update all" "System info")
+      ACTS=(update info)
+      if github_ready; then ITEMS+=("GitHub setup") ACTS+=(github); fi ;;
+    help)
+      ITEMS=("Getting started" "Report a bug" About)
+      ACTS=(welcome report about) ;;
   esac
 }
 
@@ -431,6 +461,7 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 
 act_about() { run mynx about || pause; }  # in less; a failure stays on screen
 act_report() { run mynx report; pause; }  # it asks; its answer stays on screen
+act_github() { run mynx github; pause; }  # its summary stays on screen
 act_appupdate() { run mynx update; pause; }  # shows the notes and asks
 
 act_update() {

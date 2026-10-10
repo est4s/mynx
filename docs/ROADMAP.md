@@ -20,13 +20,6 @@ polish (first run, icon, updates from GitHub Releases).
 
 ## Planned
 
-### Guided GitHub setup
-`mynx github` (and a menu item), optional and never part of the first
-run: installs `git` and `gh`, signs in through the browser (the
-one-time code copied to the clipboard), sets git's name and GitHub's
-noreply email, and ends with a summary. mynx never stores a token. With
-`gh` signed in, `mynx report` files bug reports itself.
-
 ### Background services
 Hidden terminal tabs for servers and daemons (a web server, `sshd`, a
 database, a bot), since there's no init to run them:

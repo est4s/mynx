@@ -2,6 +2,7 @@
 
 Run: python3 -m unittest discover -s tests/mynx
 """
+import contextlib
 import json
 import os
 import shutil
@@ -1011,6 +1012,183 @@ esac'''
         run = self.report("--json")
         self.assertEqual(run.returncode, 2)
         self.assertIn("usage: mynx report", json.loads(run.stdout)["error"])
+
+    # --- github --------------------------------------------------------------
+
+    def fake_github(self, signed_in=None, installed=True, login_fails=False, name="Mona Lisa"):
+        """A PATH with bash and fake gh and git (git runs the real one, so
+        `git config --global` writes $HOME/.gitconfig). Not installed, an
+        apt-get that installs them. gh's account is in tmp/gh-login."""
+        state = os.path.join(self.tmp.name, "gh-login")
+        if signed_in:
+            self.write(state, signed_in + "\n")
+        user = ('{"id": 42, "login": "%s", "name": ' + (f'"{name}"' if name else "null") + '}')
+        gh = f'''
+state={state}
+case "$1 $2" in
+  "api user")
+    [ -s "$state" ] || {{ echo "You are not logged into any GitHub hosts." >&2; exit 1; }}
+    read login < "$state"
+    if [ "$3" = --jq ]; then echo "$login"; else printf '{user}\\n' "$login"; fi ;;
+  "auth login")
+    echo "$@" > {state}.args
+    printf '\\033[0;33m!\\033[0m First copy your one-time code: \\033[0;1;39mAB12-CD34\\033[0m\\r\\n'
+    printf 'Press Enter to open github.com in your browser... '
+    read enter
+    {'exit 1' if login_fails else 'echo octocat > "$state"; echo "Logged in as octocat"'} ;;
+  "auth setup-git") echo done > {state}.setup-git ;;
+  *) exit 1 ;;
+esac'''
+        git = 'exec /usr/bin/git "$@"'
+        bin_dir = os.path.join(self.tmp.name, "bin")
+        os.makedirs(bin_dir, exist_ok=True)
+        for tool in ("bash", "python3"):
+            with contextlib.suppress(FileExistsError):
+                os.symlink(shutil.which(tool), os.path.join(bin_dir, tool))
+        if installed:
+            self.fake_commands(gh=gh, git=git)
+        else:
+            self.write(os.path.join(self.tmp.name, "gh.src"), "#!/bin/sh\n" + gh + "\n")
+            self.write(os.path.join(self.tmp.name, "git.src"), "#!/bin/sh\n" + git + "\n")
+            self.fake_commands(**{"apt-get": f'''
+echo "ran apt-get $*"
+[ "$1" = install ] || exit 0
+while read -r line; do echo "$line"; done < {self.tmp.name}/gh.src > {bin_dir}/gh
+while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/git
+{shutil.which("chmod")} +x {bin_dir}/gh {bin_dir}/git'''})
+        return bin_dir
+
+    def github(self, *args, input="", path=None):
+        if not self.app:
+            self.start_app({"clipboard-set": {"ok": True}})
+        return self.mynx("github", *args, input=input, env={"PATH": path or self.fake_github()})
+
+    def git_config(self, key):
+        run = subprocess.run(["git", "config", "--global", key], capture_output=True, text=True,
+                             env={"HOME": self.home, "PATH": "/usr/bin:/bin"})
+        return run.stdout.strip() or None
+
+    def gh_state(self, name):
+        path = os.path.join(self.tmp.name, "gh-login" + name)
+        if not os.path.exists(path):
+            return None
+        with open(path) as f:
+            return f.read().strip()
+
+    def test_github_signs_in_copies_the_code_and_sets_up_git(self):
+        run = self.github(input="\n")
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.app.requests, [["clipboard-set", "AB12-CD34"]])
+        self.assertIn("AB12-CD34", run.stdout)
+        self.assertIn("copied", run.stdout)
+        self.assertEqual(self.gh_state(".args"),
+                         "auth login --web --hostname github.com --git-protocol https")
+        self.assertEqual(self.git_config("user.name"), "Mona Lisa")
+        self.assertEqual(self.git_config("user.email"), "42+octocat@users.noreply.github.com")
+        self.assertEqual(self.gh_state(".setup-git"), "done")
+        summary = run.stdout.split("Logged in as octocat")[1]
+        self.assertIn("GitHub     signed in as @octocat", summary)
+        self.assertIn("git name   Mona Lisa", summary)
+        self.assertIn("git email  42+octocat@users.noreply.github.com", summary)
+
+    def test_github_points_git_at_gh_before_signing_in(self):
+        # Then gh doesn't ask "Authenticate Git with your GitHub credentials?"
+        self.github(input="\n")
+        run = subprocess.run(["git", "config", "--global", "--get-all", "credential.https://github.com.helper"],
+                             capture_output=True, text=True, env={"HOME": self.home, "PATH": "/usr/bin:/bin"})
+        self.assertEqual(run.stdout, "\n!gh auth git-credential\n")
+
+    def test_github_names_git_after_the_login_when_the_account_has_no_name(self):
+        run = self.github(input="\n", path=self.fake_github(name=None))
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertEqual(self.git_config("user.name"), "octocat")
+
+    def test_github_signed_in_asks_to_switch_and_keeps_the_account(self):
+        run = self.github(input="n\n", path=self.fake_github(signed_in="est4s"))
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("Signed in to GitHub as @est4s. Switch to another account? [y/N]", run.stdout)
+        self.assertIsNone(self.gh_state(".args"))
+        self.assertEqual(self.app.seen, [])
+        self.assertEqual(self.git_config("user.email"), "42+est4s@users.noreply.github.com")
+        self.assertIn("signed in as @est4s", run.stdout)
+
+    def test_github_signed_in_switches_accounts(self):
+        run = self.github(input="y\n\n", path=self.fake_github(signed_in="est4s"))
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIsNotNone(self.gh_state(".args"))
+        self.assertEqual(self.git_config("user.email"), "42+octocat@users.noreply.github.com")
+
+    def test_github_asks_before_replacing_git_identity(self):
+        self.write(os.path.join(self.home, ".gitconfig"), "[user]\n\tname = Me\n\temail = me@example.com\n")
+        run = self.github(input="n\nn\n", path=self.fake_github(signed_in="est4s"))
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        text = " ".join(run.stdout.split())
+        self.assertIn("git commits are signed Me <me@example.com>", text)
+        self.assertIn("Change them to Mona Lisa <42+est4s@users.noreply.github.com>? [y/N]", text)
+        self.assertEqual(self.git_config("user.email"), "me@example.com")
+        self.assertIn("git email  me@example.com", run.stdout)
+
+    def test_github_replaces_git_identity_when_asked(self):
+        self.write(os.path.join(self.home, ".gitconfig"), "[user]\n\tname = Me\n\temail = me@example.com\n")
+        self.github(input="n\ny\n", path=self.fake_github(signed_in="est4s"))
+        self.assertEqual(self.git_config("user.name"), "Mona Lisa")
+        self.assertEqual(self.git_config("user.email"), "42+est4s@users.noreply.github.com")
+
+    def test_github_doesnt_ask_when_git_identity_already_matches(self):
+        self.write(os.path.join(self.home, ".gitconfig"),
+                   "[user]\n\tname = Mona Lisa\n\temail = 42+est4s@users.noreply.github.com\n")
+        run = self.github(input="n\n", path=self.fake_github(signed_in="est4s"))
+        self.assertNotIn("Change them", run.stdout)
+
+    def test_github_installs_git_and_gh_asking_first(self):
+        run = self.github(input="y\n\n", path=self.fake_github(installed=False))
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        before = run.stdout.split("Install them? [y/N]")[0]
+        self.assertIn("apt-get install -y git gh", before)
+        self.assertNotIn("ran apt-get", before)
+        self.assertIn("ran apt-get update", run.stdout)
+        self.assertIn("ran apt-get install -y git gh", run.stdout)
+        self.assertEqual(self.git_config("user.name"), "Mona Lisa")
+
+    def test_github_installs_nothing_when_told_no(self):
+        run = self.github(input="n\n", path=self.fake_github(installed=False))
+        self.assertEqual(run.returncode, 1)
+        self.assertNotIn("ran apt-get", run.stdout)
+        self.assertIn("Nothing was installed.", run.stdout)
+
+    def test_github_stops_when_signing_in_fails(self):
+        run = self.github(input="\n", path=self.fake_github(login_fails=True))
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("signing in to GitHub didn't work", run.stderr)
+        self.assertIsNone(self.git_config("user.name"))
+
+    def test_github_status(self):
+        self.write(os.path.join(self.home, ".gitconfig"), "[user]\n\tname = Me\n")
+        run = self.github("status", path=self.fake_github(signed_in="est4s"))
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "GitHub     signed in as @est4s\ngit name   Me\ngit email  (not set)\n")
+        self.assertIsNone(self.gh_state(".args"))
+
+    def test_github_status_without_gh(self):
+        bin_dir = os.path.join(self.tmp.name, "bin")
+        os.makedirs(bin_dir)
+        os.symlink(shutil.which("python3"), os.path.join(bin_dir, "python3"))
+        run = self.github("status", path=bin_dir)
+        self.assertEqual(run.stdout, "GitHub     gh isn't installed (mynx github sets it up)\n"
+                                     "git name   (git isn't installed)\ngit email  (git isn't installed)\n")
+
+    def test_github_status_json(self):
+        self.write(os.path.join(self.home, ".gitconfig"), "[user]\n\tname = Me\n")
+        run = self.github("status", "--json", path=self.fake_github(signed_in="est4s"))
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "gh": True, "git": True, "login": "est4s",
+                                                  "name": "Me", "email": None})
+
+    def test_github_setup_refuses_json_and_unknown_words(self):
+        path = self.fake_github()
+        for args in (["--json"], ["now"]):
+            run = self.github(*args, path=path)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("mynx github [status] [--yes]", run.stdout + run.stderr)
 
     # --- open --------------------------------------------------------------
 

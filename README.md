@@ -84,7 +84,7 @@ installs it, keeping Debian and your files.
     installs Codex.
   - **Gemini CLI:** not tested yet.
 - `apt update`, then `apt install` any Debian package.
-- `mynx edit` (the menu's Settings) changes the theme, font and key
+- `mynx edit` (the menu's Settings → App settings) changes the theme, font and key
   bars; `mynx help` lists everything the `mynx` command does.
 
 ## Good to know
@@ -96,10 +96,16 @@ installs it, keeping Debian and your files.
 
 ## Help and bug reports
 
-`mynx report "what went wrong"` (or the menu's System → Report a bug)
+`mynx report "what went wrong"` (or the menu's Settings → Help → Report a
+bug)
 shows a report with your phone's details, and sends it as a GitHub
 issue only once you agree. You can also open an
 [issue](../../issues) yourself.
+
+`mynx github` (the main menu's "Set up GitHub" until it's done, then
+Settings → System → GitHub setup) installs `git` and `gh`, signs
+you in to GitHub in the browser and sets git's name and email; then
+bug reports go straight to GitHub.
 
 ## License
 

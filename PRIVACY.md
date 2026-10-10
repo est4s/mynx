@@ -44,7 +44,7 @@ A new version is only downloaded, from GitHub, when you say yes in
 
 ## Bug reports
 
-`mynx report` (menu → System → Report a bug) sends nothing until you
+`mynx report` (menu → Settings → Help → Report a bug) sends nothing until you
 say yes, and shows you the whole report first: what you wrote, the
 app's version, the Android version, the phone model and the app's
 last crash, if any (`--no-crash` leaves that out). It goes to GitHub
