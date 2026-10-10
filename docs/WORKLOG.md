@@ -254,6 +254,12 @@ force fullscreen rather than clear the canary's record in
 `~/.claude.json`, which running sessions rewrite. Tests:
 `test_agents.py` (`LaunchTest`, `StaleSocketsTest`), `test_mynx.py`,
 `shell-setup.bats`. Not tried on the phone yet (Next 4a).
+Also `scripts/deliver.sh`: after the move it failed copying to
+`Download/mynx-build.apk`, which the uninstalled debug-signed mynx made
+and this one can't overwrite. Each run is now `mynx-dev-RUN.apk` (its
+own older ones deleted), and from the release mynx, where
+`install-apk` is refused, it says to open the file in Files. Tried on
+the phone with run 38058304575.
 
 ### 2026-10-10 (96): The first release, v0.1.0
 
