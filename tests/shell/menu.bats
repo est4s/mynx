@@ -7,6 +7,7 @@ MENU="$BATS_TEST_DIRNAME/../../tools/bin/menu"
 
 setup() {
     export HOME="$BATS_TEST_TMPDIR/home"
+    unset XDG_CONFIG_HOME GH_CONFIG_DIR GIT_CONFIG_GLOBAL # CI's runner sets XDG_CONFIG_HOME
     export MENU_GAME_DIRS="$BATS_TEST_TMPDIR/games:$HOME/games"
     export MENU_APP_DIRS="$BATS_TEST_TMPDIR/apps:$HOME/apps"
     export MENU_UPDATE_FILE="$BATS_TEST_TMPDIR/update-available"
