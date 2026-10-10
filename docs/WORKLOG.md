@@ -212,13 +212,12 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-10 (92): The agent bar takes the maintainer's layout (PR `agent-keybar`)
+### 2026-10-10 (92): The agent bar takes the maintainer's layout (confirmed, PR #14)
 
 Maintainer's request: the built-in `agent` bar becomes the copy they
 use (`~/.config/mynx/keybars/agent.conf`): Esc Ctrl ↑ Tab Newline / on
 top, ← ↓ → Enter Mode Ctrl+C below. New: Ctrl and Enter; ↑ sits above
-↓. `KeyBarTest` pins the labels. To check on the phone: start an agent
-in mynx dev (with no `agent.conf` of its own) and see the two rows.
+↓. `KeyBarTest` pins the labels. Confirmed on the phone in mynx dev.
 
 ### 2026-10-10 (91): Codex asks to turn its sandbox off (confirmed, PR #13)
 
