@@ -744,7 +744,7 @@ def agent_hook(agent, event):
         request("notify", agent.title, text, *options)
 
 
-AGENT_USAGE = ("usage: mynx agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify] [--sandbox-off|--sandbox-on]"
+AGENT_USAGE = ("usage: mynx agent [list] | start [NAME [ARGS...]] | install [NAME] [--yes] [--notify|--no-notify] [--sandbox-off|--sandbox-on]"
                " | notify NAME on|off")
 
 
@@ -754,11 +754,11 @@ def cmd_agent(args, as_json):
         for s in (agents.status(a) for a in agents.AGENTS.values()):
             print(f"{s['name']}\t{s['title']}\t{'installed' if s['installed'] else ''}")
         return 0
-    if sub == "start" and len(args) <= 2:
+    if sub == "start":
         if len(args) == 1:
             return pick_agent("Start an AI agent:", start_agent)
         if args[1] in agents.AGENTS:
-            return start_agent(agents.AGENTS[args[1]])
+            return start_agent(agents.AGENTS[args[1]], args[2:])
     if sub == "list" and len(args) <= 1:
         found = [agents.status(a) for a in agents.AGENTS.values()]
         lines = [f"{s['name']:<7} {s['title']:<12} {'installed' if s['installed'] else 'not installed':<14} "
@@ -809,8 +809,9 @@ def agent_binary(agent):
     return found or (local if os.access(local, os.X_OK) else None)
 
 
-def start_agent(agent):
-    """Runs [agent] in this terminal; offers to install it first if it's missing."""
+def start_agent(agent, args=()):
+    """Runs [agent] with [args] in this terminal; offers to install it first
+    if it's missing."""
     if not agent_binary(agent):
         print(f"{agent.title} isn't installed yet.\n")
         code = install_agent(agent, yes=False, notify=None, then="")
@@ -823,10 +824,14 @@ def start_agent(agent):
     if not binary:
         raise Failure(f"can't find {agent.command} after installing it; open a new tab and run {agent.command}")
     get_what_it_needs(agent)
+    args, extra = agents.launch(agent, list(args), os.environ, read_file("~/.claude/settings.json"),
+                                claude_socket() if agent.name == "claude" else None)
+    argv = [agent.command] + args
+    env = {**os.environ, **extra}
     sys.stdout.flush()
     bar_file = os.environ.get("MYNX_KEYBAR_FILE")
     if not bar_file:
-        os.execv(binary, [agent.command])
+        os.execve(binary, argv, env)
     # Like the keybar command: the agent's bar (else the generic one) while
     # it runs, then the bar from before.
     try:
@@ -837,9 +842,40 @@ def start_agent(agent):
     write_quietly(bar_file, f"{agent.name},agent")
     signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl+C is for the agent
     try:
-        return subprocess.run([agent.command], executable=binary).returncode
+        return subprocess.run(argv, executable=binary, env=env).returncode
     finally:
         write_quietly(bar_file, before)
+
+
+def read_file(path):
+    try:
+        with open(os.path.expanduser(path)) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def claude_socket():
+    """A socket path for this Claude Code session, in a private folder
+    cleared of those whose session is gone. Named after this process,
+    which lives as long as the session (or becomes it)."""
+    folder = os.path.expanduser(agents.SOCKETS)
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    os.chmod(folder, 0o700)
+    for name in agents.stale_sockets(os.listdir(folder), alive=pid_alive):
+        with contextlib.suppress(OSError):
+            os.remove(os.path.join(folder, name))
+    return os.path.join(folder, f"{os.getpid()}-{int(time.time())}.sock")
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        pass  # someone else's
+    return True
 
 
 def write_quietly(path, text):

@@ -453,6 +453,16 @@ Bugs that took a phone round to find; keep them from coming back.
   Installing it asks to turn the sandbox off (`Agent.sandbox`), and
   its installer runs with `CODEX_NON_INTERACTIVE=1`: otherwise it
   starts Codex inside the install step.
+- **Claude Code under proot** (`agents.launch()`): its cross-session
+  messaging needs `--messaging-socket-path` (no uid map, so it can't
+  check its own socket folder's owner), and its fullscreen "boot
+  canary" turns fullscreen off for the version after two starts that
+  die before the first healthy frame (`fullscreenAutoDisabled` in
+  `~/.claude.json`; closing a tab while it starts is enough), leaving
+  the inline mode that scrolls away. So `mynx agent start` (which the
+  shell's `claude` function calls) adds the flag and
+  `CLAUDE_CODE_NO_FLICKER=1`, unless settings.json says
+  `"tui": "default"`.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

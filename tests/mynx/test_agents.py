@@ -7,9 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib"))
 
-from mynx.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,
-                                    missing_steps,  # noqa: E402
-                                    remove_hooks, sandbox_off)
+from mynx.agents import (AGENTS, add_hooks, download_progress, has_hooks, install_steps,  # noqa: E402
+                         launch, missing_steps, remove_hooks, sandbox_off, stale_sockets)
 from mynx.client import Failure  # noqa: E402
 
 CLAUDE = AGENTS["claude"]
@@ -160,6 +159,44 @@ class DownloadProgressTest(unittest.TestCase):
     def test_claude_downloads_into_its_own_folder(self):
         self.assertEqual(AGENTS["claude"].downloads, "~/.claude/downloads")
         self.assertIsNone(AGENTS["codex"].downloads)
+
+
+class LaunchTest(unittest.TestCase):
+    """What mynx adds when it starts an agent, so it works under proot."""
+
+    SOCKET = "/root/.cache/mynx/claude-msg/41-1700000000.sock"
+
+    def claude(self, args=(), environ=None, settings=None):
+        return launch(CLAUDE, list(args), environ or {}, settings, self.SOCKET)
+
+    def test_claude_gets_a_messaging_socket_and_fullscreen(self):
+        # proot has no uid map, so Claude Code can't check its own socket
+        # folder; and a few starts that died early turn fullscreen off.
+        self.assertEqual(self.claude(["--resume", "x"]),
+                         (["--messaging-socket-path", self.SOCKET, "--resume", "x"],
+                          {"CLAUDE_CODE_NO_FLICKER": "1"}))
+
+    def test_a_socket_given_by_hand_wins(self):
+        for given in (["--messaging-socket-path", "/s"], ["--messaging-socket-path=/s"]):
+            self.assertEqual(self.claude(given)[0], given)
+
+    def test_fullscreen_left_alone_when_chosen_otherwise(self):
+        # /tui default saves "tui": "default" in Claude Code's settings.
+        self.assertEqual(self.claude(settings='{"tui": "default"}')[1], {})
+        self.assertEqual(self.claude(environ={"CLAUDE_CODE_NO_FLICKER": "0"})[1], {})
+        self.assertEqual(self.claude(settings='{"tui": "fullscreen"}')[1], {"CLAUDE_CODE_NO_FLICKER": "1"})
+        self.assertEqual(self.claude(settings="not json")[1], {"CLAUDE_CODE_NO_FLICKER": "1"})
+        self.assertEqual(self.claude(settings="[]")[1], {"CLAUDE_CODE_NO_FLICKER": "1"})
+
+    def test_other_agents_start_as_they_are(self):
+        for name in ("codex", "gemini"):
+            self.assertEqual(launch(AGENTS[name], ["-x"], {}, None, self.SOCKET), (["-x"], {}))
+
+
+class StaleSocketsTest(unittest.TestCase):
+    def test_sockets_of_sessions_that_are_gone(self):
+        names = ["41-1700000000.sock", "42-1700000001.sock", "notes.txt", "x-1.sock"]
+        self.assertEqual(stale_sockets(names, alive=lambda pid: pid == 41), ["42-1700000001.sock"])
 
 
 if __name__ == "__main__":

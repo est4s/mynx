@@ -119,6 +119,16 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
+### 4a. Claude Code: socket and fullscreen, try it on the phone
+
+Built (entry 97). In mynx dev with Claude Code installed, `claude`
+typed in the shell and AI agents in the menu should both start it
+with no "Cross-session messaging is off" line and the input at the
+bottom, staying put while scrolling. `/tui default`, then a new
+`claude`: inline, as asked. `/tui fullscreen` puts it back. The
+maintainer's `~/.local/claude-wrap` (see `~/AGENTS.md`) does the
+socket part by hand and can go once this ships.
+
 ### 5. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
@@ -226,6 +236,24 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-10 (97): Claude Code: messaging socket and fullscreen
+
+After the move, Claude Code in the fresh Debian said "Cross-session
+messaging is off" (no uid map under proot), and its input no longer
+stuck to the bottom: its boot canary had recorded two fullscreen starts
+that died early and turned fullscreen off for 2.1.296
+(`fullscreenAutoDisabled` in `~/.claude.json`). Now
+`mynx agent start NAME [ARGS…]` passes ARGS, and for Claude Code adds
+`--messaging-socket-path ~/.cache/mynx/claude-msg/PID-TIME.sock`
+(stale ones cleared) and `CLAUDE_CODE_NO_FLICKER=1` unless
+settings.json has `"tui": "default"` (what `/tui default` saves) or
+the variable is set. The shell's `claude`/`codex`/`gemini` functions
+now call `mynx agent start`, which already did the key bar. Decided:
+force fullscreen rather than clear the canary's record in
+`~/.claude.json`, which running sessions rewrite. Tests:
+`test_agents.py` (`LaunchTest`, `StaleSocketsTest`), `test_mynx.py`,
+`shell-setup.bats`. Not tried on the phone yet (Next 4a).
 
 ### 2026-10-10 (96): The first release, v0.1.0
 

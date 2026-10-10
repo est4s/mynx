@@ -731,19 +731,33 @@ class MynxTest(unittest.TestCase):
                          "claude\tClaude Code\tinstalled\ncodex\tCodex\t\ngemini\tGemini CLI\t\n")
 
     def test_agent_start_runs_an_installed_agent(self):
-        path = self.fake_commands(claude='echo "CLAUDE STARTED $*"')
-        run = self.agent("start", "claude", path=path)
-        self.assertEqual((run.returncode, run.stdout), (0, "CLAUDE STARTED \n"))
+        path = self.fake_commands(gemini='echo "GEMINI STARTED $*"')
+        run = self.agent("start", "gemini", path=path)
+        self.assertEqual((run.returncode, run.stdout), (0, "GEMINI STARTED \n"))
+
+    def test_agent_start_gives_claude_a_socket_and_fullscreen(self):
+        sockets = os.path.join(self.home, ".cache", "mynx", "claude-msg")
+        os.makedirs(sockets)
+        self.write(os.path.join(sockets, "999999999-1.sock"), "")  # a session that's gone
+        path = self.fake_commands(claude='echo "$CLAUDE_CODE_NO_FLICKER $*"')
+        run = self.agent("start", "claude", "--resume", "a b", path=path)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        flicker, flag, socket, *rest = run.stdout.split(" ", 3)
+        self.assertEqual((flicker, flag, rest), ("1", "--messaging-socket-path", ["--resume a b\n"]))
+        self.assertEqual(os.path.dirname(socket), sockets)
+        self.assertRegex(os.path.basename(socket), r"^\d+-\d+\.sock$")
+        self.assertEqual(os.stat(sockets).st_mode & 0o777, 0o700)
+        self.assertFalse(os.path.exists(os.path.join(sockets, "999999999-1.sock")))
 
     def test_agent_start_shows_the_agents_key_bar_then_puts_the_old_one_back(self):
         bar_file = os.path.join(self.tmp.name, "keybar")
         self.write(bar_file, "menu")
-        path = self.fake_commands(claude=f'echo "BAR $(cat {bar_file})"; exit 3')
+        path = self.fake_commands(codex=f'echo "BAR $(cat {bar_file}) $*"; exit 3')
         environ = {"PATH": path, "MYNX_REQUESTS": self.requests, "HOME": self.home,
                    "MYNX_TOOLS": self.tools, "MYNX_TIMEOUT": "1", "MYNX_KEYBAR_FILE": bar_file}
-        run = subprocess.run(["python3", MYNX, "agent", "start", "claude"], capture_output=True,
+        run = subprocess.run(["python3", MYNX, "agent", "start", "codex", "--search"], capture_output=True,
                              text=True, env=environ)
-        self.assertEqual((run.returncode, run.stdout), (3, "BAR claude,agent\n"))
+        self.assertEqual((run.returncode, run.stdout), (3, "BAR codex,agent --search\n"))
         with open(bar_file) as f:
             self.assertEqual(f.read(), "menu")
 
