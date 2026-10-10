@@ -16,20 +16,32 @@ are in git history: the full log up to entry 84 is
   agent support, Android integration (clipboard, sharing, location,
   sensors, camera, flashlight, sound in and out, rotation lock), and
   polish (welcome page, wakelock, Settings shortcut, `mynx about`,
-  themed icon, the title art and "m" icon). Also: the rename to Mynx,
-  bug reports (`mynx report`), and **Mynx Dev**, debug builds as a
+  themed icon, the title art and "m" icon). Also: the rename to mynx,
+  bug reports (`mynx report`), and **mynx dev**, debug builds as a
   separate app (entry 82).
 - **Built, waiting for a release to test:** app updates from GitHub
-  releases (`mynx update`, the daily check, entry 81). Mynx Dev
+  releases (`mynx update`, the daily check, entry 81). mynx dev
   doesn't update from releases, so only a release can try them.
 - **Not released yet:** no `v*` tag, and the release key isn't made.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
-  CI builds PRs; `scripts/deliver.sh` installs a build in Mynx Dev.
+  CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`.
 
 
 ## Next
+
+### 0. Finish PR #12 (`readme-logo`)
+
+- **On the phone, still to check** (entry 89): the launcher label
+  "mynx dev", the menu's pixel title and pages (Getting started still
+  fits), `mynx about`. The setup screen's logo is confirmed.
+- **Docker Hub sign-in:** the maintainer makes a new read-only token
+  and runs `mynx clipboard get | gh secret set DOCKERHUB_TOKEN` (check
+  `DOCKERHUB_USERNAME`, `est4s`, is their Docker Hub name). Then a
+  build's "Sign in to Docker Hub" step should print "Login Succeeded",
+  not the warning.
+- Then merge.
 
 ### 1. The first release, v0.1.0
 
@@ -45,24 +57,24 @@ are in git history: the full log up to entry 84 is
    anything fatal on `main` and move the tag as RELEASING.md says. The
    release page should have `mynx-0.1.0.apk`.
 3. **The move** (RELEASING.md, "Debug and release builds on one phone"):
-   the maintainer's Mynx is a debug build with the release's ID, so
+   the maintainer's mynx is a debug build with the release's ID, so
    the release can't install over it. `scripts/backup-root.sh`,
    uninstall, install the release, `restore-root.sh` (entry 84). Then:
    `mynx about` says 0.1.0, `mynx install-apk` refuses (debug only).
-   From then on: develop in Mynx, test in Mynx Dev.
+   From then on: develop in mynx, test in mynx dev.
    **After the move** (maintainer's decision, 2026-10-08): keep the two
    scripts (a new phone or a reinstall needs them again), but trim
-   RELEASING.md's "Debug and release builds on one phone" to Mynx Dev
+   RELEASING.md's "Debug and release builds on one phone" to mynx dev
    plus a short general note ("moving to a new phone: `backup-root.sh`,
    then `restore-root.sh`"), drop its builds-up-to-87 steps, and drop
    this item.
 
 ### 2. Test updates for real: v0.1.1
 
-Merge any change and tag `v0.1.1`. In Mynx 0.1.0, `mynx update`
+Merge any change and tag `v0.1.1`. In mynx 0.1.0, `mynx update`
 checks at once: it should show 0.1.1 with its notes and size; `y`
 downloads, and the installer opens (the first time Android asks to
-allow installing apps: allow, run it again). After **Update**, Mynx
+allow installing apps: allow, run it again). After **Update**, mynx
 comes back as 0.1.1 with tabs and Debian intact. Within a day the
 notification and the menu's "Update available" should come on their
 own (with `update-check` on).
@@ -89,7 +101,7 @@ never part of the first run. Proposed shape (agreed in principle):
 - Sets git's `user.name` and `user.email` from the account, with
   GitHub's noreply address so the real email stays out of commits.
 - Ends with a summary: who's signed in, what was set.
-- Mynx never stores a token: `gh` keeps its own login.
+- mynx never stores a token: `gh` keeps its own login.
 
 With `gh` signed in, `mynx report` already files issues itself, so this
 makes bug reports one tap.
@@ -204,7 +216,7 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-09 (89): The name in small letters, the pixel title (PR #12, not on the phone yet)
+### 2026-10-09 (89): The name in small letters, the pixel title, the setup logo (PR #12)
 
 Maintainer's decisions: the name is written "mynx" everywhere it's
 shown (the app's label, "mynx dev", `mynx about` and update messages,
@@ -219,12 +231,18 @@ pages (Getting started still fits), `mynx about`.
 Then (same PR): the setup screen ("Setting up Debian…", first start)
 shows the whole logo, as in the README, in place of the old
 "▓▒░ MYNX ░▒▓" text: a vector drawable made by `scripts/mynx-svg.py
---vector`, kept in step by a test. To check: clear mynx dev's storage,
-open it.
+--vector`, kept in step by a test. **Confirmed** on the phone
+(build of `9d2a359`, after clearing mynx dev's storage).
 
 CI then failed twice on Docker Hub's anonymous pull limit (shared
 runner IPs). The maintainer made a read-only Docker Hub token; both
 workflows now `docker login` with the `DOCKERHUB_*` secrets.
+The step retries and falls back to an anonymous pull with a warning
+(Docker's auth server timed out for a while that night). **Not
+working yet:** Docker Hub answers "incorrect username or password",
+probably because `DOCKERHUB_TOKEN` holds a token since deleted (the
+first one was pasted into a command by mistake and revoked). See
+Next.
 
 ### 2026-10-09 (88): Menu order (confirmed, #10)
 
