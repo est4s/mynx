@@ -17,6 +17,21 @@ sensors, microphone, speaker and flashlight.
 
 > **Status:** in development, not released yet.
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/menu.png" width="200" alt="Menu"><br>Menu</td>
+    <td align="center"><img src="docs/images/agent.png" width="200" alt="AI agent"><br>AI agent</td>
+    <td align="center"><img src="docs/images/compass.png" width="200" alt="Compass"><br>Compass</td>
+    <td align="center"><img src="docs/images/drive.png" width="200" alt="Drive"><br>Drive</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/tuner.png" width="200" alt="Tuner"><br>Tuner</td>
+    <td align="center"><img src="docs/images/torch.png" width="200" alt="Torch"><br>Torch</td>
+    <td align="center"><img src="docs/images/spectrum.png" width="200" alt="Spectrum"><br>Spectrum</td>
+    <td align="center"><img src="docs/images/themes.png" width="200" alt="Themes"><br>Themes</td>
+  </tr>
+</table>
+
 ## What you get
 
 - **Example apps to start from:** a compass, a spirit level, a

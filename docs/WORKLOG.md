@@ -109,8 +109,6 @@ makes bug reports one tap.
 - **Bug reports, not tried yet:** the browser path without gh (`gh
   auth logout`, then `y` opens GitHub's filled-in new-issue page, `n`
   says "Nothing was sent."), and a report after a crash.
-- **Screenshots** for the README: the maintainer takes them, guided by
-  an agent ([`SCREENSHOTS.md`](SCREENSHOTS.md)).
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Before Play (not urgent):** `release.yml` has its own
   `GITHUB_RUN_NUMBER`, so release version codes are far below debug
@@ -222,8 +220,11 @@ READMEs. Dropped the Roadmap section (one "Want to help?" line links
 internals; numbered install steps; new "Getting started", "Good to
 know" (proot, `wakelock`) and "Help and bug reports" (`mynx report`).
 No Credits section (maintainer's decision): `mynx about` lists the
-bundled components. Screenshots go under the pitch once taken
-(`docs/SCREENSHOTS.md`).
+bundled components. Then the screenshots, taken by the
+maintainer in mynx dev and chosen together: two rows of four under the
+pitch (menu, agent, compass, drive; tuner, torch, spectrum, themes),
+pngquant'ed to 16-71 KB in `docs/images/`. `docs/SCREENSHOTS.md` now
+describes these.
 
 ### 2026-10-09 (89): The name in small letters, the pixel title, the setup logo (confirmed, PR #12)
 
