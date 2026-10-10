@@ -734,7 +734,7 @@ def agent_hook(agent, event):
         request("notify", agent.title, text, *options)
 
 
-AGENT_USAGE = ("usage: mynx agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify]"
+AGENT_USAGE = ("usage: mynx agent [list] | start [NAME] | install [NAME] [--yes] [--notify|--no-notify] [--sandbox-off|--sandbox-on]"
                " | notify NAME on|off")
 
 
@@ -763,13 +763,15 @@ def cmd_agent(args, as_json):
             f"{agent.title} notifications: {args[2]}{where}")
         return 0
     if sub == "install":
-        flags = {"--yes", "--notify", "--no-notify"}
+        flags = {"--yes", "--notify", "--no-notify", "--sandbox-off", "--sandbox-on"}
         names = [a for a in args[1:] if a not in flags]
-        if len(names) > 1 or (names and names[0] not in agents.AGENTS) or {"--notify", "--no-notify"} <= set(args):
+        if (len(names) > 1 or (names and names[0] not in agents.AGENTS)
+                or {"--notify", "--no-notify"} <= set(args) or {"--sandbox-off", "--sandbox-on"} <= set(args)):
             raise Usage(AGENT_USAGE)
         notify = True if "--notify" in args else False if "--no-notify" in args else None
+        sandbox_off = True if "--sandbox-off" in args else False if "--sandbox-on" in args else None
         if names:
-            return install_agent(agents.AGENTS[names[0]], "--yes" in args, notify)
+            return install_agent(agents.AGENTS[names[0]], "--yes" in args, notify, sandbox_off=sandbox_off)
         return pick_and_install()
     raise Usage(AGENT_USAGE)
 
@@ -901,7 +903,39 @@ def get_what_it_needs(agent):
     print()
 
 
-def install_agent(agent, yes, notify, then=None):
+SANDBOX_NOTE = """\
+{title} can only run commands here with its sandbox
+turned off.
+
+The sandbox stops the commands {title} runs from
+changing files outside your project folder or using
+the network. It needs Linux features that proot
+doesn't have, so with it on, every command {title}
+tries fails. With it off, its commands can change
+anything in this Debian, like programs you run
+yourself, but not the rest of the phone.
+"""
+
+
+def ask_sandbox(agent):
+    """Whether to turn off [agent]'s sandbox (True), keep it (False), or
+    not install it at all (None)."""
+    print(SANDBOX_NOTE.format(title=agent.title))
+    if ask(f"Turn {agent.title}'s sandbox off? [y/N]"):
+        print()
+        return True
+    if ask(f"Install {agent.title} anyway, with its sandbox on? It won't be able to run commands. [y/N]"):
+        print()
+        return False
+    return None
+
+
+def install_agent(agent, yes, notify, then=None, sandbox_off=None):
+    if agent.sandbox and sandbox_off is None:
+        sandbox_off = ask_sandbox(agent)
+        if sandbox_off is None:
+            print("Not installed.")
+            return 1
     steps = agents.install_steps(agent, curl=bool(shutil.which("curl")), node=node_major(),
                                  ps=bool(shutil.which("ps")))
     print(f"Installing {agent.title} with its official installer runs:\n")
@@ -919,6 +953,12 @@ def install_agent(agent, yes, notify, then=None):
         if code != 0:
             raise Failure(f"'{step}' failed (exit {code}); nothing else was run")
     print()
+    if agent.sandbox and sandbox_off:
+        agents.turn_sandbox_off(agent)
+        print(f'Sandbox: off ({agents.SANDBOX_OFF} in {agent.sandbox})')
+    elif agent.sandbox:
+        print(f"Sandbox: on, so {agent.title} can't run commands here. To turn it off, put\n"
+              f"{agents.SANDBOX_OFF} at the top of {agent.sandbox}")
     if notify is None:
         notify = ask(f"Also set up notifications for {agent.title} (when it finishes or needs you)? [y/N]")
     if notify:

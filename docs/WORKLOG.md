@@ -41,6 +41,21 @@ are in git history: the full log up to entry 84 is
   not the warning.
 - Then merge.
 
+### 0b. Check PR `codex-sandbox` on the phone (entry 91)
+
+In mynx dev: if Codex is installed already, remove it first
+(`rm -rf ~/.codex ~/.local/bin/codex`), then menu → AI agents → Codex
+(install). It should explain the sandbox and ask to turn it off;
+say yes, finish the install, sign in, and ask Codex for something that
+runs commands (the pomodoro app). Commands should run. Also check the
+two "no" paths: no then yes installs with the sandbox on ("Sandbox:
+on" and the line to add), no then no says "Not installed.". Not
+verified yet: that the TUI honours `sandbox_mode` from `config.toml`
+(`codex sandbox` ignored it in testing; only `-c` worked). If
+commands still fail with the line in place, the fallback is passing
+`-s danger-full-access` from the `codex` shell function and
+`mynx agent start`. Then merge.
+
 ### 1. The first release, v0.1.0
 
 **First, the maintainer's changes before the release** (2026-10-08:
@@ -211,6 +226,25 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-10 (91): Codex asks to turn its sandbox off (PR `codex-sandbox`)
+
+Codex in mynx dev couldn't run any command: "error building bubblewrap
+command: cannot establish app-server socket mount isolation".
+Reproduced with Codex 0.162.1 in a scratch home: its bundled `bwrap`
+fails ("Can't read /proc/sys/kernel/overflowuid"), the legacy Landlock
+mode panics (it requires bubblewrap too), and only
+`danger-full-access` works. Maintainer's decision: tell the user during
+the install that Codex only runs with its sandbox off, say briefly what
+the sandbox is for, and ask; on no, ask whether to install it anyway
+with the sandbox on (else nothing is installed). Built:
+`Agent.sandbox` (Codex: `~/.codex/config.toml`), `sandbox_off()` puts
+`sandbox_mode = "danger-full-access"` at the top (replacing a
+top-level one, before any `[table]`), `--sandbox-off`/`--sandbox-on`
+for scripts. Guide and README updated: the README says Claude Code
+works (tested), Codex works with its sandbox off (tested), Gemini CLI
+isn't tested (maintainer's wording). Already installed Codexes aren't
+touched; the guide says how to add the line.
 
 ### 2026-10-10 (90): README for users only (PR #12)
 
