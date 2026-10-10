@@ -214,6 +214,17 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-10 (90): README for users only (PR #12)
+
+Maintainer's request: only what's useful to users, like popular apps'
+READMEs. Dropped the Roadmap section (one "Want to help?" line links
+`docs/ROADMAP.md`); features ordered by what people come for, without
+internals; numbered install steps; new "Getting started", "Good to
+know" (proot, `wakelock`) and "Help and bug reports" (`mynx report`).
+No Credits section (maintainer's decision): `mynx about` lists the
+bundled components. Screenshots go under the pitch once taken
+(`docs/SCREENSHOTS.md`).
+
 ### 2026-10-09 (89): The name in small letters, the pixel title, the setup logo (confirmed, PR #12)
 
 Maintainer's decisions: the name is written "mynx" everywhere it's
