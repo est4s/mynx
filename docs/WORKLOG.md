@@ -93,8 +93,9 @@ Built (entries 94-95, branch `github-setup`). In mynx dev, the
 main menu's "Set up GitHub" (System → GitHub setup once done):
 - **Confirmed (2026-10-10, build of `1f8b0db`):** signed out, "Set up
   GitHub" shows in the main menu after AI agents; signing in (code,
-  browser, summary) works, and the item then moves to System. Still
-  untried: the cases below.
+  browser, summary) works, and the item then moves to System;
+  signed in, it asks "Switch to another account?". Still untried:
+  git's name/email set to something else, and installing git and gh.
 - **Signed out:** after a moment `gh` shows the one-time code, with
   "(The code is copied: paste it on GitHub's page.)" under it; Enter
   opens the browser, paste, approve. Then the summary: the account,
