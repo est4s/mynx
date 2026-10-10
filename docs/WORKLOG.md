@@ -33,9 +33,7 @@ are in git history: the full log up to entry 84 is
 
 ### 0. Finish PR #12 (`readme-logo`)
 
-- **On the phone, still to check** (entry 89): the launcher label
-  "mynx dev", the menu's pixel title and pages (Getting started still
-  fits), `mynx about`. The setup screen's logo is confirmed.
+- Everything in entry 89 is confirmed on the phone.
 - **Docker Hub sign-in:** the maintainer makes a new read-only token
   and runs `mynx clipboard get | gh secret set DOCKERHUB_TOKEN` (check
   `DOCKERHUB_USERNAME`, `est4s`, is their Docker Hub name). Then a
@@ -216,7 +214,7 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-09 (89): The name in small letters, the pixel title, the setup logo (PR #12)
+### 2026-10-09 (89): The name in small letters, the pixel title, the setup logo (confirmed, PR #12)
 
 Maintainer's decisions: the name is written "mynx" everywhere it's
 shown (the app's label, "mynx dev", `mynx about` and update messages,
@@ -225,8 +223,8 @@ title is "mynx" in small pixel letters like the logo, without the
 shadow (3 rows, 23 columns, `TITLE_ART` in `tools/bin/menu`; the boot
 splash's text fallback is "m y n x"). The README's title is the whole
 logo, `docs/images/mynx.svg`, made by `scripts/mynx-svg.py`. To check
-on the phone: the launcher label "mynx dev", the menu's title and
-pages (Getting started still fits), `mynx about`.
+on the phone (all confirmed): the launcher label "mynx dev", the
+menu's title and pages (Getting started still fits), `mynx about`.
 
 Then (same PR): the setup screen ("Setting up Debian…", first start)
 shows the whole logo, as in the README, in place of the old
