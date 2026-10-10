@@ -102,7 +102,8 @@ shows a report with your phone's details, and sends it as a GitHub
 issue only once you agree. You can also open an
 [issue](../../issues) yourself.
 
-`mynx github` (the menu's Settings → System → GitHub setup) installs `git` and `gh`, signs
+`mynx github` (the main menu's "Set up GitHub" until it's done, then
+Settings → System → GitHub setup) installs `git` and `gh`, signs
 you in to GitHub in the browser and sets git's name and email; then
 bug reports go straight to GitHub.
 

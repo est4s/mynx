@@ -89,8 +89,8 @@ edits them in the release before tagging (decide then).
 
 ### 4. Guided GitHub setup: try it on the phone
 
-Built (entry 94, branch `github-setup`). In mynx dev, System →
-GitHub setup:
+Built (entries 94-95, branch `github-setup`). In mynx dev, the
+main menu's "Set up GitHub" (System → GitHub setup once done):
 - **Signed out:** after a moment `gh` shows the one-time code, with
   "(The code is copied: paste it on GitHub's page.)" under it; Enter
   opens the browser, paste, approve. Then the summary: the account,
@@ -216,8 +216,11 @@ The main menu loses System: Settings is now a submenu, App settings
 (`mynx edit`), System (Update all, System info, GitHub setup) and Help
 (Getting started, Report a bug, About). New `menu.conf` actions:
 `settings` is the submenu, `app-settings` the editors, `help` the Help
-menu. A main-menu "Set up GitHub" offer (until gh is
-signed in) was tried and dropped (maintainer's decision). Docs (README, PRIVACY,
+menu. Until gh is signed in (its `hosts.yml`, following
+`GH_CONFIG_DIR`) and git's email is set, the main menu has "Set up
+GitHub" after AI agents (last without them, whatever `menu.conf`
+says) and System leaves it out; then it moves to System (maintainer's
+decision, after first dropping it). Docs (README, PRIVACY,
 `tools/AGENTS.md`, `welcome.txt`, AGENTS.md) follow. The session that
 started this crashed; the next one finished the docs. Not yet tried on
 the phone.

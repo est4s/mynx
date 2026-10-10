@@ -380,11 +380,15 @@ line, in order; labels up to 20 characters. Actions:
 | `settings` | the Settings menu: App settings, System, Help |
 | `app-settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
-| `system` | Update all, System info, GitHub setup (`mynx github`) |
+| `system` | Update all, System info, and GitHub setup (`mynx github`) once GitHub is set up |
 | `help` | Getting started (`mynx welcome`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
+
+Until `gh` is signed in and git's email is set, the main menu has
+"Set up GitHub" (`mynx github`) after AI agents (last if there's no
+AI agents item), whatever the menu file says.
 
 To change it: `mynx menu edit`, edit the file, `mynx check` (it
 checks the menu file too). Any executable file in `~/games` shows up

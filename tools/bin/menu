@@ -17,6 +17,8 @@
 # Update available: the app writes the version of a newer release to
 #   /tmp/.mynx/update-available; while it's there, the main menu starts with
 #   "Update available" (mynx update).
+# GitHub setup: in the main menu (after AI agents) until gh is signed in and
+#   git's email is set, then in Settings → System (mynx github).
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
 # MENU_APP_DIRS (colon-separated) override where games and apps are found,
 # MENU_UPDATE_FILE the app's update notice, MENU_ART the boot splash's title
@@ -189,6 +191,23 @@ app_label() { # app_label <file>: its "# label:" line, else named like a game
   game_label "$1"
 }
 
+github_ready() { # gh signed in (offline: its hosts file) and git's email set
+  local gh=${GH_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/gh}
+  [[ -s $gh/hosts.yml ]] && git config --global user.email >/dev/null 2>&1
+}
+
+offer_github() { # "Set up GitHub" after AI agents, else last
+  local i
+  for i in "${!ACTS[@]}"; do
+    if [[ ${ACTS[i]} == menu:agents ]]; then
+      ITEMS=("${ITEMS[@]:0:i+1}" "Set up GitHub" "${ITEMS[@]:i+1}")
+      ACTS=("${ACTS[@]:0:i+1}" github "${ACTS[@]:i+1}")
+      return
+    fi
+  done
+  ITEMS+=("Set up GitHub") ACTS+=(github)
+}
+
 menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
   # Actions: "menu:<name>" opens a submenu, "exit" drops to the shell,
   # "quit_session" closes the tab (exit code 10, handled in ~/.bashrc),
@@ -207,6 +226,7 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ITEMS=(Shell "AI agents" Apps Games Files Settings Exit)
         ACTS=(exit menu:agents menu:apps menu:games files menu:settings quit_session)
       fi
+      github_ready || offer_github
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
         ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
       fi ;;
@@ -243,8 +263,9 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       ITEMS=("App settings" System Help)
       ACTS=(settings menu:system menu:help) ;;
     system)
-      ITEMS=("Update all" "System info" "GitHub setup")
-      ACTS=(update info github) ;;
+      ITEMS=("Update all" "System info")
+      ACTS=(update info)
+      if github_ready; then ITEMS+=("GitHub setup") ACTS+=(github); fi ;;
     help)
       ITEMS=("Getting started" "Report a bug" About)
       ACTS=(welcome report about) ;;
