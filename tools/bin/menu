@@ -82,7 +82,7 @@ theme_name() { # the theme the colours file was set from (see mynx theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, apps, games, settings, agents, system, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, games, settings, app-settings, agents, system, help, welcome, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -106,9 +106,11 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       files) action=files ;;
       apps) action=menu:apps ;;
       games) action=menu:games ;;
-      settings) action=settings ;;
+      settings) action=menu:settings ;;
+      app-settings) action=settings ;;
       agents) action=menu:agents ;;
       system) action=menu:system ;;
+      help) action=menu:help ;;
       welcome) action=welcome ;;
       exit) action=quit_session ;;
       run) PROBLEMS+=("line $n: run needs a command"); continue ;;
@@ -164,7 +166,8 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [system]=System)
+declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [settings]=Settings
+  [system]=System [help]=Help)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
   local name=${1##*/} label= w
@@ -201,8 +204,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ((${#ITEMS[@]})) && break
       done
       if ! ((${#ITEMS[@]})); then
-        ITEMS=(Shell "AI agents" Apps Games Files Settings System Exit)
-        ACTS=(exit menu:agents menu:apps menu:games files settings menu:system quit_session)
+        ITEMS=(Shell "AI agents" Apps Games Files Settings Exit)
+        ACTS=(exit menu:agents menu:apps menu:games files menu:settings quit_session)
       fi
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
         ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
@@ -236,9 +239,15 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ITEMS+=("$title") ACTS+=("agent:$name")
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
+    settings)
+      ITEMS=("App settings" System Help)
+      ACTS=(settings menu:system menu:help) ;;
     system)
-      ITEMS=("Update all" "System info" "Getting started" About "Report a bug" "GitHub setup")
-      ACTS=(update info welcome about report github) ;;
+      ITEMS=("Update all" "System info" "GitHub setup")
+      ACTS=(update info github) ;;
+    help)
+      ITEMS=("Getting started" "Report a bug" About)
+      ACTS=(welcome report about) ;;
   esac
 }
 

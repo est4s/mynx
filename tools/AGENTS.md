@@ -118,7 +118,7 @@ their own.
 `--json` on any command prints `{"ok": true, ...}` or
 `{"ok": false, "error": "..."}`, for scripts.
 
-`mynx edit` (also the menu's Settings item) opens editors for people:
+`mynx edit` (also the menu's Settings → App settings) opens editors for people:
 theme (moving through the list previews each theme live), settings
 (font, cursor, agent notifications, undo), key bars, the launcher menu,
 a config check and "Undo last change". In each, `r` puts things back
@@ -377,9 +377,11 @@ line, in order; labels up to 20 characters. Actions:
 | `files` | the file manager |
 | `apps` | the Apps menu (see "Apps") |
 | `games` | the Games menu |
-| `settings` | the settings editors (`mynx edit`) |
+| `settings` | the Settings menu: App settings, System, Help |
+| `app-settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
-| `system` | Update all, System info, Getting started (`mynx welcome`), About (`mynx about`), Report a bug (`mynx report`), GitHub setup (`mynx github`) |
+| `system` | Update all, System info, GitHub setup (`mynx github`) |
+| `help` | Getting started (`mynx welcome`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
@@ -488,7 +490,7 @@ shows the generic game bar until `my-tool.conf` exists.
   `size`, `published`). The check and download run in the app, not
   Debian, so they work even if Debian's network tools are broken.
 - **Bug reports:** `mynx report "what went wrong"` (or the menu's
-  System → Report a bug) builds a report: the description, the app's
+  Settings → Help → Report a bug) builds a report: the description, the app's
   version, the Android version and phone model, and the app's last
   crash, if any (`--no-crash` leaves it out). It shows all of it and
   asks. When `gh` is installed and signed in, yes sends it as a new
@@ -500,7 +502,8 @@ shows the generic game bar until `my-tool.conf` exists.
   For agents: `mynx report TEXT --json` gives `title`, `what`,
   `details` and `url` and opens nothing; show the user the report and
   only `mynx open URL` once they agree.
-- **GitHub:** `mynx github` (or the menu's System → GitHub setup)
+- **GitHub:** `mynx github` (or the menu's Settings → System → GitHub
+  setup)
   installs `git` and `gh` if they're missing (asking first), signs in
   with `gh auth login` in the phone's browser and copies the one-time
   code to the clipboard, so it only needs pasting. Already signed in,

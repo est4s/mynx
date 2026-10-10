@@ -487,7 +487,7 @@ These come from the scope (`docs/ROADMAP.md`) and apply to every feature:
   `tools/lib/mynx/cli.py`). The name and icon aren't covered: forks
   use their own.
 - **Licenses:** keep GPL components (proot) as separate executables and link
-  their source from About (`mynx about`, the menu's System → About, in
+  their source from About (`mynx about`, the menu's Settings → Help → About, in
   the terminal: maintainer's decision). Its credits are `COMPONENTS` in
   `tools/lib/mynx/cli.py`; the licence texts ship in `tools/licenses/`
   (`/opt/mynx/licenses`). When you add, upgrade or patch a bundled

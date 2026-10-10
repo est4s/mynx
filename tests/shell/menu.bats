@@ -26,8 +26,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings System Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:apps menu:games files settings menu:system quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:apps menu:games files menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -45,7 +45,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings System Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -53,7 +53,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, agents, system, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, app-settings, agents, system, help, welcome, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -83,31 +83,53 @@ keys() {
     [[ $output == *"RUN: mynx update"* ]]
 }
 
+@test "settings menu" {
+    source "$MENU"
+    menu_items settings
+    [ "${ITEMS[*]}" = "App settings System Help" ]
+    [ "${ACTS[*]}" = "settings menu:system menu:help" ]
+}
+
 @test "system menu" {
     source "$MENU"
     menu_items system
-    [ "${ITEMS[*]}" = "Update all System info Getting started About Report a bug GitHub setup" ]
-    [ "${ACTS[*]}" = "update info welcome about report github" ]
+    [ "${ITEMS[*]}" = "Update all System info GitHub setup" ]
+    [ "${ACTS[*]}" = "update info github" ]
+}
+
+@test "help menu" {
+    source "$MENU"
+    menu_items help
+    [ "${ITEMS[*]}" = "Getting started Report a bug About" ]
+    [ "${ACTS[*]}" = "welcome report about" ]
 }
 
 @test "About shows mynx about" {
-    run keys 74
+    run keys 633
     [[ $output == *"RUN: mynx about"* ]]
 }
 
-@test "System has Getting started" {
-    run keys 73xxxxxxqq
+@test "Help has Getting started" {
+    run keys 631xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 75
+    run keys 632
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 76
+    run keys 623
     [[ $output == *"RUN: mynx github"* ]]
+}
+
+@test "a menu file can name the settings editors and the Help menu" {
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Look = app-settings\nInfo = help\n' >"$HOME/.config/mynx/menu.conf"
+    source "$MENU"
+    menu_items main
+    [ "${ACTS[*]}" = "settings menu:help" ]
 }
 
 @test "games come from both folders, named after their files" {
@@ -241,7 +263,7 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 8
+    run keys 7
     [ "$status" -eq 10 ]
 }
 
@@ -256,8 +278,8 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
-@test "Settings opens the settings editor" {
-    run keys 6
+@test "Settings → App settings opens the settings editors" {
+    run keys 61
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -321,7 +343,7 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
 }
 
 @test "Update all runs apt" {
-    run keys 71
+    run keys 621
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 

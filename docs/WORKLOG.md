@@ -210,6 +210,18 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-10 (95): Menu: a Settings submenu (branch `github-setup`)
+
+The main menu loses System: Settings is now a submenu, App settings
+(`mynx edit`), System (Update all, System info, GitHub setup) and Help
+(Getting started, Report a bug, About). New `menu.conf` actions:
+`settings` is the submenu, `app-settings` the editors, `help` the Help
+menu. A main-menu "Set up GitHub" offer (until gh is
+signed in) was tried and dropped (maintainer's decision). Docs (README, PRIVACY,
+`tools/AGENTS.md`, `welcome.txt`, AGENTS.md) follow. The session that
+started this crashed; the next one finished the docs. Not yet tried on
+the phone.
+
 ### 2026-10-10 (94): Guided GitHub setup, built (branch `github-setup`)
 
 `mynx github` and System → GitHub setup (menu item at the end of
