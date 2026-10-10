@@ -1,7 +1,7 @@
 # Agent guide
 
 Context for AI agents (and humans) working on this repo. Read `README.md` first
-for **what** the app does (and `docs/ROADMAP.md` for the full scope). This file covers **how** we build it and the decisions
+for **what** the app does (and `docs/ROADMAP.md` for what's planned). This file covers **how** we build it and the decisions
 already made. Status and next steps live in `docs/WORKLOG.md`.
 
 Keep this file up to date: when a decision changes or a milestone lands, update
@@ -25,7 +25,7 @@ to do next.
 recent work. Once an entry's work is confirmed on the phone and what it
 taught is in this file (decisions, gotchas), the entry can go; done
 plans leave "Next" when they're done. Git history keeps everything
-(the full log up to entry 84: `git show 72b8512:docs/WORKLOG.md`).
+(the full log up to entry 92: `git show be3d232:docs/WORKLOG.md`).
 
 ## Naming
 
@@ -447,6 +447,12 @@ Bugs that took a phone round to find; keep them from coming back.
   `EXTRA_STREAM`, the clip isn't a file to save (`filesToSave()`).
 - **The app can't read `/storage/emulated/0/DCIM`** (or other apps'
   media) without a media permission; test shares with files it made.
+- **Codex's sandbox can't run under proot:** its bundled `bwrap`
+  fails ("Can't read /proc/sys/kernel/overflowuid") and the Landlock
+  mode needs bubblewrap too, so only `danger-full-access` works.
+  Installing it asks to turn the sandbox off (`Agent.sandbox`), and
+  its installer runs with `CODEX_NON_INTERACTIVE=1`: otherwise it
+  starts Codex inside the install step.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.
@@ -583,7 +589,7 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
 - **Releases:** only the maintainer tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
 - **README:** short, for users: what ships today, install, licence.
-  The full scope and roadmap are `docs/ROADMAP.md`; when the maintainer
+  What's planned is `docs/ROADMAP.md`; when the maintainer
   changes scope, update it in the same commit, and the README when a
   feature ships.
 - Don't describe in user-facing docs how this app itself is developed.
