@@ -41,21 +41,6 @@ are in git history: the full log up to entry 84 is
   not the warning.
 - Then merge.
 
-### 0b. Check PR `codex-sandbox` on the phone (entry 91)
-
-In mynx dev: if Codex is installed already, remove it first
-(`rm -rf ~/.codex ~/.local/bin/codex`), then menu → AI agents → Codex
-(install). It should explain the sandbox and ask to turn it off;
-say yes, finish the install, sign in, and ask Codex for something that
-runs commands (the pomodoro app). Commands should run. Also check the
-two "no" paths: no then yes installs with the sandbox on ("Sandbox:
-on" and the line to add), no then no says "Not installed.". Not
-verified yet: that the TUI honours `sandbox_mode` from `config.toml`
-(`codex sandbox` ignored it in testing; only `-c` worked). If
-commands still fail with the line in place, the fallback is passing
-`-s danger-full-access` from the `codex` shell function and
-`mynx agent start`. Then merge.
-
 ### 1. The first release, v0.1.0
 
 **First, the maintainer's changes before the release** (2026-10-08:
@@ -227,7 +212,7 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-10 (91): Codex asks to turn its sandbox off (PR `codex-sandbox`)
+### 2026-10-10 (91): Codex asks to turn its sandbox off (confirmed, PR #13)
 
 Codex in mynx dev couldn't run any command: "error building bubblewrap
 command: cannot establish app-server socket mount isolation".
@@ -251,7 +236,9 @@ and ran Codex inside the install step; quitting it exited 1, so mynx
 called the install failed and never wrote the line (commands still
 failed). Now the installer runs with `CODEX_NON_INTERACTIVE=1`
 (`Agent.installer_env`) and mynx asks to start it, after the line is
-written.
+written. Second round confirmed: the install finishes, mynx starts
+Codex, and its commands run (so Codex reads `sandbox_mode` from
+`config.toml`).
 
 ### 2026-10-10 (90): README for users only (PR #12)
 
