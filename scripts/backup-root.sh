@@ -2,17 +2,22 @@
 # Backs up root's home and the list of packages installed by hand, to move
 # them into a fresh Debian (uninstalling the app deletes its Debian). The
 # backup goes to phone storage, which survives the uninstall, with
-# restore-root.sh beside it: run that in the new Debian.
+# restore-root.sh beside it. A reinstalled app can't read files the old one
+# left there, so the new Debian gets them shared to it from the Files app
+# (they land in ~/Shared), then runs restore-root.sh.
 #
-#   scripts/backup-root.sh [FOLDER]   default /storage/emulated/0/mynx-backup
+#   scripts/backup-root.sh [FOLDER]   default /storage/emulated/0/Download/mynx-backup
+#
+# Apps can't make folders at the top of phone storage, hence Download.
 #
 # Left out: caches that rebuild themselves (~/.gradle, ~/.cache), proot's
 # .l2s.* link files (tar reads what they stand for), and Claude Code
-# versions other than the one in use. BACKUP_HOME overrides /root (tests).
+# versions other than the one in use. BACKUP_HOME overrides /root and
+# BACKUP_STORAGE /storage/emulated/0 (tests).
 set -euo pipefail
 
 home=${BACKUP_HOME:-/root}
-dest=${1:-/storage/emulated/0/mynx-backup}
+dest=${1:-${BACKUP_STORAGE:-/storage/emulated/0}/Download/mynx-backup}
 here=$(cd "$(dirname "$0")" && pwd)
 name=$(basename "$home")
 
@@ -53,7 +58,7 @@ mv "$dest/root.tar.gz.part" "$dest/root.tar.gz"
 cp "$here/restore-root.sh" "$dest/restore-root.sh"
 (cd "$dest" && sha256sum root.tar.gz packages.txt >SHA256SUMS)
 
-echo "Backed up $(du -h "$dest/root.tar.gz" | cut -f1) and $(wc -l <"$dest/packages.txt") packages to $dest."
+echo "Backed up $(numfmt --to=iec --suffix=B "$(stat -c %s "$dest/root.tar.gz")") and $(wc -l <"$dest/packages.txt") packages to $dest."
 logins=()
 for f in .config/gh .claude .claude.json .ssh; do
     [[ -e $home/$f ]] && logins+=("~/$f")
@@ -64,4 +69,6 @@ if ((${#logins[@]})); then
     echo "phone storage can read it: delete it once it's restored."
 fi
 echo
-echo "In the new Debian: bash $dest/restore-root.sh"
+echo "To restore it in a new Debian: in the Files app, open $dest,"
+echo "select its four files and Share them to mynx. They go to ~/Shared;"
+echo "then run: bash ~/Shared/restore-root.sh"
