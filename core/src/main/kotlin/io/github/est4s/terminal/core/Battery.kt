@@ -116,7 +116,7 @@ private const val DISCHARGING = 3
 internal fun known(value: Int?) = value?.takeIf { it != Int.MIN_VALUE }
 
 /** A current in µA, positive into the battery: phones disagree on its sign, but discharging it can only flow out. */
-internal fun microamps(r: BatteryReading, value: Int?): Int? =
+private fun microamps(r: BatteryReading, value: Int?): Int? =
     known(value)?.let { if (r.status == DISCHARGING) -abs(it) else it }
 
 /** The voltage in µV; some phones report volts instead of millivolts. */

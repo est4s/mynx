@@ -33,21 +33,17 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0a. Battery: try `mynx battery` and the stand-in
+### 0a. Battery: try the stand-in's fixes, then merge PR #22
 
-Built: `mynx battery` (entry 99) and the `/sys/class/power_supply`
-stand-in (entry 100, branch `battery-sysfs`, not yet pushed). On the
-phone, in mynx dev: `mynx battery` charging and on battery (status,
-plug, "full in", the current's direction and size: Pixels should
-report µA), `mynx battery --stream` while plugging in and out and
-switching battery saver on, `--every 10`, `--json`. Then the
-stand-in: `cat /sys/class/power_supply/battery/uevent`, the
-`usb/online` flip on plugging in, starship's battery module (it
-shows below 10% by default: set `threshold = 100` to see it),
-`apt install acpi && acpi -b`, and
-`python3 -c 'import psutil; print(psutil.sensors_battery())'`
-(`python3-psutil`). If the bind fails, tabs might not start: check
-first that a new tab opens.
+`mynx battery` (entry 99) and the `/sys/class/power_supply` stand-in
+(entry 100) are confirmed on the phone, but for two fixes made after
+(entry 100). In mynx dev, after `apt update && apt install -y acpi
+python3-psutil`: `acpi -b` should show the real level (not 0%) and
+`python3 -c 'import psutil; print(psutil.sensors_battery())'` a
+positive `secsleft` on battery. Then starship's battery module (it
+shows below 10% by default):
+`printf '[[battery.display]]\nthreshold = 100\n' > /tmp/s.toml;
+STARSHIP_CONFIG=/tmp/s.toml starship module battery`. Then merge.
 
 ### 0. Docker Hub sign-in
 
@@ -263,6 +259,11 @@ by proot ("Function not implemented" on every file call, see
   proot doesn't.
 - Docs: the user guide's `mynx battery` item, AGENTS.md
   architecture.
+- On the phone (run 38139887743): streams, `--every`, `--json` work;
+  `ac/online` follows a USB-C charger (Android calls it AC). `acpi -b`
+  said 0% (no `charge_full`: now worked out from charge ÷ level) and
+  psutil a negative `secsleft` (now `current_now` is the size only,
+  maintainer's decision). Both fixed, not yet tried on the phone.
 
 ### 2026-10-11 (99): `mynx battery`, step 1 of 2
 

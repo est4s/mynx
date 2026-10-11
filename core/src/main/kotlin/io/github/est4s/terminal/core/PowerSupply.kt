@@ -1,6 +1,8 @@
 package io.github.est4s.terminal.core
 
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /**
  * Where Linux programs look for the battery and chargers (starship,
@@ -32,11 +34,14 @@ fun powerSupplyFiles(r: BatteryReading): Map<String, String> {
         "technology" to technology(r),
         "temp" to known(r.temperature),
         "voltage_now" to microvolts(r),
-        "current_now" to microamps(r, r.current),
-        "current_avg" to microamps(r, r.currentAverage),
+        // Its size only, as laptops give it: psutil reckons the time left from it. The status says which way.
+        "current_now" to known(r.current)?.let(::abs),
+        "current_avg" to known(r.currentAverage)?.let(::abs),
         // Android's charge counter is what's left, which the kernel calls charge_now.
         "charge_now" to microampHours(r),
         "charge_counter" to microampHours(r),
+        // Android doesn't give the full charge; acpi needs it for the level.
+        "charge_full" to fullCharge(r),
         "cycle_count" to cycles(r),
         "time_to_full_now" to chargeSeconds(r),
     ).mapNotNull { (name, value) -> value?.let { name to it.toString() } }
@@ -50,6 +55,9 @@ fun powerSupplyFiles(r: BatteryReading): Map<String, String> {
         values.map { (key, value) -> "$folder/$key" to "$value\n" } + ("$folder/uevent" to uevent)
     }.toMap()
 }
+
+private fun fullCharge(r: BatteryReading): Long? =
+    microampHours(r)?.takeIf { r.level > 0 && r.scale > 0 }?.let { (it.toDouble() * r.scale / r.level).roundToLong() }
 
 /**
  * Brings the stand-in in [dir] up to date with [reading]: changed files

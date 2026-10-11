@@ -40,6 +40,7 @@ class PowerSupplyTest {
                 "current_avg" to "1150000",
                 "charge_now" to "3912000",
                 "charge_counter" to "3912000",
+                "charge_full" to "4770732",
                 "cycle_count" to "142",
                 "time_to_full_now" to "4320",
             ),
@@ -61,6 +62,7 @@ class PowerSupplyTest {
             POWER_SUPPLY_CURRENT_AVG=1150000
             POWER_SUPPLY_CHARGE_NOW=3912000
             POWER_SUPPLY_CHARGE_COUNTER=3912000
+            POWER_SUPPLY_CHARGE_FULL=4770732
             POWER_SUPPLY_CYCLE_COUNT=142
             POWER_SUPPLY_TIME_TO_FULL_NOW=4320
 
@@ -111,10 +113,19 @@ class PowerSupplyTest {
     }
 
     @Test
-    fun `the current flows out while discharging, as in mynx battery`() {
+    fun `the full charge is worked out from what's left and the level, as acpi needs it`() {
+        assertEquals("4808333\n", powerSupplyFiles(charging.copy(level = 60, charge = 2_885_000))["battery/charge_full"])
+        assertEquals("4808333\n", powerSupplyFiles(charging.copy(level = 120, scale = 200, charge = 2_885_000))["battery/charge_full"])
+        assertEquals(null, powerSupplyFiles(charging.copy(level = 0))["battery/charge_full"])
+        assertEquals(null, powerSupplyFiles(charging.copy(charge = 0))["battery/charge_full"])
+    }
+
+    @Test
+    fun `the current is its size only, as laptops give it, which psutil expects`() {
         val files = powerSupplyFiles(charging.copy(status = 3, plugged = 0, current = 450_000, currentAverage = -380_000))
-        assertEquals("-450000\n", files["battery/current_now"])
-        assertEquals("-380000\n", files["battery/current_avg"])
+        assertEquals("450000\n", files["battery/current_now"])
+        assertEquals("380000\n", files["battery/current_avg"])
+        assertEquals("890000\n", powerSupplyFiles(charging.copy(current = -890_000))["battery/current_now"])
     }
 
     @Test
