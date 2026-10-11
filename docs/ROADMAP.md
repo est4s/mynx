@@ -15,15 +15,6 @@ polish (first run, icon, updates from GitHub Releases).
 - **What's new and release notes:** after every update, a page with the
   notes of the versions since the one before; "Release notes" in the
   menu, working offline.
-- **Battery:** `mynx battery`: charge level, charging or not (and
-  how), temperature and health, with `--json` and `--stream` like
-  `mynx sensor`. No permission needed.
-- **Vibration patterns:** `mynx vibrate` beyond one buzz: Android's
-  predefined effects (`click`, `double-click`, `tick`,
-  `heavy-click`), waveforms (steps of length and strength, optionally
-  repeating until stopped), and chained primitives (`click`, `thud`,
-  `spin`, `slow-rise`, …, Android 11+). `mynx vibrate list` shows
-  what the phone supports.
 - **Volume keys** as input for programs here, while the app is on
   screen (today they only change the volume). How they reach a
   program is still to be decided.

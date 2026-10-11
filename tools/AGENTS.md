@@ -91,7 +91,12 @@ their own.
 | `mynx notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
 | `mynx undo` | take back the last config change (`mynx undo --list` shows what it can take back) |
 | `mynx open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
-| `mynx vibrate [MS]` | vibrate the phone, 300 ms unless given (1 to 5000) |
+| `mynx vibrate [MS]` | vibrate the phone, 300 ms unless given (1 to 5000); `--strength PCT` |
+| `mynx vibrate effect NAME` | one of Android's effects: `click`, `double-click`, `tick`, `heavy-click` |
+| `mynx vibrate wave STEP…` | a pattern of steps (`MS`, `MS@PERCENT`); `--repeat` until Ctrl+C (see "The phone") |
+| `mynx vibrate chain PRIM…` | Android's primitives one after another (`click`, `thud@50+100`, …) |
+| `mynx vibrate list` | what the phone's vibrator can do: strength, effects, primitives |
+| `mynx vibrate stop` | stop any vibration |
 | `mynx clipboard get` | print the phone's clipboard (the app must be on screen) |
 | `mynx clipboard set [TEXT]` | copy TEXT to the phone's clipboard, or stdin when there's no TEXT |
 | `mynx share FILE…` | send files to another app through Android's share sheet (the app must be on screen) |
@@ -251,7 +256,39 @@ it too, even one spread over several rows.
 
 Commands for the phone itself, and the sound device:
 
-- `mynx vibrate [MS]`: a buzz, e.g. `make && mynx vibrate`.
+- `mynx vibrate [MS]`: a buzz, e.g. `make && mynx vibrate`. It
+  returns at once. `--strength PCT` (1 to 100) sets how strong, on
+  phones whose vibrator has strength control (`mynx vibrate list`
+  says); elsewhere it's refused, saying why.
+- **Vibration patterns:** these wait until the vibration ends, and
+  Ctrl+C stops it. Only one vibration plays at a time: a new one, or
+  `mynx vibrate stop` (from any tab), ends the one before, whose
+  `mynx` then returns. Nothing the phone can't do is skipped
+  silently: it's refused with the reason (`--json`: `{"ok": false,
+  "error": …}`).
+  - `mynx vibrate effect NAME`: Android's predefined `click`,
+    `double-click`, `tick` or `heavy-click` (Android 10+), as the
+    phone tunes them.
+  - `mynx vibrate wave STEP…`: steps one after another, each `MS`
+    (full strength), `MS@PERCENT`, or `MS@0` for a pause:
+    `mynx vibrate wave 200 100@0 200 100@0 600@40`. Up to 60 s;
+    `--repeat` plays it again and again until Ctrl+C or `mynx vibrate
+    stop`. Strengths other than 0 and 100 need strength control.
+  - `mynx vibrate chain PRIM…`: Android's haptic primitives (Android
+    11+), each `NAME[@PERCENT][+MS]`, `+MS` being a pause before it:
+    `mynx vibrate chain slow-rise click+100 thud@60`. Names: `click`,
+    `tick`, `quick-rise`, `slow-rise`, `quick-fall`, and from Android
+    12 `low-tick`, `thud`, `spin`. Phones have only some of them.
+  - `mynx vibrate list`: whether the vibrator has strength control,
+    each effect (yes, no, or unknown before Android 11) and each
+    primitive (with its length in ms from Android 12). `--json` gives
+    `amplitude_control`, `effects` (name: true, false or null) and
+    `primitives` (name: `supported`, `ms`).
+  - A finished `--json` answer has `ms`, how long it played (an
+    effect's is a close guess: Android doesn't say), or `"stopped":
+    true` when another vibration or `stop` ended it.
+  - Vibrations follow the phone's media vibration setting (Android
+    13+), like other apps'.
 - `mynx clipboard set [TEXT]` copies TEXT, or what's piped in, line
   breaks and all: `git log -1 | mynx clipboard set`.
   `mynx clipboard get` prints it as it is, with no line break added

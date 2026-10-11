@@ -33,7 +33,8 @@ private class Refused(message: String) : Exception(message)
  * returned by [processPending]). [notify] shows a [Notice] and returns
  * null, or says why it didn't; [openUrl] likewise opens a web link,
  * and [installApk] opens Android's installer for an APK (a host file).
- * [vibrate] and [setClipboard] work the same way; [readClipboard] gives
+ * [vibrate] (for ms, at a strength in percent or the phone's own) and
+ * [setClipboard] work the same way; [readClipboard] gives
  * the clipboard's text or fails with the reason. [share] opens
  * Android's share sheet for a [Share]; [torch] turns the flashlight on
  * (at a strength in percent, or the phone's default) or off.
@@ -53,7 +54,7 @@ class MynxRequests(
     private val notify: (Notice) -> String? = { "notifications aren't available" },
     private val openUrl: (String) -> String? = { "links can't be opened here" },
     private val installApk: (File) -> String? = { "apps can't be installed here" },
-    private val vibrate: (Long) -> String? = { "vibration isn't available here" },
+    private val vibrate: (Long, Int?) -> String? = { _, _ -> "vibration isn't available here" },
     private val setClipboard: (String) -> String? = { "the clipboard isn't available here" },
     private val readClipboard: () -> Result<String> = { Result.failure(Exception("the clipboard isn't available here")) },
     private val share: (Share) -> String? = { "sharing isn't available here" },
@@ -241,11 +242,18 @@ class MynxRequests(
                 ok()
             }
             "vibrate" -> {
-                val ms = args.getOrNull(0)?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                    it.toLongOrNull()?.takeIf { ms -> ms in 1..MAX_VIBRATE_MS }
-                        ?: throw Refused("vibrate takes milliseconds from 1 to $MAX_VIBRATE_MS")
-                } ?: DEFAULT_VIBRATE_MS
-                vibrate(ms)?.let { throw Refused(it) }
+                var ms = DEFAULT_VIBRATE_MS
+                var percent: Int? = null
+                for (word in args.map { it.trim() }.filter { it.isNotEmpty() }) {
+                    if (word.startsWith("strength=")) {
+                        percent = word.substringAfter('=').toIntOrNull()?.takeIf { it in 1..MAX_VIBRATION_PERCENT }
+                            ?: throw Refused("the strength is 1 to $MAX_VIBRATION_PERCENT %")
+                    } else {
+                        ms = word.toLongOrNull()?.takeIf { it in 1..MAX_VIBRATE_MS }
+                            ?: throw Refused("vibrate takes milliseconds from 1 to $MAX_VIBRATE_MS")
+                    }
+                }
+                vibrate(ms, percent)?.let { throw Refused(it) }
                 ok()
             }
             "clipboard-get" -> {

@@ -17,7 +17,7 @@ class PhoneRequestsTest {
     private val shared = mutableListOf<Share>()
     private val requests = MynxRequests(
         dir, home,
-        vibrate = { ms -> vibrations += ms; refusal },
+        vibrate = { ms, _ -> vibrations += ms; refusal },
         setClipboard = { text -> copied += text; refusal },
         readClipboard = { clipboard },
         share = { shared += it; refusal },

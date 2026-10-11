@@ -25,6 +25,8 @@ are in git history: the full log up to entry 92 is
   `mynx update` (entry 81's updates, confirmed).
 - **Battery** (`mynx battery`, the `/sys/class/power_supply`
   stand-in): confirmed and merged (entries 99-100).
+- **Vibration patterns** (`mynx vibrate effect/wave/chain/list/stop`):
+  confirmed on the phone (entry 102, PR #24).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -33,11 +35,10 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. Vibration patterns (roadmap, "more of the phone")
+### 1. Volume keys (roadmap, "more of the phone")
 
-`mynx vibrate` beyond one buzz: predefined effects, waveforms,
-chained primitives, `mynx vibrate list` (`docs/ROADMAP.md`). Then
-volume keys, once the maintainer decides how they reach programs.
+As input for programs here while the app is on screen. How they reach
+a program is the maintainer's decision, still open: ask first.
 
 ### 2. What's new and release notes (planned, not built)
 
@@ -177,6 +178,41 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-11 (102): Vibration patterns (branch `vibration-patterns`)
+
+The maintainer's approved design, built test-first:
+- `mynx vibrate [MS] [--strength PCT]`, `effect NAME`, `wave STEP…
+  [--repeat]`, `chain PRIM…`, `list`, `stop`. Plain MS still returns
+  at once (`vibrate`, now with `strength=PCT`); effect, wave and chain
+  wait until the vibration ends; Ctrl+C stops it (a repeating wave's
+  Ctrl+C exits 0, the others 130 like `audio play`).
+- `core/.../Vibration.kt`: `Vibrations` checks steps, primitives,
+  limits (60 s, 1000 wave steps, 100 primitives, 10 s pauses) and API
+  levels against the app's `VibratorInfo`, refusing what the phone
+  can't do with a reason; works out the length (primitive durations
+  from Android 12, else estimates; effects are estimates, Android
+  doesn't say) and answers when it's over. One vibration at a time:
+  a new one or `stop` answers the waiting one `"stopped": true`.
+- `app/.../Haptics.kt` (`PhoneHaptics`) replaces
+  `TerminalService.vibrate()`; Android 13+ vibrates with
+  `VibrationAttributes` `USAGE_MEDIA` (design said "USAGE_TOUCH or
+  similar": touch is UI feedback and goes off with the phone's touch
+  feedback setting; media vibration is what app content uses).
+- **Deviation:** `vibrate-list` and `vibrate-stop` are [Later]
+  requests answered at once rather than plain ones, so stop can end a
+  waiting vibration and everything stays in `Vibration.kt`; to `mynx`
+  they look the same.
+- No new setting; the metronome is untouched.
+- Unrelated: `test_undo_list` fails when `TZ` isn't UTC (this tab's
+  is Europe/Helsinki); CI is UTC.
+- **Confirmed on the phone** (mynx dev, PR #24's build): `list`
+  shows strength control, all four effects and all eight primitives
+  with lengths (click 29 ms … slow-rise 500); each effect, a wave with
+  pauses, `--repeat` with Ctrl+C, `stop` from another tab and a chain
+  all work. In Vibrate mode `effect click` still clicks and the
+  metronome still buzzes, so `USAGE_MEDIA` stays. Mute not tried.
+- ROADMAP: Battery left "Next" (it shipped in #21-#22).
 
 ### 2026-10-11 (101): Docker Hub sign-in, backup docs, housekeeping
 
