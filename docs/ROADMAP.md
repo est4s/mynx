@@ -12,11 +12,22 @@ polish (first run, icon, updates from GitHub Releases).
 
 ## Next
 
-- **First release, v0.1.0:** signed APKs on GitHub Releases, built by CI
-  from version tags.
 - **What's new and release notes:** after every update, a page with the
   notes of the versions since the one before; "Release notes" in the
   menu, working offline.
+- **Battery:** `mynx battery`: charge level, charging or not (and
+  how), temperature and health, with `--json` and `--stream` like
+  `mynx sensor`. No permission needed.
+- **Vibration patterns:** `mynx vibrate` beyond one buzz: Android's
+  predefined effects (`click`, `double-click`, `tick`,
+  `heavy-click`), waveforms (steps of length and strength, optionally
+  repeating until stopped), and chained primitives (`click`, `thud`,
+  `spin`, `slow-rise`, …, Android 11+). `mynx vibrate list` shows
+  what the phone supports.
+- **Volume keys** as input while the app is on screen: a key bar can
+  map them to keys (`volume-up = PgUp`), so a program with its own bar
+  reads them like any other key; with no mapping they change the
+  volume as now.
 
 ## Planned
 
@@ -62,16 +73,10 @@ The design and the parts are in the work log ("Parked: roadmap step 8").
 Further `mynx` commands for the phone's hardware, through Android's
 APIs like `mynx sensor` and `mynx camera`, each with `--json` and an
 `android-*` setting where it needs a permission.
-- **Battery:** charge level, charging or not, temperature and health
-  (no permission).
-- **Vibration patterns:** waveforms and Android's haptic effects
-  (click, tick, …), beyond the one buzz of `mynx vibrate`.
 - **Screen:** keep it on while a program runs (owned by that process,
   like `mynx rotation lock`), and the app's own brightness. The
   phone's brightness needs Android's "modify system settings", which
   the user turns on by hand.
-- **Volume keys** as input while the app is on screen: a key bar
-  action, or keys sent to the program.
 - **Biometric confirm:** a fingerprint or face prompt that answers yes
   or no, for scripts to guard an action (the app must be on screen).
 - **Hardware keystore:** keys made in Android's keystore that never
