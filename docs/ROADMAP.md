@@ -15,9 +15,6 @@ polish (first run, icon, updates from GitHub Releases).
 - **What's new and release notes:** after every update, a page with the
   notes of the versions since the one before; "Release notes" in the
   menu, working offline.
-- **Battery:** `mynx battery`: charge level, charging or not (and
-  how), temperature and health, with `--json` and `--stream` like
-  `mynx sensor`. No permission needed.
 - **Volume keys** as input for programs here, while the app is on
   screen (today they only change the volume). How they reach a
   program is still to be decided.

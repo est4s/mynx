@@ -25,6 +25,8 @@ are in git history: the full log up to entry 92 is
   `mynx update` (entry 81's updates, confirmed).
 - **Battery** (`mynx battery`, the `/sys/class/power_supply`
   stand-in): confirmed and merged (entries 99-100).
+- **Vibration patterns** (`mynx vibrate effect/wave/chain/list/stop`):
+  confirmed on the phone (entry 102, PR #24).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -33,30 +35,10 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. Vibration patterns: try them on the phone
+### 1. Volume keys (roadmap, "more of the phone")
 
-Built (entry 102, branch `vibration-patterns`). In mynx dev on the
-Pixel 10:
-- `mynx vibrate list` (and `--json`): what does it say about strength
-  control, the four effects and the eight primitives (lengths)?
-- Each effect: `mynx vibrate effect click`, `double-click`, `tick`,
-  `heavy-click`: does each feel different, and does `mynx` return
-  right after?
-- A wave with pauses: `mynx vibrate wave 200 100@0 200 100@0 600@40`
-  (the last step weaker); `mynx vibrate 300 --strength 20`.
-- `mynx vibrate wave 100 400@0 --repeat`, then Ctrl+C: it stops at
-  once and exits quietly. Again, then `mynx vibrate stop` from another
-  tab: the vibration stops and the first tab's `mynx` returns.
-- A chain: `mynx vibrate chain slow-rise click+100 thud@60`, and one
-  with a primitive the phone lacks (per `list`): a clear refusal.
-- Silent mode and Do Not Disturb, and the phone's vibration settings
-  (media vibration off): does it still vibrate? We vibrate as
-  `USAGE_MEDIA` on Android 13+; if that feels wrong, try another
-  usage.
-- The apps that buzz (compass, incline, tuner, metronome) still do.
-
-Then: volume keys, once the maintainer decides how they reach
-programs.
+As input for programs here while the app is on screen. How they reach
+a program is the maintainer's decision, still open: ask first.
 
 ### 2. What's new and release notes (planned, not built)
 
@@ -224,6 +206,13 @@ The maintainer's approved design, built test-first:
 - No new setting; the metronome is untouched.
 - Unrelated: `test_undo_list` fails when `TZ` isn't UTC (this tab's
   is Europe/Helsinki); CI is UTC.
+- **Confirmed on the phone** (mynx dev, PR #24's build): `list`
+  shows strength control, all four effects and all eight primitives
+  with lengths (click 29 ms … slow-rise 500); each effect, a wave with
+  pauses, `--repeat` with Ctrl+C, `stop` from another tab and a chain
+  all work. In Vibrate mode `effect click` still clicks and the
+  metronome still buzzes, so `USAGE_MEDIA` stays. Mute not tried.
+- ROADMAP: Battery left "Next" (it shipped in #21-#22).
 
 ### 2026-10-11 (101): Docker Hub sign-in, backup docs, housekeeping
 
