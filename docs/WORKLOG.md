@@ -33,17 +33,10 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0a. Battery: try the stand-in's fixes, then merge PR #22
+### 0a. Merge PR #22 (battery stand-in)
 
-`mynx battery` (entry 99) and the `/sys/class/power_supply` stand-in
-(entry 100) are confirmed on the phone, but for two fixes made after
-(entry 100). In mynx dev, after `apt update && apt install -y acpi
-python3-psutil`: `acpi -b` should show the real level (not 0%) and
-`python3 -c 'import psutil; print(psutil.sensors_battery())'` a
-positive `secsleft` on battery. Then starship's battery module (it
-shows below 10% by default):
-`printf '[[battery.display]]\nthreshold = 100\n' > /tmp/s.toml;
-STARSHIP_CONFIG=/tmp/s.toml starship module battery`. Then merge.
+Confirmed on the phone (entry 100); merge it. Then roadmap: the rest
+of "more of the phone" (vibration, volume keys: undecided).
 
 ### 0. Docker Hub sign-in
 
@@ -263,7 +256,9 @@ by proot ("Function not implemented" on every file call, see
   `ac/online` follows a USB-C charger (Android calls it AC). `acpi -b`
   said 0% (no `charge_full`: now worked out from charge ÷ level) and
   psutil a negative `secsleft` (now `current_now` is the size only,
-  maintainer's decision). Both fixed, not yet tried on the phone.
+  maintainer's decision). Both fixed and **confirmed** (run
+  38145343394): `acpi -b` 52%, psutil a positive `secsleft`,
+  starship's battery module shows.
 
 ### 2026-10-11 (99): `mynx battery`, step 1 of 2
 
