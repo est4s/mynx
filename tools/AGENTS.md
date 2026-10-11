@@ -99,6 +99,7 @@ their own.
 | `mynx location` | where the phone is: one fix; `--stream` keeps printing them (see "The phone") |
 | `mynx sensor list` | the phone's sensors, with their values and units |
 | `mynx sensor NAME` | one reading of a sensor; `--stream` keeps printing them (see "The phone") |
+| `mynx battery` | the battery: charge, charging, temperature, health, battery saver; `--stream` prints changes (see "The phone") |
 | `mynx camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
 | `mynx torch on [PERCENT]\|off` | the phone's flashlight |
 | `mynx rotation lock [portrait\|landscape]` | stop the screen turning while the program that ran it runs; `unlock`, `status` |
@@ -289,6 +290,26 @@ Commands for the phone itself, and the sound device:
   step sensors need Android's "physical activity" permission, asked
   the first time (app on screen). Readings keep coming in the
   background. `android-sensors off` blocks it.
+- `mynx battery` shows the battery: level, status and what it's
+  plugged into (with the time until full while charging),
+  temperature, health, voltage, current (in or out, and on average),
+  charge left in mAh, charge cycles, the technology, battery saver
+  and the phone's thermal status (`none` to `shutdown`: how hard it
+  is slowing down to cool off). Lines the phone doesn't fill are left
+  out. `--stream` prints a line whenever the level, status, plug,
+  health, temperature, battery saver or thermal status changes, until
+  Ctrl+C; `--every SECONDS` (1 to 3600) adds one at least that often,
+  for logging the current. `--json` gives `percent`, `status`
+  (`charging`, `discharging`, `full`, `not-charging`, `unknown`),
+  `plugged` (`ac`, `usb`, `wireless`, `dock`, null), `health`,
+  `temperature` (°C), `voltage` (V), `current` and `current_average`
+  (A, positive into the battery), `charge` (mAh), `time_to_full`
+  (seconds), `cycles`, `technology`, `battery_saver`, `thermal` and
+  `time` (ms since 1970), null for what the phone doesn't say; with
+  `--stream`, one object per line. It needs no permission and works
+  in the background. How phones report the current varies; it's
+  shown as they say, except that while discharging it always flows
+  out.
 - `mynx camera FILE` opens the phone's camera app; the photo you
   take is saved to FILE as a JPEG (replacing it), and `mynx` prints
   `Saved /root/photo.jpg (2.3 MB)`. Backing out of the camera app

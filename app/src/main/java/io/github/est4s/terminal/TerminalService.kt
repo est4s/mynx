@@ -33,6 +33,7 @@ import io.github.est4s.terminal.core.Phone
 import io.github.est4s.terminal.core.RotationLocks
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
+import io.github.est4s.terminal.core.batteryRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
@@ -143,6 +144,7 @@ class TerminalService : Service() {
                 sensorRequests(File(rootfs, "root"), sensors::hasType, sensors::read) +
                 cameraRequests(File(rootfs, "root"), camera::take) +
                 audioRequests(File(rootfs, "root"), player::play, recorder::record) +
+                batteryRequests(batteryReader::read) +
                 updater.requests { apk -> onMain { openInstaller(apk) } },
         )
     }
@@ -178,6 +180,7 @@ class TerminalService : Service() {
         )
     }
     private val sensors by lazy { SensorReader(this, ::askPermissions) }
+    private val batteryReader by lazy { BatteryReader(this, mainHandler) }
     private val player by lazy { AudioPlayer(mainHandler) }
     private val sound by lazy {
         SoundDevice(
@@ -384,6 +387,7 @@ class TerminalService : Service() {
         mainHandler.removeCallbacks(updateTick)
         locator.stopAll()
         sensors.stopAll()
+        batteryReader.stopAll()
         player.stopAll()
         recorder.stopAll()
         mic.stop()

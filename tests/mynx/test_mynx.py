@@ -1485,6 +1485,82 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertEqual(run.returncode, 2, args)
             self.assertIn(usage, run.stderr, args)
 
+    # --- battery ------------------------------------------------------------
+
+    BATTERY = {"percent": 82, "status": "charging", "plugged": "usb", "health": "good", "temperature": 31.5,
+               "voltage": 4.123, "current": 1.204, "current_average": 1.15, "charge": 3912, "time_to_full": 4320,
+               "cycles": 142, "technology": "Li-ion", "battery_saver": False, "thermal": "none",
+               "time": 1791177403145}
+    UNKNOWN_BATTERY = {"percent": 40, "status": "discharging", "plugged": None, "health": "unknown",
+                       "temperature": None, "voltage": None, "current": -0.45, "current_average": None,
+                       "charge": None, "time_to_full": None, "cycles": None, "technology": None,
+                       "battery_saver": True, "thermal": "moderate", "time": 1791177463145}
+
+    def test_battery_shows_everything_the_phone_says(self):
+        self.start_app({"battery": {"ok": True, "battery": self.BATTERY}})
+        run = self.mynx("battery")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Level          82 %\n"
+                                     "Status         charging (USB), full in 1 h 12 min\n"
+                                     "Temperature    31.5 °C\n"
+                                     "Health         good\n"
+                                     "Voltage        4.12 V\n"
+                                     "Current        1.20 A in (average 1.15 A)\n"
+                                     "Charge         3912 mAh\n"
+                                     "Cycles         142\n"
+                                     "Technology     Li-ion\n"
+                                     "Battery saver  off\n"
+                                     "Thermal        none\n")
+        self.assertEqual(self.app.requests, [["battery"]])
+        self.assertEqual(json.loads(self.mynx("battery", "--json").stdout), {"ok": True, "battery": self.BATTERY})
+
+    def test_battery_leaves_out_what_the_phone_doesnt_say(self):
+        self.start_app({"battery": {"ok": True, "battery": self.UNKNOWN_BATTERY}})
+        run = self.mynx("battery")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Level          40 %\n"
+                                     "Status         discharging\n"
+                                     "Health         unknown\n"
+                                     "Current        0.45 A out\n"
+                                     "Battery saver  on\n"
+                                     "Thermal        moderate\n")
+
+    def test_battery_time_to_full_under_an_hour(self):
+        self.start_app({"battery": {"ok": True, "battery": dict(self.BATTERY, plugged="ac", time_to_full=1500)}})
+        self.assertIn("Status         charging (AC), full in 25 min\n", self.mynx("battery").stdout)
+
+    def test_battery_stream_prints_a_line_per_change(self):
+        self.start_app({"battery-stream": {"ok": True, "_lines": [self.BATTERY, self.UNKNOWN_BATTERY]}})
+        run = self.mynx("battery", "--stream", env={"TZ": "UTC"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "05:16:43 82 % charging (USB) 31.5 °C 1.20 A in\n"
+                                     "05:17:43 40 % discharging 0.45 A out, battery saver, thermal moderate\n")
+        self.assertEqual(self.app.requests, [["battery-stream"]])
+        run = self.mynx("battery", "--stream", "--json")
+        self.assertEqual([json.loads(line) for line in run.stdout.splitlines()],
+                         [self.BATTERY, self.UNKNOWN_BATTERY])
+
+    def test_battery_stream_every_few_seconds(self):
+        self.start_app({"battery-stream": {"ok": True, "_lines": []}})
+        self.assertEqual(self.mynx("battery", "--stream", "--every", "30").returncode, 0)
+        self.assertEqual(self.app.requests, [["battery-stream", "interval=30"]])
+
+    def test_battery_stream_stops_quietly_on_ctrl_c(self):
+        self.start_app({"battery-stream": {"ok": True, "_lines": [self.BATTERY], "_hold": True}})
+        proc = self.popen("battery", "--stream")
+        self.assertIn("82 %", proc.stdout.readline())
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, err), (0, ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_battery_usage(self):
+        usage = "usage: mynx battery [--stream [--every SECONDS]]"
+        for args in [("--every", "5"), ("--stream", "--every"), ("now",), ("--fast",)]:
+            run = self.mynx("battery", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn(usage, run.stderr, args)
+
     # --- camera and torch ---------------------------------------------------
 
     def test_camera_saves_to_the_files_full_path(self):

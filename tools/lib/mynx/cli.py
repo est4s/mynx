@@ -38,6 +38,7 @@ Commands:
   share      share FILE... | --text [TEXT]: send to another app
   location   location [--gps] [--stream]: where the phone is
   sensor     sensor list | NAME [--stream]: the phone's sensors
+  battery    battery [--stream [--every SECONDS]]: charge, health, power
   camera     camera FILE [--quick front|back]: take a photo
   torch      torch on [PERCENT] | off: the flashlight
   rotation   rotation [status] | lock [portrait|landscape] | unlock
@@ -388,6 +389,96 @@ def reading_text(reading):
     else:
         text = " ".join(f"{k}={v}" for k, v in values.items())
     return f"{text} {reading['unit']}".rstrip()
+
+
+BATTERY_USAGE = "usage: mynx battery [--stream [--every SECONDS]]"
+
+
+def cmd_battery(args, as_json):
+    options, stream = [], False
+    rest = list(args)
+    while rest:
+        arg = rest.pop(0)
+        if arg == "--stream":
+            stream = True
+        elif arg == "--every" and rest:
+            options.append(f"interval={rest.pop(0)}")
+        else:
+            raise Usage(BATTERY_USAGE)
+    # One reading has no interval.
+    if options and not stream:
+        raise Usage(BATTERY_USAGE)
+    if not stream:
+        answer = request("battery")
+        out(as_json, answer, battery_text(answer["battery"]))
+        return 0
+
+    def show(battery):
+        if as_json:
+            line = json.dumps(battery)
+        else:
+            line = f"{time.strftime('%H:%M:%S', time.localtime(battery['time'] / 1000))} {battery_line(battery)}"
+        print(line, flush=True)
+
+    try:
+        request("battery-stream", *options, on_line=show)
+    except KeyboardInterrupt:
+        pass
+    except BrokenPipeError:
+        sys.stdout = open(os.devnull, "w")
+    return 0
+
+
+def battery_text(b):
+    """The whole reading, one line each; what the phone doesn't say is left out."""
+    status = battery_status(b)
+    if b["status"] == "charging" and b["time_to_full"] is not None:
+        status += f", full in {duration_text(b['time_to_full'])}"
+    current = None
+    if b["current"] is not None:
+        current = amps_text(b["current"])
+        if b["current_average"] is not None:
+            current += f" (average {abs(b['current_average']):.2f} A)"
+    rows = [
+        ("Level", None if b["percent"] is None else f"{b['percent']} %"),
+        ("Status", status),
+        ("Temperature", None if b["temperature"] is None else f"{b['temperature']:.1f} °C"),
+        ("Health", b["health"]),
+        ("Voltage", None if b["voltage"] is None else f"{b['voltage']:.2f} V"),
+        ("Current", current),
+        ("Charge", None if b["charge"] is None else f"{round(b['charge'])} mAh"),
+        ("Cycles", b["cycles"]),
+        ("Technology", b["technology"]),
+        ("Battery saver", "on" if b["battery_saver"] else "off"),
+        ("Thermal", b["thermal"]),
+    ]
+    return "\n".join(f"{name:<14} {value}" for name, value in rows if value is not None)
+
+
+def battery_line(b):
+    """A stream's line: level, status, temperature, current, and what's unusual."""
+    parts = [f"{b['percent']} %" if b["percent"] is not None else None, battery_status(b),
+             None if b["temperature"] is None else f"{b['temperature']:.1f} °C",
+             None if b["current"] is None else amps_text(b["current"])]
+    line = " ".join(p for p in parts if p)
+    extra = (["battery saver"] if b["battery_saver"] else []) + \
+        ([f"thermal {b['thermal']}"] if b["thermal"] not in (None, "none") else [])
+    return ", ".join([line] + extra)
+
+
+def battery_status(b):
+    plugged = {"ac": "AC", "usb": "USB", "wireless": "wireless", "dock": "dock"}.get(b["plugged"])
+    return f"{b['status']} ({plugged})" if plugged else b["status"]
+
+
+def amps_text(amps):
+    return f"{abs(amps):.2f} A {'out' if amps < 0 else 'in'}"
+
+
+def duration_text(seconds):
+    minutes = max(1, round(seconds / 60))
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours} h {minutes} min" if hours else f"{minutes} min"
 
 
 CAMERA_USAGE = "usage: mynx camera FILE [--quick front|back]"
@@ -1489,7 +1580,7 @@ COMMANDS = {
     "theme": cmd_theme, "keybar": cmd_keybar, "menu": cmd_menu, "edit": cmd_edit,
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
-    "location": cmd_location, "sensor": cmd_sensor, "camera": cmd_camera, "torch": cmd_torch,
+    "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,

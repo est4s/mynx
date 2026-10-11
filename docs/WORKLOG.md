@@ -33,6 +33,22 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
+### 0a. `mynx battery`: try it, then the stand-in (step 2)
+
+Built (entry 99). On the phone, in mynx dev: `mynx battery` charging
+and on battery (status, plug, "full in", the current's direction and
+size: Pixels should report µA), `mynx battery --stream` while
+plugging in and out and switching battery saver on, `--every 10`,
+`--json`. Then **step 2** (maintainer's decision): a stand-in
+`/sys/class/power_supply` (Android blocks the real one: "Permission
+denied"), written by the app from the same readings and bound by
+proot like the fake `/proc` files, so starship's battery module, htop,
+`acpi` and psutil see the battery. Folders `battery` (`type`
+Battery, `capacity`, `status`, `health`, `present`, `technology`,
+`temp`, `voltage_now`, `current_now`, `charge_counter`,
+`cycle_count`, `uevent`) and `ac`/`usb`/`wireless` (`type`,
+`online`). Check starship and psutil read it.
+
 ### 0. Docker Hub sign-in
 
 Both secrets are set, but builds still say "unauthorized: incorrect
@@ -226,6 +242,27 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-11 (99): `mynx battery`, step 1 of 2
+
+Roadmap "Next" (PR #19/#20): battery, vibration patterns, volume keys.
+`mynx battery` shows everything Android gives without a permission:
+level, status and plug, time to full, temperature, health, voltage,
+current now and on average, charge (mAh), cycles (Android 14+),
+technology, battery saver and the thermal status. `--stream` prints a
+line when something worth knowing changes (not voltage or current
+alone), `--every SECONDS` at least that often; `--json` with
+snake_case keys. Core (`Battery.kt`) turns Android's raw numbers into
+JSON and handles the phone's "don't know" values (`Int.MIN_VALUE`,
+-1, 0) and volts-for-millivolts; while discharging the current always
+flows out (phones disagree on its sign); no unit guessing for µA vs mA.
+`BatteryReader` reads the sticky battery broadcast, BatteryManager and
+PowerManager on the main thread. Decided (maintainer): no
+`android-battery` setting (no permission, like torch and vibrate).
+Tests: `BatteryRequestTest`, `test_mynx.py` (battery). Not yet on the
+phone. Seen while testing: `test_undo_list` fails unless `TZ=UTC`
+(depends on the tab's time zone since entry 98) and
+`test_audio_play_stops_quietly_on_ctrl_c` is flaky; both untouched.
 
 ### 2026-10-10 (98): The phone's time zone in Debian
 
