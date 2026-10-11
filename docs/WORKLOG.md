@@ -19,12 +19,12 @@ are in git history: the full log up to entry 92 is
   themed icon, the title art and "m" icon). Also: the rename to mynx,
   bug reports (`mynx report`), and **mynx dev**, debug builds as a
   separate app (entry 82).
-- **Built, waiting for a release to test:** app updates from GitHub
-  releases (`mynx update`, the daily check, entry 81). mynx dev
-  doesn't update from releases, so only a release can try them.
-- **v0.1.0 is released** (2026-10-10, entry 96), signed with the
-  release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer is
-  moving their daily mynx to it (item 1).
+- **Released:** v0.1.0 and v0.1.1 (2026-10-10), signed with the
+  release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer's
+  daily mynx is the release, and it updated 0.1.0 → 0.1.1 through
+  `mynx update` (entry 81's updates, confirmed).
+- **Battery** (`mynx battery`, the `/sys/class/power_supply`
+  stand-in): confirmed and merged (entries 99-100).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -33,65 +33,23 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0a. Merge PR #22 (battery stand-in)
+### 1. Try the backup's new restore path (mynx dev)
 
-Confirmed on the phone (entry 100); merge it. Then roadmap: the rest
-of "more of the phone" (vibration, volume keys: undecided).
+`scripts/backup-root.sh` now saves to `Download/mynx-backup` and
+says to share its four files to mynx (entry 101). Untried on the
+phone: in mynx, `scripts/backup-root.sh` (or into a scratch folder
+with a small `BACKUP_HOME`); in the Files app, select the four files
+→ Share → mynx dev; in mynx dev, `ls ~/Shared` shows them under
+their own names, and `bash ~/Shared/restore-root.sh` checks the sums
+and restores. Watch for: the share sheet offering mynx dev for a
+`.tar.gz`, a big tarball copying whole. Fix `docs/RELEASING.md` if
+anything differs.
 
-### 0. Docker Hub sign-in
+### 2. Vibration patterns (roadmap, "more of the phone")
 
-Both secrets are set, but builds still say "unauthorized: incorrect
-username or password" and pull anonymously (run 38036141815). The
-token is probably one since revoked, or `DOCKERHUB_USERNAME` (`est4s`)
-isn't the maintainer's Docker Hub name. Fix: a new read-only token,
-`mynx clipboard get | gh secret set DOCKERHUB_TOKEN`; the next build's
-"Sign in to Docker Hub" step should print "Login Succeeded".
-
-### 1. After v0.1.0: the move, then fix the move docs
-
-The release key is made and backed up, the secrets are set and
-`v0.1.0` is out (entry 96). Left:
-
-1. **The move** (the maintainer, no backup: everything that matters is
-   on GitHub). Uninstall the old debug-signed mynx (not mynx dev),
-   install `Download/mynx-0.1.0.apk`, then in the fresh Debian:
-   ```sh
-   apt update && apt install -y alsa-utils apt-utils bats chafa curl dialog eza gh git htop jq libasound2-plugins mc nano nnn openjdk-21-jdk-headless pngquant pulseaudio-utils python3-numpy python3-pil python3-pyte sox starship
-   gh auth login
-   gh repo clone est4s/mynx && cd mynx && scripts/setup.sh
-   mynx agent install claude
-   ```
-   Lost with the old Debian: `~/bin/claude` (the messaging-socket
-   wrapper, see the old `~/AGENTS.md`), Claude Code's memory, mynx
-   settings. Check: `mynx about` says 0.1.0, `mynx install-apk`
-   refuses (debug only). From then on: develop in mynx, test in mynx
-   dev.
-2. **Fix `scripts/backup-root.sh`** (found on the phone, entry 96): its
-   default folder, `/storage/emulated/0/mynx-backup`, can't be made
-   (apps can't create top-level folders: "Permission denied"), and
-   files the app writes to `Download` can't be read by another app
-   (mynx dev got "Permission denied" on them), so a reinstalled mynx
-   probably can't read its old backup either. What worked in theory
-   but wasn't tried: Files app → select the backup → Share → mynx,
-   which copies it to `~/Shared`; `restore-root.sh` finds files next
-   to itself. Change the default to `Download/mynx-backup`, make the
-   restore step "share the four files to mynx, then
-   `bash ~/Shared/restore-root.sh`", test it with mynx dev, and fix
-   `docs/RELEASING.md` to match.
-3. **Then trim RELEASING.md** (maintainer's decision, 2026-10-08): keep
-   the two scripts, but cut "Debug and release builds on one phone" to
-   mynx dev plus a short "moving to a new phone" note, and drop the
-   builds-up-to-87 steps. Drop this item.
-
-### 2. Test updates for real: v0.1.1
-
-Merge any change and tag `v0.1.1`. In mynx 0.1.0, `mynx update`
-checks at once: it should show 0.1.1 with its notes and size; `y`
-downloads, and the installer opens (the first time Android asks to
-allow installing apps: allow, run it again). After **Update**, mynx
-comes back as 0.1.1 with tabs and Debian intact. Within a day the
-notification and the menu's "Update available" should come on their
-own (with `update-check` on).
+`mynx vibrate` beyond one buzz: predefined effects, waveforms,
+chained primitives, `mynx vibrate list` (`docs/ROADMAP.md`). Then
+volume keys, once the maintainer decides how they reach programs.
 
 ### 3. What's new and release notes (planned, not built)
 
@@ -231,6 +189,25 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-11 (101): Docker Hub sign-in, backup docs, housekeeping
+
+- **Docker Hub:** the token secret was wrong. The maintainer made a
+  new read-only token (`mynx-build`), set from the clipboard with
+  `gh secret set DOCKERHUB_TOKEN`; a re-run of main's build (run
+  38149539484) printed "Login Succeeded".
+- **Backup:** `backup-root.sh` defaults to `Download/mynx-backup`
+  (apps can't make top-level folders) and ends with the restore
+  path: share the four files to mynx from the Files app, then `bash
+  ~/Shared/restore-root.sh` (a reinstalled app can't read the old
+  one's files in Download). `restore-root.sh` now says to delete the
+  four files, not `rm -r` the folder, which is now `~/Shared`.
+  `BACKUP_STORAGE` lets the tests use a fake phone storage.
+- `docs/RELEASING.md`: "Debug and release builds on one phone" cut
+  to "mynx dev beside the release" and "Moving to a new phone"; the
+  builds-up-to-87 steps are gone.
+- Work log: the move, v0.1.1 and the update test are done
+  (maintainer: 0.1.0 → 0.1.1 came through `mynx update`).
 
 ### 2026-10-11 (100): The battery stand-in, step 2 (branch `battery-sysfs`)
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Restores a backup made by backup-root.sh into this Debian: root's home
 # (its files replace those of the same name; others stay) and the packages
-# installed by hand. Run it from the backup's folder, where backup-root.sh
-# put it:
+# installed by hand. It reads the backup's files beside it: share the four
+# of them to mynx from the Files app (they land in ~/Shared), then
 #
-#   bash /storage/emulated/0/mynx-backup/restore-root.sh [--yes]
+#   bash ~/Shared/restore-root.sh [--yes]
 #
 # RESTORE_HOME overrides /root (tests).
 set -euo pipefail
@@ -61,5 +61,6 @@ if ((${#failed[@]})); then
 fi
 echo "Check that your logins came back: gh auth status, and start claude."
 echo "Then open a new tab (the restored ~/.bashrc applies there), and delete"
-echo "the backup, which holds those logins: rm -r $dir"
+echo "the backup, which holds those logins:"
+echo "rm $dir/root.tar.gz $dir/packages.txt $dir/SHA256SUMS $dir/restore-root.sh"
 ((${#failed[@]} == 0)) || exit 1

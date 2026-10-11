@@ -96,32 +96,31 @@ git push origin v0.1.0
   Delete a half-made release first if there is one
   (`gh release delete v0.1.0`).
 
-## Debug and release builds on one phone
+## mynx dev beside the release
 
 Debug builds are a separate app, **mynx dev**, with the application ID
 `io.github.est4s.terminal.dev` (`applicationIdSuffix`), so they install
 beside the release (`io.github.est4s.terminal`), each with its own
 Debian. The release keeps the ID it can never change.
 
-Builds from before mynx dev (up to build 87) are debug-signed with the
-release's ID. Android won't install a release over one of those:
-uninstall it first, which **deletes its Debian**. To move to the
-release:
+## Moving to a new phone (or a reinstall)
 
-1. In the old app: download the release APK
-   (`gh release download v0.1.0 -D /storage/emulated/0/Download`), then
-   `scripts/backup-root.sh`. It saves `/root` (without caches, which
-   rebuild themselves), the packages installed by hand and
-   `restore-root.sh` to `/storage/emulated/0/mynx-backup`, which survives
-   the uninstall. It never overwrites a backup that's there.
-2. Uninstall the app (not mynx dev); install the APK from the Files app.
-3. In the release's fresh Debian:
-   `bash /storage/emulated/0/mynx-backup/restore-root.sh`. It checks the
-   backup, asks, restores `/root`, then `apt-get install`s the packages
-   (naming any that fail).
+Uninstalling deletes the app's Debian, so move `/root` with the two
+scripts:
+
+1. In the old Debian: `scripts/backup-root.sh`. It saves `/root`
+   (without caches, which rebuild themselves), the packages installed
+   by hand and `restore-root.sh` to `Download/mynx-backup`, and never
+   overwrites a backup that's there.
+2. Get that folder onto the new phone (or keep it through the
+   reinstall), install mynx, then in the Files app select its four
+   files and **Share** them to mynx: they land in `~/Shared` (a new
+   app can't read files the old one left in Download).
+3. In the new Debian: `bash ~/Shared/restore-root.sh`. It checks the
+   backup, asks, restores `/root`, then `apt-get install`s the
+   packages (naming any that fail).
 4. Check `gh auth status` and `claude`, open a new tab, then delete the
-   backup: it holds those logins, and other apps can read phone
-   storage.
+   backup's files, here and in Download: they hold those logins.
 
 ## Later: Google Play
 

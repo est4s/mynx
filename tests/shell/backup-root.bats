@@ -8,6 +8,7 @@ SCRIPTS="$BATS_TEST_DIRNAME/../../scripts"
 setup() {
     export BACKUP_HOME="$BATS_TEST_TMPDIR/old/root"
     export RESTORE_HOME="$BATS_TEST_TMPDIR/new/root"
+    export BACKUP_STORAGE="$BATS_TEST_TMPDIR/phone"
     DEST="$BATS_TEST_TMPDIR/phone/mynx-backup"
     mkdir -p "$BACKUP_HOME/mynx" "$RESTORE_HOME" "$BATS_TEST_TMPDIR/bin" "$BATS_TEST_TMPDIR/phone"
     echo 'my bashrc' >"$BACKUP_HOME/.bashrc"
@@ -60,6 +61,16 @@ backup() { bash "$SCRIPTS/backup-root.sh" "$DEST"; }
     [[ $list == *".local/bin/claude"* ]]
 }
 
+@test "backs up to Download, where the Files app can share it to mynx" {
+    mkdir -p "$BACKUP_STORAGE/Download"
+    run bash "$SCRIPTS/backup-root.sh"
+    [ "$status" -eq 0 ]
+    [ -f "$BACKUP_STORAGE/Download/mynx-backup/root.tar.gz" ]
+    # Another app's files in Download can't be read from the new Debian.
+    [[ $output == *"Share"* ]]
+    [[ $output == *"bash ~/Shared/restore-root.sh"* ]]
+}
+
 @test "never overwrites a backup that's there" {
     mkdir -p "$DEST"
     echo earlier >"$DEST/root.tar.gz"
@@ -90,7 +101,9 @@ backup() { bash "$SCRIPTS/backup-root.sh" "$DEST"; }
     grep -qx 'update' "$BATS_TEST_TMPDIR/apt.log"
     grep -qx 'install -y bats gh openjdk-21-jdk-headless' "$BATS_TEST_TMPDIR/apt.log"
     [[ $output == *"gh auth status"* ]]
-    [[ $output == *"rm -r $DEST"* ]]
+    [[ $output == *"rm $DEST/root.tar.gz $DEST/packages.txt $DEST/SHA256SUMS $DEST/restore-root.sh"* ]]
+    # The backup's folder may be ~/Shared, which holds other things too.
+    [[ $output != *"rm -r"* ]]
 }
 
 @test "restore changes nothing unless the answer is yes" {
