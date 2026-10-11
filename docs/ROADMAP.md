@@ -12,11 +12,22 @@ polish (first run, icon, updates from GitHub Releases).
 
 ## Next
 
-- **First release, v0.1.0:** signed APKs on GitHub Releases, built by CI
-  from version tags.
 - **What's new and release notes:** after every update, a page with the
   notes of the versions since the one before; "Release notes" in the
   menu, working offline.
+- **Battery:** `mynx battery`: charge level, charging or not (and
+  how), temperature and health, with `--json` and `--stream` like
+  `mynx sensor`. No permission needed.
+- **Vibration patterns:** `mynx vibrate` beyond one buzz: Android's
+  predefined effects (`click`, `double-click`, `tick`,
+  `heavy-click`), waveforms (steps of length and strength, optionally
+  repeating until stopped), and chained primitives (`click`, `thud`,
+  `spin`, `slow-rise`, …, Android 11+). `mynx vibrate list` shows
+  what the phone supports.
+- **Volume keys** as input while the app is on screen: a key bar can
+  map them to keys (`volume-up = PgUp`), so a program with its own bar
+  reads them like any other key; with no mapping they change the
+  volume as now.
 
 ## Planned
 
@@ -58,6 +69,33 @@ The design and the parts are in the work log ("Parked: roadmap step 8").
 - Turn each phone permission on or off per profile (today: one
   `android-*` setting each).
 
+### More of the phone
+Further `mynx` commands for the phone's hardware, through Android's
+APIs like `mynx sensor` and `mynx camera`, each with `--json` and an
+`android-*` setting where it needs a permission.
+- **Screen:** keep it on while a program runs (owned by that process,
+  like `mynx rotation lock`), and the app's own brightness. The
+  phone's brightness needs Android's "modify system settings", which
+  the user turns on by hand.
+- **Biometric confirm:** a fingerprint or face prompt that answers yes
+  or no, for scripts to guard an action (the app must be on screen).
+- **Hardware keystore:** keys made in Android's keystore that never
+  leave the phone. First use: an `ssh-agent` in Debian that signs with
+  them.
+- **NFC:** read and write tags (NDEF, and raw ISO-DEP), only while the
+  app is on screen; later, the phone as an NFC card (host card
+  emulation).
+- **Wi-Fi:** the connection (network name, signal, speed, frequency)
+  and scans for networks. Scans need the location permission, and
+  Android allows about four every two minutes. No monitor mode.
+- **Cellular:** signal and network type, send and read SMS, start a
+  call. Google Play only allows the SMS and call permissions for a
+  phone's default SMS or phone app, so those stay out of a Play build.
+- **Video:** record to a file (`mynx camera --video`), with exposure
+  and focus settings for photos too. Later, a live stream into Debian
+  over a local socket or HTTP (MJPEG), since there's no `/dev/video0`
+  without kernel modules.
+
 ### Development boards
 Flash and talk to boards like **Arduino** and **ESP32** over a USB-C OTG
 cable, using standard tools.
@@ -86,10 +124,13 @@ first.
 - **BLE:** `mynx ble` scans, connects, reads, writes and subscribes, with
   `--json` and streams like `mynx sensor`. Nordic UART devices can also
   be a serial port.
+- Bluetooth headphones and speakers need nothing: the sound device
+  plays through Android, which sends it to them.
 
 ### Google Play
 Once the app is stable. Needs a version-code scheme that only goes up,
-and a build without `REQUEST_INSTALL_PACKAGES`.
+and a build without `REQUEST_INSTALL_PACKAGES` (and without the SMS and
+call permissions, see "More of the phone").
 
 ---
 
