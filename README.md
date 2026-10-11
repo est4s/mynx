@@ -44,7 +44,7 @@ sensors, microphone, speaker and flashlight.
   `~/AGENTS.md` so they can change your setup for you, and a phone
   notification when they finish or need you.
 - **The phone from the shell:** notifications, clipboard, share,
-  camera and flashlight, location, sensors, and sound, so Linux
+  camera and flashlight, location, sensors, battery, and sound, so Linux
   programs play through the speaker and record from the microphone.
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
   and packages survive app updates.
