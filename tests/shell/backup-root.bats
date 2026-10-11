@@ -151,3 +151,11 @@ backup() { bash "$SCRIPTS/backup-root.sh" "$DEST"; }
     [[ $output == *"inside $BACKUP_HOME"* ]]
     [ ! -e "$BACKUP_HOME/backup" ]
 }
+
+@test "backup and restore name the tarball's own size, not du's 4K blocks" {
+    run backup
+    size="$(stat -c %s "$DEST/root.tar.gz")B"
+    [[ $output == *"Backed up $size "* ]]
+    run bash "$DEST/restore-root.sh" <<<"n"
+    [[ $output == *"from the backup in $DEST ($size)"* ]]
+}

@@ -33,25 +33,13 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. Try the backup's new restore path (mynx dev)
-
-`scripts/backup-root.sh` now saves to `Download/mynx-backup` and
-says to share its four files to mynx (entry 101). Untried on the
-phone: in mynx, `scripts/backup-root.sh` (or into a scratch folder
-with a small `BACKUP_HOME`); in the Files app, select the four files
-→ Share → mynx dev; in mynx dev, `ls ~/Shared` shows them under
-their own names, and `bash ~/Shared/restore-root.sh` checks the sums
-and restores. Watch for: the share sheet offering mynx dev for a
-`.tar.gz`, a big tarball copying whole. Fix `docs/RELEASING.md` if
-anything differs.
-
-### 2. Vibration patterns (roadmap, "more of the phone")
+### 1. Vibration patterns (roadmap, "more of the phone")
 
 `mynx vibrate` beyond one buzz: predefined effects, waveforms,
 chained primitives, `mynx vibrate list` (`docs/ROADMAP.md`). Then
 volume keys, once the maintainer decides how they reach programs.
 
-### 3. What's new and release notes (planned, not built)
+### 2. What's new and release notes (planned, not built)
 
 Maintainer's decision (2026-10-08): after every update, a What's new
 page shows the notes of the versions since the one before (the tools'
@@ -62,7 +50,7 @@ tools (`/opt/mynx/release-notes`), so both work offline and match
 GitHub. Generated notes are commit subjects; maybe the maintainer
 edits them in the release before tagging (decide then).
 
-### 4. Guided GitHub setup: try it on the phone
+### 3. Guided GitHub setup: try it on the phone
 
 Built (entries 94-95, branch `github-setup`). In mynx dev, the
 main menu's "Set up GitHub" (System → GitHub setup once done):
@@ -82,7 +70,7 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
-### 5. Smaller things
+### 4. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
   auth logout`, then `y` opens GitHub's filled-in new-issue page, `n`
@@ -203,6 +191,13 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
   one's files in Download). `restore-root.sh` now says to delete the
   four files, not `rm -r` the folder, which is now `~/Shared`.
   `BACKUP_STORAGE` lets the tests use a fake phone storage.
+  **Confirmed on the phone:** a scratch backup from mynx, its four
+  files shared to mynx dev, landed in `~/Shared` under their own
+  names; `restore-root.sh` checked the sums, `n` changed nothing, `y`
+  restored and installed all 22 packages (3m46s with the JDK).
+- Both scripts give the tarball's own size (`stat`, `numfmt`):
+  `du -h` showed a 159-byte one as 4.0K (whole blocks), and "from
+  /root/Shared (4.0K)" read as the folder's size.
 - `docs/RELEASING.md`: "Debug and release builds on one phone" cut
   to "mynx dev beside the release" and "Moving to a new phone"; the
   builds-up-to-87 steps are gone.

@@ -58,7 +58,7 @@ mv "$dest/root.tar.gz.part" "$dest/root.tar.gz"
 cp "$here/restore-root.sh" "$dest/restore-root.sh"
 (cd "$dest" && sha256sum root.tar.gz packages.txt >SHA256SUMS)
 
-echo "Backed up $(du -h "$dest/root.tar.gz" | cut -f1) and $(wc -l <"$dest/packages.txt") packages to $dest."
+echo "Backed up $(numfmt --to=iec --suffix=B "$(stat -c %s "$dest/root.tar.gz")") and $(wc -l <"$dest/packages.txt") packages to $dest."
 logins=()
 for f in .config/gh .claude .claude.json .ssh; do
     [[ -e $home/$f ]] && logins+=("~/$f")

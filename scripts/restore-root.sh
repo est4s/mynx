@@ -26,7 +26,7 @@ if ! (cd "$dir" && sha256sum -c --quiet SHA256SUMS) >/dev/null 2>&1; then
 fi
 mapfile -t packages < <(grep -v '^[[:space:]]*$' "$dir/packages.txt")
 
-echo "This restores $home from $dir ($(du -h "$dir/root.tar.gz" | cut -f1)):"
+echo "This restores $home from the backup in $dir ($(numfmt --to=iec --suffix=B "$(stat -c %s "$dir/root.tar.gz")")):"
 echo "files in the backup replace those of the same name. Then it installs"
 echo "${#packages[@]} packages: ${packages[*]}"
 if [[ -z $yes ]]; then
