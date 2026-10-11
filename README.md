@@ -53,7 +53,8 @@ sensors, microphone, speaker and flashlight.
   reopen the app. Swipe sideways to switch.
 - **A key bar** above the phone's keyboard (Esc, Tab, Ctrl, arrows, …)
   that changes with what's running: the file manager, games, AI agents
-  and your own programs can each have their own.
+  and your own programs can each have their own. A bar can make the
+  volume keys send keys too.
 - **A ready setup:** a launcher menu, a file manager
   ([nnn](https://github.com/jarun/nnn)), ten themes, a Nerd Font, the
   starship prompt and a few terminal games. Every setting is a text

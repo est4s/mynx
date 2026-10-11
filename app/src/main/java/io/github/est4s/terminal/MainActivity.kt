@@ -17,6 +17,7 @@ import android.os.IBinder
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.Surface
 import android.view.View
@@ -726,6 +727,10 @@ class MainActivity : Activity() {
     }
 
     fun takeCtrlLatch() = ::keyBar.isInitialized && keyBar.takeCtrlLatch()
+
+    // Before any view: the volume keys work whatever has focus, keyboard up or down.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        (::keyBar.isInitialized && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
 
     /** A tap on a link opens it; anywhere else brings up the keyboard. */
     fun onTap(e: MotionEvent) {

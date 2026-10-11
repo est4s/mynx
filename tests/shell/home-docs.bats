@@ -100,3 +100,9 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 @test "the guide says Linux tools see the battery through a stand-in" {
     grep -qF '/sys/class/power_supply' "$GUIDE"
 }
+
+@test "the guide says how a key bar sets the volume keys" {
+    grep -qF 'VolumeUp' "$GUIDE"
+    grep -qF 'VolumeDown' "$GUIDE"
+    grep -qF 'changes the volume as usual' "$GUIDE"
+}

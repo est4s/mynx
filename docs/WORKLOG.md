@@ -35,11 +35,20 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. Volume keys (roadmap, "more of the phone")
+### 1. Volume keys: try them on the phone
 
-As input for programs here while the app is on screen. How they reach
-a program is the maintainer's decision, still open: ask first.
-
+Built (entry 103, branch `volume-keys`). In mynx dev:
+- `mynx keybar edit shell`, add `VolumeUp = Up Repeat` and
+  `VolumeDown = Down`, `mynx check` (no problems). In bash, with
+  some history: a short press of each sends one Up/Down (history
+  moves); holding VolumeUp repeats, holding VolumeDown sends once.
+  Neither changes the volume (no volume slider).
+- A bar without them still changes the volume: run `files` (nnn's
+  bar), the volume keys change the volume; quit back to the shell
+  and they move history again.
+- Both with the keyboard up and down.
+- A duplicate `VolumeUp` line: `mynx check` reports it.
+- Then `mynx keybar reset shell`.
 ### 2. What's new and release notes (planned, not built)
 
 Maintainer's decision (2026-10-08): after every update, a What's new
@@ -178,6 +187,30 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-11 (103): Volume keys (branch `volume-keys`)
+
+The maintainer's approved design, built test-first:
+- A key bar's `VolumeUp`/`VolumeDown` lines (label in any case) say
+  what the phone's volume keys send while that bar shows; they aren't
+  buttons and take no room. Same syntax as a button's keys; they
+  repeat only with `Repeat` (unlike arrow buttons).
+  `core/.../KeyBar.kt`: `ParsedKeyBar`/`LoadedKeyBar` gain
+  `volumeUp`/`volumeDown`; a second line for the same key is a
+  problem ("VolumeUp is already set on line N"), the first good one
+  counts; bad keys are problems as for buttons, so `mynx check`
+  reports them. `volumeKeyAction()` decides: Pass (bar doesn't set
+  it, the volume changes), Press, Swallow (Android's repeats of a held
+  key), Release.
+- app: `MainActivity.dispatchKeyEvent()` gives volume keys to
+  `KeyBarView.onVolumeKey()` before any view, so it works whatever has
+  focus; it sends with the buttons' `press()` (sticky Ctrl included)
+  and repeats with their timer (400 ms, then every 50 ms). The repeat
+  also stops when the window loses focus (a key released outside the
+  app).
+- No built-in bar sets them; no long press, no setting (decided).
+- Docs: tools/AGENTS.md "Key bars", README, AGENTS.md architecture;
+  ROADMAP: Volume keys left "Next".
 
 ### 2026-10-11 (102): Vibration patterns (branch `vibration-patterns`)
 

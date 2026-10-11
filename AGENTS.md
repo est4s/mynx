@@ -227,6 +227,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`res/drawable/mynx_title.xml`, `--vector`) are the whole art
   (`scripts/mynx-svg.py`; `test_art.py` fails if they're out of date).
   Change the art, regenerate them too.
+- **Volume keys** (maintainer's design, 2026-10-11): a key bar's
+  `VolumeUp`/`VolumeDown` lines (`ParsedKeyBar.volumeUp`/`volumeDown`,
+  not buttons) say what the volume keys send while that bar shows.
+  `MainActivity.dispatchKeyEvent()` hands them to `KeyBarView`, which
+  asks core's `volumeKeyAction()`: keys the bar doesn't set pass on
+  (the volume changes), Android's own key repeats are swallowed and the
+  bar repeats with its button timing, only for lines with `Repeat`. No
+  built-in bar sets them; no long press, no global setting (decided).
 - **Who checks what:** the program that reads a file checks it. The app
   (`core`) checks colours, themes, settings and key bars (`checkConfig`);
   the menu checks `menu.conf` (`menu --check FILE`); `mynx check`
