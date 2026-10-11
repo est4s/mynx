@@ -79,6 +79,13 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `binds the battery's stand-in over the power supply folder Android blocks`() {
+        val binds = prootLaunch(paths, powerSupply = "/data/files/power-supply").argv.valuesAfter("-b")
+
+        assertEquals(listOf("/dev", "/proc", "/sys", "/storage", "/data/files/power-supply:/sys/class/power_supply"), binds)
+    }
+
+    @Test
     fun `has the shell write its folder to a file after each prompt`() {
         val argv = prootLaunch(paths, cwdFile = "/tmp/.mynx/cwd-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

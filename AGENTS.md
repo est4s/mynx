@@ -372,6 +372,17 @@ See `docs/ROADMAP.md` "How it works". The details:
 - **Blocked `/proc` files:** Android hides some (`stat`, `vmstat`, …) from
   apps. The app probes them at each start and binds static stand-ins from
   `filesDir/fake-proc` over the blocked ones (`core/.../FakeProc.kt`).
+- **Battery stand-in** (`core/.../PowerSupply.kt`): Android blocks
+  `/sys/class/power_supply`, so the service keeps a battery stream of
+  its own (on changes, and every 30 s for the current) writing
+  `filesDir/power-supply` in the kernel's names and units, and every
+  tab's proot binds it there. Files are renamed into place and only
+  when changed; values the phone stops giving lose their file.
+  `current_now` is the current's size, as laptop drivers give it
+  (maintainer's decision, 2026-10-11): the kernel's docs say negative
+  while discharging, but psutil then counts negative time left.
+  `charge_full` is worked out (charge left ÷ level): acpi reckons
+  the level from it.
 - **Updates never overwrite the user's Debian.** The rootfs is unpacked once.
   App updates may only apply additive, versioned migrations. This is a hard
   rule: users' files and installed packages must survive every update.

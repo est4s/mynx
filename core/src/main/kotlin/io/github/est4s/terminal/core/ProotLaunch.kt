@@ -29,8 +29,9 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * on the PATH. [requestDir] (a Debian path) is where `mynx` sends requests.
  * [shellId] tells programs which tab they run in (`mynx notify`).
  * [soundSocket] (a Debian path) is the sound server's socket. [timeZone]
- * is the phone's, as [debianTimeZone] gives it. [command] runs instead
- * of the login bash.
+ * is the phone's, as [debianTimeZone] gives it. [powerSupply] (a host
+ * path) is the battery's stand-in, bound at [POWER_SUPPLY_MOUNT].
+ * [command] runs instead of the login bash.
  */
 fun prootLaunch(
     paths: ProotPaths,
@@ -44,6 +45,7 @@ fun prootLaunch(
     shellId: Int? = null,
     soundSocket: String? = null,
     timeZone: String? = null,
+    powerSupply: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
@@ -55,6 +57,7 @@ fun prootLaunch(
         add("-w"); add(workDir)
         HOST_BINDS.forEach { add("-b"); add(it) }
         fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
+        powerSupply?.let { add("-b"); add("$it:$POWER_SUPPLY_MOUNT") }
         toolsDir?.let {
             add("-b"); add("$it:$TOOLS_MOUNT")
         }

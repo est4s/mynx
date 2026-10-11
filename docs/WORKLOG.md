@@ -33,21 +33,10 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0a. `mynx battery`: try it, then the stand-in (step 2)
+### 0a. Merge PR #22 (battery stand-in)
 
-Built (entry 99). On the phone, in mynx dev: `mynx battery` charging
-and on battery (status, plug, "full in", the current's direction and
-size: Pixels should report µA), `mynx battery --stream` while
-plugging in and out and switching battery saver on, `--every 10`,
-`--json`. Then **step 2** (maintainer's decision): a stand-in
-`/sys/class/power_supply` (Android blocks the real one: "Permission
-denied"), written by the app from the same readings and bound by
-proot like the fake `/proc` files, so starship's battery module, htop,
-`acpi` and psutil see the battery. Folders `battery` (`type`
-Battery, `capacity`, `status`, `health`, `present`, `technology`,
-`temp`, `voltage_now`, `current_now`, `charge_counter`,
-`cycle_count`, `uevent`) and `ac`/`usb`/`wireless` (`type`,
-`online`). Check starship and psutil read it.
+Confirmed on the phone (entry 100); merge it. Then roadmap: the rest
+of "more of the phone" (vibration, volume keys: undecided).
 
 ### 0. Docker Hub sign-in
 
@@ -242,6 +231,34 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-11 (100): The battery stand-in, step 2 (branch `battery-sysfs`)
+
+Picked up after a crashed session: its core work was uncommitted
+but complete. A Gradle daemon from that session was left untraced
+by proot ("Function not implemented" on every file call, see
+"proot notes") and hung every build until it was killed.
+- `core/.../PowerSupply.kt`: `powerSupplyFiles()` turns a
+  `BatteryReading` into `battery/` (type, present, status, health,
+  capacity, technology, temp, voltage_now, current_now/avg,
+  charge_now, charge_counter, cycle_count, time_to_full_now, uevent)
+  and `ac`/`usb`/`wireless` (type, online, uevent);
+  `writePowerSupply()` updates a folder in place. Battery.kt's unit
+  helpers became `internal` so both share them.
+- `prootLaunch(powerSupply = …)` binds it at
+  `/sys/class/power_supply`. `TerminalService` keeps a battery
+  stream (every 30 s too) writing `filesDir/power-supply` from
+  `onCreate` until `onDestroy`; shells bind it. The sound server's
+  proot doesn't.
+- Docs: the user guide's `mynx battery` item, AGENTS.md
+  architecture.
+- On the phone (run 38139887743): streams, `--every`, `--json` work;
+  `ac/online` follows a USB-C charger (Android calls it AC). `acpi -b`
+  said 0% (no `charge_full`: now worked out from charge ÷ level) and
+  psutil a negative `secsleft` (now `current_now` is the size only,
+  maintainer's decision). Both fixed and **confirmed** (run
+  38145343394): `acpi -b` 52%, psutil a positive `secsleft`,
+  starship's battery module shows.
 
 ### 2026-10-11 (99): `mynx battery`, step 1 of 2
 

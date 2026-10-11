@@ -102,7 +102,7 @@ private fun parseBatteryQuery(args: List<String>, stream: Boolean): Result<Batte
 private fun worthKnowing(r: BatteryReading): List<Any?> =
     listOf(percent(r), r.status, r.plugged, r.health, r.temperature, r.powerSaver, r.thermal, r.cycles)
 
-private fun percent(r: BatteryReading): Int? =
+internal fun percent(r: BatteryReading): Int? =
     if (r.level < 0 || r.scale <= 0) null else (r.level * 100.0 / r.scale).roundToInt()
 
 private val STATUSES = mapOf(2 to "charging", 3 to "discharging", 4 to "not-charging", 5 to "full")
@@ -113,28 +113,41 @@ private val HEALTHS = mapOf(
 private val THERMALS = listOf("none", "light", "moderate", "severe", "critical", "emergency", "shutdown")
 private const val DISCHARGING = 3
 
+internal fun known(value: Int?) = value?.takeIf { it != Int.MIN_VALUE }
+
+/** A current in µA, positive into the battery: phones disagree on its sign, but discharging it can only flow out. */
+private fun microamps(r: BatteryReading, value: Int?): Int? =
+    known(value)?.let { if (r.status == DISCHARGING) -abs(it) else it }
+
+/** The voltage in µV; some phones report volts instead of millivolts. */
+internal fun microvolts(r: BatteryReading): Long? =
+    known(r.voltage)?.takeIf { it > 0 }?.let { if (it < 100) it * 1_000_000L else it * 1000L }
+
+/** The charge left in µAh. */
+internal fun microampHours(r: BatteryReading): Int? = known(r.charge)?.takeIf { it > 0 }
+
+internal fun chargeSeconds(r: BatteryReading): Long? = r.chargeTimeMs?.takeIf { it >= 0 }?.let { it / 1000 }
+
+internal fun cycles(r: BatteryReading): Int? = r.cycles?.takeIf { it >= 0 }
+
+internal fun technology(r: BatteryReading): String? = r.technology?.takeIf { it.isNotBlank() }
+
 /** One reading as JSON: SI units, current positive into the battery. */
 fun batteryJson(r: BatteryReading): String {
-    fun known(value: Int?) = value?.takeIf { it != Int.MIN_VALUE }
-    // Phones disagree on the current's sign; discharging, it can only flow out.
-    fun amps(microamps: Int?) = known(microamps)?.let {
-        (if (r.status == DISCHARGING) -abs(it) else it) / 1_000_000.0
-    }
-    // Some phones report volts instead of millivolts.
-    val volts = known(r.voltage)?.takeIf { it > 0 }?.let { if (it < 100) it.toDouble() else it / 1000.0 }
+    fun amps(value: Int?) = microamps(r, value)?.let { it / 1_000_000.0 }
     return obj(
         "percent" to (percent(r)?.toString() ?: "null"),
         "status" to json(STATUSES[r.status] ?: "unknown"),
         "plugged" to (PLUGS[r.plugged]?.let(::json) ?: "null"),
         "health" to json(HEALTHS[r.health] ?: "unknown"),
         "temperature" to number(known(r.temperature)?.let { it / 10.0 }, 1),
-        "voltage" to number(volts, 3),
+        "voltage" to number(microvolts(r)?.let { it / 1_000_000.0 }, 3),
         "current" to number(amps(r.current), 3),
         "current_average" to number(amps(r.currentAverage), 3),
-        "charge" to number(known(r.charge)?.takeIf { it > 0 }?.let { it / 1000.0 }, 0),
-        "time_to_full" to (r.chargeTimeMs?.takeIf { it >= 0 }?.let { (it / 1000).toString() } ?: "null"),
-        "cycles" to (r.cycles?.takeIf { it >= 0 }?.toString() ?: "null"),
-        "technology" to (r.technology?.takeIf { it.isNotBlank() }?.let(::json) ?: "null"),
+        "charge" to number(microampHours(r)?.let { it / 1000.0 }, 0),
+        "time_to_full" to (chargeSeconds(r)?.toString() ?: "null"),
+        "cycles" to (cycles(r)?.toString() ?: "null"),
+        "technology" to (technology(r)?.let(::json) ?: "null"),
         "battery_saver" to r.powerSaver.toString(),
         "thermal" to (r.thermal?.let { THERMALS.getOrNull(it) }?.let(::json) ?: "null"),
         "time" to r.time.toString(),

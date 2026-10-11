@@ -309,7 +309,11 @@ Commands for the phone itself, and the sound device:
   `--stream`, one object per line. It needs no permission and works
   in the background. How phones report the current varies; it's
   shown as they say, except that while discharging it always flows
-  out.
+  out. Linux tools see the battery too: Android hides
+  `/sys/class/power_supply`, so the app keeps a stand-in there
+  (`battery`, `ac`, `usb`, `wireless`, in the kernel's names and
+  units) for starship, `acpi`, htop or Python's psutil, updated on
+  every change and every 30 s.
 - `mynx camera FILE` opens the phone's camera app; the photo you
   take is saved to FILE as a JPEG (replacing it), and `mynx` prints
   `Saved /root/photo.jpg (2.3 MB)`. Backing out of the camera app
