@@ -96,3 +96,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF 'time zone is the phone' "$GUIDE"
     grep -qF 'export TZ=' "$GUIDE"
 }
+
+@test "the guide says Linux tools see the battery through a stand-in" {
+    grep -qF '/sys/class/power_supply' "$GUIDE"
+}

@@ -33,6 +33,9 @@ import io.github.est4s.terminal.core.Phone
 import io.github.est4s.terminal.core.RotationLocks
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
+import io.github.est4s.terminal.core.BatteryQuery
+import io.github.est4s.terminal.core.BatteryReading
+import io.github.est4s.terminal.core.BatteryReport
 import io.github.est4s.terminal.core.batteryRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
@@ -67,6 +70,7 @@ import io.github.est4s.terminal.core.snapshot
 import io.github.est4s.terminal.core.killProot
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
+import io.github.est4s.terminal.core.writePowerSupply
 import io.github.est4s.terminal.core.zoneInfoPath
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
@@ -88,6 +92,8 @@ private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
 private const val UPDATE_TICK_MS = 3_600_000L
+// How often the battery stand-in is refreshed between Android's battery broadcasts (for current_now).
+private const val POWER_SUPPLY_SECONDS = 30
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.mynx"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
@@ -181,6 +187,8 @@ class TerminalService : Service() {
     }
     private val sensors by lazy { SensorReader(this, ::askPermissions) }
     private val batteryReader by lazy { BatteryReader(this, mainHandler) }
+    // The battery's stand-in, bound at /sys/class/power_supply (Android blocks the real one).
+    private val powerSupply by lazy { File(filesDir, "power-supply") }
     private val player by lazy { AudioPlayer(mainHandler) }
     private val sound by lazy {
         SoundDevice(
@@ -246,9 +254,22 @@ class TerminalService : Service() {
         watchRequests()
         applySoundSetting()
         applyWakelockSetting()
+        keepPowerSupply()
         // After cwdDir is cleared: the menu's update notice lives there too.
         runCatching { updater.start() }
         mainHandler.post(updateTick)
+    }
+
+    // Rewrites the stand-in on every change, and often enough for the current; until onDestroy.
+    private fun keepPowerSupply() {
+        powerSupply.mkdirs()
+        batteryReader.read(BatteryQuery(stream = true, intervalSeconds = POWER_SUPPLY_SECONDS), object : BatteryReport {
+            override fun reading(reading: BatteryReading) {
+                runCatching { writePowerSupply(powerSupply, reading) }
+            }
+            override fun fail(message: String) {}
+            override fun onCancel(block: () -> Unit) {}
+        })
     }
 
     // Held while the `wakelock` setting is on, so jobs keep running with the screen off.
@@ -502,7 +523,7 @@ class TerminalService : Service() {
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
