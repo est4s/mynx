@@ -19,9 +19,6 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.system.Os
 import android.system.OsConstants
 import com.termux.terminal.TerminalEmulator
@@ -41,6 +38,7 @@ import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
 import io.github.est4s.terminal.core.MynxRequests
+import io.github.est4s.terminal.core.Vibrations
 import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
 import io.github.est4s.terminal.core.ProotPaths
@@ -141,7 +139,7 @@ class TerminalService : Service() {
         MynxRequests(
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
-            vibrate = ::vibrate, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
+            vibrate = vibrations::oneShot, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share, torch = camera::torch, startSound = sound::start,
             rotation = rotation, rotationChanged = ::setRotation,
             phone = { Phone(Build.VERSION.RELEASE, Build.VERSION.SDK_INT, Build.MANUFACTURER, Build.MODEL) },
@@ -151,6 +149,7 @@ class TerminalService : Service() {
                 cameraRequests(File(rootfs, "root"), camera::take) +
                 audioRequests(File(rootfs, "root"), player::play, recorder::record) +
                 batteryRequests(batteryReader::read) +
+                vibrations.requests() +
                 updater.requests { apk -> onMain { openInstaller(apk) } },
         )
     }
@@ -190,6 +189,13 @@ class TerminalService : Service() {
     // The battery's stand-in, bound at /sys/class/power_supply (Android blocks the real one).
     private val powerSupply by lazy { File(filesDir, "power-supply") }
     private val player by lazy { AudioPlayer(mainHandler) }
+    private val vibrations by lazy {
+        Vibrations(PhoneHaptics(this)) { ms, block ->
+            val timer = Runnable(block)
+            mainHandler.postDelayed(timer, ms)
+            return@Vibrations { mainHandler.removeCallbacks(timer) }
+        }
+    }
     private val sound by lazy {
         SoundDevice(
             launch = { prootLaunch(prootPaths(), toolsDir = tools.tools.absolutePath, command = listOf("/bin/sh", SOUND_SERVER)) },
@@ -583,18 +589,6 @@ class TerminalService : Service() {
         } catch (e: ActivityNotFoundException) {
             "no app on the phone opens links"
         }
-    }
-
-    // Answers `mynx vibrate`: null when it vibrated, else why not.
-    private fun vibrate(ms: Long): String? {
-        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
-            getSystemService(VibratorManager::class.java).defaultVibrator
-        } else {
-            getSystemService(Vibrator::class.java)
-        }
-        if (vibrator?.hasVibrator() != true) return "the phone has no vibrator"
-        vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
-        return null
     }
 
     private val clipboard by lazy { getSystemService(ClipboardManager::class.java) }

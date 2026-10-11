@@ -1315,6 +1315,86 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
     def test_vibrate_takes_one_time_at_most(self):
         self.assertIn("usage: mynx vibrate [MS]", self.mynx("vibrate", "1", "2").stderr)
 
+    def test_vibrate_at_a_strength(self):
+        self.start_app({"vibrate": {"ok": True}})
+        self.assertEqual(self.mynx("vibrate", "50", "--strength", "40").returncode, 0)
+        self.assertEqual(self.mynx("vibrate", "--strength", "40").returncode, 0)
+        self.assertEqual(self.app.requests, [["vibrate", "50", "strength=40"], ["vibrate", "strength=40"]])
+
+    def test_vibrate_effect_wave_and_chain_wait_quietly(self):
+        self.start_app({"vibrate-effect": {"ok": True, "ms": 150}, "vibrate-wave": {"ok": True, "ms": 600},
+                        "vibrate-chain": {"ok": True, "ms": 932}})
+        for args in [("effect", "double-click"), ("wave", "200", "100@0", "300@50"),
+                     ("chain", "click", "thud@50+100")]:
+            run = self.mynx("vibrate", *args)
+            self.assertEqual((run.returncode, run.stdout, run.stderr), (0, "", ""), args)
+        self.assertEqual(self.app.requests, [["vibrate-effect", "double-click"],
+                                             ["vibrate-wave", "200", "100@0", "300@50"],
+                                             ["vibrate-chain", "click", "thud@50+100"]])
+        self.assertEqual(json.loads(self.mynx("vibrate", "effect", "click", "--json").stdout), {"ok": True, "ms": 150})
+
+    def test_vibrate_wave_repeats_until_ctrl_c(self):
+        self.start_app({"vibrate-wave": {"ok": True, "_lines": [], "_hold": True}})
+        proc = self.popen("vibrate", "wave", "100", "--repeat", "100@0")
+        self.wait_for_request()
+        time.sleep(0.2)
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, out, err), (0, "", "Vibrating: Ctrl+C stops\n"))
+        self.assertTrue(self.app.cancelled)
+        self.assertEqual(self.app.requests, [["vibrate-wave", "100", "100@0", "repeat"]])
+
+    def test_vibrate_chain_stops_on_ctrl_c(self):
+        self.start_app({"vibrate-chain": {"ok": True, "_lines": [], "_hold": True}})
+        proc = self.popen("vibrate", "chain", "slow-rise")
+        self.wait_for_request()
+        time.sleep(0.2)
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, out, err), (130, "", ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_vibrate_list_says_what_the_phone_can_do(self):
+        answer = {"ok": True, "amplitude_control": True,
+                  "effects": {"click": True, "double-click": True, "tick": False, "heavy-click": None},
+                  "primitives": {"click": {"supported": True, "ms": 12}, "thud": {"supported": True, "ms": None},
+                                 "spin": {"supported": False, "ms": None}}}
+        self.start_app({"vibrate-list": answer})
+        run = self.mynx("vibrate", "list")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines(), [
+            "Strength control: yes",
+            "Effects:",
+            "  click         yes",
+            "  double-click  yes",
+            "  tick          no",
+            "  heavy-click   unknown",
+            "Chain primitives:",
+            "  click         yes, 12 ms",
+            "  thud          yes",
+            "  spin          no",
+        ])
+        self.assertEqual(json.loads(self.mynx("vibrate", "list", "--json").stdout), answer)
+
+    def test_vibrate_stop(self):
+        self.start_app({"vibrate-stop": {"ok": True}})
+        run = self.mynx("vibrate", "stop")
+        self.assertEqual((run.returncode, run.stdout), (0, ""))
+        self.assertEqual(self.app.requests, [["vibrate-stop"]])
+
+    def test_vibrate_says_what_the_phone_lacks(self):
+        error = "this phone has no spin; mynx vibrate list shows what it has"
+        self.start_app({"vibrate-chain": {"ok": False, "error": error}})
+        run = self.mynx("vibrate", "chain", "spin")
+        self.assertEqual((run.returncode, run.stderr), (2, f"mynx: {error}\n"))
+
+    def test_vibrate_usage(self):
+        for args in [("1", "2"), ("--strength",), ("1", "--loud"), ("effect",), ("effect", "a", "b"), ("wave",),
+                     ("wave", "--repeat"), ("chain",), ("list", "x"), ("stop", "now")]:
+            run = self.mynx("vibrate", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx vibrate [MS] [--strength PCT] | effect NAME", run.stderr, args)
+
     def test_clipboard_get_prints_the_text_as_it_is(self):
         self.start_app({"clipboard-get": {"ok": True, "text": "two\nlines"}})
         run = self.mynx("clipboard", "get")

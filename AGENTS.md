@@ -326,6 +326,22 @@ See `docs/ROADMAP.md` "How it works". The details:
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
   parent's pid. The service sweeps every second while locked and the
   activity sets `requestedOrientation` (LOCKED for "as it is").
+- **Vibration** (`core/.../Vibration.kt`, `app/.../Haptics.kt`):
+  `Vibrations` checks everything against the `VibratorInfo` the app
+  reports (`PhoneHaptics`: amplitude control, effect support, primitives
+  and their lengths, by API level) and refuses what the phone can't do
+  with the reason, then has `Haptics` play a `Vibration`. The plain
+  `vibrate` request (returns at once) goes through
+  `Vibrations.oneShot`; `vibrate-effect`, `-wave` and `-chain` are
+  [Later] streams answered when the vibration should be over (Android
+  has no "ended" callback: core works out the length, from the
+  primitives' durations where Android gives them, else
+  `estimateMs`, and the app's `Handler` times it); `vibrate-list` and
+  `vibrate-stop` are [Later]s answered at once, so all of it stays in
+  one file. One vibration at a time: a new one or `stop` answers the
+  waiting one `"stopped": true`, and only the current one's Ctrl+C
+  cancels the vibrator. API 33+ vibrates as `USAGE_MEDIA`, so the
+  phone's media vibration setting applies.
 - **Sharing** (`core/.../Sharing.kt`): `mynx share` files are served
   by `ShareProvider` (not exported, read-only) under a random token per
   share (`SharedFiles`, last 20 kept in memory), so receiving apps only

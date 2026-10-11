@@ -33,7 +33,7 @@ Commands:
   notify     notify [--if-away] TITLE [TEXT]: a phone notification
   agent      agent [list] | install [NAME] | notify NAME on|off: AI agents
   open       open URL: open a link in the phone's browser
-  vibrate    vibrate [MS]: vibrate the phone (300 ms unless given)
+  vibrate    vibrate [MS] [--strength PCT] | effect NAME | wave STEP... [--repeat] | chain PRIM... | list | stop
   clipboard  clipboard get | set [TEXT]: the phone's clipboard
   share      share FILE... | --text [TEXT]: send to another app
   location   location [--gps] [--stream]: where the phone is
@@ -244,12 +244,61 @@ def cmd_open(args, as_json):
     return 0
 
 
+VIBRATE_USAGE = ("usage: mynx vibrate [MS] [--strength PCT] | effect NAME\n"
+                 "         | wave STEP... [--repeat] | chain PRIM... | list | stop")
+
+
 def cmd_vibrate(args, as_json):
-    if len(args) > 1:
-        raise Usage("usage: mynx vibrate [MS]")
-    answer = request("vibrate", *args)
-    out(as_json, answer, None)
+    """effect, wave and chain wait until the vibration ends; Ctrl+C
+    stops it (the normal end of a repeating wave)."""
+    sub, rest = (args[0], list(args[1:])) if args else (None, [])
+    if sub == "list" and not rest:
+        answer = request("vibrate-list")
+        out(as_json, answer, vibrator_text(answer))
+    elif sub == "stop" and not rest:
+        out(as_json, request("vibrate-stop"), None)
+    elif sub == "effect" and len(rest) == 1:
+        out(as_json, request("vibrate-effect", rest[0]), None)
+    elif sub == "wave" and [a for a in rest if a != "--repeat"]:
+        repeat = "--repeat" in rest
+        steps = [a for a in rest if a != "--repeat"]
+        if repeat and not as_json:
+            print("Vibrating: Ctrl+C stops", file=sys.stderr, flush=True)
+        answer = request("vibrate-wave", *steps, *(["repeat"] if repeat else []), answer_on_interrupt=repeat)
+        out(as_json, answer, None)
+    elif sub == "chain" and rest:
+        out(as_json, request("vibrate-chain", *rest), None)
+    elif sub in ("list", "stop", "effect", "wave", "chain"):
+        raise Usage(VIBRATE_USAGE)
+    else:
+        out(as_json, request("vibrate", *vibrate_options(args)), None)
     return 0
+
+
+def vibrate_options(args):
+    words, ms, strength = list(args), [], []
+    while words:
+        word = words.pop(0)
+        if word == "--strength" and words and not strength:
+            strength = ["strength=" + words.pop(0)]
+        elif not word.startswith("-") and not ms:
+            ms = [word]
+        else:
+            raise Usage(VIBRATE_USAGE)
+    return ms + strength
+
+
+def vibrator_text(info):
+    def word(value):
+        return {True: "yes", False: "no"}.get(value, "unknown")
+
+    lines = ["Strength control: " + word(info["amplitude_control"]), "Effects:"]
+    lines += [f"  {name:<13} {word(supported)}" for name, supported in info["effects"].items()]
+    lines.append("Chain primitives:")
+    for name, primitive in info["primitives"].items():
+        ms = f", {primitive['ms']} ms" if primitive["supported"] and primitive.get("ms") is not None else ""
+        lines.append(f"  {name:<13} {word(primitive['supported'])}{ms}")
+    return "\n".join(lines)
 
 
 def cmd_clipboard(args, as_json):
