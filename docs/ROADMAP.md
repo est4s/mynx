@@ -24,10 +24,9 @@ polish (first run, icon, updates from GitHub Releases).
   repeating until stopped), and chained primitives (`click`, `thud`,
   `spin`, `slow-rise`, …, Android 11+). `mynx vibrate list` shows
   what the phone supports.
-- **Volume keys** as input while the app is on screen: a key bar can
-  map them to keys (`volume-up = PgUp`), so a program with its own bar
-  reads them like any other key; with no mapping they change the
-  volume as now.
+- **Volume keys** as input for programs here, while the app is on
+  screen (today they only change the volume). How they reach a
+  program is still to be decided.
 
 ## Planned
 
