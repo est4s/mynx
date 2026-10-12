@@ -117,6 +117,17 @@ class ServiceManager<S>(
         return true
     }
 
+    /** How many services run, or wait to restart: while any does, the app stays. */
+    val active: Int get() = services.all.count { it.isRunning || it.restartPending }
+
+    /** Stops every service and calls off waiting restarts (the app exits). */
+    fun stopAll() {
+        for (service in services.all.toList()) {
+            if (!stopThen(service) {}) services.stopAsked(service.name)
+        }
+        host.changed()
+    }
+
     /** A service's tab was shown or hidden. */
     fun setOpen(name: String, open: Boolean) {
         services.setOpen(name, open)

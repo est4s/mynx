@@ -432,6 +432,39 @@ class ServiceRequestTest {
     }
 
     @Test
+    fun `stopAll stops every running one and calls off waiting restarts`() {
+        write("[web]\ncommand = run\n[db]\ncommand = pg\nstop-timeout = 3\n")
+        ask("service-start", "web")
+        ask("service-start", "db")
+        File(servicesDir, "db.pid").writeText("77\n")
+        File(servicesDir, "web.exit").writeText("1\n")
+        manager.exited("web#1")
+        assertEquals(1, host.scheduled.size)
+        assertEquals(2, manager.active)
+
+        manager.stopAll()
+
+        assertEquals("stop db#2 group=77 timeout=3", host.events.last())
+        host.scheduled.single().second()
+        assertEquals(2, host.events.count { it.startsWith("start") }, "the waiting restart is off")
+        manager.exited("db#2")
+        assertEquals(ServiceState.STOPPED, manager.services["db"]!!.state)
+        assertTrue(host.scheduled.size == 1, "never restarted")
+        assertEquals(0, manager.active)
+    }
+
+    @Test
+    fun `active counts the running ones and those waiting to restart`() {
+        write("[web]\ncommand = run\n[db]\ncommand = pg\n")
+        assertEquals(0, manager.active)
+        ask("service-start", "web")
+        assertEquals(1, manager.active)
+        File(servicesDir, "web.exit").writeText("0\n")
+        manager.exited("web#1")
+        assertEquals(0, manager.active)
+    }
+
+    @Test
     fun `nothing to start with no file`() {
         manager.launch(null)
         assertTrue(host.events.isEmpty())
