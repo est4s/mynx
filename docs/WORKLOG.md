@@ -27,6 +27,8 @@ are in git history: the full log up to entry 92 is
   stand-in): confirmed and merged (entries 99-100).
 - **Vibration patterns** (`mynx vibrate effect/wave/chain/list/stop`):
   confirmed on the phone (entry 102, PR #24).
+- **Volume keys** (a key bar's `VolumeUp`/`VolumeDown` lines):
+  confirmed on the phone (entry 103, PR #25).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -35,21 +37,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. Volume keys: try them on the phone
-
-Built (entry 103, branch `volume-keys`). In mynx dev:
-- `mynx keybar edit shell`, add `VolumeUp = Up Repeat` and
-  `VolumeDown = Down`, `mynx check` (no problems). In bash, with
-  some history: a short press of each sends one Up/Down (history
-  moves); holding VolumeUp repeats, holding VolumeDown sends once.
-  Neither changes the volume (no volume slider).
-- A bar without them still changes the volume: run `files` (nnn's
-  bar), the volume keys change the volume; quit back to the shell
-  and they move history again.
-- Both with the keyboard up and down.
-- A duplicate `VolumeUp` line: `mynx check` reports it.
-- Then `mynx keybar reset shell`.
-### 2. What's new and release notes (planned, not built)
+### 1. What's new and release notes (planned, not built)
 
 Maintainer's decision (2026-10-08): after every update, a What's new
 page shows the notes of the versions since the one before (the tools'
@@ -60,7 +48,7 @@ tools (`/opt/mynx/release-notes`), so both work offline and match
 GitHub. Generated notes are commit subjects; maybe the maintainer
 edits them in the release before tagging (decide then).
 
-### 3. Guided GitHub setup: try it on the phone
+### 2. Guided GitHub setup: try it on the phone
 
 Built (entries 94-95, branch `github-setup`). In mynx dev, the
 main menu's "Set up GitHub" (System → GitHub setup once done):
@@ -80,7 +68,7 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
-### 4. Smaller things
+### 3. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
   auth logout`, then `y` opens GitHub's filled-in new-issue page, `n`
@@ -211,6 +199,15 @@ The maintainer's approved design, built test-first:
 - No built-in bar sets them; no long press, no setting (decided).
 - Docs: tools/AGENTS.md "Key bars", README, AGENTS.md architecture;
   ROADMAP: Volume keys left "Next".
+- Added after review: `KeyBarView.refresh()` stops a held key's
+  repeat when the bar changes (a program switching bars mid-hold
+  sent the release to Android, and the repeat ran on).
+- **Confirmed on the phone** (2026-10-12, mynx dev, build of
+  `c7f5a34`): the shell bar with `VolumeUp = Up Repeat` and
+  `VolumeDown = Down`: short presses move history, only VolumeUp
+  repeats when held; `files` still changes the volume and the shell
+  gets them back after; keyboard up and down; `mynx check` reports a
+  duplicate line.
 
 ### 2026-10-11 (102): Vibration patterns (branch `vibration-patterns`)
 
