@@ -307,6 +307,22 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-13 (108): Services in the app (parts 1 and 3, branch `services`)
+
+Not yet tried on the phone. Core: `prootLaunch(service =)` sets
+`MYNX_SERVICE`; `serviceCommand()`/`shellQuote()` run the wrapper;
+`serviceWorkDir()`; `ServiceManager.stopAll()`/`active`;
+`serviceGaveUpText()`; `wakelock = auto|on|off` (default auto, the
+`Wakelock` enum); `runningTerminalsText(services =)`. App:
+`ServiceSessions` (the `ServiceHost`: hidden sessions started with
+`updateSize(80, 24, 10, 20)`, TERM to the group then `stop()`;
+`open`/`adopt` refuse until parts 2 and 6), wired in
+`TerminalService`: requests, launch at start, `state/services`,
+"Services" notification channel, lifetime with no tabs (the activity
+finishes; the app exits when the last service ends), Exit stops them
+(TERM, 3 s, then onDestroy forces). `tools/AGENTS.md`'s `wakelock`
+line still says on/off: part 4 (docs) updates it.
+
 ### 2026-10-12 (107): Background services planned, spike on the phone
 
 Planned with the maintainer ("Next 0": decisions, design, request
