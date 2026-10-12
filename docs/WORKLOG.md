@@ -29,8 +29,9 @@ are in git history: the full log up to entry 92 is
   confirmed on the phone (entry 102, PR #24).
 - **Volume keys** (a key bar's `VolumeUp`/`VolumeDown` lines):
   confirmed on the phone (entry 103, PR #25).
-- **Release notes and What's new:** built, to try on the phone
-  (entry 104, "Next" 1).
+- **Release notes** (`mynx notes`, Help → Release notes, the `pager`
+  bar): confirmed on the phone, PR #26 (entry 104). What's new shows
+  first at the next release ("Next" 1).
 - **Guided GitHub setup** (`mynx github`) and **bug reports**
   (`mynx report`): every path confirmed on the phone (2026-10-12).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
@@ -41,22 +42,13 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. What's new and release notes: try it on the phone
+### 1. What's new: check it at the next release
 
-Built (entry 104, branch `release-notes`). In mynx dev, from the PR's
-build:
-- Settings → Help → **Release notes** shows v0.1.1 and v0.1.0's
-  notes in less, readable at 56 columns (bullets, `(#18)`, no `##`
-  or `**`), with the `pager` bar: **Back** returns to the menu (it
-  opened less's help before). About too. `mynx notes` in the shell
-  shows the same bar, and the shell's comes back after.
-- `mynx notes new` prints nothing in mynx dev (every debug build is
-  0.0.1, so What's new can't be tried there), and a new tab opens
-  with no delay or message.
-- **What's new itself** shows at the next release: once v0.1.2 (or
-  later) is tagged and the maintainer's mynx updates to it, the
-  restored tab should show "What's new in mynx" with that version's
-  notes, once; the next tab, nothing.
+Release notes and the pager bar are confirmed in mynx dev (entry 104).
+What's new can't show there (every debug build is 0.0.1): once the
+next release is tagged and the maintainer's mynx updates to it, the
+restored tab should show "What's new in mynx" with that version's
+notes, once; the next tab, nothing.
 
 ### 2. Smaller things
 
@@ -196,6 +188,9 @@ confirmed on the phone earlier; they left "Next".
   Back = `q`) now shows while `mynx` pages with less (`page()`, through
   `keybar pager,shell`; not for What's new's `-FX`, where a short page
   just prints).
+- **Confirmed on the phone** (2026-10-12, mynx dev, build of
+  `a75744c`): Release notes and About show the pager bar, and Back
+  returns to the menu.
 - Docs: tools/AGENTS.md (command, menu, "Updates"), README, RELEASING
   (notes edited on GitHub later reach only later builds), ROADMAP
   (left "Next", which is now empty), AGENTS.md architecture.
