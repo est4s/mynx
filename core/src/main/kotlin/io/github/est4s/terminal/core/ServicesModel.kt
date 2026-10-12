@@ -141,6 +141,13 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
         service.stopAsked = false
     }
 
+    /** [name]'s session couldn't be started: given up on. */
+    fun startFailed(name: String) {
+        val service = get(name) ?: return
+        service.state = ServiceState.FAILED
+        service.restartPending = false
+    }
+
     /**
      * A stop was asked for: it won't restart. True if there's a running
      * session to stop; a restart that was waiting is called off.

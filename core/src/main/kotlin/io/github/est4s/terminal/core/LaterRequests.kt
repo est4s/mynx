@@ -59,7 +59,7 @@ class PendingReply internal constructor(
         cancelled = block
     }
 
-    private fun answer(json: String) {
+    internal fun answer(json: String) {
         synchronized(this) {
             if (done) return
             done = true

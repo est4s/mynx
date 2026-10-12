@@ -502,7 +502,7 @@ internal fun ok(vararg fields: Pair<String, String>) = obj("ok" to "true", *fiel
 internal fun obj(vararg fields: Pair<String, String>) =
     fields.joinToString(",", "{", "}") { (key, value) -> "${json(key)}:$value" }
 
-private fun array(items: List<String>) = items.joinToString(",", "[", "]")
+internal fun array(items: List<String>) = items.joinToString(",", "[", "]")
 
 internal fun json(text: String): String = buildString {
     append('"')
