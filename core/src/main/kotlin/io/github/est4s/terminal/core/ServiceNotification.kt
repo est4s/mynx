@@ -22,6 +22,9 @@ fun runningTerminalsText(count: Int, wakelock: Boolean = false, services: Int = 
     return terminals + if (wakelock) " · wakelock held" else ""
 }
 
+/** The strip's mark next to + while [active] services run (or wait to restart); null: none. */
+fun servicesMark(active: Int): String? = if (active > 0) "● $active" else null
+
 /** The notification when [name] ended too often in a row and won't be restarted. */
 fun serviceGaveUpText(name: String, exitCode: Int?): String =
     "$name stopped" + (exitCode?.let { " (code $it)" } ?: "") + ", not restarting"

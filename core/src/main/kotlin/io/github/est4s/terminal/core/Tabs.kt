@@ -1,6 +1,10 @@
 package io.github.est4s.terminal.core
 
-/** One terminal tab. [number] names it while neither the shell nor the user has. */
+/**
+ * One terminal tab. [number] names it while neither the shell nor the user
+ * has. A tab with a [service] shows that background service: its title is
+ * the service's name and state, whatever the program or the user calls it.
+ */
 class Tab<S> internal constructor(session: S, val number: Int) {
     var session: S = session
         internal set
@@ -15,9 +19,19 @@ class Tab<S> internal constructor(session: S, val number: Int) {
     /** Rang the bell while in the background. */
     var bell = false
         internal set
+    /** The service this tab shows, or null for a shell's tab. */
+    var service: String? = null
+        internal set
+    /** The service's title while it isn't running (see [Tabs.setServiceTitles]); null: running. */
+    internal var serviceTitle: String? = null
 
-    val title: String get() = rename ?: shellTitle.ifBlank { "Tab $number" }
+    val title: String
+        get() = service?.let { serviceTitle ?: serviceTabTitle(it) }
+            ?: rename ?: shellTitle.ifBlank { "Tab $number" }
 }
+
+/** A running service's tab title: a mark and its name. */
+fun serviceTabTitle(name: String): String = "● $name"
 
 /**
  * The open tabs, in strip order, and which one is selected. Generic over the
@@ -42,6 +56,60 @@ class Tabs<S>(private val onChange: () -> Unit = {}) {
         list.add(selectedIndex, tab)
         onChange()
         return tab
+    }
+
+    /**
+     * Shows service [name]'s [session] as a tab: its tab if one is open
+     * (showing [session] now), else a new one after the selected tab.
+     * Either way it's selected.
+     */
+    fun openService(name: String, session: S): Tab<S> {
+        serviceTab(name)?.let { tab ->
+            tab.session = session
+            select(list.indexOf(tab))
+            return tab
+        }
+        val tab = Tab(session, 0).also { it.service = name }
+        selectedIndex += 1
+        list.add(selectedIndex, tab)
+        onChange()
+        return tab
+    }
+
+    fun serviceTab(name: String): Tab<S>? = list.find { it.service == name }
+
+    /**
+     * Service [name] runs a new [session]: its tab, if open, shows it.
+     * Returns the session the tab showed before, or null if nothing changed.
+     */
+    fun followService(name: String, session: S): S? {
+        val tab = serviceTab(name)?.takeIf { it.session != session } ?: return null
+        val old = tab.session
+        tab.session = session
+        onChange()
+        return old
+    }
+
+    /** The tab of [session] shows service [name] from now on (a tab run as a service). */
+    fun makeService(session: S, name: String) = update(session) { it.service = name }
+
+    /** Each service tab's title from [titleOf] its name (null: running, the plain mark). */
+    fun setServiceTitles(titleOf: (String) -> String?) {
+        var changed = false
+        for (tab in list) {
+            val name = tab.service ?: continue
+            val title = titleOf(name)
+            if (title != tab.serviceTitle) {
+                tab.serviceTitle = title
+                changed = true
+            }
+        }
+        if (changed) onChange()
+    }
+
+    /** Closes the tabs of services not in [names] (removed ones). */
+    fun closeServicesExcept(names: Set<String>) {
+        list.filter { it.service != null && it.service !in names }.forEach { close(it.session) }
     }
 
     /** Closes the tab; if it was selected, selects its right neighbour, else its left. */
@@ -121,7 +189,7 @@ class Tabs<S>(private val onChange: () -> Unit = {}) {
     }
 
     private fun freeNumber(): Int {
-        val used = list.map { it.number }.toSet()
+        val used = list.filter { it.service == null }.map { it.number }.toSet()
         return generateSequence(1) { it + 1 }.first { it !in used }
     }
 

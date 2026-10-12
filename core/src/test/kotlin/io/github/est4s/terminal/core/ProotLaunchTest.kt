@@ -222,6 +222,11 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `the services tab runs the menu's Services under the menu's bar`() {
+        assertEquals(runThenShell("keybar menu menu services"), SERVICES_TAB_COMMAND)
+    }
+
+    @Test
     fun `tells programs where the sound server is`() {
         val argv = prootLaunch(paths, soundSocket = "/tmp/.mynx/sound/native").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

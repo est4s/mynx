@@ -456,6 +456,19 @@ no_services_mynx() {
     [[ $output == *"RUN: mynx service start database-server"* ]]
 }
 
+@test "menu services starts at the Services list" {
+    services_mynx
+    run bash -c "printf 12 | MENU_DRYRUN=1 bash '$MENU' services 2>&1"
+    [[ $output == *"RUN: mynx service stop web"* ]]
+}
+
+@test "leaving the Services list started there leaves the menu" {
+    services_mynx
+    run bash -c "printf 'q' | MENU_DRYRUN=1 timeout 5 bash '$MENU' services 2>&1"
+    [ "$status" -eq 0 ]
+    [[ $output != *"Shell"* ]]
+}
+
 @test "a service's log opens in the pager, at its end" {
     services_mynx
     run keys 314

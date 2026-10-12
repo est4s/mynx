@@ -13,6 +13,8 @@
 #   (the file's name without its ending), else the shell's.
 # menu --boot plays the boot splash first (the app does this on a fresh start),
 #   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
+# menu services starts at the Services list; leaving it leaves the menu (the
+#   app opens it from the strip's services mark and its notification).
 # Exit closes the tab: the menu exits with 10 and ~/.bashrc exits the shell.
 # Update available: the app writes the version of a newer release to
 #   /tmp/.mynx/update-available; while it's there, the main menu starts with
@@ -641,7 +643,11 @@ trap 'cursor_show; printf "\e[0m"' EXIT
 printf '\e]0;Menu\a'  # tab title
 
 [[ $1 == --boot ]] && { boot; first_welcome; }
-show main ""
+if [[ $1 == services ]]; then   # the app's services mark and notification button
+    show services "${TITLE[main]}"
+else
+    show main ""
+fi
 rc=$?
 cursor_show; clear_screen
 ((rc == 2)) && exit 10

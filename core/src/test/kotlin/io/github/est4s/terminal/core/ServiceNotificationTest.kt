@@ -37,4 +37,11 @@ class ServiceNotificationTest {
         assertEquals("No terminals · 1 service", runningTerminalsText(0, services = 1))
         assertEquals("1 terminal · 2 services · wakelock held", runningTerminalsText(1, wakelock = true, services = 2))
     }
+
+    @Test
+    fun `the strip counts the active services, and shows nothing without any`() {
+        assertEquals("● 2", servicesMark(2))
+        assertEquals("● 1", servicesMark(1))
+        assertEquals(null, servicesMark(0))
+    }
 }

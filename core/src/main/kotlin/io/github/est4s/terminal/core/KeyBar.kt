@@ -29,6 +29,8 @@ private const val VOLUME_UP = "VolumeUp"
 private const val VOLUME_DOWN = "VolumeDown"
 
 const val SHELL_KEY_BAR = "shell"
+/** The bar of a service's tab, unless its program asks for another. */
+const val SERVICE_KEY_BAR = "service"
 
 /** Named keys, in their usual spelling. */
 val KEY_NAMES: List<String> =
@@ -146,12 +148,12 @@ private fun parseStroke(token: Token): KeyStroke {
 
 /**
  * The bars a tab's program asked for, best first (see the `keybar`
- * command: `name,fallback,…`). Invalid names are dropped; the shell's bar
- * if nothing is left.
+ * command: `name,fallback,…`). Invalid names are dropped; [fallback] (the
+ * shell's bar, or a service tab's) if nothing is left.
  */
-fun keyBarNames(reported: String?): List<String> =
+fun keyBarNames(reported: String?, fallback: String = SHELL_KEY_BAR): List<String> =
     reported.orEmpty().split(',').map { it.trim() }.filter { BAR_NAME.matches(it) }
-        .ifEmpty { listOf(SHELL_KEY_BAR) }
+        .ifEmpty { listOf(fallback) }
 
 internal fun isKeyBarName(name: String) = BAR_NAME.matches(name)
 

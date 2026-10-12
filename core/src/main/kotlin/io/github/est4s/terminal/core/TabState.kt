@@ -49,9 +49,17 @@ fun parseSavedTabs(text: String): SavedTabs? {
     return SavedTabs(tabs, selected?.takeIf { it in tabs.indices } ?: 0)
 }
 
-/** What to save for these tabs. [cwdOf] gives a session's Debian folder, if known. */
-fun <S> Tabs<S>.snapshot(cwdOf: (S) -> String?): SavedTabs =
-    SavedTabs(tabs.map { SavedTab(it.rename, cwdOf(it.session)) }, selectedIndex.coerceAtLeast(0))
+/**
+ * What to save for these tabs. [cwdOf] gives a session's Debian folder, if
+ * known. Services' tabs are left out: the services come back by themselves,
+ * hidden. A selected service tab leaves the selection on the shell tab
+ * before it.
+ */
+fun <S> Tabs<S>.snapshot(cwdOf: (S) -> String?): SavedTabs {
+    val shells = tabs.filter { it.service == null }
+    val selected = tabs.take(selectedIndex + 1).count { it.service == null } - 1
+    return SavedTabs(shells.map { SavedTab(it.rename, cwdOf(it.session)) }, selected.coerceAtLeast(0))
+}
 
 /** Opens the saved tabs in order, starting each session with [start] in its folder. */
 fun <S> Tabs<S>.restore(saved: SavedTabs, start: (cwd: String?) -> S) {

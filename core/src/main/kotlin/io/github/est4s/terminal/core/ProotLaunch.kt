@@ -114,6 +114,13 @@ val SETTINGS_TAB_COMMAND: List<String> = runThenShell("mynx edit")
 /** The tab the "update available" notification opens: `mynx update`, then a shell. */
 val UPDATE_TAB_COMMAND: List<String> = runThenShell("mynx update")
 
+/**
+ * The tab the strip's services mark and the notification's Services button
+ * open: the menu's Services list (under the menu's bar: the `menu` function
+ * of ~/.bashrc isn't there in a login shell's -c), then a shell.
+ */
+val SERVICES_TAB_COMMAND: List<String> = runThenShell("keybar menu menu services")
+
 /** How long a proot gets to stop what it runs before it's killed outright. */
 const val PROOT_STOP_GRACE_MS = 2000L
 private const val SIGQUIT = 3

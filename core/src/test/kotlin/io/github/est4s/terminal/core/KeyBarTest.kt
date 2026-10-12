@@ -138,6 +138,13 @@ class KeyBarTest {
     }
 
     @Test
+    fun `a service's tab falls back to the service bar`() {
+        assertEquals(listOf("service"), keyBarNames(null, fallback = SERVICE_KEY_BAR))
+        assertEquals(listOf("service"), keyBarNames("", fallback = SERVICE_KEY_BAR))
+        assertEquals(listOf("nnn"), keyBarNames("nnn", fallback = SERVICE_KEY_BAR), "the program's bar wins")
+    }
+
+    @Test
     fun `a report can list fallbacks, and bad names are dropped`() {
         assertEquals(listOf("my-game", "game"), keyBarNames("my-game,game"))
         assertEquals(listOf("game"), keyBarNames("../x, game"))
