@@ -487,9 +487,10 @@ still works). Holding an arrow (or any button marked
 `keybar NAME[,FALLBACK…] command…` shows the first of those bars that
 exists while the command runs, then the previous one; with no command
 running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`,
-the editors use `mynx-edit`.
+the editors use `mynx-edit`, and `mynx about` and `mynx notes` page
+with `pager`.
 
-Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, the games'
+Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, `pager`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
 apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
 `metronome`, and

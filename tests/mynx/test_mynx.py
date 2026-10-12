@@ -400,6 +400,26 @@ class MynxTest(unittest.TestCase):
         self.assertIn("https://github.com/termux/proot", text)
         self.assertIn("full text of GPL-2.0", text)
 
+    def test_paging_shows_the_pager_key_bar(self):
+        # The menu's bar would stay up, and its Back (h) is less's help.
+        import pty
+        self.write_about_files()
+        log = os.path.join(self.tmp.name, "keybar.log")
+        for name, body in (("less", "cat >/dev/null"), ("keybar", f'echo "$@" >{log}; shift; exec "$@"')):
+            path = os.path.join(self.tmp.name, name)
+            with open(path, "w") as f:
+                f.write(f"#!/bin/sh\n{body}\n")
+            os.chmod(path, 0o755)
+        main, side = pty.openpty()
+        environ = {"PATH": self.tmp.name + os.pathsep + os.environ["PATH"], "HOME": self.home,
+                   "MYNX_TOOLS": self.tools}
+        proc = subprocess.run(["python3", MYNX, "about"], stdout=side, stderr=side, env=environ, timeout=20)
+        os.close(side)
+        os.close(main)
+        self.assertEqual(proc.returncode, 0)
+        with open(log) as f:
+            self.assertEqual(f.read(), "pager,shell less\n")
+
 
     # --- settings ----------------------------------------------------------
 

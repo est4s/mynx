@@ -47,7 +47,9 @@ Built (entry 104, branch `release-notes`). In mynx dev, from the PR's
 build:
 - Settings → Help → **Release notes** shows v0.1.1 and v0.1.0's
   notes in less, readable at 56 columns (bullets, `(#18)`, no `##`
-  or `**`); `q` goes back to the menu. `mynx notes` does the same.
+  or `**`), with the `pager` bar: **Back** returns to the menu (it
+  opened less's help before). About too. `mynx notes` in the shell
+  shows the same bar, and the shell's comes back after.
 - `mynx notes new` prints nothing in mynx dev (every debug build is
   0.0.1, so What's new can't be tried there), and a new tab opens
   with no delay or message.
@@ -188,6 +190,12 @@ confirmed on the phone earlier; they left "Next".
   a new install (no menu state yet) shows nothing, older Debians show
   this version's notes.
 - Menu: Settings → Help gets "Release notes" (`mynx notes`).
+- Fixed after the maintainer's first try: Back in Release notes (and
+  About) opened less's help, since the menu's bar stayed up and its
+  Back sends `h`. A built-in `pager` bar (↑ ↓ PgUp PgDn Top End Find,
+  Back = `q`) now shows while `mynx` pages with less (`page()`, through
+  `keybar pager,shell`; not for What's new's `-FX`, where a short page
+  just prints).
 - Docs: tools/AGENTS.md (command, menu, "Updates"), README, RELEASING
   (notes edited on GitHub later reach only later builds), ROADMAP
   (left "Next", which is now empty), AGENTS.md architecture.

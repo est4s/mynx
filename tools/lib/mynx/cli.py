@@ -1295,9 +1295,12 @@ def cmd_about(args, as_json):
 
 
 def page(text, *less_options):
-    """Text through `less` on a terminal, else printed."""
+    """Text through `less` on a terminal, else printed. Under the pager
+    key bar: the menu's would stay up, and its Back (h) is less's help.
+    Not for -F, where a short text just prints."""
     if sys.stdout.isatty() and shutil.which("less"):
-        subprocess.run(["less", *less_options], input=text, text=True)
+        bar = ["keybar", "pager,shell"] if shutil.which("keybar") and "-FX" not in less_options else []
+        subprocess.run([*bar, "less", *less_options], input=text, text=True)
     else:
         try:
             sys.stdout.write(text)
