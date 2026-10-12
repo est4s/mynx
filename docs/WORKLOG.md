@@ -43,6 +43,165 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
+### 0. Background services (planned 2026-10-12, not started)
+
+Roadmap "Background services": hidden tabs for servers and daemons.
+Build test-first, with a maintainer test on the phone after each part.
+
+**Maintainer's decisions (2026-10-12):**
+- **Defined in a config file**, `~/.config/mynx/services.conf`,
+  which `mynx service add/remove` edit and `mynx check` checks.
+- **Opening a service shows it as a tab**, marked as a service, with
+  a `service` key bar. Closing that tab only hides it again; only
+  Stop ends it.
+- **Autostart is when the app starts.** Not at phone boot. Services
+  that were running also come back after Android kills the app.
+- **`wakelock = auto`**, the new default: hold the CPU awake only
+  while a service runs. `on` and `off` stay as they are.
+
+**Design (agent's proposal; change it if the maintainer objects):**
+- **File format:** one `[name]` block per service, keys:
+  `command` (run by `bash --login -c`, so the PATH and `~/.profile`
+  apply), `cwd` (default `~`), `autostart = yes|no` (default no),
+  `restart = no|on-failure|always` (default on-failure),
+  `restart-limit` (quick failures in a row before giving up, default
+  5, 0 = never give up), `restart-delay` (first wait in seconds,
+  default 1, doubling up to 60), `stop-timeout` (seconds, default
+  10). Names: `[a-z0-9-]`, up to 20.
+  Parsing and checking go in core's `Services.kt`, which joins
+  `checkConfig` and undo like the other files.
+- **A service is a `TerminalSession`**, kept in the service's own
+  list (`Services<S>` in core, generic like `Tabs<S>`), not in
+  `Tabs`. It has a pty, 2000 lines of scrollback, and keys can be
+  typed into it. It gets the same `prootLaunch` as a tab (tools, TZ,
+  sound, power supply, `MYNX_SHELL`), plus `MYNX_SERVICE=NAME`.
+  **Gotcha:** a session only starts on its first `updateSize()`,
+  which normally comes from `attachSession()`. A hidden one would
+  never start, so the service calls `updateSize(80, 24)` itself.
+  Check the 0.118.3 signature first.
+- **The wrapper, `tools/lib/service-run NAME`** (from the spike,
+  below): the session runs `bash --login -c 'service-run NAME'`, and
+  the wrapper reads the command from `services.conf` (or is given it,
+  for an adopted tab). It runs the command in a process group of its
+  own that keeps the terminal, so typing and Ctrl+C reach it. It
+  writes the group's id to `/tmp/.mynx/services/NAME.pid`, and when
+  the command ends it writes its exit code to `NAME.exit` (128+N for
+  signal N). The app takes the exit code from that file, never from
+  the session.
+- **Stopping cleanly:** databases need TERM, and proot ignores it.
+  The app sends TERM to the group in `NAME.pid`, waits up to
+  `stop-timeout`, then the usual `stopProot()` (QUIT, then
+  `killProot()`, which the spike showed leaves nothing behind).
+- **Restarts:** generalise `ServerRestarts` (backoff 1 s to 60 s,
+  reset after 30 s up) into `RestartPolicy`, with the service's own
+  `restart`, `restart-delay` and `restart-limit`. `on-failure`
+  restarts on a non-zero exit, `always` on any exit. After
+  `restart-limit` quick failures in a row it gives up and posts a phone notification ("web exited
+  (code 1), not restarting"), tapping it opens the service. A
+  service stopped by `mynx` is never restarted.
+- **State:** `filesDir/state/services` records which services run.
+  On a fresh start the service runs those plus the `autostart`
+  ones. Exit in the notification clears it, as it does the tabs.
+- **Lifetime:** closing the last tab no longer exits while services
+  run. The app stays in the background, and the notification says
+  "2 terminals · 1 service" (`runningTerminalsText()`). Opening the
+  app with no tabs opens a fresh one as usual.
+- **Wakelock:** `wakelock = auto | on | off`. `auto` holds it while
+  any service runs, using the existing `applyWakelockSetting()`.
+  An old `on`/`off` keeps meaning what it did.
+- **Commands** (`mynx service`, all with `--json`), as requests to
+  the app answered in core:
+  `list` (name, state, pid, uptime, restarts, last exit code),
+  `start/stop/restart NAME`, `log NAME [-n N]` (the session's
+  transcript, from the emulator), `open NAME` (shows it as a tab;
+  the app must be on screen), `add NAME [--autostart]
+  [--restart …] [--cwd DIR] -- COMMAND…`, and `remove NAME` (stops
+  it first). `start` with no saved service of that name refuses.
+- **In the app:** an open service is a `Tab` with `service = NAME`.
+  The strip shows it with a mark (e.g. `● web`). Closing it hides it
+  and doesn't stop it. Its exit doesn't close the tab: the status
+  shows in the title until it restarts. `keybar` picks the `service`
+  bar: Hide, Restart, Stop, Ctrl+C, arrows.
+- **Menu:** a `services` action, "Services" in the built-in menu
+  after AI agents. It lists them with their state; picking one
+  offers Open, Start/Stop, Restart and Log. It shows a short how-to
+  when there are none.
+- **Seeing them from anywhere** (maintainer's decision, 2026-10-12):
+  while any service runs, the strip shows `● N` next to **+**;
+  tapping it opens the Services list (the menu's, in a new tab).
+  The app's ongoing notification gets a **Services** button that
+  does the same.
+- **Turning a tab into a service** (maintainer: nice to have, last
+  part): the tab's long-press menu gets "Run as service", and
+  `mynx service adopt NAME` does it from inside the tab
+  (`MYNX_SHELL` says which). The session moves from `Tabs` to the
+  services as it is, so nothing restarts. It's an *unsaved*
+  service: `restart = no`, not in `services.conf`, and it ends if
+  Android kills the app (a running process can't be brought back).
+  `list` marks it unsaved. Its foreground command can be read from
+  `/proc` (bash's `tpgid` → that process's `cmdline`), so "Save"
+  can offer a `services.conf` block with that command and the
+  folder, to edit before saving.
+- **Ports:** nothing below 1024 (proot's fake root). The guide
+  says so, with `sshd -p 8022` as the example.
+
+**Spike results** (2026-10-12, PR #29, mynx dev, closed unmerged):
+- A session started with `updateSize(80, 24, 10, 20)` and never
+  attached runs: `python3 -m http.server 8080` served the phone's
+  browser, also after 4 min with the screen off. Its transcript can
+  be read (`emulator.screen.transcriptText`).
+- A death by signal reads as exit 0: proot reports
+  "terminated with signal 15" and exits 0, even with
+  `cmd; exit $?` (TERM to all tracees kills that bash too). Normal
+  codes come through (`exit 7` → 7). Hence the wrapper.
+- `stopProot()` on a running service leaves no process behind.
+
+**Request protocol** (the contract between core, `mynx` and the
+app; args are strings, replies JSON with `ok`):
+- `service-list` → `services`: objects with `name`, `saved`
+  (false for an adopted tab), `command`, `cwd`, `autostart`,
+  `restart`, `state` (`running`, `stopping`, `stopped`, `failed`
+  when it gave up), `pid`, `started` (ms since 1970 or null),
+  `exit_code` (last, or null), `restarts`, `open` (shown as a tab).
+- `service-start NAME`, `service-restart NAME`: answered once it's
+  started. `service-stop NAME`: a [Later], answered once it has
+  stopped (`stop-timeout` and the force included).
+- `service-log NAME [LINES]` → `log` (the transcript, last LINES,
+  default 100).
+- `service-open NAME`: shows it as a tab (app on screen).
+- `service-add NAME KEY=VALUE…`: `command=…` required; `cwd`,
+  `autostart`, `restart`, `restart-limit`, `restart-delay`,
+  `stop-timeout` optional. Refuses a name that exists.
+  `service-remove NAME`: stops it, removes its block, keeps the rest
+  of the file and its comments.
+- `service-adopt NAME SHELL`: the tab whose `MYNX_SHELL` is SHELL
+  becomes the unsaved service NAME. `service-save NAME [command=…]`
+  writes an adopted one to `services.conf`.
+- Errors as elsewhere: `ok: false`, `error` ("no service named
+  web", "web is already running", …).
+
+**Parts:**
+1. **Core and commands:** `Services.kt` (format, check, add/remove
+   keeping the rest of the file), `RestartPolicy`, the requests,
+   `mynx service list/start/stop/restart/log/add/remove`. App:
+   hidden sessions, clean stop, restarts, notifications. Phone test:
+   `python3 -m http.server 8080` as a service, reached from the
+   phone's browser, stopped and restarted, killed to see a restart.
+2. **Opening as a tab:** `mynx service open`, the strip mark, hide
+   on close, the `service` key bar.
+3. **Autostart, restore, lifetime and wakelock:** the state file,
+   staying alive with no tabs, `wakelock = auto`, the notification
+   text. Phone test: swipe the app away, reopen it, and see the
+   services back.
+4. **Menu and docs:** the Services menu, `tools/AGENTS.md` (a
+   "Background services" section and the commands table), README,
+   AGENTS.md architecture, and the roadmap entry leaves.
+5. **Strip indicator and notification button:** `● N` next to
+   **+**, the notification's Services button.
+6. **Turning a tab into a service (nice to have):** "Run as
+   service", `mynx service adopt NAME`, and saving it to
+   `services.conf` from its foreground command.
+
 ### 1. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
@@ -147,6 +306,15 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-12 (107): Background services planned, spike on the phone
+
+Planned with the maintainer ("Next 0": decisions, design, request
+protocol, six parts). A throwaway spike (PR #29, branch
+`spike-hidden-session`, closed unmerged) showed that a hidden session
+runs and keeps running with the screen off, and that proot reports a
+death by signal as exit 0, which led to the `service-run` wrapper.
+Work is split for agents overnight on the branch `services`.
 
 ### 2026-10-12 (106): v0.1.2 confirmed on the phone
 
