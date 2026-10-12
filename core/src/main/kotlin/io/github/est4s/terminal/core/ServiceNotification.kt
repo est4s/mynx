@@ -21,3 +21,7 @@ fun runningTerminalsText(count: Int, wakelock: Boolean = false, services: Int = 
     }
     return terminals + if (wakelock) " · wakelock held" else ""
 }
+
+/** The notification when [name] ended too often in a row and won't be restarted. */
+fun serviceGaveUpText(name: String, exitCode: Int?): String =
+    "$name stopped" + (exitCode?.let { " (code $it)" } ?: "") + ", not restarting"

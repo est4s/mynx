@@ -25,6 +25,12 @@ class ServiceNotificationTest {
     }
 
     @Test
+    fun `says a service was given up on, with its exit code`() {
+        assertEquals("web stopped (code 1), not restarting", serviceGaveUpText("web", 1))
+        assertEquals("web stopped, not restarting", serviceGaveUpText("web", null))
+    }
+
+    @Test
     fun `counts the services after the terminals`() {
         assertEquals("2 terminals · 1 service", runningTerminalsText(2, services = 1))
         assertEquals("1 terminal · 3 services", runningTerminalsText(1, services = 3))
