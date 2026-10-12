@@ -20,6 +20,7 @@ import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.LoadedKeyBar
+import io.github.est4s.terminal.core.SHELL_KEY_BAR
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.VolumeKeyAction
 import io.github.est4s.terminal.core.keyBarNames
@@ -66,8 +67,9 @@ class KeyBarView(
 ) : FrameLayout(context) {
     private var bar: LoadedKeyBar? = null
     // What the bar was loaded from: the tab's report file, its timestamp and
-    // length (two quick writes can share a timestamp, not a length).
-    private var loadedFrom: Triple<String?, Long, Long>? = null
+    // length (two quick writes can share a timestamp, not a length), and the
+    // bar to fall back on.
+    private var loadedFrom: List<Any?>? = null
     private var ctrlLatched = false
     private var pages: List<List<List<Int>>> = emptyList()
     private var page = 0
@@ -112,13 +114,15 @@ class KeyBarView(
     /**
      * Reloads the bar if the tab's report file changed (or [force], e.g.
      * after the user may have edited bar files). Cheap when nothing
-     * changed: a stat or two. Returns the bar when it was (re)loaded.
+     * changed: a stat or two. [fallback] is the bar when the program asks
+     * for none (a service's tab has its own). Returns the bar when it was
+     * (re)loaded.
      */
-    fun refresh(reportFile: File?, force: Boolean = false): LoadedKeyBar? {
-        val stamp = Triple(reportFile?.path, reportFile?.lastModified() ?: 0L, reportFile?.length() ?: 0L)
+    fun refresh(reportFile: File?, force: Boolean = false, fallback: String = SHELL_KEY_BAR): LoadedKeyBar? {
+        val stamp = listOf(reportFile?.path, reportFile?.lastModified() ?: 0L, reportFile?.length() ?: 0L, fallback)
         if (!force && stamp == loadedFrom) return null
         loadedFrom = stamp
-        val names = keyBarNames(runCatching { reportFile?.readText() }.getOrNull())
+        val names = keyBarNames(runCatching { reportFile?.readText() }.getOrNull(), fallback)
         val loaded = loadKeyBar(names, userDir)
         if (loaded == bar) return null
         // A key held across the change belongs to the old bar: its release

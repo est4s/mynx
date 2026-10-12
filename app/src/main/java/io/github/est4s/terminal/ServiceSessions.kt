@@ -21,12 +21,17 @@ private const val CELL_HEIGHT_PX = 20
  * The app's side of the background services: each one a [TerminalSession]
  * that no tab shows. [newSession] makes one (not started yet) as a tab's,
  * with the wrapper's command; [stopSession] stops a session's proot.
- * Everything runs on [handler]'s (the main) thread.
+ * The tabs side ([openTab], [followTab], [adoptTab], [foregroundOf]) is
+ * the service's. Everything runs on [handler]'s (the main) thread.
  */
 class ServiceSessions(
     private val handler: Handler,
     private val newSession: (def: ServiceDef, saved: Boolean) -> TerminalSession,
     private val stopSession: (TerminalSession) -> Unit,
+    private val openTab: (name: String, session: TerminalSession) -> String?,
+    private val followTab: (name: String, session: TerminalSession) -> Unit,
+    private val adoptTab: (name: String, shell: Int) -> Result<AdoptedTab<TerminalSession>>,
+    private val foregroundOf: (TerminalSession) -> Foreground?,
     private val notifyGaveUp: (name: String, exitCode: Int?) -> Unit,
     private val onChanged: () -> Unit,
 ) : ServiceHost<TerminalSession> {
@@ -57,13 +62,13 @@ class ServiceSessions(
     override fun transcript(session: TerminalSession): String =
         session.emulator?.screen?.transcriptText.orEmpty()
 
-    override fun open(name: String, session: TerminalSession): String? =
-        "opening a service as a tab isn't in this version yet"
+    override fun open(name: String, session: TerminalSession): String? = openTab(name, session)
 
-    override fun adopt(shell: Int): Result<AdoptedTab<TerminalSession>> =
-        Result.failure(Exception("turning a tab into a service isn't in this version yet"))
+    override fun started(name: String, session: TerminalSession) = followTab(name, session)
 
-    override fun foreground(session: TerminalSession): Foreground? = null
+    override fun adopt(name: String, shell: Int): Result<AdoptedTab<TerminalSession>> = adoptTab(name, shell)
+
+    override fun foreground(session: TerminalSession): Foreground? = foregroundOf(session)
 
     override fun schedule(delayMs: Long, block: () -> Unit) {
         handler.postDelayed({ if (!exiting) block() }, delayMs)

@@ -44,9 +44,11 @@ class SessionClient(private val service: TerminalService) : TerminalSessionClien
     override fun onColorsChanged(session: TerminalSession) {
         service.activity?.onScreenUpdated(session)
     }
-    // A program hid or showed the cursor: a hidden cursor mustn't blink.
+    // A program hid or showed the cursor: a hidden cursor mustn't blink. The
+    // call doesn't say whose (a hidden service's, maybe), so the blinker asks
+    // the shown terminal (setTerminalCursorBlinkerState's startOnlyIfCursorEnabled).
     override fun onTerminalCursorStateChange(state: Boolean) {
-        service.activity?.setCursorBlinking(state)
+        service.activity?.setCursorBlinking(true)
     }
     override fun getTerminalCursorStyle(): Int? = service.cursorStyle
 

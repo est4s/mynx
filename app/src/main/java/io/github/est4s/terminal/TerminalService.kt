@@ -82,6 +82,10 @@ import io.github.est4s.terminal.core.serviceCommand
 import io.github.est4s.terminal.core.serviceGaveUpText
 import io.github.est4s.terminal.core.serviceRequests
 import io.github.est4s.terminal.core.serviceWorkDir
+import io.github.est4s.terminal.core.AdoptedTab
+import io.github.est4s.terminal.core.Foreground
+import io.github.est4s.terminal.core.foregroundCommand
+import io.github.est4s.terminal.core.servicesMark
 import java.io.File
 import java.util.TimeZone
 import java.util.WeakHashMap
@@ -95,6 +99,8 @@ private const val NOTICE_ID_BASE = 1000
 const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 /** Opens a tab running `mynx update` (the update notification). */
 const val ACTION_UPDATE = "io.github.est4s.terminal.UPDATE"
+/** Opens a tab with the menu's Services list (the notification's Services button). */
+const val ACTION_SERVICES = "io.github.est4s.terminal.SERVICES"
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -170,7 +176,11 @@ class TerminalService : Service() {
     }
     // Background services: hidden sessions (see ServiceSessions), kept running without a tab.
     private val serviceHost by lazy {
-        ServiceSessions(mainHandler, ::newServiceSession, ::stop, ::showGaveUp, ::servicesChanged)
+        ServiceSessions(
+            mainHandler, ::newServiceSession, ::stop,
+            openTab = ::openServiceTab, followTab = ::followServiceTab, adoptTab = ::adoptTab, foregroundOf = ::foregroundOf,
+            notifyGaveUp = ::showGaveUp, onChanged = ::servicesChanged,
+        )
     }
     private val serviceManager by lazy { ServiceManager(File(rootfs, "root"), File(rootfs, SERVICES_DIR), serviceHost) }
     private val servicesStateFile by lazy { File(filesDir, "state/services") }
@@ -478,21 +488,33 @@ class TerminalService : Service() {
     /** A new tab after the selected one; [command] runs instead of the plain login shell. */
     fun newSession(command: List<String>? = null): TerminalSession = startShell(command = command).also { tabs.open(it) }
 
-    /** Replaces a finished session with a fresh shell in the same tab and folder. */
+    /** Replaces a finished session with a fresh shell in the same tab and folder. A service's tab waits for the service. */
     fun restart(old: TerminalSession) {
+        if (tabs.find(old)?.service != null) return
         tabs.replaceSession(old, startShell(cwdOf(old)))
-        cwdFiles.remove(old)?.delete()
-        keyBarFiles.remove(old)?.delete()
+        forgetFiles(old)
+    }
+
+    // The files a session's shell reports through, once nothing reads them.
+    private fun forgetFiles(session: TerminalSession) {
+        cwdFiles.remove(session)?.delete()
+        keyBarFiles.remove(session)?.delete()
     }
 
     /** Where [session]'s programs report the key bar they want (may not exist yet). */
     fun keyBarFileOf(session: TerminalSession): File? = keyBarFiles[session]
 
+    /** Closes a tab, ending its shell; a service's tab is only hidden, the service runs on. */
     fun closeTab(session: TerminalSession) {
+        val service = tabs.find(session)?.service
         tabs.close(session)
-        stop(session)
-        cwdFiles.remove(session)?.delete()
-        keyBarFiles.remove(session)?.delete()
+        if (service == null) {
+            stop(session)
+            forgetFiles(session)
+        } else {
+            if (!session.isRunning) forgetFiles(session)
+            serviceManager.setOpen(service, false)
+        }
         if (tabs.isEmpty) lastTabClosed()
     }
 
@@ -510,7 +532,11 @@ class TerminalService : Service() {
 
     fun onSessionFinished(session: TerminalSession) {
         // A service's end is the services' business; it never closes a tab.
-        if (serviceManager.exited(session)) return
+        // An open tab still shows it (and its bar) until the service starts again.
+        if (serviceManager.exited(session)) {
+            if (tabs.find(session) == null) forgetFiles(session) else cwdFiles.remove(session)?.delete()
+            return
+        }
         if (tabs.find(session) != null && closesOnExit(session.exitStatus)) closeTab(session)
     }
 
@@ -535,13 +561,72 @@ class TerminalService : Service() {
         serviceManager.services.all.mapNotNull { it.session }.filter { it.isRunning }.forEach(::stop)
     }
 
-    // Something about the services changed (ServiceHost.changed): save, wakelock, notification.
+    // Something about the services changed (ServiceHost.changed): save, wakelock,
+    // notification, the services' tabs and the strip's mark.
     private fun servicesChanged() {
         saveServices()
         applyWakelockSetting()
         refreshNotification()
-        if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
+        val hadTabs = !tabs.isEmpty
+        syncServiceTabs()
+        activity?.onServicesChanged()
+        if (hadTabs && tabs.isEmpty) lastTabClosed()
+        else if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
     }
+
+    // Removed services' tabs close; the others' titles say how they are.
+    private fun syncServiceTabs() {
+        val names = serviceManager.names
+        tabs.tabs.filter { it.service != null && it.service !in names }.forEach { forgetFiles(it.session) }
+        tabs.closeServicesExcept(names)
+        tabs.setServiceTitles(serviceManager::tabTitle)
+    }
+
+    /** How many services run or wait to restart, for the strip's mark. */
+    val stripServicesMark: String? get() = servicesMark(serviceManager.active)
+
+    // ServiceHost.open: `mynx service open`, from a tab on screen.
+    private fun openServiceTab(name: String, session: TerminalSession): String? {
+        if (activity?.onScreen != true) return "the app must be on screen to open a service as a tab"
+        tabs.openService(name, session)
+        syncServiceTabs()
+        return null
+    }
+
+    // ServiceHost.started: an open tab shows the service's new session.
+    private fun followServiceTab(name: String, session: TerminalSession) {
+        tabs.followService(name, session)?.let(::forgetFiles)
+    }
+
+    // ServiceHost.adopt: the tab stays where it is, as the service's tab.
+    private fun adoptTab(name: String, shell: Int): Result<AdoptedTab<TerminalSession>> {
+        val session = sessionOfShell(shell) ?: return Result.failure(Exception("no tab with shell $shell"))
+        tabs.find(session)?.service?.let { return Result.failure(Exception("that tab is already the service $it")) }
+        if (!session.isRunning) return Result.failure(Exception("that tab's shell has ended"))
+        val command = runCatching { foregroundCommand(session.pid) }.getOrNull()
+        tabs.makeService(session, name)
+        return Result.success(AdoptedTab(session, session.pid, command, cwdOf(session) ?: "/root", open = true))
+    }
+
+    private fun foregroundOf(session: TerminalSession): Foreground? {
+        if (!session.isRunning) return null
+        return Foreground(runCatching { foregroundCommand(session.pid) }.getOrNull(), cwdOf(session))
+    }
+
+    /** The tab's "Run as service": it becomes the unsaved service [name]; null, or why not. */
+    fun runAsService(session: TerminalSession, name: String): String? {
+        val shell = shellIds[session] ?: return "that tab has no shell"
+        return serviceManager.adopt(name, shell)
+    }
+
+    /** What the tab's shell runs in the foreground now, for "Run as service" to suggest a name. */
+    fun foregroundCommandOf(session: TerminalSession): String? = foregroundOf(session)?.command
+
+    /** A service tab's Stop, Start and Restart: null, or why not. */
+    fun stopService(name: String): String? = serviceManager.stop(name)
+    fun startService(name: String): String? = serviceManager.start(name)
+    fun restartService(name: String): String? = serviceManager.restart(name)
+    fun serviceRunning(name: String): Boolean = serviceManager.services[name]?.isRunning == true
 
     // Like saveTabs: atomically, and never failing.
     private fun saveServices() {
@@ -579,9 +664,9 @@ class TerminalService : Service() {
     }
 
     // Swaps in an empty model first, so the killed sessions' late exit
-    // events find no tab and are ignored.
+    // events find no tab and are ignored. Services' tabs are the services' to stop.
     private fun killAll() {
-        val sessions = tabs.tabs.map { it.session }
+        val sessions = tabs.tabs.filter { it.service == null }.map { it.session }
         tabs = newTabs()
         sessions.forEach(::stop)
     }
@@ -900,13 +985,16 @@ class TerminalService : Service() {
 
     private fun buildNotification(): Notification {
         notifiedCount = tabs.tabs.size
-        val running = runningTerminalsText(tabs.tabs.size, wakeLock != null, serviceManager.active)
+        val running = runningTerminalsText(tabs.tabs.count { it.service == null }, wakeLock != null, serviceManager.active)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Running terminals", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0,
             Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val exit = PendingIntent.getService(this, 1,
             Intent(this, TerminalService::class.java).setAction(ACTION_EXIT), PendingIntent.FLAG_IMMUTABLE)
+        val services = PendingIntent.getActivity(this, 4,
+            Intent(this, MainActivity::class.java).setAction(ACTION_SERVICES).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.app_name))
@@ -919,6 +1007,9 @@ class TerminalService : Service() {
             }
             .setContentIntent(open)
             .setOngoing(true)
+            .apply {
+                if (serviceManager.active > 0) addAction(Notification.Action.Builder(null as Icon?, "Services", services).build())
+            }
             .addAction(Notification.Action.Builder(null as Icon?, "Exit", exit).build())
             .build()
     }
