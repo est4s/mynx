@@ -2,7 +2,7 @@
 # service-run NAME [COMMAND]: runs a background service in the terminal
 # the app gives it. The command is the `command` of [NAME] in
 # ~/.config/mynx/services.conf (run in its `cwd`, home by default), or
-# COMMAND (an adopted tab's).
+# COMMAND (an adopted tab's, run in the folder this starts in).
 #
 # The command gets a process group of its own that has the terminal, so
 # keys typed and Ctrl+C reach it. Its id goes to NAME.pid in
@@ -61,7 +61,8 @@ read_service() { # sets FOUND, COMMAND and CWD from [NAME]'s block
 }
 
 if [[ $# -eq 2 ]]; then
-    COMMAND=$2 CWD=
+    # An unsaved service's folder is where the app started this.
+    COMMAND=$2 CWD=$PWD
 else
     read_service
     [[ -n $FOUND ]] || fail "no service named $name in ~/.config/mynx/services.conf"

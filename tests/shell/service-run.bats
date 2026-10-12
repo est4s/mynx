@@ -101,6 +101,14 @@ pty() {
     [ "$(cat "$MYNX_SERVICES_DIR/web.exit")" = 4 ]
 }
 
+@test "a command given on the line runs where the app started it, not at home" {
+    mkdir -p "$BATS_TEST_TMPDIR/site"
+    cd "$BATS_TEST_TMPDIR/site"
+    run pty -- "$RUN" web 'pwd'
+    [ "$status" -eq 0 ]
+    [[ $output == *"$BATS_TEST_TMPDIR/site"* ]]
+}
+
 @test "keys typed reach the command: it has the terminal" {
     service web 'read -r line; echo "got $line"; exit 3'
     run pty --send 'hello\n' -- "$RUN" web
