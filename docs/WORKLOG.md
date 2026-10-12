@@ -21,8 +21,9 @@ are in git history: the full log up to entry 92 is
   separate app (entry 82).
 - **Released:** v0.1.0 and v0.1.1 (2026-10-10), v0.1.2 (2026-10-12), signed with the
   release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer's
-  daily mynx is the release, and it updated 0.1.0 → 0.1.1 through
-  `mynx update` (entry 81's updates, confirmed).
+  daily mynx is the release, and it updated 0.1.0 → 0.1.1 → 0.1.2
+  through `mynx update` (entry 81's updates, confirmed); 0.1.2 came
+  from the daily check's notification and menu item (entry 106).
 - **Battery** (`mynx battery`, the `/sys/class/power_supply`
   stand-in): confirmed and merged (entries 99-100).
 - **Vibration patterns** (`mynx vibrate effect/wave/chain/list/stop`):
@@ -30,8 +31,8 @@ are in git history: the full log up to entry 92 is
 - **Volume keys** (a key bar's `VolumeUp`/`VolumeDown` lines):
   confirmed on the phone (entry 103, PR #25).
 - **Release notes** (`mynx notes`, Help → Release notes, the `pager`
-  bar): confirmed on the phone, PR #26 (entry 104). What's new shows
-  first at the next release ("Next" 1).
+  bar) and What's new after an update: confirmed on the phone with
+  v0.1.2 (PR #26, entry 106).
 - **Guided GitHub setup** (`mynx github`) and **bug reports**
   (`mynx report`): every path confirmed on the phone (2026-10-12).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
@@ -42,14 +43,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. What's new: check it with v0.1.2
-
-v0.1.2 is out (2026-10-12, tagged by the agent at the maintainer's
-request). `mynx update` in the daily mynx; the restored tab should show
-"What's new in mynx" with v0.1.2's notes, once; the next tab, nothing.
-Help → Release notes lists v0.1.2, v0.1.1 and v0.1.0.
-
-### 2. Smaller things
+### 1. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Before Play (not urgent):** `release.yml` has its own
@@ -154,60 +148,18 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
-### 2026-10-12 (105): v0.1.2 released
+### 2026-10-12 (106): v0.1.2 confirmed on the phone
 
-The maintainer asked the agent to tag it once `main` built green
-(`d32da81`). The release workflow ran its new notes step for the first
-time and worked: the APK and the release carry the same generated
-notes. But the release had no title: `gh release create` with
-`--notes-file` sets none (`--generate-notes` used the tag). Set it by
-hand (`gh release edit v0.1.2 --title v0.1.2`); `release.yml` now
-passes `--title`. The app only reads the tag and asset, so updates
-were never affected.
-
-### 2026-10-12 (104): Release notes and What's new (branch `release-notes`)
-
-The maintainer chose (2026-10-12) to bundle the notes at build time,
-so they work offline. The GitHub setup and bug reports were all
-confirmed on the phone earlier; they left "Next".
-- `scripts/release-notes.py OUT [--tag TAG --notes-out FILE]`: every
-  published release's notes from GitHub's API as
-  `release-notes.json` (`version`, `published`, `notes`), newest
-  first. With `--tag` (release.yml) GitHub generates the new tag's
-  notes first, the same call `--generate-notes` makes, and
-  `gh release create` now publishes them with `--notes-file`, so
-  GitHub and the APK match. build.yml only warns if the API fails.
-  Tried here against the real repo: it generated v0.1.2's notes
-  without creating anything. `pack-tools.sh OUT [NOTES]` packs them.
-- `mynx notes [all] | new | seen` (`cli.py`, logic in
-  `tools/lib/mynx/notes.py`: version order with pre-releases first,
-  `newer()`, GitHub Markdown to terminal lines). `new` is read-only;
-  `seen` writes `~/.local/state/mynx/notes-seen`. `mynx update` now
-  shows its notes formatted the same way.
-- **What's new:** an update restores the tabs, so `menu --boot`
-  doesn't run. `tools/shell.bash` instead compares the tools' version
-  name with `notes-seen` at each interactive login (bash only, no
-  Python unless they differ), then runs `mynx notes new` (`less -FX`:
-  a short page just prints) and `mynx notes seen`. Nothing seen yet:
-  a new install (no menu state yet) shows nothing, older Debians show
-  this version's notes.
-- Menu: Settings → Help gets "Release notes" (`mynx notes`).
-- Fixed after the maintainer's first try: Back in Release notes (and
-  About) opened less's help, since the menu's bar stayed up and its
-  Back sends `h`. A built-in `pager` bar (↑ ↓ PgUp PgDn Top End Find,
-  Back = `q`) now shows while `mynx` pages with less (`page()`, through
-  `keybar pager,shell`; not for What's new's `-FX`, where a short page
-  just prints).
-- **Confirmed on the phone** (2026-10-12, mynx dev, build of
-  `a75744c`): Release notes and About show the pager bar, and Back
-  returns to the menu.
-- Docs: tools/AGENTS.md (command, menu, "Updates"), README, RELEASING
-  (notes edited on GitHub later reach only later builds), ROADMAP
-  (left "Next", which is now empty), AGENTS.md architecture.
-- Tests: `tests/mynx/test_notes.py`, notes in `test_mynx.py`,
-  `shell-setup.bats`, `menu.bats`. All pass here except
-  `test_undo_list`, which fails on `main` too in a tab whose `TZ`
-  isn't UTC (CI is UTC): not looked into.
+The maintainer's daily mynx found v0.1.2 by itself: the notification
+came and the menu showed "Update available"; the menu item ran
+`mynx update` and it installed. Afterwards the restored tab showed
+"What's new in mynx" with v0.1.2's notes, once; a new tab showed
+nothing; Help → Release notes lists v0.1.2, v0.1.1 and v0.1.0.
+`notes-seen` holds `0.1.2` and the update marker is gone. With that,
+entries 104 (release notes, What's new) and 105 (v0.1.2, the release
+title fix in `release.yml`) left the log: what they decided is in
+`AGENTS.md` ("Release notes", "Releases"), the rest in git history.
+"Next" item 1 (check What's new) is done.
 
 ### 2026-10-11 (103): Volume keys (branch `volume-keys`)
 

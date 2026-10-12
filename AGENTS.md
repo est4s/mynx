@@ -381,7 +381,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   every published release's notes from GitHub's API into the tools
   (`release-notes.json`, through `pack-tools.sh`). `release.yml` also
   has GitHub generate the new tag's notes first and publishes the
-  release with that same text (`--notes-file`); `build.yml` only warns
+  release with that same text (`--notes-file`, which sets no title, so
+  it passes `--title` too); `build.yml` only warns
   if the API fails. `mynx notes` shows them (`tools/lib/mynx/notes.py`
   turns GitHub's Markdown into terminal lines). **What's new:** after
   an update the app restores the tabs, so the menu's boot doesn't run;
