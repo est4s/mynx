@@ -57,4 +57,11 @@ class ServiceFilesTest {
         assertFalse(File(dir, "web.pid").exists())
         assertEquals(1, readServiceExit(dir, "webby"))
     }
+
+    @Test
+    fun `a service's folder in Debian, from its cwd`() {
+        assertEquals("/root", serviceWorkDir("~"))
+        assertEquals("/root/site", serviceWorkDir("~/site"))
+        assertEquals("/srv/www", serviceWorkDir("/srv/www"))
+    }
 }

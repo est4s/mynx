@@ -23,4 +23,11 @@ fun clearServiceFiles(dir: File, name: String) {
     File(dir, "$name.pid").delete()
 }
 
+/** The Debian folder a service with [cwd] (`~`, `~/…` or a full path) starts in. */
+fun serviceWorkDir(cwd: String): String = when {
+    cwd == "~" -> "/root"
+    cwd.startsWith("~/") -> "/root/" + cwd.removePrefix("~/")
+    else -> cwd
+}
+
 private fun readNumber(file: File): Int? = runCatching { file.readText().trim().toInt() }.getOrNull()
