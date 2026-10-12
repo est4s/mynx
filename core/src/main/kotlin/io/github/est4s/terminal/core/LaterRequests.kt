@@ -7,9 +7,15 @@ import java.io.File
  * stream of readings. [seconds] is how long `mynx` waits for the
  * answer; null makes it a stream, which runs until `mynx` cancels it.
  * [start] begins the work and must not block: it answers through the
- * [PendingReply], now or later.
+ * [PendingReply], now or later. A request that changes the config files
+ * names the change with [change] (for `mynx undo`); [start] must have
+ * written them by the time it returns.
  */
-class Later(val seconds: Int?, val start: (args: List<String>, reply: PendingReply) -> Unit)
+class Later(
+    val seconds: Int?,
+    val change: ((args: List<String>) -> String)? = null,
+    val start: (args: List<String>, reply: PendingReply) -> Unit,
+)
 
 /**
  * The answer to a [Later] request; any thread may use it. Next to

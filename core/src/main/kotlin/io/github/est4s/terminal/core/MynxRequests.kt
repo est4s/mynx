@@ -114,11 +114,14 @@ class MynxRequests(
         val wait = File(dir, "$id.wait.tmp")
         wait.writeText(handler.seconds?.toString() ?: "stream")
         wait.renameTo(File(dir, "$id.wait"))
+        val change = handler.change?.let { runCatching { it(request.args) }.getOrNull() }
+        if (change != null) runCatching { history.observe(HAND_EDITS, undoKeep()) }
         try {
             handler.start(request.args, reply)
         } catch (e: Refused) {
             reply.refuse(e.message!!)
         }
+        if (change != null) runCatching { history.observe(change, undoKeep()) }
     }
 
     /** Whether a [Later] request is still running: while one is, call [sweep] now and then. */

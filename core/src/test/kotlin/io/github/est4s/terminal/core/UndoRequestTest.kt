@@ -71,6 +71,28 @@ class UndoRequestTest {
         assertEquals("font-size = 20\n", settings.readText())
     }
 
+    @Test
+    fun `a later request that changes the config names its step`() {
+        val services = File(home, "$CONFIG_DIR/services.conf")
+        val requests = MynxRequests(
+            dir, home, now = { 60_000L },
+            later = mapOf(
+                "write" to Later(5, change = { "write ${it[0]}" }) { args, reply ->
+                    services.apply { parentFile.mkdirs() }.writeText(args[0])
+                    reply.ok()
+                },
+            ),
+        )
+        requests.start()
+        settings.apply { parentFile.mkdirs() }.writeText("undo-keep = 3\n")
+        File(dir, "w.req").writeText("write\n[web]\n")
+        requests.processPending()
+
+        assertEquals("""{"ok":true,"undone":"write [web]"}""", ask("undo"))
+        assertEquals(false, services.exists())
+        assertEquals("""{"ok":true,"undone":"edits by hand"}""", ask("undo"))
+    }
+
     private fun ask(vararg lines: String): String {
         File(dir, "q.req").writeText(lines.joinToString("\n", postfix = "\n"))
         requests.processPending()
