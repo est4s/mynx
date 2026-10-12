@@ -307,6 +307,27 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-13 (110): Review of the services branch, seams fixed
+
+Reviewed `main...services` for bugs at the seams between the four
+parts. CLI ↔ core requests and reply fields, the menu's `list --json`,
+`serviceCommand` quoting and the `NAME.pid`/`NAME.exit` folder (same
+`rootfs + /tmp/.mynx/services` on both sides) all match. Fixed,
+test-first:
+- `service-run`: a command given on the line (an unsaved/adopted
+  service) ran at home; it now runs in the folder the app starts it in
+  (the tab's). A name defined twice ran the last block; now the first,
+  as core reads it.
+- `ServiceManager`: any exception in a `service-*` request (not only
+  `ServiceRefused`) is a refusal. Before, it escaped `processPending`
+  before the `.req` was deleted, failed again at every poll and held
+  up the requests after it.
+- Menu: a failed Start/Stop/Restart waited for two keys.
+Not changed: a service whose block is deleted by hand while it runs
+stays listed as unsaved after it ends (like an adopted one), and
+`list`'s reload doesn't refresh tabs or the mark until the next change.
+Phone tests for parts 1-6 are still pending.
+
 ### 2026-10-13 (109): Service tabs, the strip's mark, Run as service (parts 2, 5, 6)
 
 Not yet tried on the phone. Core: `Tab.service`, `Tabs.openService`/
