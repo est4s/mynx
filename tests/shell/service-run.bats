@@ -188,3 +188,11 @@ pty() {
     [ "$status" -eq 0 ]
     [[ $output == *"got ["*"x]"* ]]
 }
+
+@test "a name defined twice runs its first block, as the app reads it" {
+    service web 'echo first'
+    service web 'echo second'
+    run pty -- "$RUN" web
+    [[ $output == *first* ]]
+    [[ $output != *second* ]]
+}

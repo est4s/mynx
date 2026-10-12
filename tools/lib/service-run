@@ -47,6 +47,8 @@ read_service() { # sets FOUND, COMMAND and CWD from [NAME]'s block
         line=$(trim "$line")
         [[ -z $line || $line == \#* ]] && continue
         if [[ $line =~ ^\[(.*)\]$ ]]; then
+            # A name defined twice: the app takes the first block.
+            [[ -n $FOUND ]] && break
             section=$(trim "${BASH_REMATCH[1]}")
             [[ $section == "$name" ]] && FOUND=1
             continue
