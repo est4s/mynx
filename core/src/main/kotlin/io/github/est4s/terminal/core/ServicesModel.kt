@@ -44,6 +44,9 @@ class Service<S> internal constructor(def: ServiceDef, saved: Boolean) {
 
     internal var policy = policyFor(def, saved)
     internal var stopAsked = false
+    /** Its last run ended because it was asked to stop. */
+    var stoppedByHand = false
+        internal set
 
     val isRunning get() = state == ServiceState.RUNNING || state == ServiceState.STOPPING
 }
@@ -112,6 +115,12 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
         return service
     }
 
+    /** An unsaved service runs [command] in [cwd] next time (null: as before). */
+    fun update(name: String, command: String?, cwd: String?) {
+        val service = get(name)?.takeIf { !it.saved } ?: return
+        service.def = service.def.copy(command = command ?: service.def.command, cwd = cwd ?: service.def.cwd)
+    }
+
     /** An unsaved service is now in `services.conf` as [def]. */
     fun save(def: ServiceDef) {
         val service = get(def.name) ?: return
@@ -139,6 +148,7 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
         service.started = now()
         service.restartPending = false
         service.stopAsked = false
+        service.stoppedByHand = false
     }
 
     /** [name]'s session couldn't be started: given up on. */
@@ -171,6 +181,7 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
         service.pid = null
         if (service.stopAsked) {
             service.stopAsked = false
+            service.stoppedByHand = true
             service.state = ServiceState.STOPPED
             return null
         }

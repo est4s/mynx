@@ -45,8 +45,11 @@ interface ServiceHost<S> {
     /** Shows the session as a tab; null, or why it can't. */
     fun open(name: String, session: S): String?
 
-    /** Takes the tab whose `MYNX_SHELL` is [shell] out of the tabs, or fails saying why. */
-    fun adopt(shell: Int): Result<AdoptedTab<S>>
+    /** Service [name] runs [session] now (started or restarted): a tab that shows it follows. */
+    fun started(name: String, session: S)
+
+    /** Makes the tab whose `MYNX_SHELL` is [shell] service [name]'s, or fails saying why. */
+    fun adopt(name: String, shell: Int): Result<AdoptedTab<S>>
 
     /** What [session] runs in the foreground, for saving an adopted tab. */
     fun foreground(session: S): Foreground?
@@ -154,9 +157,21 @@ class ServiceManager<S>(
             }
         return mapOf(
             "service-list" to now { list() },
-            "service-start" to now { args -> startByHand(named(args, "service-start")) },
-            "service-stop" to waiting { args, reply -> stop(named(args, "service-stop"), reply) },
-            "service-restart" to waiting { args, reply -> restart(named(args, "service-restart"), reply) },
+            "service-start" to now { args ->
+                val service = named(args, "service-start")
+                startByHand(service)
+                ok("service" to serviceJson(service))
+            },
+            "service-stop" to waiting { args, reply ->
+                val service = named(args, "service-stop")
+                stop(service) { reply.answer(ok("service" to serviceJson(service))) }
+            },
+            "service-restart" to waiting { args, reply ->
+                val service = named(args, "service-restart")
+                restart(service) { error ->
+                    if (error == null) reply.answer(ok("service" to serviceJson(service))) else reply.refuse(error)
+                }
+            },
             "service-log" to now { args -> log(args) },
             "service-open" to now { args -> open(named(args, "service-open")) },
             "service-add" to now(change = { "service add ${it.firstOrNull()?.trim().orEmpty()}" }) { args -> add(args) },
@@ -181,7 +196,44 @@ class ServiceManager<S>(
         return services[name] ?: throw ServiceRefused(noService(name))
     }
 
-    private fun startByHand(service: Service<S>): String {
+    /** Starts [name] (the app's Start); null, or why not. */
+    fun start(name: String): String? = refusal { startByHand(named(listOf(name), "start")) }
+
+    /** Stops [name] (a service tab's Stop); null once asked, or why not. */
+    fun stop(name: String): String? = refusal { stop(named(listOf(name), "stop")) {} }
+
+    /** Restarts [name] (a service tab's Restart); null once asked, or why not. */
+    fun restart(name: String): String? = refusal { restart(named(listOf(name), "restart")) {} }
+
+    /** Makes the tab of shell [shell] the unsaved service [name] (the tab's "Run as service"); null, or why not. */
+    fun adopt(name: String, shell: Int): String? = refusal { adopt(listOf(name, shell.toString())) }
+
+    private fun refusal(action: () -> Unit): String? = try {
+        action()
+        null
+    } catch (e: ServiceRefused) {
+        e.message
+    }
+
+    /** The names of the services there are, for the tabs of removed ones to close. */
+    val names: Set<String> get() = services.all.map { it.name }.toSet()
+
+    /** The title of [name]'s tab: null while it runs (the plain mark), else how it is. */
+    fun tabTitle(name: String): String? {
+        val service = services[name] ?: return null
+        return when {
+            service.state == ServiceState.RUNNING -> null
+            service.state == ServiceState.STOPPING -> "● $name: stopping"
+            service.restartPending -> "○ $name: restarting"
+            service.state == ServiceState.FAILED ->
+                "○ $name: failed" + (service.exitCode?.let { " (exit $it)" } ?: "")
+            service.stoppedByHand -> "○ $name: stopped"
+            service.exitCode != null -> "○ $name: exit ${service.exitCode}"
+            else -> "○ $name: not running"
+        }
+    }
+
+    private fun startByHand(service: Service<S>) {
         when (service.state) {
             ServiceState.RUNNING -> throw ServiceRefused("${service.name} is already running")
             ServiceState.STOPPING -> throw ServiceRefused("${service.name} is stopping")
@@ -189,7 +241,6 @@ class ServiceManager<S>(
         }
         start(service.name, byHand = true)
         host.changed()
-        return ok("service" to serviceJson(service))
     }
 
     private fun start(name: String, byHand: Boolean) {
@@ -203,6 +254,7 @@ class ServiceManager<S>(
             throw ServiceRefused("couldn't start $name: ${e.message ?: e.javaClass.simpleName}")
         }
         services.started(name, session, host.pid(session), byHand)
+        host.started(name, session)
     }
 
     // Asks [service] to stop; [then] runs once it has. False if it wasn't running.
@@ -217,22 +269,30 @@ class ServiceManager<S>(
         return true
     }
 
-    private fun stop(service: Service<S>, reply: PendingReply) {
+    // [stopped] runs once it has stopped.
+    private fun stop(service: Service<S>, stopped: () -> Unit) {
         val pending = service.restartPending
-        if (stopThen(service) { reply.answer(ok("service" to serviceJson(service))) }) return
+        if (stopThen(service, stopped)) return
         if (!pending) throw ServiceRefused("${service.name} isn't running")
         host.changed()
-        reply.answer(ok("service" to serviceJson(service)))
+        stopped()
     }
 
-    private fun restart(service: Service<S>, reply: PendingReply) {
+    // [done] gets null once it runs again, else why not. An unsaved one
+    // starts again with what runs in it now, if that's known.
+    private fun restart(service: Service<S>, done: (String?) -> Unit) {
+        if (!service.saved) {
+            service.session?.let(host::foreground)?.let { now ->
+                services.update(service.name, now.command?.takeIf { it.isNotBlank() }, now.cwd?.takeIf { it.isNotBlank() })
+            }
+        }
         val again = {
             try {
                 start(service.name, byHand = true)
                 host.changed()
-                reply.answer(ok("service" to serviceJson(service)))
+                done(null)
             } catch (e: ServiceRefused) {
-                reply.refuse(e.message!!)
+                done(e.message!!)
             }
         }
         if (!stopThen(service, again)) again()
@@ -293,8 +353,10 @@ class ServiceManager<S>(
             ?: throw ServiceRefused("service-adopt needs a name and a tab's MYNX_SHELL number")
         reload()
         if (services[name] != null) throw ServiceRefused("there's already a service named $name")
-        val tab = host.adopt(shell).getOrElse { throw ServiceRefused(it.message ?: "couldn't take that tab") }
-        val service = services.adopt(name, tab.command ?: "bash", tab.cwd, tab.session, tab.pid, tab.open)
+        val tab = host.adopt(name, shell).getOrElse { throw ServiceRefused(it.message ?: "couldn't take that tab") }
+        // Adopted from inside the tab, `mynx service adopt` itself is what runs.
+        val command = tab.command?.takeUnless(::runsMynx) ?: "bash"
+        val service = services.adopt(name, command, tab.cwd, tab.session, tab.pid, tab.open)
         host.changed()
         return ok("service" to serviceJson(service))
     }
@@ -359,6 +421,10 @@ class ServiceManager<S>(
 
     private fun noService(name: String) = "no service named $name (mynx service list shows them)"
 }
+
+// `mynx …`, or its script under an interpreter (`python3 /opt/mynx/bin/mynx …`, as /proc shows it).
+private fun runsMynx(command: String): Boolean =
+    command.split(' ').take(2).any { it.substringAfterLast('/') == "mynx" }
 
 /** The `service-*` requests, for [MynxRequests]'s `later`. */
 fun <S> serviceRequests(manager: ServiceManager<S>): Map<String, Later> = manager.requests()

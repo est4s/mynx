@@ -18,6 +18,8 @@ private class FakeServiceHost : ServiceHost<String> {
     var startFails: String? = null
     var openFails: String? = null
     var changes = 0
+    val adopted = mutableListOf<String>()
+    val followed = mutableListOf<String>()
     private var count = 0
 
     override fun start(def: ServiceDef, saved: Boolean): String {
@@ -41,8 +43,13 @@ private class FakeServiceHost : ServiceHost<String> {
         return null
     }
 
-    override fun adopt(shell: Int): Result<AdoptedTab<String>> =
-        tabs.remove(shell)?.let { Result.success(it) } ?: Result.failure(Exception("no tab with shell $shell"))
+    override fun adopt(name: String, shell: Int): Result<AdoptedTab<String>> =
+        tabs.remove(shell)?.let { adopted += "$name ${it.session}"; Result.success(it) }
+            ?: Result.failure(Exception("no tab with shell $shell"))
+
+    override fun started(name: String, session: String) {
+        followed += "$name $session"
+    }
 
     override fun foreground(session: String) = foreground
 
@@ -469,5 +476,95 @@ class ServiceRequestTest {
         manager.launch(null)
         assertTrue(host.events.isEmpty())
         assertNull(manager.services["web"])
+    }
+
+    @Test
+    fun `every new session is reported, so an open tab can follow it`() {
+        write("[web]\ncommand = run\n")
+        ask("service-start", "web")
+        File(servicesDir, "web.exit").writeText("1\n")
+        manager.exited("web#1")
+        host.scheduled.single().second()
+
+        assertEquals(listOf("web web#1", "web web#2"), host.followed)
+    }
+
+    @Test
+    fun `a tab's title says how its service is`() {
+        write("[web]\ncommand = run\nrestart-limit = 1\n")
+        manager.reload()
+        assertEquals("○ web: not running", manager.tabTitle("web"))
+        ask("service-start", "web")
+        assertNull(manager.tabTitle("web"), "running: the plain mark")
+        File(servicesDir, "web.exit").writeText("1\n")
+        manager.exited("web#1")
+        assertEquals("○ web: restarting", manager.tabTitle("web"))
+        host.scheduled.single().second()
+        File(servicesDir, "web.exit").writeText("1\n")
+        manager.exited("web#2")
+        assertEquals("○ web: failed (exit 1)", manager.tabTitle("web"))
+        manager.start("web")
+        ask("service-stop", "web")
+        assertEquals("● web: stopping", manager.tabTitle("web"))
+        File(servicesDir, "web.exit").writeText("143\n")
+        manager.exited("web#3")
+        assertEquals("○ web: stopped", manager.tabTitle("web"))
+        assertNull(manager.tabTitle("db"))
+    }
+
+    @Test
+    fun `an ended service's title has its exit code`() {
+        write("[web]\ncommand = run\nrestart = no\n")
+        ask("service-start", "web")
+        File(servicesDir, "web.exit").writeText("3\n")
+        manager.exited("web#1")
+        assertEquals("○ web: exit 3", manager.tabTitle("web"))
+    }
+
+    @Test
+    fun `the app stops, restarts and starts services by name, and hears why not`() {
+        write("[web]\ncommand = run\n")
+        assertEquals("web isn't running", manager.stop("web"))
+        assertEquals("no service named db (mynx service list shows them)", manager.stop("db"))
+        assertNull(manager.start("web"))
+        assertEquals("web is already running", manager.start("web"))
+        assertNull(manager.restart("web"))
+        assertEquals("stop web#1 group=null timeout=10", host.events.last())
+        manager.exited("web#1")
+        assertEquals("start web saved=true", host.events.last())
+        assertNull(manager.stop("web"))
+        assertEquals(ServiceState.STOPPING, manager.services["web"]!!.state)
+    }
+
+    @Test
+    fun `the app adopts a tab by its shell number`() {
+        host.tabs[3] = AdoptedTab("tab3", 77, "vim", "~", open = true)
+        assertNull(manager.adopt("notes", 3))
+        assertEquals(listOf("notes tab3"), host.adopted)
+        assertEquals("there's already a service named notes", manager.adopt("notes", 4))
+        assertEquals("no tab with shell 4", manager.adopt("other", 4))
+    }
+
+    @Test
+    fun `a tab adopted from inside runs mynx then, and that isn't its command`() {
+        host.tabs[3] = AdoptedTab("tab3", 77, "mynx service adopt notes", "~", open = true)
+        assertTrue(""""command":"bash"""" in ask("service-adopt", "notes", "3"))
+        host.tabs[4] = AdoptedTab("tab4", 78, "/usr/bin/python3 /opt/mynx/bin/mynx service adopt b", "~", open = true)
+        assertTrue(""""command":"bash"""" in ask("service-adopt", "b", "4"))
+        host.tabs[5] = AdoptedTab("tab5", 79, "python3 -m http.server", "~", open = true)
+        assertTrue(""""command":"python3 -m http.server"""" in ask("service-adopt", "c", "5"))
+    }
+
+    @Test
+    fun `an adopted one restarts with what runs in it now`() {
+        host.tabs[3] = AdoptedTab("tab3", 77, null, "~/src", open = true)
+        ask("service-adopt", "dev", "3")
+        host.foreground = Foreground(command = "npm run dev", cwd = "~/src/app")
+
+        ask("service-restart", "dev")
+        manager.exited("tab3")
+
+        assertEquals("start dev saved=false", host.events.last())
+        assertEquals(ServiceDef("dev", "npm run dev", "~/src/app", restart = Restart.NO), manager.services["dev"]!!.def)
     }
 }
