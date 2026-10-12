@@ -180,7 +180,17 @@ class ServiceManager<S>(
             },
             "service-adopt" to now { args -> adopt(args) },
             "service-save" to now(change = { "service save ${it.firstOrNull()?.trim().orEmpty()}" }) { args -> save(args) },
-        )
+        ).mapValues { (name, later) ->
+            // Anything else thrown would leave the request file in place, to fail
+            // again at every poll and hold up the requests after it.
+            Later(later.seconds, later.change) { args, reply ->
+                try {
+                    later.start(args, reply)
+                } catch (e: Exception) {
+                    reply.refuse("$name failed: ${e.message ?: e.javaClass.simpleName}")
+                }
+            }
+        }
     }
 
     private fun list(): String {

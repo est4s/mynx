@@ -17,6 +17,7 @@ private class FakeServiceHost : ServiceHost<String> {
     var foreground: Foreground? = null
     var startFails: String? = null
     var openFails: String? = null
+    var transcriptFails: String? = null
     var changes = 0
     val adopted = mutableListOf<String>()
     val followed = mutableListOf<String>()
@@ -35,7 +36,10 @@ private class FakeServiceHost : ServiceHost<String> {
         events += "stop $session group=$group timeout=$timeoutSeconds"
     }
 
-    override fun transcript(session: String) = transcripts[session] ?: ""
+    override fun transcript(session: String): String {
+        transcriptFails?.let { throw IllegalStateException(it) }
+        return transcripts[session] ?: ""
+    }
 
     override fun open(name: String, session: String): String? {
         openFails?.let { return it }
@@ -267,6 +271,18 @@ class ServiceRequestTest {
             """{"ok":false,"error":"the number of lines must be a whole number from 1 to $MAX_LOG_LINES"}""",
             ask("service-log", "web", "0"),
         )
+    }
+
+    @Test
+    fun `an unexpected failure is a refusal, so the request doesn't stay to block the others`() {
+        write("[web]\ncommand = run\n")
+        ask("service-start", "web")
+        host.transcriptFails = "boom"
+
+        val reply = ask("service-log", "web")
+
+        assertEquals("""{"ok":false,"error":"service-log failed: boom"}""", reply)
+        assertFalse(File(dir, "q.req").exists())
     }
 
     @Test
