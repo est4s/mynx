@@ -36,3 +36,42 @@ agent() { # agent NAME: a fake installed agent
     [ "$status" -eq 127 ]
     [ "$output" = "claude isn't installed; mynx agent install claude installs it" ]
 }
+
+whats_new_setup() { # whats_new_setup VERSION [SEEN]: tools and state for it
+    export MYNX_TOOLS="$BATS_TEST_TMPDIR/tools" HOME="$BATS_TEST_TMPDIR/home"
+    unset XDG_STATE_HOME
+    mkdir -p "$MYNX_TOOLS" "$HOME/.local/state/mynx"
+    echo "$1" >"$MYNX_TOOLS/.version"
+    [ -z "${2-}" ] || echo "$2" >"$HOME/.local/state/mynx/notes-seen"
+    printf '#!/bin/sh\necho "mynx $*" >>"%s"\n' "$BATS_TEST_TMPDIR/ran" >"$STUBS/mynx"
+}
+
+@test "after an update the shell shows what's new once" {
+    whats_new_setup 90-1760000000-0.2.0 0.1.1
+    source "$SETUP"
+    _mynx_whats_new
+    [ "$(cat "$BATS_TEST_TMPDIR/ran")" = "$(printf 'mynx notes new\nmynx notes seen')" ]
+}
+
+@test "with this version seen, the shell starts no mynx" {
+    whats_new_setup 90-1760000000-0.2.0 0.2.0
+    source "$SETUP"
+    _mynx_whats_new
+    [ ! -e "$BATS_TEST_TMPDIR/ran" ]
+}
+
+@test "with nothing seen yet, mynx decides (and records it)" {
+    whats_new_setup 90-1760000000-0.2.0
+    source "$SETUP"
+    _mynx_whats_new
+    [ "$(cat "$BATS_TEST_TMPDIR/ran")" = "$(printf 'mynx notes new\nmynx notes seen')" ]
+}
+
+@test "tools with no version name, or none at all, start no mynx" {
+    whats_new_setup 57-1700000000000
+    source "$SETUP"
+    _mynx_whats_new
+    rm "$MYNX_TOOLS/.version"
+    _mynx_whats_new
+    [ ! -e "$BATS_TEST_TMPDIR/ran" ]
+}

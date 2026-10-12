@@ -239,6 +239,15 @@ class KeyBarTest {
     }
 
     @Test
+    fun `the pager bar's Back quits less instead of opening its help`() {
+        // The menu's Back sends h, which in less is help.
+        val bar = loadKeyBar("pager", dir)
+        assertEquals("built-in pager", bar.source)
+        assertEquals(listOf("↑", "PgUp", "Top", "Find", "↓", "PgDn", "End", "Back"), bar.buttons.map { it.label })
+        assertEquals(parseKeyBar("Back = q").buttons.single().strokes, bar.buttons.single { it.label == "Back" }.strokes)
+    }
+
+    @Test
     fun `game bars repeat the keys you hold to move`() {
         fun repeating(name: String) = loadKeyBar(name, dir).buttons.filter { it.repeat }.map { it.label }
 

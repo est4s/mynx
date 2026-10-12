@@ -267,8 +267,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       ACTS=(update info)
       if github_ready; then ITEMS+=("GitHub setup") ACTS+=(github); fi ;;
     help)
-      ITEMS=("Getting started" "Report a bug" About)
-      ACTS=(welcome report about) ;;
+      ITEMS=("Getting started" "Release notes" "Report a bug" About)
+      ACTS=(welcome notes report about) ;;
   esac
 }
 
@@ -460,6 +460,7 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 }
 
 act_about() { run mynx about || pause; }  # in less; a failure stays on screen
+act_notes() { run mynx notes || pause; }  # the same
 act_report() { run mynx report; pause; }  # it asks; its answer stays on screen
 act_github() { run mynx github; pause; }  # its summary stays on screen
 act_appupdate() { run mynx update; pause; }  # shows the notes and asks

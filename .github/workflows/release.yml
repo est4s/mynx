@@ -2,7 +2,8 @@ name: Release APK
 
 # Push a tag like v0.1.0 to build a signed release APK and publish it on
 # GitHub Releases. The key comes from the repo's secrets (docs/RELEASING.md).
-# The test and asset steps are copied from build.yml: keep them in step.
+# The test and asset steps are copied from build.yml: keep them in step
+# (the release notes step differs: it adds this release's notes).
 
 on:
   push:
@@ -106,8 +107,18 @@ jobs:
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets
 
-      - name: Add the app's tools (mynx, editors, themes)
-        run: scripts/pack-tools.sh app/src/main/assets
+      # Every release's notes, this one's too: GitHub generates them now,
+      # and the same text is published with the release below.
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build
+          scripts/release-notes.py build/release-notes.json \
+            --tag "$GITHUB_REF_NAME" --notes-out build/release-notes.md
+
+      - name: Add the app's tools (mynx, editors, themes, release notes)
+        run: scripts/pack-tools.sh app/src/main/assets build/release-notes.json
 
       - name: Add the terminal font
         run: scripts/fetch-font.sh app/src/main/assets/fonts
@@ -143,7 +154,7 @@ jobs:
           prerelease=
           case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
           gh release create "$GITHUB_REF_NAME" "dist/mynx-${{ steps.version.outputs.name }}.apk" \
-            --generate-notes $prerelease
+            --notes-file build/release-notes.md $prerelease
 
       - uses: actions/upload-artifact@v7
         if: failure()

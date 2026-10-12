@@ -105,8 +105,20 @@ jobs:
       - name: Build Debian rootfs
         run: scripts/build-rootfs.sh app/src/main/assets
 
-      - name: Add the app's tools (mynx, editors, themes)
-        run: scripts/pack-tools.sh app/src/main/assets
+      # The published releases' notes, for mynx notes. A debug build
+      # still builds without them.
+      - name: Release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p build
+          scripts/release-notes.py build/release-notes.json ||
+            echo "::warning::No release notes: GitHub's API failed"
+
+      - name: Add the app's tools (mynx, editors, themes, release notes)
+        run: |
+          notes=build/release-notes.json
+          scripts/pack-tools.sh app/src/main/assets "$([ -f $notes ] && echo $notes)"
 
       - name: Add the terminal font
         run: scripts/fetch-font.sh app/src/main/assets/fonts

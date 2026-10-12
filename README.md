@@ -71,7 +71,8 @@ Needs an **arm64** phone with **Android 8** or newer.
    two; after that it opens straight into the menu.
 
 mynx checks for a new version once a day and tells you; `mynx update`
-installs it, keeping Debian and your files.
+installs it, keeping Debian and your files. Afterwards it shows what's
+new; `mynx notes` has the notes of every release.
 
 ## Getting started
 

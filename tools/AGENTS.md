@@ -118,6 +118,7 @@ their own.
 | `mynx hook claude\|codex\|gemini` | run by the agents' hooks (see "AI agents"); reads the hook's JSON on stdin |
 | `mynx edit` | the settings editors, for people (full screen) |
 | `mynx welcome` | the welcome page new users see: what's here and how to get around |
+| `mynx notes` | every release's notes, newest first; `mynx notes new` only those since the last update, `mynx notes seen` marks them read (see "Updates") |
 | `mynx about` | the app's version, what it's made with (proot, Termux's terminal, the font, Debian), their licences and source links; in `less` on a terminal |
 | `mynx version` | the version of the app's tools |
 | `mynx update` | update the app to its latest release: shows the version and its notes, asks, downloads it and opens Android's installer (`--check` only says; `--yes` skips the question; see "Updates") |
@@ -459,7 +460,7 @@ line, in order; labels up to 20 characters. Actions:
 | `app-settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
 | `system` | Update all, System info, and GitHub setup (`mynx github`) once GitHub is set up |
-| `help` | Getting started (`mynx welcome`), Report a bug (`mynx report`), About (`mynx about`) |
+| `help` | Getting started (`mynx welcome`), Release notes (`mynx notes`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
@@ -486,9 +487,10 @@ still works). Holding an arrow (or any button marked
 `keybar NAME[,FALLBACK…] command…` shows the first of those bars that
 exists while the command runs, then the previous one; with no command
 running it's the shell's bar. `files` uses `nnn`, `menu` uses `menu`,
-the editors use `mynx-edit`.
+the editors use `mynx-edit`, and `mynx about` and `mynx notes` page
+with `pager`.
 
-Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, the games'
+Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, `pager`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
 apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
 `metronome`, and
@@ -585,6 +587,15 @@ shows the generic game bar until `my-tool.conf` exists.
   `current`, `latest`, `available`, and with one `tag`, `notes`,
   `size`, `published`). The check and download run in the app, not
   Debian, so they work even if Debian's network tools are broken.
+- **What's new and release notes:** every release's notes ship with
+  the app (`/opt/mynx/release-notes.json`), so they work offline.
+  After an update, the first terminal that opens shows **What's new**:
+  the notes of each version since the one before (`mynx notes new`),
+  once (`mynx notes seen` records the version; the state is
+  `~/.local/state/mynx/notes-seen`). `mynx notes` (or the menu's
+  Settings → Help → Release notes) shows them all. `--json` gives
+  `releases` (`version`, `published`, `notes` in GitHub's Markdown);
+  with `new`, also `current` and `seen`.
 - **Bug reports:** `mynx report "what went wrong"` (or the menu's
   Settings → Help → Report a bug) builds a report: the description, the app's
   version, the Android version and phone model, and the app's last
