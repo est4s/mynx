@@ -376,6 +376,22 @@ See `docs/ROADMAP.md` "How it works". The details:
   GitHub's sha256 checked; a complete one is reused), then the
   installer opens through `ApkProvider`. Old downloads go at the next
   start. `update-check` (setting, on) only turns off the daily check.
+- **Release notes** (maintainer's decision, 2026-10-12: bundled at
+  build time, so they work offline): `scripts/release-notes.py` writes
+  every published release's notes from GitHub's API into the tools
+  (`release-notes.json`, through `pack-tools.sh`). `release.yml` also
+  has GitHub generate the new tag's notes first and publishes the
+  release with that same text (`--notes-file`); `build.yml` only warns
+  if the API fails. `mynx notes` shows them (`tools/lib/mynx/notes.py`
+  turns GitHub's Markdown into terminal lines). **What's new:** after
+  an update the app restores the tabs, so the menu's boot doesn't run;
+  instead `tools/shell.bash` compares the tools' version name with
+  `~/.local/state/mynx/notes-seen` at each interactive login and, only
+  when they differ, runs `mynx notes new` and `mynx notes seen`. With
+  nothing seen yet, a Debian whose menu never ran (a new install, which
+  gets the welcome page) shows nothing; an older one shows this
+  version's notes. Debug builds are all `0.0.1`, so mynx dev never
+  shows What's new.
 - **Time zone** (`core/.../TimeZone.kt`): each tab gets `TZ` from
   Android's default zone, read as the tab starts (`phoneTimeZone()`).
   By name when Debian has its zoneinfo file, else a fixed POSIX offset

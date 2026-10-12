@@ -108,12 +108,17 @@ keys() {
 @test "help menu" {
     source "$MENU"
     menu_items help
-    [ "${ITEMS[*]}" = "Getting started Report a bug About" ]
-    [ "${ACTS[*]}" = "welcome report about" ]
+    [ "${ITEMS[*]}" = "Getting started Release notes Report a bug About" ]
+    [ "${ACTS[*]}" = "welcome notes report about" ]
+}
+
+@test "Release notes shows mynx notes" {
+    run keys 632
+    [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 633
+    run keys 634
     [[ $output == *"RUN: mynx about"* ]]
 }
 
@@ -123,7 +128,7 @@ keys() {
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 632
+    run keys 633
     [[ $output == *"RUN: mynx report"* ]]
 }
 

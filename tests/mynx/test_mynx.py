@@ -205,6 +205,88 @@ class MynxTest(unittest.TestCase):
         self.assertEqual(run.returncode, 2)
         self.assertIn("welcome.txt", run.stderr)
 
+    # --- notes -------------------------------------------------------------
+
+    RELEASES = [
+        {"version": "0.2.0", "published": "2026-11-01T10:00:00Z", "notes": "## What's Changed\n* Two"},
+        {"version": "0.1.1", "published": "2026-10-10T17:04:09Z", "notes": "* One and a half"},
+        {"version": "0.1.0", "published": "2026-10-10T12:14:05Z", "notes": "* One"},
+    ]
+
+    def write_notes(self, version="0.2.0", seen=None, menu_ran=True):
+        with open(os.path.join(self.tools, "release-notes.json"), "w") as f:
+            json.dump(self.RELEASES, f)
+        with open(os.path.join(self.tools, ".version"), "w") as f:
+            f.write(f"90-1760000000-{version}\n")
+        state = os.path.join(self.home, ".local", "state", "mynx")
+        os.makedirs(state)
+        if seen:
+            with open(os.path.join(state, "notes-seen"), "w") as f:
+                f.write(seen + "\n")
+        if menu_ran:
+            with open(os.path.join(state, "menu"), "w") as f:
+                f.write("welcomed=1\n")
+        return os.path.join(state, "notes-seen")
+
+    def test_notes_shows_every_release_newest_first(self):
+        self.write_notes()
+        run = self.mynx("notes")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "mynx 0.2.0 · 2026-11-01\n\nWhat's Changed\n• Two\n\n"
+                                     "mynx 0.1.1 · 2026-10-10\n\n• One and a half\n\n"
+                                     "mynx 0.1.0 · 2026-10-10\n\n• One\n")
+        self.assertEqual(json.loads(self.mynx("notes", "--json").stdout),
+                         {"ok": True, "releases": self.RELEASES})
+
+    def test_notes_without_the_notes_file_fails(self):
+        run = self.mynx("notes")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("release-notes.json", run.stderr)
+
+    def test_notes_new_shows_the_releases_since_the_one_seen(self):
+        self.write_notes(seen="0.1.0")
+        run = self.mynx("notes", "new")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertTrue(run.stdout.startswith("What's new in mynx\n\nmynx 0.2.0"), run.stdout)
+        self.assertIn("mynx 0.1.1", run.stdout)
+        self.assertNotIn("mynx 0.1.0", run.stdout)
+        answer = json.loads(self.mynx("notes", "new", "--json").stdout)
+        self.assertEqual(answer, {"ok": True, "current": "0.2.0", "seen": "0.1.0",
+                                  "releases": self.RELEASES[:2]})
+
+    def test_notes_new_prints_nothing_once_seen(self):
+        self.write_notes(seen="0.2.0")
+        run = self.mynx("notes", "new")
+        self.assertEqual((run.returncode, run.stdout), (0, ""), run.stderr)
+
+    def test_notes_new_after_updating_from_before_notes_shows_this_version(self):
+        self.write_notes()
+        run = self.mynx("notes", "new")
+        self.assertIn("mynx 0.2.0", run.stdout)
+        self.assertNotIn("mynx 0.1.1", run.stdout)
+
+    def test_notes_new_on_a_new_install_shows_nothing(self):
+        # The menu hasn't run yet: the welcome page comes instead.
+        self.write_notes(menu_ran=False)
+        self.assertEqual(self.mynx("notes", "new").stdout, "")
+
+    def test_notes_new_changes_nothing_and_seen_records_this_version(self):
+        seen = self.write_notes(seen="0.1.0")
+        self.mynx("notes", "new")
+        with open(seen) as f:
+            self.assertEqual(f.read(), "0.1.0\n")
+        run = self.mynx("notes", "seen")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        with open(seen) as f:
+            self.assertEqual(f.read(), "0.2.0\n")
+        self.assertEqual(self.mynx("notes", "new").stdout, "")
+        self.assertEqual(json.loads(self.mynx("notes", "seen", "--json").stdout), {"ok": True, "seen": "0.2.0"})
+
+    def test_notes_with_something_else_is_a_usage_error(self):
+        run = self.mynx("notes", "old")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: mynx notes", run.stderr)
+
     # --- about -------------------------------------------------------------
 
     LICENSES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
@@ -1250,7 +1332,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("update", input="n\n")
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("mynx 0.2.0 is available (you have 0.1.0).", run.stdout)
-        self.assertIn("## What's new\n- Updates", run.stdout)
+        self.assertIn("What's new\n• Updates", run.stdout)
         self.assertIn("2.5 MB", run.stdout)
         self.assertIn("Download and install it? [y/N]", run.stdout)
         self.assertIn("Nothing was changed.", run.stdout)

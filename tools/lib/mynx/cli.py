@@ -13,7 +13,7 @@ import threading
 import time
 import urllib.parse
 
-from . import agents
+from . import agents, notes
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
@@ -46,6 +46,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
+  notes      notes [all] | new | seen: release notes, and what's new since the last update
   update     update [--check] [--yes]: update the app to its latest release
   report     report [TEXT]: report a bug (shows it, asks, then sends it with gh or opens GitHub)
   github     github [status] [--yes]: install git and gh, sign in to GitHub, set git's name
@@ -762,9 +763,9 @@ def cmd_update(args, as_json):
         published = found.get("published")
         when = time.strftime(" on %Y-%m-%d", time.localtime(published / 1000)) if published else ""
         print(f"Released{when}; the download is {size_text(found['size'])}.\n")
-        notes = (found.get("notes") or "").strip()
-        if notes:
-            print(notes + "\n")
+        lines = notes.format_notes(found.get("notes") or "", notes_width())
+        if lines:
+            print("\n".join(lines) + "\n")
         if not yes and not ask("Download and install it? [y/N]"):
             print("Nothing was changed.")
             return 0
@@ -1289,15 +1290,72 @@ def cmd_about(args, as_json):
                    "license": APP_LICENSE, "source": APP_SOURCE,
                    "components": COMPONENTS}, None)
         return 0
-    text = about_text(version)
+    page(about_text(version))
+    return 0
+
+
+def page(text, *less_options):
+    """Text through `less` on a terminal, else printed."""
     if sys.stdout.isatty() and shutil.which("less"):
-        subprocess.run(["less"], input=text, text=True)
+        subprocess.run(["less", *less_options], input=text, text=True)
     else:
         try:
             sys.stdout.write(text)
             sys.stdout.flush()
         except BrokenPipeError:  # mynx about | head
             os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+
+
+NOTES_USAGE = "usage: mynx notes [all] | new | seen"
+
+
+def state_dir():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "mynx")
+
+
+def notes_width():
+    return min(shutil.get_terminal_size((56, 24)).columns, 80)
+
+
+def cmd_notes(args, as_json):
+    """Release notes bundled by CI. `new` shows the ones since the
+    version last marked `seen`: the shell runs both after an update."""
+    what = args[0] if args else "all"
+    if len(args) > 1 or what not in ("all", "new", "seen"):
+        raise Usage(NOTES_USAGE)
+    seen_file = os.path.join(state_dir(), "notes-seen")
+    current = None if what == "all" else version_parts(tools_version())[1]
+    if what == "seen":
+        os.makedirs(state_dir(), exist_ok=True)
+        with open(seen_file, "w") as f:
+            f.write(f"{current or ''}\n")
+        out(as_json, {"ok": True, "seen": current}, None)
+        return 0
+    path = os.path.join(TOOLS, "release-notes.json")
+    try:
+        with open(path) as f:
+            releases = json.load(f)
+    except (OSError, ValueError):
+        raise Failure(f"no release notes in {path}")
+    if what == "all":
+        if as_json:
+            out(True, {"ok": True, "releases": releases}, None)
+        else:
+            page(notes.render(releases, notes_width(), APP_NAME))
+        return 0
+    try:
+        seen = read(seen_file) or None
+    except OSError:
+        seen = None
+    # A new Debian (the menu never ran) gets the welcome page instead.
+    first = seen is None and not os.path.exists(os.path.join(state_dir(), "menu"))
+    new = [] if first else notes.newer(releases, seen, current)
+    if as_json:
+        out(True, {"ok": True, "current": current, "seen": seen, "releases": new}, None)
+    elif new:
+        # -F: a short page just prints, -X: and stays on screen.
+        page(f"What's new in {APP_NAME}\n\n" + notes.render(new, notes_width(), APP_NAME), "-FX")
     return 0
 
 
@@ -1632,7 +1690,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound,
-    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 
 

@@ -90,7 +90,11 @@ git push origin v0.1.0
 - A tag with a suffix (`v0.2.0-beta.1`) makes a pre-release.
 - The workflow runs all tests, builds the APK (about the same time as a
   debug build), checks its signature and creates the release with notes
-  generated from the commits. Watch it with `gh run watch`.
+  generated from the merged PRs. Watch it with `gh run watch`.
+- The same notes ship inside the APK (`mynx notes`, What's new after
+  an update), with every earlier release's notes as GitHub has them
+  when it builds. Editing a release's notes on GitHub later changes
+  what the next builds ship, not the APKs already out.
 - If it fails, fix it on `main`, then move the tag:
   `git tag -d v0.1.0 && git push origin :v0.1.0`, tag again and push.
   Delete a half-made release first if there is one

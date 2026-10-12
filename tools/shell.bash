@@ -19,3 +19,17 @@ _mynx_run_agent() {
     fi
     mynx agent start "$name" "$@"
 }
+
+# After an app update, the first interactive shell shows what's new
+# (mynx notes new) once. mynx only starts when the version changed.
+_mynx_whats_new() {
+    local version seen tools=${MYNX_TOOLS:-${BASH_SOURCE[0]%/*}}
+    local state=${XDG_STATE_HOME:-$HOME/.local/state}/mynx/notes-seen
+    { read -r version <"$tools/.version"; } 2>/dev/null || return 0
+    [[ $version == *-*-?* ]] || return 0   # BUILD-INSTALLTIME-NAME
+    { read -r seen <"$state"; } 2>/dev/null || seen=
+    [[ ${version#*-*-} == "$seen" ]] && return 0
+    mynx notes new 2>/dev/null
+    mynx notes seen >/dev/null 2>&1
+}
+if [[ $- == *i* ]]; then _mynx_whats_new; fi

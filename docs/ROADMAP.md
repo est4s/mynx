@@ -10,12 +10,6 @@ polish (first run, icon, updates from GitHub Releases).
 
 ---
 
-## Next
-
-- **What's new and release notes:** after every update, a page with the
-  notes of the versions since the one before; "Release notes" in the
-  menu, working offline.
-
 ## Planned
 
 ### Background services

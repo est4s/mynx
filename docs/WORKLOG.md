@@ -29,6 +29,10 @@ are in git history: the full log up to entry 92 is
   confirmed on the phone (entry 102, PR #24).
 - **Volume keys** (a key bar's `VolumeUp`/`VolumeDown` lines):
   confirmed on the phone (entry 103, PR #25).
+- **Release notes and What's new:** built, to try on the phone
+  (entry 104, "Next" 1).
+- **Guided GitHub setup** (`mynx github`) and **bug reports**
+  (`mynx report`): every path confirmed on the phone (2026-10-12).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -37,42 +41,23 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. What's new and release notes (planned, not built)
+### 1. What's new and release notes: try it on the phone
 
-Maintainer's decision (2026-10-08): after every update, a What's new
-page shows the notes of the versions since the one before (the tools'
-version change already marks an update), and the menu gets "Release
-notes": all of GitHub's release notes. Proposed: the release workflow
-writes the notes of every release so far, plus the new one, into the
-tools (`/opt/mynx/release-notes`), so both work offline and match
-GitHub. Generated notes are commit subjects; maybe the maintainer
-edits them in the release before tagging (decide then).
+Built (entry 104, branch `release-notes`). In mynx dev, from the PR's
+build:
+- Settings → Help → **Release notes** shows v0.1.1 and v0.1.0's
+  notes in less, readable at 56 columns (bullets, `(#18)`, no `##`
+  or `**`); `q` goes back to the menu. `mynx notes` does the same.
+- `mynx notes new` prints nothing in mynx dev (every debug build is
+  0.0.1, so What's new can't be tried there), and a new tab opens
+  with no delay or message.
+- **What's new itself** shows at the next release: once v0.1.2 (or
+  later) is tagged and the maintainer's mynx updates to it, the
+  restored tab should show "What's new in mynx" with that version's
+  notes, once; the next tab, nothing.
 
-### 2. Guided GitHub setup: try it on the phone
+### 2. Smaller things
 
-Built (entries 94-95, branch `github-setup`). In mynx dev, the
-main menu's "Set up GitHub" (System → GitHub setup once done):
-- **Confirmed (2026-10-10, build of `1f8b0db`):** signed out, "Set up
-  GitHub" shows in the main menu after AI agents; signing in (code,
-  browser, summary) works, and the item then moves to System;
-  signed in, it asks "Switch to another account?". Still untried:
-  git's name/email set to something else, and installing git and gh.
-- **Signed out:** after a moment `gh` shows the one-time code, with
-  "(The code is copied: paste it on GitHub's page.)" under it; Enter
-  opens the browser, paste, approve. Then the summary: the account,
-  git's name and noreply email. `git push` to a repo should work with
-  no password.
-- **Signed in:** it asks "Switch to another account?"; `n` keeps it.
-- **git name/email already set to something else:** it asks first.
-- **Without git or gh** (`apt remove gh`): it offers to install them.
-- Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
-  screen isn't garbled, nothing odd after `gh` ends.
-
-### 3. Smaller things
-
-- **Bug reports, not tried yet:** the browser path without gh (`gh
-  auth logout`, then `y` opens GitHub's filled-in new-issue page, `n`
-  says "Nothing was sent."), and a report after a crash.
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Before Play (not urgent):** `release.yml` has its own
   `GITHUB_RUN_NUMBER`, so release version codes are far below debug
@@ -175,6 +160,41 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-12 (104): Release notes and What's new (branch `release-notes`)
+
+The maintainer chose (2026-10-12) to bundle the notes at build time,
+so they work offline. The GitHub setup and bug reports were all
+confirmed on the phone earlier; they left "Next".
+- `scripts/release-notes.py OUT [--tag TAG --notes-out FILE]`: every
+  published release's notes from GitHub's API as
+  `release-notes.json` (`version`, `published`, `notes`), newest
+  first. With `--tag` (release.yml) GitHub generates the new tag's
+  notes first, the same call `--generate-notes` makes, and
+  `gh release create` now publishes them with `--notes-file`, so
+  GitHub and the APK match. build.yml only warns if the API fails.
+  Tried here against the real repo: it generated v0.1.2's notes
+  without creating anything. `pack-tools.sh OUT [NOTES]` packs them.
+- `mynx notes [all] | new | seen` (`cli.py`, logic in
+  `tools/lib/mynx/notes.py`: version order with pre-releases first,
+  `newer()`, GitHub Markdown to terminal lines). `new` is read-only;
+  `seen` writes `~/.local/state/mynx/notes-seen`. `mynx update` now
+  shows its notes formatted the same way.
+- **What's new:** an update restores the tabs, so `menu --boot`
+  doesn't run. `tools/shell.bash` instead compares the tools' version
+  name with `notes-seen` at each interactive login (bash only, no
+  Python unless they differ), then runs `mynx notes new` (`less -FX`:
+  a short page just prints) and `mynx notes seen`. Nothing seen yet:
+  a new install (no menu state yet) shows nothing, older Debians show
+  this version's notes.
+- Menu: Settings → Help gets "Release notes" (`mynx notes`).
+- Docs: tools/AGENTS.md (command, menu, "Updates"), README, RELEASING
+  (notes edited on GitHub later reach only later builds), ROADMAP
+  (left "Next", which is now empty), AGENTS.md architecture.
+- Tests: `tests/mynx/test_notes.py`, notes in `test_mynx.py`,
+  `shell-setup.bats`, `menu.bats`. All pass here except
+  `test_undo_list`, which fails on `main` too in a tab whose `TZ`
+  isn't UTC (CI is UTC): not looked into.
 
 ### 2026-10-11 (103): Volume keys (branch `volume-keys`)
 
