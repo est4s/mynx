@@ -92,14 +92,11 @@ class PipePlayer(private val out: SoundOut, private val now: () -> Long, val idl
 
 /** How long to wait before starting the sound server again after it stopped. */
 class ServerRestarts {
-    private var failures = 0
+    private val policy = RestartPolicy(Restart.ALWAYS)
 
     /** Null: don't. A server that ran a while starts the count over. */
-    fun after(exitCode: Int, ranMs: Long): Long? {
-        if (exitCode == SOUND_NOT_INSTALLED) return null
-        if (ranMs >= 30_000) failures = 0
-        return (1000L shl failures.coerceAtMost(6)).coerceAtMost(60_000).also { failures++ }
-    }
+    fun after(exitCode: Int, ranMs: Long): Long? =
+        if (exitCode == SOUND_NOT_INSTALLED) null else policy.after(exitCode, ranMs)
 }
 
 /**
