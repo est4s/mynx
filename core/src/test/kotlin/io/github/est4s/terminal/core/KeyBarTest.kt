@@ -409,6 +409,20 @@ class KeyBarTest {
     }
 
     @Test
+    fun `a service's bar sends what a running server needs`() {
+        // Its tab runs the service, not a shell, so no mynx commands here.
+        assertTrue("service" in BUILT_IN_KEY_BARS)
+        val bar = loadKeyBar("service", dir)
+
+        assertEquals("built-in service", bar.source)
+        assertEquals(emptyList(), bar.problems)
+        assertEquals(listOf("Esc", "Ctrl", "↑", "Tab", "Ctrl+C", "←", "↓", "→", "Enter", "Ctrl+D"),
+            bar.buttons.map { it.label })
+        assertEquals(parseKeyBar("x = Ctrl+C").buttons.single().strokes, bar.buttons.single { it.label == "Ctrl+C" }.strokes)
+        assertEquals(parseKeyBar("x = Ctrl+D").buttons.single().strokes, bar.buttons.single { it.label == "Ctrl+D" }.strokes)
+    }
+
+    @Test
     fun `no built-in bar takes the volume keys`() {
         for (name in BUILT_IN_KEY_BARS) {
             val loaded = loadKeyBar(name, dir)
