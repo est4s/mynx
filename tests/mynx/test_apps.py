@@ -151,6 +151,7 @@ class MenuActionsTest(unittest.TestCase):
             line = next(l for l in f if l.startswith("MENU_ACTIONS="))
         actions = line.split('"')[1].replace(" or run COMMAND", "").split(", ")
         self.assertIn("apps", actions)
+        self.assertIn("services", actions)
         self.assertEqual(editors.MENU_ACTIONS, actions)
 
 
