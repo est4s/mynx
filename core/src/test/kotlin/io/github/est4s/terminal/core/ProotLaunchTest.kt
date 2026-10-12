@@ -163,6 +163,38 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `tells a service's programs which service they run in`() {
+        val argv = prootLaunch(paths, service = "web").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("MYNX_SERVICE=web" in shellEnv, shellEnv.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("MYNX_SERVICE=") })
+    }
+
+    @Test
+    fun `a saved service runs its wrapper, which reads services conf`() {
+        assertEquals(
+            listOf("/bin/bash", "--login", "-c", "exec /opt/mynx/lib/service-run web"),
+            serviceCommand("web"),
+        )
+    }
+
+    @Test
+    fun `an unsaved service gives the wrapper its command, quoted`() {
+        assertEquals(
+            listOf("/bin/bash", "--login", "-c", """exec /opt/mynx/lib/service-run web 'echo '\''hi'\'''"""),
+            serviceCommand("web", "echo 'hi'"),
+        )
+    }
+
+    @Test
+    fun `quotes text for the shell`() {
+        assertEquals("'a b'", shellQuote("a b"))
+        assertEquals("''", shellQuote(""))
+        assertEquals("""'it'\''s ${'$'}HOME'""", shellQuote("it's \$HOME"))
+    }
+
+    @Test
     fun `can run a command instead of a login shell`() {
         val argv = prootLaunch(paths, command = listOf("/bin/sh", "/opt/mynx/lib/sound-server")).argv
 

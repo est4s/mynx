@@ -23,4 +23,12 @@ class ServiceNotificationTest {
     fun `says when the wakelock is held`() {
         assertEquals("2 terminals running · wakelock held", runningTerminalsText(2, wakelock = true))
     }
+
+    @Test
+    fun `counts the services after the terminals`() {
+        assertEquals("2 terminals · 1 service", runningTerminalsText(2, services = 1))
+        assertEquals("1 terminal · 3 services", runningTerminalsText(1, services = 3))
+        assertEquals("No terminals · 1 service", runningTerminalsText(0, services = 1))
+        assertEquals("1 terminal · 2 services · wakelock held", runningTerminalsText(1, wakelock = true, services = 2))
+    }
 }

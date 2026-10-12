@@ -85,7 +85,7 @@ class SettingsTest {
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
-                wakelock = true, updateCheck = false).values(),
+                wakelock = Wakelock.ON, updateCheck = false).values(),
         )
     }
 
@@ -208,12 +208,22 @@ class SettingsTest {
     }
 
     @Test
-    fun `the wakelock is off by default and can be turned on`() {
-        assertFalse(Settings().wakelock)
-        assertEquals("off", SETTINGS.single { it.key == "wakelock" }.default)
+    fun `the wakelock is auto by default and can be on or off`() {
+        assertEquals(Wakelock.AUTO, Settings().wakelock)
+        assertEquals("auto", SETTINGS.single { it.key == "wakelock" }.default)
+        assertEquals(listOf("auto", "on", "off"), SETTINGS.single { it.key == "wakelock" }.choices)
         val parsed = parseSettings("wakelock = on\nwakelock = always\n")
-        assertTrue(parsed.settings.wakelock)
-        assertEquals(listOf("line 2: wakelock must be one of: on, off"), parsed.problems)
+        assertEquals(Wakelock.ON, parsed.settings.wakelock)
+        assertEquals(listOf("line 2: wakelock must be one of: auto, on, off"), parsed.problems)
+        assertEquals(Wakelock.OFF, parseSettings("wakelock = off\n").settings.wakelock)
+    }
+
+    @Test
+    fun `auto holds the wakelock only while a service runs`() {
+        assertTrue(Wakelock.AUTO.held(servicesRunning = true))
+        assertFalse(Wakelock.AUTO.held(servicesRunning = false))
+        assertTrue(Wakelock.ON.held(servicesRunning = false))
+        assertFalse(Wakelock.OFF.held(servicesRunning = true))
     }
 
     @Test
