@@ -43,5 +43,8 @@ fun checkConfig(home: File): List<ConfigProblems> {
             report(bar, parseKeyBar(bar.readText()).problems)
         }
     }
+
+    val services = File(config, SERVICES_CONF)
+    if (services.isFile) report(services, parseServices(services.readText()).problems)
     return found
 }
