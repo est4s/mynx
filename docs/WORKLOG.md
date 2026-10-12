@@ -19,7 +19,7 @@ are in git history: the full log up to entry 92 is
   themed icon, the title art and "m" icon). Also: the rename to mynx,
   bug reports (`mynx report`), and **mynx dev**, debug builds as a
   separate app (entry 82).
-- **Released:** v0.1.0 and v0.1.1 (2026-10-10), signed with the
+- **Released:** v0.1.0 and v0.1.1 (2026-10-10), v0.1.2 (2026-10-12), signed with the
   release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer's
   daily mynx is the release, and it updated 0.1.0 → 0.1.1 through
   `mynx update` (entry 81's updates, confirmed).
@@ -42,13 +42,12 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. What's new: check it at the next release
+### 1. What's new: check it with v0.1.2
 
-Release notes and the pager bar are confirmed in mynx dev (entry 104).
-What's new can't show there (every debug build is 0.0.1): once the
-next release is tagged and the maintainer's mynx updates to it, the
-restored tab should show "What's new in mynx" with that version's
-notes, once; the next tab, nothing.
+v0.1.2 is out (2026-10-12, tagged by the agent at the maintainer's
+request). `mynx update` in the daily mynx; the restored tab should show
+"What's new in mynx" with v0.1.2's notes, once; the next tab, nothing.
+Help → Release notes lists v0.1.2, v0.1.1 and v0.1.0.
 
 ### 2. Smaller things
 
@@ -154,6 +153,17 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-12 (105): v0.1.2 released
+
+The maintainer asked the agent to tag it once `main` built green
+(`d32da81`). The release workflow ran its new notes step for the first
+time and worked: the APK and the release carry the same generated
+notes. But the release had no title: `gh release create` with
+`--notes-file` sets none (`--generate-notes` used the tag). Set it by
+hand (`gh release edit v0.1.2 --title v0.1.2`); `release.yml` now
+passes `--title`. The app only reads the tag and asset, so updates
+were never affected.
 
 ### 2026-10-12 (104): Release notes and What's new (branch `release-notes`)
 
