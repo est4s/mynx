@@ -499,8 +499,8 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 }
 
 act_svc() { # svc <open|start|stop|restart>: on $SERVICE; its answer stays on screen
-  run mynx service "$1" "$SERVICE" || pause
-  [[ $1 == open ]] || pause
+  # (Open's only when it failed: the service's tab is showing.)
+  run mynx service "$1" "$SERVICE" && [[ $1 == open ]] || pause
 }
 act_svclog() { # the transcript in the pager, at its end
   local log

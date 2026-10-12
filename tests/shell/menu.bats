@@ -475,6 +475,18 @@ no_services_mynx() {
     [[ $output == *"RUN: keybar pager,shell less +G"* ]]
 }
 
+@test "a service action's answer stays on screen, waiting for one key" {
+    source "$MENU"
+    pause() { echo PAUSED; }
+    SERVICE=web
+    run() { return 0; }
+    [ "$(act_svc stop | grep -c PAUSED)" -eq 1 ]
+    [ "$(act_svc open | grep -c PAUSED)" -eq 0 ]
+    run() { return 2; }
+    [ "$(act_svc stop | grep -c PAUSED)" -eq 1 ]
+    [ "$(act_svc open | grep -c PAUSED)" -eq 1 ]
+}
+
 @test "a log that can't be read says why" {
     services_mynx
     source "$MENU"
