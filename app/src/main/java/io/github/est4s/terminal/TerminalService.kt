@@ -66,6 +66,7 @@ import io.github.est4s.terminal.core.restore
 import io.github.est4s.terminal.core.serialize
 import io.github.est4s.terminal.core.snapshot
 import io.github.est4s.terminal.core.killProot
+import io.github.est4s.terminal.core.prootTracees
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.prootLaunch
 import io.github.est4s.terminal.core.writePowerSupply
@@ -342,9 +343,44 @@ class TerminalService : Service() {
                 when {
                     path?.endsWith(".req") == true -> mainHandler.post { processRequests() }
                     path?.endsWith(".cancel") == true -> mainHandler.post { sweepRequests() }
+                    path?.startsWith("spike-") == true && !path.endsWith(".out") -> mainHandler.post { spike(path) }
                 }
             }
         }.also { it.startWatching() }
+    }
+
+    // SPIKE (throwaway): a session that is never attached to the view.
+    // spike-start (a command), spike-status, spike-term, spike-quit;
+    // answers go to spike-*.out in the request folder.
+    private var spikeSession: TerminalSession? = null
+
+    private fun spike(name: String) {
+        val file = File(requestDir, name)
+        val out = File(requestDir, "$name.out")
+        val text = runCatching { file.readText().trim() }.getOrDefault("")
+        file.delete()
+        val result = runCatching {
+            when (name) {
+                "spike-start" -> {
+                    val session = startShell(command = listOf("/bin/bash", "--login", "-c", text))
+                    session.updateSize(80, 24, 10, 20)
+                    spikeSession = session
+                    "started pid=${session.pid} running=${session.isRunning}"
+                }
+                "spike-status" -> spikeSession?.let { s ->
+                    val transcript = s.emulator?.screen?.transcriptText ?: "(no emulator)"
+                    "pid=${s.pid} running=${s.isRunning} exit=${s.exitStatus} tracees=${if (s.pid > 0) prootTracees(s.pid) else emptyList<Int>()}\n--- transcript ---\n$transcript"
+                } ?: "no session"
+                "spike-term" -> spikeSession?.let { s ->
+                    val tracees = prootTracees(s.pid)
+                    tracees.forEach { runCatching { Os.kill(it, OsConstants.SIGTERM) } }
+                    "sent TERM to $tracees"
+                } ?: "no session"
+                "spike-quit" -> spikeSession?.let { s -> stop(s); "stopProot sent" } ?: "no session"
+                else -> "unknown"
+            }
+        }.getOrElse { it.stackTraceToString() }
+        out.writeText(result + "\n")
     }
 
     /** Answers waiting `mynx` requests, then applies what they changed. */
