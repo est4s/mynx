@@ -121,6 +121,10 @@ class KeyBarView(
         val names = keyBarNames(runCatching { reportFile?.readText() }.getOrNull())
         val loaded = loadKeyBar(names, userDir)
         if (loaded == bar) return null
+        // A key held across the change belongs to the old bar: its release
+        // may now pass to Android and never stop the repeat.
+        stopRepeat()
+        volumeHeld = null
         bar = loaded
         ctrlLatched = false
         page = 0
