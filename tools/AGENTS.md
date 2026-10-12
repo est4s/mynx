@@ -302,17 +302,29 @@ services that were running come back after Android closes the app.
 `mynx service` lists them: `running`, `stopping`, `stopped` or
 `failed` (it gave up), with the last exit code, uptime and restarts.
 `mynx service log NAME -n 50` prints the end of its terminal.
-`mynx service open NAME` shows it as a tab, marked as a service, with
-the `service` key bar: type into it, Ctrl+C it; closing the tab only
-hides it, and only Stop ends it.
+`mynx service open NAME` (or the menu's Services → NAME → Open)
+shows it as a tab, titled `● NAME` (`○ NAME: exit 1`, `restarting`,
+`failed` or `stopped` while it isn't running), with the `service`
+key bar (Esc, Ctrl, arrows, Tab, Ctrl+C, Enter, Ctrl+D) unless its
+program asks for another: type into it, Ctrl+C it. Its × only hides
+it; long-pressing the tab offers **Hide**, **Restart** and **Stop**
+(**Start** when it isn't running). When it restarts, the tab shows
+the new run. Service tabs aren't brought back after Android closes
+the app: the services come back, hidden.
 
-**A tab into a service:** `mynx service adopt NAME`, typed in a tab,
-makes that tab, with what runs in it, the service NAME without
-restarting anything (the tab's long-press menu has Run as service
-too). It isn't
-saved (marked `*` in the list) and ends if Android closes the app;
-`mynx service save NAME [--command COMMAND]` writes it to
-`services.conf`.
+**Seeing them from anywhere:** while any service runs, the tab strip
+shows `● N` (how many) right of **+**; tapping it opens a tab with the
+menu's Services list (`menu services` does the same in a shell). The
+app's notification has a **Services** button too.
+
+**A tab into a service:** long-press a tab and pick **Run as
+service** (it offers the name of the program running in it), or type
+`mynx service adopt NAME` in the tab: the tab, with what runs in it,
+becomes the service NAME without restarting anything, and stays open
+as its tab. It isn't saved (marked `*` in the list) and ends if
+Android closes the app; `mynx service save NAME [--command COMMAND]`
+writes it to `services.conf`, with the command running in it then
+(read from its terminal's foreground program) and its folder.
 
 **How a service runs:** the app runs `/opt/mynx/lib/service-run
 NAME`, which runs the command in a process group of its own that has
@@ -704,7 +716,8 @@ shows the generic game bar until `my-tool.conf` exists.
   report` files issues itself.
 - **Tab titles:** a program sets its tab's title with the escape code
   `\e]0;title\a`. The prompt sets it to the current folder name. A name
-  the user gives a tab (long-press it) wins over these.
+  the user gives a tab (long-press it, then Rename) wins over these. A
+  service's tab is always titled with the service's name.
 - **Prompt hook:** the app sets `PROMPT_COMMAND` so it can reopen each
   tab in its folder after Android closes the app. If you change the
   prompt setup in `~/.bashrc`, keep whatever `PROMPT_COMMAND` the shell

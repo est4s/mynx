@@ -399,10 +399,32 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`<+03>-3`). Debian's `/etc/localtime` is left alone (the user's
   Debian), so programs started outside a tab, like the sound server,
   stay on UTC.
-- **Wakelock** (`wakelock` setting, off by default): `TerminalService`
-  holds a `PARTIAL_WAKE_LOCK` ("mynx:service") while it runs and the
-  setting is on, re-read with the sound setting (reloading requests)
-  and when the app comes on screen; released on exit and `onDestroy`.
+- **Wakelock** (`wakelock = auto | on | off`, default `auto`):
+  `TerminalService` holds a `PARTIAL_WAKE_LOCK` ("mynx:service") while
+  a background service runs (`auto`) or whenever it runs (`on`;
+  `Wakelock.held()`), re-read when the services change, with the sound
+  setting (reloading requests) and when the app comes on screen;
+  released on exit and `onDestroy`.
+- **Background services** (`core/.../Services.kt`, `ServicesModel.kt`,
+  `ServiceManager.kt`, `app/.../ServiceSessions.kt`,
+  `tools/lib/service-run`): each service is a `TerminalSession` no tab
+  holds, started with `updateSize(80, 24, …)` (a session only starts
+  on its first size). `ServiceManager` answers the `service-*`
+  requests and drives the app through `ServiceHost`. **Service tabs:**
+  a `Tab` with `service = NAME`; `Tabs.openService` shows one,
+  `followService` swaps in a restarted service's session
+  (`ServiceHost.started`), closing one only hides it (`setOpen`), its
+  exit never closes or restarts it, and they aren't saved in
+  `state/tabs`. Its title comes from core (`serviceTabTitle`,
+  `ServiceManager.tabTitle`) and its bar falls back to `service`
+  (`keyBarNames(fallback =)`). Long-press: Hide/Restart/Stop, or for a
+  shell's tab Rename/Run as service (`ServiceManager.adopt`); the
+  foreground command comes from `/proc` (`foregroundCommand()`: the
+  shell's `tpgid`, that group leader's `cmdline`). The strip's
+  `● N` (`servicesMark()`) and the notification's Services button
+  open `SERVICES_TAB_COMMAND` (`menu services`).
+  `onTerminalCursorStateChange` doesn't say whose terminal changed, so
+  the blinker always asks the shown one.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

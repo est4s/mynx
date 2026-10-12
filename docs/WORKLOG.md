@@ -43,7 +43,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Background services (planned 2026-10-12, not started)
+### 0. Background services (planned 2026-10-12; built on branch `services`, entries 108-109, phone tests pending)
 
 Roadmap "Background services": hidden tabs for servers and daemons.
 Build test-first, with a maintainer test on the phone after each part.
@@ -306,6 +306,29 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-13 (109): Service tabs, the strip's mark, Run as service (parts 2, 5, 6)
+
+Not yet tried on the phone. Core: `Tab.service`, `Tabs.openService`/
+`followService`/`makeService`/`setServiceTitles`/`closeServicesExcept`,
+service tabs left out of `state/tabs`; `serviceTabTitle()` and
+`ServiceManager.tabTitle()` ("● web", "○ web: exit 1", "restarting",
+"failed", "stopped"); `keyBarNames(fallback =)` (the `service` bar);
+`ServiceHost.started()` (an open tab follows a restart) and
+`adopt(name, shell)`; `ServiceManager.start/stop/restart/adopt(name)`
+for the app; `foregroundCommand()` (`/proc`: the shell's `tpgid`, the
+group leader's `cmdline`) and `suggestServiceName()`;
+`servicesMark()`, `SERVICES_TAB_COMMAND` (`menu services`, a new
+entry point of the menu). App: service tabs (× hides), long-press
+menus (Rename / Run as service; Hide / Restart / Stop or Start), `● N`
+right of +, the notification's Services button, service sessions'
+cwd/keybar files removed once unused, the cursor blinker asks the
+shown terminal. Decisions: an adopted tab stays open as the service's
+tab; Hide/Restart/Stop live in the long-press menu (no app-handled key
+bar action); a tab adopted by `mynx service adopt` from inside runs
+`mynx` at that moment, so its command is `bash` until saved, and an
+unsaved service restarts with its current foreground command. Docs:
+tools/AGENTS.md, AGENTS.md architecture, README (wakelock auto).
 
 ### 2026-10-13 (108): Services in the app (parts 1 and 3, branch `services`)
 

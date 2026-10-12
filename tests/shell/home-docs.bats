@@ -108,6 +108,21 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF 'wakelock = auto' "$GUIDE"
 }
 
+@test "the guide gives wakelock's three values, auto by default" {
+    grep -qF '`wakelock`: `auto` (default), `on` or `off`' "$GUIDE"
+    run grep -qiE 'wakelock.*(`off` \(default\)|off by default)' "$GUIDE"
+    [ "$status" -ne 0 ]
+}
+
+@test "the guide explains service tabs: the mark, hiding, the strip and notification, Run as service" {
+    grep -qF '● NAME' "$GUIDE"
+    grep -qF '**Hide**, **Restart** and **Stop**' "$GUIDE"
+    grep -qF '`● N`' "$GUIDE"
+    grep -qF '**Services** button' "$GUIDE"
+    grep -qF 'menu services' "$GUIDE"
+    grep -qF '**Run as' "$GUIDE"
+}
+
 @test "the guide says how a key bar sets the volume keys" {
     grep -qF 'VolumeUp' "$GUIDE"
     grep -qF 'VolumeDown' "$GUIDE"
