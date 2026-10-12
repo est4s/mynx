@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# service-run NAME [COMMAND]: runs a background service in the terminal
+# the app gives it. The command is the `command` of [NAME] in
+# ~/.config/mynx/services.conf (run in its `cwd`, home by default), or
+# COMMAND (an adopted tab's).
+#
+# The command gets a process group of its own that has the terminal, so
+# keys typed and Ctrl+C reach it. Its id goes to NAME.pid in
+# $MYNX_SERVICES_DIR (/tmp/.mynx/services): the app stops the service
+# with TERM to that group, which leaves this wrapper standing. When the
+# command ends, its exit code goes to NAME.exit (128+N for signal N; 2
+# when the service can't start) and the wrapper exits with it: proot
+# reports a death by signal as exit 0, so the app reads the file.
+
+DIR=${MYNX_SERVICES_DIR:-/tmp/.mynx/services}
+CONF=$HOME/.config/mynx/services.conf
+name=$1
+
+if [[ $# -lt 1 || $# -gt 2 || -z $name ]]; then
+    echo "usage: service-run NAME [COMMAND]" >&2
+    exit 2
+fi
+mkdir -p "$DIR"
+rm -f "$DIR/$name.exit" "$DIR/$name.pid"
+
+finish() { # finish CODE: leave the code for the app, then exit with it
+    printf '%s\n' "$1" >"$DIR/$name.exit.tmp" && mv -f "$DIR/$name.exit.tmp" "$DIR/$name.exit"
+    rm -f "$DIR/$name.pid"
+    exit "$1"
+}
+fail() {
+    echo "service-run: $*" >&2
+    finish 2
+}
+
+trim() { # trim TEXT: prints it without leading or trailing blanks
+    local s=$1
+    s=${s#"${s%%[![:space:]]*}"}
+    printf '%s' "${s%"${s##*[![:space:]]}"}"
+}
+
+read_service() { # sets FOUND, COMMAND and CWD from [NAME]'s block
+    local line section= key
+    FOUND= COMMAND= CWD=
+    [[ -r $CONF ]] || return
+    while IFS= read -r line || [[ -n $line ]]; do
+        line=$(trim "$line")
+        [[ -z $line || $line == \#* ]] && continue
+        if [[ $line =~ ^\[(.*)\]$ ]]; then
+            section=$(trim "${BASH_REMATCH[1]}")
+            [[ $section == "$name" ]] && FOUND=1
+            continue
+        fi
+        [[ $section == "$name" && $line == *=* ]] || continue
+        key=$(trim "${line%%=*}")
+        case $key in
+            command) COMMAND=$(trim "${line#*=}") ;;
+            cwd) CWD=$(trim "${line#*=}") ;;
+        esac
+    done <"$CONF"
+}
+
+if [[ $# -eq 2 ]]; then
+    COMMAND=$2 CWD=
+else
+    read_service
+    [[ -n $FOUND ]] || fail "no service named $name in ~/.config/mynx/services.conf"
+    [[ -n $COMMAND ]] || fail "$name has no command in ~/.config/mynx/services.conf"
+fi
+CWD=${CWD:-~}
+[[ $CWD == "~" || $CWD == "~/"* ]] && CWD=$HOME${CWD:1}
+cd "$CWD" 2>/dev/null || fail "no folder $CWD for $name"
+
+# Job control: the command runs as a foreground job, in a group of its
+# own that has the terminal; its first process leads the group, so its
+# pid is the group's id. (`cmd &` then `fg` doesn't hand over the
+# terminal in a shell that isn't interactive.) A handler, not "ignore",
+# which the command would inherit, keeps a Ctrl+C typed before that from
+# ending the wrapper. Ctrl+Z would leave the service stopped with no
+# one to continue it, so the terminal doesn't send it.
+trap ':' INT QUIT
+[[ -t 0 ]] && stty susp undef 2>/dev/null
+set -m
+bash -c 'echo $$ >"$1"; exec bash -c "$2"' service-run "$DIR/$name.pid" "$COMMAND"
+code=$?
+set +m
+if ((code > 128)); then
+    echo "service-run: $name stopped by signal $((code - 128)) (exit code $code)" >&2
+else
+    echo "service-run: $name exited with code $code" >&2
+fi
+finish "$code"

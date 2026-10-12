@@ -3,6 +3,7 @@ import contextlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -44,6 +45,7 @@ Commands:
   rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
+  service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
   notes      notes [all] | new | seen: release notes, and what's new since the last update
@@ -627,6 +629,130 @@ def cmd_audio(args, as_json):
     answer = request("audio-record", path, *options, on_line=started, answer_on_interrupt=True)
     out(as_json, answer, f"Saved {answer['file']} ({size_text(answer['bytes'])}, {answer['seconds']} s)")
     return 0
+
+
+SERVICE_USAGE = """\
+usage: mynx service [list]
+       mynx service start|stop|restart|open|remove NAME
+       mynx service log NAME [-n LINES]
+       mynx service add NAME [--autostart] [--restart no|on-failure|always]
+             [--cwd DIR] [--restart-limit N] [--restart-delay S]
+             [--stop-timeout S] [--] COMMAND...
+       mynx service adopt NAME
+       mynx service save NAME [--command COMMAND]"""
+SERVICES_FILE = "~/.config/mynx/services.conf"
+SERVICE_ADD_OPTIONS = ("--cwd", "--restart", "--restart-limit", "--restart-delay", "--stop-timeout")
+SERVICE_DONE = {"start": "started", "stop": "stopped", "restart": "restarted", "open": None,
+                "remove": f"removed from {SERVICES_FILE}"}
+
+
+def cmd_service(args, as_json):
+    sub, rest = (args[0], list(args[1:])) if args else ("list", [])
+    if sub == "list" and not rest:
+        answer = request("service-list")
+        out(as_json, answer, services_table(answer["services"], time.time()))
+        return 0
+    if sub in SERVICE_DONE and len(rest) == 1:
+        name = rest[0]
+        answer = request(f"service-{sub}", name)
+        done = SERVICE_DONE[sub]
+        out(as_json, answer, f"{name}: {done}" if done else None)
+        return 0
+    if sub == "log" and rest:
+        name, options = rest[0], rest[1:]
+        if options and not (len(options) == 2 and options[0] == "-n" and options[1].isdigit()):
+            raise Usage(SERVICE_USAGE)
+        answer = request("service-log", name, *options[1:])
+        if as_json:
+            out(as_json, answer, None)
+        else:
+            text = answer["log"]
+            sys.stdout.write(text if not text or text.endswith("\n") else text + "\n")
+        return 0
+    if sub == "add" and rest:
+        return service_add(rest, as_json)
+    if sub == "adopt" and len(rest) == 1:
+        shell = os.environ.get("MYNX_SHELL", "")
+        if not shell.isdigit():
+            raise Failure("mynx service adopt only works in one of the app's tabs")
+        answer = request("service-adopt", rest[0], shell)
+        out(as_json, answer, f"This tab is now the service {rest[0]}. It isn't saved:\n"
+                             f"mynx service save {rest[0]} keeps it in {SERVICES_FILE}.")
+        return 0
+    if sub == "save" and len(rest) in (1, 3):
+        extra = []
+        if len(rest) == 3:
+            if rest[1] != "--command":
+                raise Usage(SERVICE_USAGE)
+            extra = [f"command={rest[2]}"]
+        answer = request("service-save", rest[0], *extra)
+        out(as_json, answer, f"Saved {rest[0]} to {SERVICES_FILE}")
+        return 0
+    raise Usage(SERVICE_USAGE)
+
+
+def service_add(rest, as_json):
+    name = rest.pop(0)
+    if name.startswith("-"):
+        raise Usage(SERVICE_USAGE)
+    options, autostart = {}, False
+    while rest and rest[0].startswith("-"):
+        arg = rest.pop(0)
+        if arg == "--":
+            break
+        if arg == "--autostart":
+            autostart = True
+        elif arg in SERVICE_ADD_OPTIONS and rest:
+            options[arg[2:]] = rest.pop(0)
+        else:
+            raise Usage(SERVICE_USAGE)
+    if not rest:
+        raise Usage(SERVICE_USAGE)
+    # One argument is shell text as it is ("cd site && make serve");
+    # several are words, quoted where they need it.
+    command = rest[0] if len(rest) == 1 else shlex.join(rest)
+    cwd = options.pop("cwd", None)
+    fields = [f"command={command}"]
+    if cwd is not None:
+        fields.append(f"cwd={cwd if cwd.startswith('~') else os.path.abspath(cwd)}")
+    if autostart:
+        fields.append("autostart=yes")
+    fields += [f"{key}={value}" for key, value in options.items()]
+    answer = request("service-add", name, *fields)
+    out(as_json, answer, f"Added {name} to {SERVICES_FILE}.\nStart it: mynx service start {name}")
+    return 0
+
+
+def services_table(services, now):
+    """NAME STATE UP RESTARTS, in 56 columns; unsaved ones marked *."""
+    if not services:
+        return ("No services yet. Add one, for example:\n"
+                "  mynx service add web -- python3 -m http.server 8080")
+    rows = []
+    for s in services:
+        state = s["state"]
+        if state in ("stopped", "failed") and s.get("exit_code") is not None:
+            state += f" ({s['exit_code']})"
+        up = "-"
+        if state in ("running", "stopping") and s.get("started"):
+            up = uptime_text(now - s["started"] / 1000)
+        rows.append((s["name"] + ("" if s.get("saved", True) else "*"), state, up, str(s.get("restarts", 0))))
+    lines = [f"{'NAME':<21} {'STATE':<14} {'UP':>8} {'RESTARTS':>8}"]
+    lines += [f"{n:<21} {st:<14} {up:>8} {r:>8}" for n, st, up, r in rows]
+    if any(not s.get("saved", True) for s in services):
+        lines.append("* unsaved: mynx service save NAME keeps it")
+    return "\n".join(lines)
+
+
+def uptime_text(seconds):
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h {seconds % 3600 // 60:02d}m"
+    return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
 
 
 SOUND_USAGE = "usage: mynx sound [status] | start | install [--yes]"
@@ -1692,7 +1818,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
-    "audio": cmd_audio, "sound": cmd_sound,
+    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 

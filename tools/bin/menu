@@ -84,7 +84,7 @@ theme_name() { # the theme the colours file was set from (see mynx theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, apps, games, settings, app-settings, agents, system, help, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -111,6 +111,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       settings) action=menu:settings ;;
       app-settings) action=settings ;;
       agents) action=menu:agents ;;
+      services) action=menu:services ;;
       system) action=menu:system ;;
       help) action=menu:help ;;
       welcome) action=welcome ;;
@@ -168,7 +169,7 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [settings]=Settings
+declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [services]=Services [settings]=Settings
   [system]=System [help]=Help)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
@@ -223,8 +224,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ((${#ITEMS[@]})) && break
       done
       if ! ((${#ITEMS[@]})); then
-        ITEMS=(Shell "AI agents" Apps Games Files Settings Exit)
-        ACTS=(exit menu:agents menu:apps menu:games files menu:settings quit_session)
+        ITEMS=(Shell "AI agents" Services Apps Games Files Settings Exit)
+        ACTS=(exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session)
       fi
       github_ready || offer_github
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
@@ -259,6 +260,28 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ITEMS+=("$title") ACTS+=("agent:$name")
       done <<<"$list"
       ((${#ITEMS[@]})) || { ITEMS=("(mynx isn't working)"); ACTS=(none); } ;;
+    services)
+      local list name state label
+      if list=$(mynx service list --json 2>/dev/null | service_rows); then
+        while IFS=$'\t' read -r name state; do
+          [[ -n $name ]] || continue
+          printf -v label '%-11s %s' "${name:0:11}" "$state"
+          ITEMS+=("$label") ACTS+=("service:${name%\*}")
+        done <<<"$list"
+        ((${#ITEMS[@]})) || { ITEMS=("(no services yet)"); ACTS=(svchelp); }
+      else
+        ITEMS=("(mynx isn't working)"); ACTS=(none)
+      fi ;;
+    service)   # one service: $SERVICE
+      local state
+      state=$(mynx service list --json 2>/dev/null | service_rows | awk -F'\t' -v n="$SERVICE" '$1 == n || $1 == n "*" { print $2 }')
+      ITEMS=(Open) ACTS=(svc:open)
+      if [[ $state == running || $state == stopping ]]; then
+        ITEMS+=(Stop) ACTS+=(svc:stop)
+      else
+        ITEMS+=(Start) ACTS+=(svc:start)
+      fi
+      ITEMS+=(Restart Log) ACTS+=(svc:restart svclog) ;;
     settings)
       ITEMS=("App settings" System Help)
       ACTS=(settings menu:system menu:help) ;;
@@ -270,6 +293,20 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       ITEMS=("Getting started" "Release notes" "Report a bug" About)
       ACTS=(welcome notes report about) ;;
   esac
+}
+
+service_rows() { # mynx service list --json on stdin → "name<TAB>state" lines (unsaved: name*)
+  python3 -c '
+import json, sys
+try:
+    answer = json.load(sys.stdin)
+except ValueError:
+    sys.exit(1)
+if not answer.get("ok"):
+    sys.exit(1)
+for s in answer["services"]:
+    print(s["name"] + ("" if s.get("saved", True) else "*"), s["state"], sep="\t")
+'
 }
 
 # --- screens ---------------------------------------------------------------
@@ -459,6 +496,29 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
   run mynx agent start "$1" || pause
 }
 
+act_svc() { # svc <open|start|stop|restart>: on $SERVICE; its answer stays on screen
+  run mynx service "$1" "$SERVICE" || pause
+  [[ $1 == open ]] || pause
+}
+act_svclog() { # the transcript in the pager, at its end
+  local log
+  if log=$(mynx service log "$SERVICE" -n 1000 2>&1); then
+    run keybar pager,shell less +G <<<"$log"
+  else
+    message "$SERVICE" "${log#mynx: }"
+  fi
+}
+act_svchelp() {
+  page "Services"
+  center "$C_ITEM" "Servers and daemons that run in the"
+  center "$C_ITEM" "background, in hidden terminals."
+  echo
+  center "$C_DIM" "Add one in the shell:"
+  center "$C_SUB" "mynx service add web -- python3 -m http.server 8080"
+  center "$C_DIM" "then: mynx service start web"
+  pause
+}
+
 act_about() { run mynx about || pause; }  # in less; a failure stays on screen
 act_notes() { run mynx notes || pause; }  # the same
 act_report() { run mynx report; pause; }  # it asks; its answer stays on screen
@@ -558,6 +618,8 @@ show() { # show <menu> <breadcrumb>
       exit) return 1 ;;
       quit_session) return 2 ;;
       menu:*) show "${act#menu:}" "$crumb" || return ;;
+      service:*) SERVICE=${act#service:} TITLE[service]=${act#service:}
+        show service "$crumb" || return ;;
       *:*) "act_${act%%:*}" "${act#*:}" ;;
       *) "act_$act" ;;
     esac
