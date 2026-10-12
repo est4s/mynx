@@ -53,6 +53,17 @@ class ConfigCheckTest {
     }
 
     @Test
+    fun `reports problems in a key bar's volume key lines`() {
+        write("keybars/shell.conf", "VolumeUp = Up Repeat\nVolumeUp = k\n")
+
+        assertEquals(
+            listOf(ConfigProblems("~/.config/mynx/keybars/shell.conf",
+                listOf("line 2: VolumeUp is already set on line 1"))),
+            checkConfig(home),
+        )
+    }
+
+    @Test
     fun `a key bar file whose name can't be a bar is a problem`() {
         write("keybars/my bar.conf", "Quit = q\n")
 

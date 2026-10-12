@@ -27,6 +27,8 @@ are in git history: the full log up to entry 92 is
   stand-in): confirmed and merged (entries 99-100).
 - **Vibration patterns** (`mynx vibrate effect/wave/chain/list/stop`):
   confirmed on the phone (entry 102, PR #24).
+- **Volume keys** (a key bar's `VolumeUp`/`VolumeDown` lines):
+  confirmed on the phone (entry 103, PR #25).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -35,12 +37,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 1. Volume keys (roadmap, "more of the phone")
-
-As input for programs here while the app is on screen. How they reach
-a program is the maintainer's decision, still open: ask first.
-
-### 2. What's new and release notes (planned, not built)
+### 1. What's new and release notes (planned, not built)
 
 Maintainer's decision (2026-10-08): after every update, a What's new
 page shows the notes of the versions since the one before (the tools'
@@ -51,7 +48,7 @@ tools (`/opt/mynx/release-notes`), so both work offline and match
 GitHub. Generated notes are commit subjects; maybe the maintainer
 edits them in the release before tagging (decide then).
 
-### 3. Guided GitHub setup: try it on the phone
+### 2. Guided GitHub setup: try it on the phone
 
 Built (entries 94-95, branch `github-setup`). In mynx dev, the
 main menu's "Set up GitHub" (System → GitHub setup once done):
@@ -71,7 +68,7 @@ main menu's "Set up GitHub" (System → GitHub setup once done):
 - Things to watch: the key presses reach `gh` (Enter, Ctrl+C), the
   screen isn't garbled, nothing odd after `gh` ends.
 
-### 4. Smaller things
+### 3. Smaller things
 
 - **Bug reports, not tried yet:** the browser path without gh (`gh
   auth logout`, then `y` opens GitHub's filled-in new-issue page, `n`
@@ -178,6 +175,39 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-11 (103): Volume keys (branch `volume-keys`)
+
+The maintainer's approved design, built test-first:
+- A key bar's `VolumeUp`/`VolumeDown` lines (label in any case) say
+  what the phone's volume keys send while that bar shows; they aren't
+  buttons and take no room. Same syntax as a button's keys; they
+  repeat only with `Repeat` (unlike arrow buttons).
+  `core/.../KeyBar.kt`: `ParsedKeyBar`/`LoadedKeyBar` gain
+  `volumeUp`/`volumeDown`; a second line for the same key is a
+  problem ("VolumeUp is already set on line N"), the first good one
+  counts; bad keys are problems as for buttons, so `mynx check`
+  reports them. `volumeKeyAction()` decides: Pass (bar doesn't set
+  it, the volume changes), Press, Swallow (Android's repeats of a held
+  key), Release.
+- app: `MainActivity.dispatchKeyEvent()` gives volume keys to
+  `KeyBarView.onVolumeKey()` before any view, so it works whatever has
+  focus; it sends with the buttons' `press()` (sticky Ctrl included)
+  and repeats with their timer (400 ms, then every 50 ms). The repeat
+  also stops when the window loses focus (a key released outside the
+  app).
+- No built-in bar sets them; no long press, no setting (decided).
+- Docs: tools/AGENTS.md "Key bars", README, AGENTS.md architecture;
+  ROADMAP: Volume keys left "Next".
+- Added after review: `KeyBarView.refresh()` stops a held key's
+  repeat when the bar changes (a program switching bars mid-hold
+  sent the release to Android, and the repeat ran on).
+- **Confirmed on the phone** (2026-10-12, mynx dev, build of
+  `c7f5a34`): the shell bar with `VolumeUp = Up Repeat` and
+  `VolumeDown = Down`: short presses move history, only VolumeUp
+  repeats when held; `files` still changes the volume and the shell
+  gets them back after; keyboard up and down; `mynx check` reports a
+  duplicate line.
 
 ### 2026-10-11 (102): Vibration patterns (branch `vibration-patterns`)
 

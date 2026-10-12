@@ -520,6 +520,20 @@ Ctrl   = Ctrl
   PgUp/PgDn, Backspace and Delete repeat anyway. Repeating buttons send
   as soon as they're touched; others on release.
 
+**The phone's volume keys** can send keys too, while the app is on
+screen. Two labels are reserved: a `VolumeUp` or `VolumeDown` line
+(any case) isn't a button and takes no room on the bar; it says what
+that volume key sends while the bar shows, written like a button's
+keys. A press sends them once; holding repeats only with `Repeat`
+(arrows don't repeat on their own here). A key the bar showing doesn't
+set changes the volume as usual, so set them per bar; no built-in bar
+does. For example, in `mynx keybar edit shell`:
+
+```
+VolumeUp   = Up Repeat
+VolumeDown = Down Repeat
+```
+
 **Giving a program or game its own bar** (also what an installer or an
 agent setting up a program should do): `mynx keybar edit NAME`, write
 the buttons, `mynx check`, then run it under that bar:

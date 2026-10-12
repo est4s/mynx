@@ -348,4 +348,85 @@ class KeyBarTest {
             assertTrue(KeyStroke.Key(key) in sent, key)
         }
     }
+
+    @Test
+    fun `VolumeUp and VolumeDown lines are the volume keys, not buttons`() {
+        val parsed = parseKeyBar("Up = Up\nvolumeup = Up Repeat\nVOLUMEDOWN = Ctrl \nDown = Down")
+
+        assertEquals(emptyList(), parsed.problems)
+        assertEquals(listOf("Up", "Down"), parsed.buttons.map { it.label })
+        assertEquals(KeyButton("VolumeUp", listOf(Key("Up")), repeat = true), parsed.volumeUp)
+        assertEquals(KeyButton("VolumeDown", listOf(CtrlLatch)), parsed.volumeDown)
+    }
+
+    @Test
+    fun `volume keys repeat only when the line says Repeat`() {
+        val parsed = parseKeyBar("VolumeUp = Down\nVolumeDown = \"ls\" Enter")
+
+        assertEquals(false, parsed.volumeUp?.repeat)
+        assertEquals(listOf(Text("ls"), Key("Enter")), parsed.volumeDown?.strokes)
+    }
+
+    @Test
+    fun `a bar may set one volume key, or none`() {
+        val parsed = parseKeyBar("VolumeDown = j")
+
+        assertEquals(null, parsed.volumeUp)
+        assertEquals(listOf(Key("j")), parsed.volumeDown?.strokes)
+        assertEquals(null, parseKeyBar("Up = Up").volumeDown)
+    }
+
+    @Test
+    fun `bad and repeated volume key lines are problems, the first good one counts`() {
+        val parsed = parseKeyBar("VolumeUp = Nope\nVolumeUp = k\nVolumeUp = j\nVolumeDown = Repeat")
+
+        assertEquals(
+            listOf("line 1: unknown key 'Nope'", "line 3: VolumeUp is already set on line 2", "line 4: no keys"),
+            parsed.problems,
+        )
+        assertEquals(listOf(Key("k")), parsed.volumeUp?.strokes)
+        assertEquals(null, parsed.volumeDown)
+    }
+
+    @Test
+    fun `a loaded bar keeps its volume keys`() {
+        File(dir, "mine.conf").writeText("Go = g\nVolumeDown = j Repeat\n")
+
+        val loaded = loadKeyBar("mine", dir)
+
+        assertEquals(listOf("Go"), loaded.buttons.map { it.label })
+        assertEquals(KeyButton("VolumeDown", listOf(Key("j")), repeat = true), loaded.volumeDown)
+        assertEquals(null, loaded.volumeUp)
+    }
+
+    @Test
+    fun `no built-in bar takes the volume keys`() {
+        for (name in BUILT_IN_KEY_BARS) {
+            val loaded = loadKeyBar(name, dir)
+            assertEquals(null to null, loaded.volumeUp to loaded.volumeDown, name)
+        }
+    }
+
+    @Test
+    fun `a volume key the bar sets is sent on the first press, then held without sending`() {
+        val bar = parseKeyBar("VolumeUp = Up Repeat\nVolumeDown = j").let {
+            LoadedKeyBar("mine", it.buttons, it.problems, "mine", it.volumeUp, it.volumeDown)
+        }
+
+        assertEquals(VolumeKeyAction.Press(bar.volumeUp!!), volumeKeyAction(bar, up = true, down = true, repeatCount = 0))
+        assertEquals(VolumeKeyAction.Press(bar.volumeDown!!), volumeKeyAction(bar, up = false, down = true, repeatCount = 0))
+        assertEquals(VolumeKeyAction.Swallow, volumeKeyAction(bar, up = true, down = true, repeatCount = 3))
+        assertEquals(VolumeKeyAction.Release, volumeKeyAction(bar, up = false, down = false, repeatCount = 0))
+    }
+
+    @Test
+    fun `a volume key the bar doesn't set changes the volume`() {
+        val bar = parseKeyBar("VolumeDown = j").let {
+            LoadedKeyBar("mine", it.buttons, it.problems, "mine", it.volumeUp, it.volumeDown)
+        }
+
+        assertEquals(VolumeKeyAction.Pass, volumeKeyAction(bar, up = true, down = true, repeatCount = 0))
+        assertEquals(VolumeKeyAction.Pass, volumeKeyAction(bar, up = true, down = false, repeatCount = 0))
+        assertEquals(VolumeKeyAction.Pass, volumeKeyAction(null, up = false, down = true, repeatCount = 0))
+    }
 }

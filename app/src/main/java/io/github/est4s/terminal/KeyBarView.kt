@@ -21,9 +21,11 @@ import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.LoadedKeyBar
 import io.github.est4s.terminal.core.StripColors
+import io.github.est4s.terminal.core.VolumeKeyAction
 import io.github.est4s.terminal.core.keyBarNames
 import io.github.est4s.terminal.core.keyBarPages
 import io.github.est4s.terminal.core.loadKeyBar
+import io.github.est4s.terminal.core.volumeKeyAction
 import java.io.File
 import kotlin.math.abs
 
@@ -75,6 +77,8 @@ class KeyBarView(
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     // The button being held down, sent again every REPEAT_MS after REPEAT_DELAY_MS.
     private var held: KeyButton? = null
+    // The volume key's line, while that key is held and repeating.
+    private var volumeHeld: KeyButton? = null
     private val repeater = object : Runnable {
         override fun run() {
             val button = held ?: return
@@ -117,6 +121,10 @@ class KeyBarView(
         val names = keyBarNames(runCatching { reportFile?.readText() }.getOrNull())
         val loaded = loadKeyBar(names, userDir)
         if (loaded == bar) return null
+        // A key held across the change belongs to the old bar: its release
+        // may now pass to Android and never stop the repeat.
+        stopRepeat()
+        volumeHeld = null
         bar = loaded
         ctrlLatched = false
         page = 0
@@ -130,6 +138,48 @@ class KeyBarView(
         ctrlLatched = false
         render()
         return true
+    }
+
+    /**
+     * A volume key event: the bar's `VolumeUp`/`VolumeDown` line sends its
+     * keys like a button, repeating while held only if the line says so.
+     * False when the bar doesn't set that key, so it changes the volume.
+     */
+    fun onVolumeKey(event: KeyEvent): Boolean {
+        val up = when (event.keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> true
+            KeyEvent.KEYCODE_VOLUME_DOWN -> false
+            else -> return false
+        }
+        val down = when (event.action) {
+            KeyEvent.ACTION_DOWN -> true
+            KeyEvent.ACTION_UP -> false
+            else -> return false
+        }
+        when (val action = volumeKeyAction(bar, up, down, event.repeatCount)) {
+            VolumeKeyAction.Pass -> return false
+            VolumeKeyAction.Swallow -> {}
+            VolumeKeyAction.Release -> {
+                if (held != null && held === volumeHeld) stopRepeat()
+                volumeHeld = null
+            }
+            is VolumeKeyAction.Press -> {
+                press(action.button)
+                if (action.button.repeat) {
+                    held = action.button
+                    volumeHeld = action.button
+                    removeCallbacks(repeater)
+                    postDelayed(repeater, REPEAT_DELAY_MS)
+                }
+            }
+        }
+        return true
+    }
+
+    // Leaving the app while a key is held: its release never comes here.
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) stopRepeat()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

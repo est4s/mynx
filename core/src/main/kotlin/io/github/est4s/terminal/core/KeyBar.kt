@@ -16,10 +16,17 @@ sealed interface KeyStroke {
 /** [repeat]: sends again and again while held. */
 data class KeyButton(val label: String, val strokes: List<KeyStroke>, val repeat: Boolean = false)
 
-data class ParsedKeyBar(val buttons: List<KeyButton>, val problems: List<String>)
+/** [volumeUp], [volumeDown]: what the phone's volume keys send while the bar shows, if anything. */
+data class ParsedKeyBar(val buttons: List<KeyButton>, val problems: List<String>,
+                        val volumeUp: KeyButton? = null, val volumeDown: KeyButton? = null)
 
 /** A bar ready to show; [source] is the file it came from (or the built-in's name). */
-data class LoadedKeyBar(val name: String, val buttons: List<KeyButton>, val problems: List<String>, val source: String)
+data class LoadedKeyBar(val name: String, val buttons: List<KeyButton>, val problems: List<String>, val source: String,
+                        val volumeUp: KeyButton? = null, val volumeDown: KeyButton? = null)
+
+// Labels that aren't buttons: they set what a volume key sends.
+private const val VOLUME_UP = "VolumeUp"
+private const val VOLUME_DOWN = "VolumeDown"
 
 const val SHELL_KEY_BAR = "shell"
 
@@ -41,18 +48,29 @@ private val BAR_NAME = Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,31}")
 fun parseKeyBar(text: String): ParsedKeyBar {
     val buttons = mutableListOf<KeyButton>()
     val problems = mutableListOf<String>()
+    // VolumeUp/VolumeDown → (line, what it sends)
+    val volume = mutableMapOf<String, Pair<Int, KeyButton>>()
     text.lines().forEachIndexed { i, raw ->
         val line = raw.trim()
         if (line.isEmpty() || line.startsWith("#")) return@forEachIndexed
-        val problem = parseButton(line).fold({ buttons += it; null }, { it.message })
+        val volumeKey = listOf(VOLUME_UP, VOLUME_DOWN)
+            .firstOrNull { line.substringBefore('=', "").trim().equals(it, ignoreCase = true) }
+        val problem = parseButton(line, volume = volumeKey != null).fold({ button ->
+            when {
+                volumeKey == null -> { buttons += button; null }
+                volumeKey in volume -> "$volumeKey is already set on line ${volume.getValue(volumeKey).first}"
+                else -> { volume[volumeKey] = (i + 1) to button.copy(label = volumeKey); null }
+            }
+        }, { it.message })
         if (problem != null) problems += "line ${i + 1}: $problem"
     }
-    return ParsedKeyBar(buttons, problems)
+    return ParsedKeyBar(buttons, problems, volume[VOLUME_UP]?.second, volume[VOLUME_DOWN]?.second)
 }
 
 private class BadLine(message: String) : Exception(message)
 
-private fun parseButton(line: String): Result<KeyButton> = runCatching {
+// A volume key repeats only when its line says so: there's no button to see.
+private fun parseButton(line: String, volume: Boolean = false): Result<KeyButton> = runCatching {
     if ('=' !in line) throw BadLine("expected label = keys")
     val label = line.substringBefore('=').trim()
     if (label.isEmpty()) throw BadLine("no label")
@@ -63,7 +81,7 @@ private fun parseButton(line: String): Result<KeyButton> = runCatching {
         .map(::parseStroke)
     if (strokes.isEmpty()) throw BadLine("no keys")
     if (KeyStroke.CtrlLatch in strokes && strokes.size > 1) throw BadLine("Ctrl on its own must be the only key")
-    val repeatsAnyway = (strokes.singleOrNull() as? KeyStroke.Key)?.key in REPEATING_KEYS
+    val repeatsAnyway = !volume && (strokes.singleOrNull() as? KeyStroke.Key)?.key in REPEATING_KEYS
     KeyButton(label, strokes, repeat = repeatAsked || repeatsAnyway)
 }
 
@@ -159,16 +177,38 @@ fun loadKeyBar(names: List<String>, userDir: File): LoadedKeyBar {
         val userFile = File(userDir, "$name.conf")
         if (userFile.isFile) {
             val parsed = parseKeyBar(userFile.readText())
-            return LoadedKeyBar(name, parsed.buttons, parsed.problems, userFile.path)
+            return LoadedKeyBar(name, parsed.buttons, parsed.problems, userFile.path, parsed.volumeUp, parsed.volumeDown)
         }
         val builtIn = builtInKeyBarText(name) ?: continue
         val parsed = parseKeyBar(builtIn)
-        return LoadedKeyBar(name, parsed.buttons, parsed.problems, "built-in $name")
+        return LoadedKeyBar(name, parsed.buttons, parsed.problems, "built-in $name", parsed.volumeUp, parsed.volumeDown)
     }
     return LoadedKeyBar(SHELL_KEY_BAR, emptyList(), emptyList(), "none")
 }
 
 fun loadKeyBar(name: String, userDir: File): LoadedKeyBar = loadKeyBar(listOf(name), userDir)
+
+/** What to do with a volume key event while [bar] shows. */
+sealed interface VolumeKeyAction {
+    /** The bar doesn't set this key: it changes the volume, as usual. */
+    data object Pass : VolumeKeyAction
+    /** Send [button]'s keys now; if it repeats, again while the key is held. */
+    data class Press(val button: KeyButton) : VolumeKeyAction
+    /** Android's own repeats of a held key: the bar repeats by itself, or not at all. */
+    data object Swallow : VolumeKeyAction
+    /** The key went up: stop repeating. */
+    data object Release : VolumeKeyAction
+}
+
+/** [up]: the volume-up key (else volume-down); [down]: pressed (else released). */
+fun volumeKeyAction(bar: LoadedKeyBar?, up: Boolean, down: Boolean, repeatCount: Int): VolumeKeyAction {
+    val button = (if (up) bar?.volumeUp else bar?.volumeDown) ?: return VolumeKeyAction.Pass
+    return when {
+        !down -> VolumeKeyAction.Release
+        repeatCount > 0 -> VolumeKeyAction.Swallow
+        else -> VolumeKeyAction.Press(button)
+    }
+}
 
 /**
  * Lays out [count] buttons as pages of [rows] rows of indexes, at most
