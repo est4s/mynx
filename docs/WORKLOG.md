@@ -275,6 +275,14 @@ be reported by number):
    running as unsaved (`web*`); stop it: it leaves the list and its
    tab closes.
 
+**Autostart switch** (entry 114; not yet on the phone):
+21. `mynx service autostart web on`: `services.conf` gets
+   `autostart = yes` in `[web]`, the rest unchanged, and `web` keeps
+   running. Menu → Services → web shows "Autostart: on"; picking it
+   turns it off (the item says "Autostart: off", the line `no`).
+   Exit from the notification and reopen: `web` starts only while
+   autostart is on.
+
 ### 1. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
@@ -379,6 +387,23 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-13 (114): Autostart on and off
+
+The maintainer asked, before v0.2.0, for a way to switch a saved
+service's autostart without editing the file (branch
+`service-autostart`):
+- core: `setServiceKey()` changes a block's `key = value` line, or adds
+  one after its last setting; the `service-set NAME KEY=VALUE` request
+  uses it (saved services only, an undo step, a running one keeps
+  running).
+- `mynx service autostart NAME on|off`; the menu's Services → NAME has
+  "Autostart: on/off", which switches it (not for unsaved services).
+- The guide says what starts with the app: autostart ones, plus those
+  running when Android closed it; after Exit only autostart ones.
+- AGENTS.md: GitHub deletes merged PR branches (setting on, 2026-10-13).
+Phone test 21 (in "Next 0") is still to do. Then the maintainer
+releases v0.2.0.
 
 ### 2026-10-13 (113): Services in the README and roadmap
 

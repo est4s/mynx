@@ -422,7 +422,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   foreground command comes from `/proc` (`foregroundCommand()`: the
   shell's `tpgid`, that group leader's `cmdline`). The strip's
   `● N` (`servicesMark()`) and the notification's Services button
-  open `SERVICES_TAB_COMMAND` (`menu services`).
+  open `SERVICES_TAB_COMMAND` (`menu services`). `service-set`
+  (`setServiceKey()`) changes one key of a saved service's block, for
+  `mynx service autostart` and the menu's Autostart item.
   `onTerminalCursorStateChange` doesn't say whose terminal changed, so
   the blinker always asks the shown one.
 - **Launcher shortcut** (long-press the icon → Settings):
@@ -680,7 +682,10 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
   `main`. Admins may merge a PR without the check, which Markdown-only
   PRs need (they don't build). So work-log commits go through a PR
   too, usually with the work they describe. Only collaborators can
-  push or merge at all; others fork and open PRs.
+  push or merge at all; others fork and open PRs. GitHub deletes a
+  PR's branch when it's merged (the repo's auto-delete setting, on
+  since 2026-10-13, maintainer's decision); delete the local branch
+  yourself.
 - **Releases:** only the maintainer tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
 - **README:** short, for users: what ships today, install, licence.

@@ -265,7 +265,7 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
     services)
       local list name state label
       if list=$(mynx service list --json 2>/dev/null | service_rows); then
-        while IFS=$'\t' read -r name state; do
+        while IFS=$'\t' read -r name state _; do
           [[ -n $name ]] || continue
           printf -v label '%-11s %s' "${name:0:11}" "$state"
           ITEMS+=("$label") ACTS+=("service:${name%\*}")
@@ -275,15 +275,21 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ITEMS=("(mynx isn't working)"); ACTS=(none)
       fi ;;
     service)   # one service: $SERVICE
-      local state
-      state=$(mynx service list --json 2>/dev/null | service_rows | awk -F'\t' -v n="$SERVICE" '$1 == n || $1 == n "*" { print $2 }')
+      local state auto
+      IFS=$'\t' read -r state auto < <(mynx service list --json 2>/dev/null | service_rows |
+        awk -F'\t' -v n="$SERVICE" '$1 == n || $1 == n "*" { print $2 "\t" $3 }')
       ITEMS=(Open) ACTS=(svc:open)
       if [[ $state == running || $state == stopping ]]; then
         ITEMS+=(Stop) ACTS+=(svc:stop)
       else
         ITEMS+=(Start) ACTS+=(svc:start)
       fi
-      ITEMS+=(Restart Log) ACTS+=(svc:restart svclog) ;;
+      ITEMS+=(Restart Log) ACTS+=(svc:restart svclog)
+      # Only a saved service has an autostart line to change.
+      case $auto in
+        on) ITEMS+=("Autostart: on") ACTS+=(svcauto:off) ;;
+        off) ITEMS+=("Autostart: off") ACTS+=(svcauto:on) ;;
+      esac ;;
     settings)
       ITEMS=("App settings" System Help)
       ACTS=(settings menu:system menu:help) ;;
@@ -297,7 +303,7 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
   esac
 }
 
-service_rows() { # mynx service list --json on stdin → "name<TAB>state" lines (unsaved: name*)
+service_rows() { # mynx service list --json on stdin → "name<TAB>state<TAB>autostart" lines (unsaved: name* and -)
   python3 -c '
 import json, sys
 try:
@@ -307,7 +313,9 @@ except ValueError:
 if not answer.get("ok"):
     sys.exit(1)
 for s in answer["services"]:
-    print(s["name"] + ("" if s.get("saved", True) else "*"), s["state"], sep="\t")
+    saved = s.get("saved", True)
+    auto = ("on" if s.get("autostart") else "off") if saved else "-"
+    print(s["name"] + ("" if saved else "*"), s["state"], auto, sep="\t")
 '
 }
 
@@ -501,6 +509,9 @@ act_agent() { # starts the agent, or offers to install it; keeps what went wrong
 act_svc() { # svc <open|start|stop|restart>: on $SERVICE; its answer stays on screen
   # (Open's only when it failed: the service's tab is showing.)
   run mynx service "$1" "$SERVICE" && [[ $1 == open ]] || pause
+}
+act_svcauto() { # svcauto <on|off>: $SERVICE's autostart; the item shows the change
+  run mynx service autostart "$SERVICE" "$1" || pause
 }
 act_svclog() { # the transcript in the pager, at its end
   local log
