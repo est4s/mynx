@@ -380,6 +380,12 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-13 (113): Services in the README and roadmap
+
+PR #30 merged (eeb9b21). The README lists background services among
+what ships; the roadmap moves them from Planned to Done. Next: the
+maintainer plans v0.2.0 after a day or two of services in mynx dev.
+
 ### 2026-10-13 (112): The review's two leftovers, fixed
 
 Maintainer's request, by two agents in parallel, merged on
