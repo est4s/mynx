@@ -120,6 +120,7 @@ their own.
 | `mynx service log NAME [-n N]` | the last N lines (100) of a service's terminal |
 | `mynx service open NAME` | show a service as a tab (the app must be on screen); closing the tab hides it again |
 | `mynx service remove NAME` | stop a service and remove it from `services.conf` |
+| `mynx service autostart NAME on\|off` | whether a service starts when the app starts (its `autostart` line in `services.conf`); it doesn't start or stop it now |
 | `mynx service adopt NAME` | turn this tab into the unsaved service NAME, as it runs; `mynx service save NAME [--command CMD]` saves it to `services.conf` |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
@@ -295,10 +296,15 @@ restart = on-failure
 `mynx service add web --autostart --cwd ~/site -- python3 -m http.server 8080`
 writes that block (one argument after `--` is kept as shell text,
 several are quoted as needed), `mynx service remove web` stops it and
-takes its block out; the rest of the file and its comments stay. Edit
-the file by hand, then `mynx check`. `mynx service start|stop|restart
-NAME` control one; a service stopped this way isn't restarted, and
-services that were running come back after Android closes the app.
+takes its block out; the rest of the file and its comments stay.
+`mynx service autostart web on|off` (or the menu's Services → web →
+Autostart) changes its `autostart` line. Edit the file by hand, then
+`mynx check`. `mynx service start|stop|restart NAME` control one; a
+service stopped this way isn't restarted. **What starts with the app:**
+the `autostart = yes` services, and after Android closed the app, also
+those that were running then; a service you stopped stays stopped. The
+notification's Exit stops them all, and the next start brings back only
+the `autostart` ones.
 `mynx service` lists them: `running`, `stopping`, `stopped` or
 `failed` (it gave up), with the last exit code, uptime and restarts.
 `mynx service log NAME -n 50` prints the end of its terminal.
