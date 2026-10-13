@@ -397,6 +397,8 @@ class TerminalService : Service() {
                 "preview-colors" -> activity?.previewColors(parseColorScheme(request.args.joinToString("\n"), NEON).scheme)
                 in RELOADING_REQUESTS -> {
                     activity?.reloadConfig(quiet = true)
+                    // A hand edit to services.conf: tabs, mark and notification follow (only if it changed).
+                    runCatching { serviceManager.reload() }
                     applySoundSetting()
                     applyWakelockSetting()
                 }
