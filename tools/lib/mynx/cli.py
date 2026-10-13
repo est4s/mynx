@@ -45,7 +45,7 @@ Commands:
   rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
-  service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | adopt|save NAME: background services
+  service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
   notes      notes [all] | new | seen: release notes, and what's new since the last update
@@ -638,6 +638,7 @@ usage: mynx service [list]
        mynx service add NAME [--autostart] [--restart no|on-failure|always]
              [--cwd DIR] [--restart-limit N] [--restart-delay S]
              [--stop-timeout S] [--] COMMAND...
+       mynx service autostart NAME on|off
        mynx service adopt NAME
        mynx service save NAME [--command COMMAND]"""
 SERVICES_FILE = "~/.config/mynx/services.conf"
@@ -671,6 +672,11 @@ def cmd_service(args, as_json):
         return 0
     if sub == "add" and rest:
         return service_add(rest, as_json)
+    if sub == "autostart" and len(rest) == 2 and rest[1] in ("on", "off"):
+        name, on = rest[0], rest[1] == "on"
+        answer = request("service-set", name, f"autostart={'yes' if on else 'no'}")
+        out(as_json, answer, f"{name}: autostart on (it starts when the app starts)" if on else f"{name}: autostart off")
+        return 0
     if sub == "adopt" and len(rest) == 1:
         shell = os.environ.get("MYNX_SHELL", "")
         if not shell.isdigit():

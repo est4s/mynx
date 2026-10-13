@@ -208,6 +208,27 @@ fun removeService(text: String, name: String): Result<String> = runCatching {
     if (kept.all { it.isBlank() }) "" else kept.joinToString("\n", postfix = "\n")
 }
 
+/**
+ * [text] (`services.conf`) with [key] set to [value] in [name]'s block:
+ * its `key = value` lines changed, or one added after the block's last
+ * setting. Everything else is kept.
+ */
+fun setServiceKey(text: String, name: String, key: String, value: String): Result<String> = runCatching {
+    checkServiceValue(key, value)?.let { error(it) }
+    val lines = text.lines().dropLastWhile { it.isBlank() }.toMutableList()
+    val range = blockLines(lines, name) ?: error("no service named $name in ~/$CONFIG_DIR/$SERVICES_CONF")
+    fun isKey(line: String) = '=' in line && line.substringBefore('=').trim() == key
+    val line = "$key = $value"
+    val found = range.filter { isKey(lines[it]) }
+    if (found.isNotEmpty()) {
+        for (i in found) lines[i] = lines[i].substringBefore(lines[i].trimStart()) + line
+    } else {
+        val last = range.last { lines[it].trim().let { t -> t.isNotEmpty() && !t.startsWith("#") } }
+        lines.add(last + 1, line)
+    }
+    lines.joinToString("\n", postfix = "\n")
+}
+
 // The lines of [name]'s block: its [name] line to the line before the next block's.
 private fun blockLines(lines: List<String>, name: String): IntRange? {
     fun isHeader(line: String) = line.trim().let { it.startsWith("[") && it.endsWith("]") }

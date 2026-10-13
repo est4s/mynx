@@ -191,6 +191,7 @@ class ServiceManager<S>(
             },
             "service-adopt" to now { args -> adopt(args) },
             "service-save" to now(change = { "service save ${it.firstOrNull()?.trim().orEmpty()}" }) { args -> save(args) },
+            "service-set" to now(change = { "service set ${it.firstOrNull()?.trim().orEmpty()}" }) { args -> set(args) },
         ).mapValues { (name, later) ->
             // Anything else thrown would leave the request file in place, to fail
             // again at every poll and hold up the requests after it.
@@ -395,6 +396,21 @@ class ServiceManager<S>(
         val def = values.entries.fold(start) { def, (key, value) -> def.with(key, value) }
         writeFile(addService(file.takeIf { it.isFile }?.readText(), def).getOrElse { throw ServiceRefused(it.message!!) })
         services.save(def)
+        sync()
+        host.changed()
+        return ok("service" to serviceJson(service))
+    }
+
+    private fun set(args: List<String>): String {
+        val service = named(args, "service-set")
+        val name = service.name
+        if (!service.saved) throw ServiceRefused("$name isn't in ~/$CONFIG_DIR/$SERVICES_CONF: mynx service save $name first")
+        val values = keyValues(args.drop(1))
+        if (values.isEmpty()) throw ServiceRefused("service-set needs KEY=VALUE")
+        val text = values.entries.fold(file.readText()) { text, (key, value) ->
+            setServiceKey(text, name, key, value).getOrElse { throw ServiceRefused(it.message!!) }
+        }
+        writeFile(text)
         sync()
         host.changed()
         return ok("service" to serviceJson(service))

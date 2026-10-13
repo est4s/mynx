@@ -1978,12 +1978,22 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(self.app.requests, [["service-save", "web"],
                                              ["service-save", "web", "command=python3 -m http.server 9000"]])
 
+    def test_service_autostart_on_and_off(self):
+        self.start_app({"service-set": {"ok": True}})
+        run = self.mynx("service", "autostart", "web", "on")
+        self.assertEqual((run.returncode, run.stdout), (0, "web: autostart on (it starts when the app starts)\n"))
+        run = self.mynx("service", "autostart", "web", "off")
+        self.assertEqual((run.returncode, run.stdout), (0, "web: autostart off\n"))
+        self.assertEqual(self.app.requests, [["service-set", "web", "autostart=yes"],
+                                             ["service-set", "web", "autostart=no"]])
+
     def test_service_usage(self):
         self.start_app({})
         for args in [("frob",), ("start",), ("start", "a", "b"), ("log", "web", "-n"), ("log", "web", "-n", "x"),
                      ("add", "web"), ("add", "web", "--"), ("add", "--", "true"), ("add", "web", "--restart"),
                      ("add", "web", "--bogus", "--", "true"), ("adopt",), ("save", "web", "--command"),
-                     ("remove", "a", "b"), ("list", "x")]:
+                     ("remove", "a", "b"), ("list", "x"), ("autostart", "web"),
+                     ("autostart", "web", "yes"), ("autostart", "on")]:
             run = self.mynx("service", *args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx service", run.stderr, args)

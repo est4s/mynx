@@ -72,4 +72,54 @@ class ServicesEditTest {
         assertEquals("no service named db in ~/.config/mynx/services.conf",
             removeService("[web]\ncommand = run\n", "db").exceptionOrNull()?.message)
     }
+
+    @Test
+    fun `setting a key changes its line and keeps the rest`() {
+        val text = """
+            # My services
+            [web]
+            # serves the folder
+            command = run
+            autostart = yes
+
+            [db]
+            command = postgres
+            autostart = yes
+        """.trimIndent() + "\n"
+
+        assertEquals(
+            text.replaceFirst("autostart = yes", "autostart = no"),
+            setServiceKey(text, "web", "autostart", "no").getOrThrow(),
+        )
+    }
+
+    @Test
+    fun `setting a key the block doesn't have adds it after the block's last line`() {
+        val text = "[web]\ncommand = run\ncwd = /srv\n\n# the database\n[db]\ncommand = postgres\n"
+
+        val set = setServiceKey(text, "web", "autostart", "yes").getOrThrow()
+
+        assertEquals("[web]\ncommand = run\ncwd = /srv\nautostart = yes\n\n# the database\n[db]\ncommand = postgres\n", set)
+        assertEquals(listOf(true, false), parseServices(set).services.map { it.autostart })
+        assertEquals(
+            "[web]\ncommand = run\n\n[db]\ncommand = postgres\nautostart = yes\n",
+            setServiceKey("[web]\ncommand = run\n\n[db]\ncommand = postgres", "db", "autostart", "yes").getOrThrow(),
+        )
+    }
+
+    @Test
+    fun `setting a key the block has twice changes both`() {
+        val set = setServiceKey("[web]\ncommand = run\nautostart = yes\nautostart=yes\n", "web", "autostart", "no").getOrThrow()
+
+        assertEquals("[web]\ncommand = run\nautostart = no\nautostart = no\n", set)
+    }
+
+    @Test
+    fun `setting refuses a service that isn't there, an unknown key or a bad value`() {
+        val text = "[web]\ncommand = run\n"
+        assertEquals("no service named db in ~/.config/mynx/services.conf",
+            setServiceKey(text, "db", "autostart", "yes").exceptionOrNull()?.message)
+        assertEquals("unknown key 'colour'", setServiceKey(text, "web", "colour", "red").exceptionOrNull()?.message)
+        assertEquals("autostart must be yes or no", setServiceKey(text, "web", "autostart", "on").exceptionOrNull()?.message)
+    }
 }

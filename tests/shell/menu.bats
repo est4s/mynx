@@ -383,8 +383,8 @@ services_mynx() { # a mynx with two services, web running and db stopped
 #!/bin/sh
 case "$*" in
 "service list --json")
-    printf '%s\n' '{"ok": true, "services": [{"name": "web", "state": "running", "saved": true},' \
-        '{"name": "database-server", "state": "stopped", "saved": true, "exit_code": 1},' \
+    printf '%s\n' '{"ok": true, "services": [{"name": "web", "state": "running", "saved": true, "autostart": true},' \
+        '{"name": "database-server", "state": "stopped", "saved": true, "autostart": false, "exit_code": 1},' \
         '{"name": "tab", "state": "running", "saved": false}]}' ;;
 "service log web -n 1000") printf 'Serving HTTP\nGET /\n' ;;
 "service log db -n 1000") echo "mynx: no service named db" >&2; exit 2 ;;
@@ -433,17 +433,33 @@ no_services_mynx() {
     [ "${ITEMS[*]}" = "(mynx isn't working)" ]
 }
 
-@test "a running service offers Open, Stop, Restart and Log" {
+@test "a service offers Open, Stop or Start, Restart, Log and Autostart" {
     services_mynx
     source "$MENU"
     SERVICE=web
     menu_items service
-    [ "${ITEMS[*]}" = "Open Stop Restart Log" ]
-    [ "${ACTS[*]}" = "svc:open svc:stop svc:restart svclog" ]
+    [ "${ITEMS[*]}" = "Open Stop Restart Log Autostart: on" ]
+    [ "${ACTS[*]}" = "svc:open svc:stop svc:restart svclog svcauto:off" ]
     SERVICE=database-server
     menu_items service
-    [ "${ITEMS[*]}" = "Open Start Restart Log" ]
-    [ "${ACTS[*]}" = "svc:open svc:start svc:restart svclog" ]
+    [ "${ITEMS[*]}" = "Open Start Restart Log Autostart: off" ]
+    [ "${ACTS[*]}" = "svc:open svc:start svc:restart svclog svcauto:on" ]
+}
+
+@test "an unsaved service has no Autostart: it isn't in services.conf" {
+    services_mynx
+    source "$MENU"
+    SERVICE=tab
+    menu_items service
+    [ "${ITEMS[*]}" = "Open Stop Restart Log" ]
+}
+
+@test "Autostart switches it" {
+    services_mynx
+    run keys 315
+    [[ $output == *"RUN: mynx service autostart web off"* ]]
+    run keys 325
+    [[ $output == *"RUN: mynx service autostart database-server on"* ]]
 }
 
 @test "picking a service and an action runs mynx service" {
