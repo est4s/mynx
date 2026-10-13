@@ -13,8 +13,8 @@ enum class ServiceState(val word: String) {
 
 /**
  * One background service. [saved] is false for an adopted tab (or one
- * whose block left the file while it ran): it isn't in `services.conf`
- * and is never restarted. [session] stays after it ends, for its log,
+ * whose block left the file while it ran, [orphaned]: it goes when it
+ * ends): it isn't in `services.conf` and is never restarted. [session] stays after it ends, for its log,
  * until it starts again. [restarts] counts the restarts since it was
  * last started by hand; [open] says it's shown as a tab.
  */
@@ -43,6 +43,8 @@ class Service<S> internal constructor(def: ServiceDef, saved: Boolean) {
         internal set
 
     internal var policy = policyFor(def, saved)
+    /** Its block left `services.conf` while it ran: forgotten once it ends. */
+    internal var orphaned = false
     internal var stopAsked = false
     /** Its last run ended because it was asked to stop. */
     var stoppedByHand = false
@@ -75,7 +77,8 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
     /**
      * Takes in `services.conf`'s [defs]: new ones are added stopped, changed
      * ones get their new settings. One whose block went is removed, or, while
-     * it runs, kept as unsaved until it ends.
+     * it runs, kept as unsaved until it ends ([exited]); saved again if the
+     * block comes back first.
      */
     fun sync(defs: List<ServiceDef>) {
         val names = defs.map { it.name }.toSet()
@@ -83,6 +86,7 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
             if (!service.saved || service.name in names) return@removeAll false
             if (service.isRunning) {
                 service.saved = false
+                service.orphaned = true
                 service.policy = policyFor(service.def, saved = false)
                 false
             } else true
@@ -94,6 +98,7 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
             } else if (!service.saved || service.def != def) {
                 service.def = def
                 service.saved = true
+                service.orphaned = false
                 service.policy = policyFor(def, saved = true)
             }
         }
@@ -126,6 +131,7 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
         val service = get(def.name) ?: return
         service.def = def
         service.saved = true
+        service.orphaned = false
         service.policy = policyFor(def, saved = true)
     }
 
@@ -174,11 +180,18 @@ class Services<S>(private val now: () -> Long = System::currentTimeMillis) {
     /**
      * [session] ended with [exitCode] (null: unknown, as a failure).
      * Returns the wait in ms before it should start again, or null.
+     * One whose block left the file goes.
      */
     fun exited(session: S, exitCode: Int?): Long? {
         val service = find(session)?.takeIf { it.isRunning } ?: return null
         service.exitCode = exitCode
         service.pid = null
+        if (service.orphaned) {
+            service.state = ServiceState.STOPPED
+            service.stopAsked = false
+            list.remove(service)
+            return null
+        }
         if (service.stopAsked) {
             service.stopAsked = false
             service.stoppedByHand = true
