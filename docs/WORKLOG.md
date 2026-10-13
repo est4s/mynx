@@ -43,7 +43,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Background services (built on branch `services`, PR #30; all phone tests passed 2026-10-13, entry 111)
+### 0. Background services (built on branch `services`, PR #30; all 20 phone tests passed 2026-10-13, entries 111-112)
 
 Roadmap "Background services": hidden tabs for servers and daemons.
 Build test-first, with a maintainer test on the phone after each part.
@@ -268,7 +268,7 @@ be reported by number):
 19. After several restarts, `ls /tmp/.mynx/` doesn't collect
    `cwd-N`/`keybar-N` files.
 
-**Fixed after the phone tests** (entry 112; not yet on the phone):
+**Fixed after the phone tests** (entry 112; passed on the phone):
 20. Edit `services.conf` by hand to add a service, run `mynx check`:
    the strip mark and the notification follow without a service
    command. Delete a running service's block, `mynx check`: it keeps
@@ -392,7 +392,8 @@ Maintainer's request, by two agents in parallel, merged on
   `host.changed()` once (`ServiceManager.reload()`, 045381c), and the
   app rereads the file on `mynx check` and the other reloading
   requests, `undo` included (682a1d7).
-Phone test 20 checks both; PR #30 marked ready.
+Phone test 20 checks both: passed on the phone (run
+38378514995). PR #30 marked ready and merged.
 
 ### 2026-10-13 (111): Background services confirmed on the phone
 
