@@ -19,8 +19,10 @@ and applies them. See "Changing settings" below.
 - **Fake root.** You're uid 0 inside, but Android sees an ordinary app.
   You can't change the kernel, load modules, mount filesystems, or bind
   ports below 1024. There's no `sudo` (you don't need it).
-- **No systemd or init.** Services don't start on their own; run daemons
-  in a tab and leave it open. Each tab is its own login bash.
+- **No systemd or init.** Nothing starts on its own. Servers and
+  daemons run as the app's background services instead (`mynx
+  service`, see "Background services"), or in a tab left open. Each
+  tab is its own login bash.
 - **Some `/proc` files are static stand-ins**, because Android hides the
   real ones: `/proc/stat`, `/proc/vmstat`, `/proc/uptime`,
   `/proc/loadavg`, `/proc/version`. CPU usage and uptime from tools like
@@ -47,6 +49,7 @@ and applies them. See "Changing settings" below.
 | Your own themes | `~/.config/mynx/themes/` |
 | Key bars above the keyboard | `~/.config/mynx/keybars/` |
 | Launcher menu items | `~/.config/mynx/menu.conf` (else `/opt/mynx/menu.conf`) |
+| Background services | `~/.config/mynx/services.conf` |
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
 | Menu state (last choices) | `~/.local/state/mynx/menu` |
@@ -111,6 +114,13 @@ their own.
 | `mynx audio play FILE` | play a sound file through the phone's speaker, until it ends |
 | `mynx audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
 | `mynx sound` | whether the sound device is on; `mynx sound start` starts it again, `mynx sound install` installs it (see "The phone") |
+| `mynx service [list]` | the background services: state, uptime, restarts (see "Background services") |
+| `mynx service add NAME [OPTIONS] -- COMMAND…` | add a service to `services.conf`; `--autostart`, `--restart no\|on-failure\|always`, `--cwd DIR`, `--restart-limit N`, `--restart-delay S`, `--stop-timeout S` |
+| `mynx service start\|stop\|restart NAME` | start, stop (TERM, then force after `stop-timeout`) or restart a service |
+| `mynx service log NAME [-n N]` | the last N lines (100) of a service's terminal |
+| `mynx service open NAME` | show a service as a tab (the app must be on screen); closing the tab hides it again |
+| `mynx service remove NAME` | stop a service and remove it from `services.conf` |
+| `mynx service adopt NAME` | turn this tab into the unsaved service NAME, as it runs; `mynx service save NAME [--command CMD]` saves it to `services.conf` |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
 | `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify`, and for Codex `--sandbox-off`/`--sandbox-on`, skip the questions) |
@@ -176,10 +186,11 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
-- `wakelock`: `on` or `off` (default): whether the app keeps the
-  phone's CPU awake while it runs, so long jobs (builds, downloads)
-  don't pause when the screen goes off. It uses more battery; the
-  app's notification says "wakelock held" while it's on.
+- `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
+  the phone's CPU awake, so servers and long jobs (builds, downloads)
+  don't pause when the screen goes off. `auto` holds it only while a
+  background service runs; `on` whenever the app runs. It uses more
+  battery; the app's notification says "wakelock held" while it's on.
 - `update-check`: `on` (default) or `off`: whether the app checks
   GitHub about once a day for a new version and tells you (see
   "Updates"). `mynx update` works either way.
@@ -252,6 +263,85 @@ Your own scripts can notify too: `long-job && mynx notify "Done" "long-job finis
 phone's browser, so an agent that opens a browser to sign in just works
 (the app must be on screen). Tapping a link shown in the terminal opens
 it too, even one spread over several rows.
+
+### Background services
+
+Servers and daemons (a web server, `sshd`, a database, a bot) run as
+services: each in a hidden terminal of its own, kept running by the
+app with no tab open, restarted when it fails, and started again
+when the app starts. The menu's **Services** lists them.
+
+They're defined in `~/.config/mynx/services.conf`, one `[name]`
+block each (names: `a-z`, `0-9` and `-`, up to 20 characters):
+
+```
+[web]
+command = python3 -m http.server 8080
+cwd = ~/site
+autostart = yes
+restart = on-failure
+```
+
+| Key | Means |
+|---|---|
+| `command` | what to run, in bash (required); the login PATH and `~/.profile` apply |
+| `cwd` | the folder it runs in (default `~`) |
+| `autostart` | `yes`: start it when the app starts (default `no`; not at phone boot) |
+| `restart` | `on-failure` (default): restart it when it exits with a code other than 0; `always`; `no` |
+| `restart-limit` | quick failures in a row before giving up, with a phone notification (default 5; 0 never gives up) |
+| `restart-delay` | seconds before the first restart (default 1), doubling up to 60 |
+| `stop-timeout` | seconds `stop` waits after TERM before forcing it (default 10) |
+
+`mynx service add web --autostart --cwd ~/site -- python3 -m http.server 8080`
+writes that block (one argument after `--` is kept as shell text,
+several are quoted as needed), `mynx service remove web` stops it and
+takes its block out; the rest of the file and its comments stay. Edit
+the file by hand, then `mynx check`. `mynx service start|stop|restart
+NAME` control one; a service stopped this way isn't restarted, and
+services that were running come back after Android closes the app.
+`mynx service` lists them: `running`, `stopping`, `stopped` or
+`failed` (it gave up), with the last exit code, uptime and restarts.
+`mynx service log NAME -n 50` prints the end of its terminal.
+`mynx service open NAME` (or the menu's Services → NAME → Open)
+shows it as a tab, titled `● NAME` (`○ NAME: exit 1`, `restarting`,
+`failed` or `stopped` while it isn't running), with the `service`
+key bar (Esc, Ctrl, arrows, Tab, Ctrl+C, Enter, Ctrl+D) unless its
+program asks for another: type into it, Ctrl+C it. Its × only hides
+it; long-pressing the tab offers **Hide**, **Restart** and **Stop**
+(**Start** when it isn't running). When it restarts, the tab shows
+the new run. Service tabs aren't brought back after Android closes
+the app: the services come back, hidden.
+
+**Seeing them from anywhere:** while any service runs, the tab strip
+shows `● N` (how many) right of **+**; tapping it opens a tab with the
+menu's Services list (`menu services` does the same in a shell). The
+app's notification has a **Services** button too.
+
+**A tab into a service:** long-press a tab and pick **Run as
+service** (it offers the name of the program running in it), or type
+`mynx service adopt NAME` in the tab: the tab, with what runs in it,
+becomes the service NAME without restarting anything, and stays open
+as its tab. It isn't saved (marked `*` in the list) and ends if
+Android closes the app; `mynx service save NAME [--command COMMAND]`
+writes it to `services.conf`, with the command running in it then
+(read from its terminal's foreground program) and its folder.
+
+**How a service runs:** the app runs `/opt/mynx/lib/service-run
+NAME`, which runs the command in a process group of its own that has
+the terminal, and writes the group's id to
+`/tmp/.mynx/services/NAME.pid`. Stop sends TERM to that group (so
+databases shut down cleanly), then forces it after `stop-timeout`.
+The exit code goes to `/tmp/.mynx/services/NAME.exit`: the command's
+own, or 128+N when signal N ended it (143 for TERM, 130 for Ctrl+C);
+2 when it couldn't start (no such service, no command, no such
+folder). Ctrl+Z is off in a service's terminal. Programs in a service
+see `MYNX_SERVICE=NAME`.
+
+- **Ports:** nothing below 1024 (proot's root is fake): run `sshd -p
+  8022`, a web server on 8080.
+- **Wakelock:** with `wakelock = auto` (the default), the app keeps
+  the CPU awake while any service runs, so servers answer with the
+  screen off.
 
 ### The phone
 
@@ -459,6 +549,7 @@ line, in order; labels up to 20 characters. Actions:
 | `settings` | the Settings menu: App settings, System, Help |
 | `app-settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
+| `services` | the background services with their state; each offers Open, Start or Stop, Restart and Log |
 | `system` | Update all, System info, and GitHub setup (`mynx github`) once GitHub is set up |
 | `help` | Getting started (`mynx welcome`), Release notes (`mynx notes`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
@@ -493,7 +584,7 @@ with `pager`.
 Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, `pager`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
 apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
-`metronome`, and
+`metronome`, `service` for a background service shown as a tab, and
 `agent` for AI agents (`claude`, `codex` and `gemini` typed in the shell,
 or started with `mynx agent start`; an agent's own bar, e.g. `claude`,
 wins when it exists). Typing them by name works through bash functions
@@ -625,7 +716,8 @@ shows the generic game bar until `my-tool.conf` exists.
   report` files issues itself.
 - **Tab titles:** a program sets its tab's title with the escape code
   `\e]0;title\a`. The prompt sets it to the current folder name. A name
-  the user gives a tab (long-press it) wins over these.
+  the user gives a tab (long-press it, then Rename) wins over these. A
+  service's tab is always titled with the service's name.
 - **Prompt hook:** the app sets `PROMPT_COMMAND` so it can reopen each
   tab in its folder after Android closes the app. If you change the
   prompt setup in `~/.bashrc`, keep whatever `PROMPT_COMMAND` the shell

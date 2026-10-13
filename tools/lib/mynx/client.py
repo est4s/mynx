@@ -44,8 +44,12 @@ def request(name, *args, on_line=None, answer_on_interrupt=False):
     try:
         while not os.path.exists(base + ".reply"):
             if not waiting and os.path.exists(base + ".wait"):
+                try:
+                    wait = read(base + ".wait")
+                except FileNotFoundError:
+                    # The app deletes ID.wait once it has answered.
+                    continue
                 waiting = True
-                wait = read(base + ".wait")
                 deadline = None if wait == "stream" else time.monotonic() + float(wait or 0) + timeout
             stream.read()
             if deadline is not None and time.monotonic() > deadline:

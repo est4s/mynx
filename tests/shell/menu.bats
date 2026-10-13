@@ -34,8 +34,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:apps menu:games files menu:settings quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -53,7 +53,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -61,7 +61,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, app-settings, agents, system, help, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -113,27 +113,27 @@ keys() {
 }
 
 @test "Release notes shows mynx notes" {
-    run keys 632
+    run keys 732
     [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 634
+    run keys 734
     [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "Help has Getting started" {
-    run keys 631xxxxxxqqq
+    run keys 731xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 633
+    run keys 733
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 623
+    run keys 723
     [[ $output == *"RUN: mynx github"* ]]
 }
 
@@ -141,7 +141,7 @@ keys() {
     rm "$HOME/.config/gh/hosts.yml"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Games Files Settings Exit" ]
     [ "${ACTS[2]}" = github ]
     menu_items system
     [ "${ITEMS[*]}" = "Update all System info" ]
@@ -162,7 +162,7 @@ keys() {
     mkdir -p "$GH_CONFIG_DIR"
     cp "$HOME/.config/gh/hosts.yml" "$GH_CONFIG_DIR/"
     menu_items main
-    [ "${ITEMS[2]}" = Apps ]
+    [ "${ITEMS[2]}" = Services ]
 }
 
 @test "Set up GitHub comes last in a menu without AI agents" {
@@ -244,9 +244,9 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
     mkdir -p "$HOME/apps"
     app "$BATS_TEST_TMPDIR/apps/tuner" "Guitar tuner"
     app "$HOME/apps/my-tool.py"
-    run keys 31
+    run keys 41
     [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/apps/tuner"* ]]
-    run keys 32
+    run keys 42
     [[ $output == *"RUN: keybar my-tool,shell $HOME/apps/my-tool.py"* ]]
 }
 
@@ -319,23 +319,23 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 7
+    run keys 8
     [ "$status" -eq 10 ]
 }
 
 @test "Files opens the file manager" {
-    run keys 5
+    run keys 6
     [[ $output == *"RUN: files"* ]]
 }
 
 @test "Games starts the chosen game" {
     game "$BATS_TEST_TMPDIR/games/neon-rogue.py"
-    run keys 41
+    run keys 51
     [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
 @test "Settings → App settings opens the settings editors" {
-    run keys 61
+    run keys 71
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -377,6 +377,126 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
     [ "${ACTS[*]}" = none ]
 }
 
+services_mynx() { # a mynx with two services, web running and db stopped
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    cat >"$BATS_TEST_TMPDIR/bin/mynx" <<'EOF'
+#!/bin/sh
+case "$*" in
+"service list --json")
+    printf '%s\n' '{"ok": true, "services": [{"name": "web", "state": "running", "saved": true},' \
+        '{"name": "database-server", "state": "stopped", "saved": true, "exit_code": 1},' \
+        '{"name": "tab", "state": "running", "saved": false}]}' ;;
+"service log web -n 1000") printf 'Serving HTTP\nGET /\n' ;;
+"service log db -n 1000") echo "mynx: no service named db" >&2; exit 2 ;;
+*) echo "mynx $*" ;;
+esac
+EOF
+    chmod +x "$BATS_TEST_TMPDIR/bin/mynx"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "Services lists the services with their state" {
+    services_mynx
+    source "$MENU"
+    menu_items services
+    [ "${ITEMS[0]}" = "web         running" ]
+    [ "${ITEMS[1]}" = "database-se stopped" ]
+    [ "${ITEMS[2]}" = "tab*        running" ]
+    [ "${ACTS[*]}" = "service:web service:database-server service:tab" ]
+}
+
+no_services_mynx() {
+    mkdir -p "$BATS_TEST_TMPDIR/bin"
+    printf '#!/bin/sh\necho %s\n' "'{\"ok\": true, \"services\": []}'" >"$BATS_TEST_TMPDIR/bin/mynx"
+    chmod +x "$BATS_TEST_TMPDIR/bin/mynx"
+    export PATH="$BATS_TEST_TMPDIR/bin:$PATH"
+}
+
+@test "with no services, Services offers a how-to" {
+    no_services_mynx
+    source "$MENU"
+    menu_items services
+    [ "${ITEMS[*]}" = "(no services yet)" ]
+    [ "${ACTS[*]}" = svchelp ]
+}
+
+@test "the how-to says how to add a service" {
+    no_services_mynx
+    run keys '31xqq'
+    [[ $output == *"mynx service add web -- python3 -m http.server 8080"* ]]
+}
+
+@test "Services without a working mynx says so" {
+    export PATH="$BATS_TEST_TMPDIR/empty:/usr/bin:/bin"
+    source "$MENU"
+    menu_items services
+    [ "${ITEMS[*]}" = "(mynx isn't working)" ]
+}
+
+@test "a running service offers Open, Stop, Restart and Log" {
+    services_mynx
+    source "$MENU"
+    SERVICE=web
+    menu_items service
+    [ "${ITEMS[*]}" = "Open Stop Restart Log" ]
+    [ "${ACTS[*]}" = "svc:open svc:stop svc:restart svclog" ]
+    SERVICE=database-server
+    menu_items service
+    [ "${ITEMS[*]}" = "Open Start Restart Log" ]
+    [ "${ACTS[*]}" = "svc:open svc:start svc:restart svclog" ]
+}
+
+@test "picking a service and an action runs mynx service" {
+    services_mynx
+    run keys 312
+    [[ $output == *"RUN: mynx service stop web"* ]]
+    run keys 321
+    [[ $output == *"RUN: mynx service open database-server"* ]]
+    run keys 322
+    [[ $output == *"RUN: mynx service start database-server"* ]]
+}
+
+@test "menu services starts at the Services list" {
+    services_mynx
+    run bash -c "printf 12 | MENU_DRYRUN=1 bash '$MENU' services 2>&1"
+    [[ $output == *"RUN: mynx service stop web"* ]]
+}
+
+@test "leaving the Services list started there leaves the menu" {
+    services_mynx
+    run bash -c "printf 'q' | MENU_DRYRUN=1 timeout 5 bash '$MENU' services 2>&1"
+    [ "$status" -eq 0 ]
+    [[ $output != *"Shell"* ]]
+}
+
+@test "a service's log opens in the pager, at its end" {
+    services_mynx
+    run keys 314
+    [[ $output == *"RUN: keybar pager,shell less +G"* ]]
+}
+
+@test "a service action's answer stays on screen, waiting for one key" {
+    source "$MENU"
+    pause() { echo PAUSED; }
+    SERVICE=web
+    run() { return 0; }
+    [ "$(act_svc stop | grep -c PAUSED)" -eq 1 ]
+    [ "$(act_svc open | grep -c PAUSED)" -eq 0 ]
+    run() { return 2; }
+    [ "$(act_svc stop | grep -c PAUSED)" -eq 1 ]
+    [ "$(act_svc open | grep -c PAUSED)" -eq 1 ]
+}
+
+@test "a log that can't be read says why" {
+    services_mynx
+    source "$MENU"
+    pause() { echo PAUSED; }
+    SERVICE=db
+    output=$(act_svclog)
+    [[ $output == *"no service named db"* ]]
+    [[ $output == *PAUSED* ]]
+}
+
 @test "a run item runs its command in bash" {
     mkdir -p "$HOME/.config/mynx"
     printf 'Top = run htop -d 10\n' >"$HOME/.config/mynx/menu.conf"
@@ -399,7 +519,7 @@ fake_mynx() { # a mynx that lists Claude Code as installed, Codex not
 }
 
 @test "Update all runs apt" {
-    run keys 621
+    run keys 721
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 

@@ -52,6 +52,10 @@ import io.github.est4s.terminal.core.swipeTarget
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.SETTINGS_TAB_COMMAND
+import io.github.est4s.terminal.core.SERVICES_TAB_COMMAND
+import io.github.est4s.terminal.core.SERVICE_KEY_BAR
+import io.github.est4s.terminal.core.SHELL_KEY_BAR
+import io.github.est4s.terminal.core.suggestServiceName
 import io.github.est4s.terminal.core.UPDATE_TAB_COMMAND
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
@@ -200,6 +204,7 @@ class MainActivity : Activity() {
     private fun commandOf(intent: Intent?): List<String>? = when (intent?.action) {
         ACTION_SETTINGS -> SETTINGS_TAB_COMMAND
         ACTION_UPDATE -> UPDATE_TAB_COMMAND
+        ACTION_SERVICES -> SERVICES_TAB_COMMAND
         else -> null
     }
 
@@ -399,7 +404,22 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(8), dp(14), dp(8))
             setOnClickListener { onTabAction(TabAction.New) }
         })
+        // While services run: how many; tapping opens the menu's Services list.
+        service?.stripServicesMark?.let { mark ->
+            stripRow.addView(stripText(mark, strip.mark).apply {
+                setPadding(dp(4), dp(8), dp(14), dp(8))
+                setOnClickListener {
+                    service?.newSession(SERVICES_TAB_COMMAND)
+                    terminalView.requestFocus()
+                }
+            })
+        }
         keepSelectedTabVisible(tabs.selectedIndex)
+    }
+
+    /** The services changed: the strip's mark follows. */
+    fun onServicesChanged() {
+        if (::terminalView.isInitialized) renderStrip()
     }
 
     private fun tabView(tab: Tab<TerminalSession>, selected: Boolean) = LinearLayout(this).apply {
@@ -425,9 +445,70 @@ class MainActivity : Activity() {
             terminalView.requestFocus()
         }
         setOnLongClickListener {
-            showRename(tab.session)
+            showTabMenu(tab)
             true
         }
+    }
+
+    // A long press: a shell's tab can be renamed or run as a service; a
+    // service's tab hidden, restarted, stopped or started.
+    private fun showTabMenu(tab: Tab<TerminalSession>) {
+        val service = service ?: return
+        val name = tab.service
+        val actions: List<Pair<String, () -> Unit>> = if (name == null) {
+            listOf("Rename" to { showRename(tab.session) }, "Run as service" to { showRunAsService(tab.session) })
+        } else {
+            val running = service.serviceRunning(name)
+            listOf(
+                "Hide" to { service.closeTab(tab.session) },
+                "Restart" to { toastError(service.restartService(name)) },
+                if (running) ("Stop" to { toastError(service.stopService(name)) })
+                else ("Start" to { toastError(service.startService(name)) }),
+            )
+        }
+        AlertDialog.Builder(this)
+            .setTitle(tab.title)
+            .setItems(actions.map { it.first }.toTypedArray()) { _, which -> actions[which].second() }
+            .setOnDismissListener { terminalView.requestFocus() }
+            .show()
+    }
+
+    private fun toastError(error: String?) {
+        error?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+    }
+
+    // Asks the new service's name, offering the foreground program's.
+    private fun showRunAsService(session: TerminalSession) {
+        val service = service ?: return
+        val input = EditText(this).apply {
+            setText(suggestServiceName(service.foregroundCommandOf(session)))
+            hint = "web"
+            setSingleLine(true)
+            selectAll()
+            imeOptions = EditorInfo.IME_ACTION_DONE
+        }
+        val run = { toastError(service.runAsService(session, input.text.toString().trim())) }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Run as service")
+            .setMessage("The tab keeps running in the background when it's hidden or the app is closed. " +
+                "Name (a-z, 0-9 and -):")
+            .setView(FrameLayout(this).apply {
+                setPadding(dp(20), dp(8), dp(20), 0)
+                addView(input)
+            })
+            .setPositiveButton("Run as service") { _, _ -> run() }
+            .setNegativeButton("Cancel", null)
+            .create()
+        input.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
+            run()
+            dialog.dismiss()
+            true
+        }
+        dialog.setOnDismissListener { terminalView.requestFocus() }
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dialog.show()
+        input.requestFocus()
     }
 
     private fun showRename(session: TerminalSession) {
@@ -562,7 +643,7 @@ class MainActivity : Activity() {
         when (action) {
             TabAction.New -> service.newSession()
             TabAction.Close -> service.tabs.selected?.let { service.closeTab(it.session) }
-            TabAction.Rename -> service.tabs.selected?.let { showRename(it.session) }
+            TabAction.Rename -> service.tabs.selected?.let { if (it.service == null) showRename(it.session) else showTabMenu(it) }
             is TabAction.Navigate -> action.applyTo(service.tabs)
         }
         terminalView.requestFocus()
@@ -709,8 +790,9 @@ class MainActivity : Activity() {
 
     /** Shows the bar the selected tab's program asked for; problems in its file show once. */
     private fun refreshKeyBar(force: Boolean = false, quiet: Boolean = false) {
-        val session = service?.tabs?.selected?.session ?: return
-        val loaded = keyBar.refresh(service?.keyBarFileOf(session), force) ?: return
+        val tab = service?.tabs?.selected ?: return
+        val fallback = if (tab.service != null) SERVICE_KEY_BAR else SHELL_KEY_BAR
+        val loaded = keyBar.refresh(service?.keyBarFileOf(tab.session), force, fallback) ?: return
         if (!quiet && loaded.problems.isNotEmpty() && loaded.problems != shownKeyBarProblems) {
             AlertDialog.Builder(this)
                 .setTitle("Problems in a key bar file")

@@ -31,8 +31,8 @@ data class Settings(
     val shareFolder: String = "~/Shared",
     /** Whether a quick sideways swipe on the terminal switches tabs. */
     val tabSwipe: Boolean = true,
-    /** Whether the service keeps the CPU awake (a partial wakelock) while it runs. */
-    val wakelock: Boolean = false,
+    /** When the app keeps the CPU awake (a partial wakelock). */
+    val wakelock: Wakelock = Wakelock.AUTO,
     /** Whether the app checks GitHub about once a day for a new version (release builds). */
     val updateCheck: Boolean = true,
 ) {
@@ -53,9 +53,19 @@ data class Settings(
         "sound-device" to if (soundDevice) "on" else "off",
         "share-folder" to shareFolder,
         "tab-swipe" to if (tabSwipe) "on" else "off",
-        "wakelock" to if (wakelock) "on" else "off",
+        "wakelock" to wakelock.word,
         "update-check" to if (updateCheck) "on" else "off",
     )
+}
+
+/** The `wakelock` setting: when the app keeps the phone's CPU awake. */
+enum class Wakelock(val word: String) {
+    /** While a background service runs. */
+    AUTO("auto"),
+    ON("on"),
+    OFF("off");
+
+    fun held(servicesRunning: Boolean): Boolean = this == ON || (this == AUTO && servicesRunning)
 }
 
 data class ParsedSettings(val settings: Settings, val problems: List<String>)
@@ -179,10 +189,10 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(tabSwipe = it == "on") },
     ),
     SettingDef(
-        "wakelock", "Whether the app keeps the phone's CPU awake while terminals run, so long jobs don't pause with the screen off (uses more battery).",
-        "off", listOf("on", "off"),
-        oneOf("wakelock", listOf("on", "off")),
-        { copy(wakelock = it == "on") },
+        "wakelock", "Whether the app keeps the phone's CPU awake, so jobs don't pause with the screen off (uses more battery): auto while a background service runs, on while terminals run, or off.",
+        "auto", Wakelock.entries.map { it.word },
+        oneOf("wakelock", Wakelock.entries.map { it.word }),
+        { v -> copy(wakelock = Wakelock.entries.first { it.word == v }) },
     ),
     SettingDef(
         "update-check", "Whether the app checks GitHub about once a day for a new version and tells you (mynx update updates).",

@@ -31,6 +31,7 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * [soundSocket] (a Debian path) is the sound server's socket. [timeZone]
  * is the phone's, as [debianTimeZone] gives it. [powerSupply] (a host
  * path) is the battery's stand-in, bound at [POWER_SUPPLY_MOUNT].
+ * [service] names the background service it runs (`MYNX_SERVICE`).
  * [command] runs instead of the login bash.
  */
 fun prootLaunch(
@@ -46,6 +47,7 @@ fun prootLaunch(
     soundSocket: String? = null,
     timeZone: String? = null,
     powerSupply: String? = null,
+    service: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
@@ -74,6 +76,7 @@ fun prootLaunch(
         keyBarFile?.let { add("MYNX_KEYBAR_FILE=$it") }
         requestDir?.let { add("MYNX_REQUESTS=$it") }
         shellId?.let { add("MYNX_SHELL=$it") }
+        service?.let { add("MYNX_SERVICE=$it") }
         soundSocket?.let { add("PULSE_SERVER=unix:$it") }
         // Debian's own zone is UTC; a TZ set in .bashrc still wins.
         timeZone?.let { add("TZ=$it") }
@@ -94,11 +97,29 @@ fun prootLaunch(
 fun runThenShell(command: String): List<String> =
     listOf("/bin/bash", "--login", "-c", "trap : INT; $command; exec /bin/bash --login")
 
+/** [text] as one word for the shell, in single quotes. */
+fun shellQuote(text: String): String = "'" + text.replace("'", "'\\''") + "'"
+
+/**
+ * A background service's [prootLaunch] command: the wrapper, which runs the
+ * service's command in a process group of its own and records its exit.
+ * Saved services' commands come from `services.conf`; an unsaved one's is [command].
+ */
+fun serviceCommand(name: String, command: String? = null): List<String> =
+    listOf("/bin/bash", "--login", "-c", "exec $TOOLS_MOUNT/lib/service-run $name" + (command?.let { " " + shellQuote(it) } ?: ""))
+
 /** The tab the launcher shortcut "Settings" opens: the settings editors, then a shell. */
 val SETTINGS_TAB_COMMAND: List<String> = runThenShell("mynx edit")
 
 /** The tab the "update available" notification opens: `mynx update`, then a shell. */
 val UPDATE_TAB_COMMAND: List<String> = runThenShell("mynx update")
+
+/**
+ * The tab the strip's services mark and the notification's Services button
+ * open: the menu's Services list (under the menu's bar: the `menu` function
+ * of ~/.bashrc isn't there in a login shell's -c), then a shell.
+ */
+val SERVICES_TAB_COMMAND: List<String> = runThenShell("keybar menu menu services")
 
 /** How long a proot gets to stop what it runs before it's killed outright. */
 const val PROOT_STOP_GRACE_MS = 2000L

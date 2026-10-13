@@ -73,6 +73,19 @@ import io.github.est4s.terminal.core.zoneInfoPath
 import io.github.est4s.terminal.core.runningTerminalsText
 import io.github.est4s.terminal.core.writeFakeProc
 import io.github.est4s.terminal.core.writeToolsProfile
+import io.github.est4s.terminal.core.SERVICES_DIR
+import io.github.est4s.terminal.core.ServiceDef
+import io.github.est4s.terminal.core.ServiceManager
+import io.github.est4s.terminal.core.Wakelock
+import io.github.est4s.terminal.core.parseSavedServices
+import io.github.est4s.terminal.core.serviceCommand
+import io.github.est4s.terminal.core.serviceGaveUpText
+import io.github.est4s.terminal.core.serviceRequests
+import io.github.est4s.terminal.core.serviceWorkDir
+import io.github.est4s.terminal.core.AdoptedTab
+import io.github.est4s.terminal.core.Foreground
+import io.github.est4s.terminal.core.foregroundCommand
+import io.github.est4s.terminal.core.servicesMark
 import java.io.File
 import java.util.TimeZone
 import java.util.WeakHashMap
@@ -86,6 +99,8 @@ private const val NOTICE_ID_BASE = 1000
 const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 /** Opens a tab running `mynx update` (the update notification). */
 const val ACTION_UPDATE = "io.github.est4s.terminal.UPDATE"
+/** Opens a tab with the menu's Services list (the notification's Services button). */
+const val ACTION_SERVICES = "io.github.est4s.terminal.SERVICES"
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -99,6 +114,11 @@ private const val TOOLS_ASSET = "tools.tar.xz"
 // How often to check whether waiting requests' `mynx`s have gone.
 private const val SWEEP_MS = 2000L
 private const val ROTATION_SWEEP_MS = 1000L
+private const val SERVICES_CHANNEL_ID = "services"
+// "Not restarting" notifications: one per service name.
+private const val SERVICE_NOTICE_ID_BASE = 3000
+// How long Exit lets the services stop cleanly (TERM) before onDestroy forces them.
+private const val EXIT_GRACE_MS = 3000L
 private val LOCATION_PERMISSIONS = arrayOf(
     android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION,
 )
@@ -150,9 +170,24 @@ class TerminalService : Service() {
                 audioRequests(File(rootfs, "root"), player::play, recorder::record) +
                 batteryRequests(batteryReader::read) +
                 vibrations.requests() +
-                updater.requests { apk -> onMain { openInstaller(apk) } },
+                updater.requests { apk -> onMain { openInstaller(apk) } } +
+                serviceRequests(serviceManager),
         )
     }
+    // Background services: hidden sessions (see ServiceSessions), kept running without a tab.
+    private val serviceHost by lazy {
+        ServiceSessions(
+            mainHandler, ::newServiceSession, ::stop,
+            openTab = ::openServiceTab, followTab = ::followServiceTab, adoptTab = ::adoptTab, foregroundOf = ::foregroundOf,
+            notifyGaveUp = ::showGaveUp, onChanged = ::servicesChanged,
+        )
+    }
+    private val serviceManager by lazy { ServiceManager(File(rootfs, "root"), File(rootfs, SERVICES_DIR), serviceHost) }
+    private val servicesStateFile by lazy { File(filesDir, "state/services") }
+    // The last tab was closed while services ran: the app stays until they end.
+    private var tabsClosed = false
+    // Exit's delayed stopSelf(), called off if the app is opened again meanwhile.
+    private val finishExit = Runnable { stopSelf() }
     // Release builds update from GitHub releases; mynx dev from CI (scripts/deliver.sh).
     private val updater by lazy {
         val version = BuildConfig.VERSION_NAME
@@ -259,6 +294,7 @@ class TerminalService : Service() {
         requests.start()
         watchRequests()
         applySoundSetting()
+        launchServices()
         applyWakelockSetting()
         keepPowerSupply()
         // After cwdDir is cleared: the menu's update notice lives there too.
@@ -278,11 +314,17 @@ class TerminalService : Service() {
         })
     }
 
-    // Held while the `wakelock` setting is on, so jobs keep running with the screen off.
+    // The services that were running (Android killed the app) and the autostart ones.
+    private fun launchServices() {
+        val saved = runCatching { parseSavedServices(servicesStateFile.readText()) }.getOrNull()
+        runCatching { serviceManager.launch(saved) }
+    }
+
+    // Held while the `wakelock` setting says (auto: while a service runs), so jobs keep running with the screen off.
     private var wakeLock: PowerManager.WakeLock? = null
 
     private fun applyWakelockSetting() {
-        val on = currentSettings()?.wakelock ?: false
+        val on = (currentSettings()?.wakelock ?: Wakelock.AUTO).held(servicesRunning = serviceManager.active > 0)
         if (on == (wakeLock != null)) return
         if (on) {
             wakeLock = getSystemService(PowerManager::class.java)
@@ -291,7 +333,7 @@ class TerminalService : Service() {
         } else {
             releaseWakeLock()
         }
-        if (!tabs.isEmpty) updateNotification()
+        refreshNotification()
     }
 
     private fun releaseWakeLock() {
@@ -355,6 +397,8 @@ class TerminalService : Service() {
                 "preview-colors" -> activity?.previewColors(parseColorScheme(request.args.joinToString("\n"), NEON).scheme)
                 in RELOADING_REQUESTS -> {
                     activity?.reloadConfig(quiet = true)
+                    // A hand edit to services.conf: tabs, mark and notification follow (only if it changed).
+                    runCatching { serviceManager.reload() }
                     applySoundSetting()
                     applyWakelockSetting()
                 }
@@ -402,6 +446,11 @@ class TerminalService : Service() {
             exit()
             return START_NOT_STICKY
         }
+        // Opened again while Exit let the services stop: the app stays.
+        if (serviceHost.exiting) {
+            mainHandler.removeCallbacks(finishExit)
+            serviceHost.exiting = false
+        }
         goForeground()
         // Android restarting a killed service can't bring the shells back.
         return START_NOT_STICKY
@@ -420,6 +469,7 @@ class TerminalService : Service() {
         mic.stop()
         sound.stop()
         killAll()
+        stopServices()
         releaseWakeLock()
         super.onDestroy()
     }
@@ -430,6 +480,7 @@ class TerminalService : Service() {
      */
     fun currentSession(): TerminalSession {
         tabs.selected?.let { return it.session }
+        tabsClosed = false
         val saved = runCatching { parseSavedTabs(stateFile.readText()) }.getOrNull()
             ?: return startShell(openMenu = true).also { tabs.open(it) }
         tabs.restore(saved) { cwd -> startShell(cwd) }
@@ -439,42 +490,185 @@ class TerminalService : Service() {
     /** A new tab after the selected one; [command] runs instead of the plain login shell. */
     fun newSession(command: List<String>? = null): TerminalSession = startShell(command = command).also { tabs.open(it) }
 
-    /** Replaces a finished session with a fresh shell in the same tab and folder. */
+    /** Replaces a finished session with a fresh shell in the same tab and folder. A service's tab waits for the service. */
     fun restart(old: TerminalSession) {
+        if (tabs.find(old)?.service != null) return
         tabs.replaceSession(old, startShell(cwdOf(old)))
-        cwdFiles.remove(old)?.delete()
-        keyBarFiles.remove(old)?.delete()
+        forgetFiles(old)
+    }
+
+    // The files a session's shell reports through, once nothing reads them.
+    private fun forgetFiles(session: TerminalSession) {
+        cwdFiles.remove(session)?.delete()
+        keyBarFiles.remove(session)?.delete()
     }
 
     /** Where [session]'s programs report the key bar they want (may not exist yet). */
     fun keyBarFileOf(session: TerminalSession): File? = keyBarFiles[session]
 
+    /** Closes a tab, ending its shell; a service's tab is only hidden, the service runs on. */
     fun closeTab(session: TerminalSession) {
+        val service = tabs.find(session)?.service
         tabs.close(session)
-        stop(session)
-        cwdFiles.remove(session)?.delete()
-        keyBarFiles.remove(session)?.delete()
-        if (tabs.isEmpty) exit()
+        if (service == null) {
+            stop(session)
+            forgetFiles(session)
+        } else {
+            if (!session.isRunning) forgetFiles(session)
+            serviceManager.setOpen(service, false)
+        }
+        if (tabs.isEmpty) lastTabClosed()
+    }
+
+    // With services running the app stays, with no tabs; opening it again opens a fresh one.
+    private fun lastTabClosed() {
+        if (serviceManager.active == 0) {
+            exit()
+            return
+        }
+        tabsClosed = true
+        stateFile.delete()
+        activity?.finishAndRemoveTask()
+        refreshNotification()
     }
 
     fun onSessionFinished(session: TerminalSession) {
+        // A service's end is the services' business; it never closes a tab.
+        // An open tab still shows it (and its bar) until the service starts again.
+        if (serviceManager.exited(session)) {
+            if (tabs.find(session) == null) forgetFiles(session) else cwdFiles.remove(session)?.delete()
+            return
+        }
         if (tabs.find(session) != null && closesOnExit(session.exitStatus)) closeTab(session)
     }
 
-    /** Kills every session, stops the service and closes the app. The next start is fresh. */
+    /** Kills every session, stops the services and the service, and closes the app. The next start is fresh. */
     fun exit() {
+        val stopping = serviceManager.active > 0
+        serviceHost.exiting = true
+        serviceManager.stopAll()
         stateFile.delete()
+        servicesStateFile.delete()
         killAll()
         releaseWakeLock()
         activity?.finishAndRemoveTask()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // The services get a moment to end cleanly on TERM; onDestroy forces what's left.
+        if (stopping) mainHandler.postDelayed(finishExit, EXIT_GRACE_MS) else stopSelf()
+    }
+
+    // Forces every service's session to end (the app is going away).
+    private fun stopServices() {
+        serviceHost.exiting = true
+        serviceManager.services.all.mapNotNull { it.session }.filter { it.isRunning }.forEach(::stop)
+    }
+
+    // Something about the services changed (ServiceHost.changed): save, wakelock,
+    // notification, the services' tabs and the strip's mark.
+    private fun servicesChanged() {
+        saveServices()
+        applyWakelockSetting()
+        refreshNotification()
+        val hadTabs = !tabs.isEmpty
+        syncServiceTabs()
+        activity?.onServicesChanged()
+        if (hadTabs && tabs.isEmpty) lastTabClosed()
+        else if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
+    }
+
+    // Removed services' tabs close; the others' titles say how they are.
+    private fun syncServiceTabs() {
+        val names = serviceManager.names
+        tabs.tabs.filter { it.service != null && it.service !in names }.forEach { forgetFiles(it.session) }
+        tabs.closeServicesExcept(names)
+        tabs.setServiceTitles(serviceManager::tabTitle)
+    }
+
+    /** How many services run or wait to restart, for the strip's mark. */
+    val stripServicesMark: String? get() = servicesMark(serviceManager.active)
+
+    // ServiceHost.open: `mynx service open`, from a tab on screen.
+    private fun openServiceTab(name: String, session: TerminalSession): String? {
+        if (activity?.onScreen != true) return "the app must be on screen to open a service as a tab"
+        tabs.openService(name, session)
+        syncServiceTabs()
+        return null
+    }
+
+    // ServiceHost.started: an open tab shows the service's new session.
+    private fun followServiceTab(name: String, session: TerminalSession) {
+        tabs.followService(name, session)?.let(::forgetFiles)
+    }
+
+    // ServiceHost.adopt: the tab stays where it is, as the service's tab.
+    private fun adoptTab(name: String, shell: Int): Result<AdoptedTab<TerminalSession>> {
+        val session = sessionOfShell(shell) ?: return Result.failure(Exception("no tab with shell $shell"))
+        tabs.find(session)?.service?.let { return Result.failure(Exception("that tab is already the service $it")) }
+        if (!session.isRunning) return Result.failure(Exception("that tab's shell has ended"))
+        val command = runCatching { foregroundCommand(session.pid) }.getOrNull()
+        tabs.makeService(session, name)
+        return Result.success(AdoptedTab(session, session.pid, command, cwdOf(session) ?: "/root", open = true))
+    }
+
+    private fun foregroundOf(session: TerminalSession): Foreground? {
+        if (!session.isRunning) return null
+        return Foreground(runCatching { foregroundCommand(session.pid) }.getOrNull(), cwdOf(session))
+    }
+
+    /** The tab's "Run as service": it becomes the unsaved service [name]; null, or why not. */
+    fun runAsService(session: TerminalSession, name: String): String? {
+        val shell = shellIds[session] ?: return "that tab has no shell"
+        return serviceManager.adopt(name, shell)
+    }
+
+    /** What the tab's shell runs in the foreground now, for "Run as service" to suggest a name. */
+    fun foregroundCommandOf(session: TerminalSession): String? = foregroundOf(session)?.command
+
+    /** A service tab's Stop, Start and Restart: null, or why not. */
+    fun stopService(name: String): String? = serviceManager.stop(name)
+    fun startService(name: String): String? = serviceManager.start(name)
+    fun restartService(name: String): String? = serviceManager.restart(name)
+    fun serviceRunning(name: String): Boolean = serviceManager.services[name]?.isRunning == true
+
+    // Like saveTabs: atomically, and never failing.
+    private fun saveServices() {
+        runCatching {
+            servicesStateFile.parentFile!!.mkdirs()
+            val tmp = File(servicesStateFile.path + ".tmp")
+            tmp.writeText(serviceManager.stateText())
+            tmp.renameTo(servicesStateFile)
+        }
+    }
+
+    // A hidden session for a background service, started by ServiceSessions.
+    private fun newServiceSession(def: ServiceDef, saved: Boolean): TerminalSession = startShell(
+        cwd = serviceWorkDir(def.cwd),
+        command = serviceCommand(def.name, if (saved) null else def.command),
+        service = def.name,
+    )
+
+    // A service ended too often in a row: tapping opens the app (`mynx service log` tells why).
+    private fun showGaveUp(name: String, exitCode: Int?) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(SERVICES_CHANNEL_ID, "Services", NotificationManager.IMPORTANCE_DEFAULT))
+        val id = SERVICE_NOTICE_ID_BASE + Math.floorMod(name.hashCode(), 1000)
+        val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val tap = PendingIntent.getActivity(this, id, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(id, Notification.Builder(this, SERVICES_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(serviceGaveUpText(name, exitCode))
+            .setContentText("mynx service log $name shows its output")
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build())
     }
 
     // Swaps in an empty model first, so the killed sessions' late exit
-    // events find no tab and are ignored.
+    // events find no tab and are ignored. Services' tabs are the services' to stop.
     private fun killAll() {
-        val sessions = tabs.tabs.map { it.session }
+        val sessions = tabs.tabs.filter { it.service == null }.map { it.session }
         tabs = newTabs()
         sessions.forEach(::stop)
     }
@@ -523,13 +717,18 @@ class TerminalService : Service() {
 
     // TerminalSession delivers its output on the Looper of the thread that
     // created it, so this must run on the main thread.
-    private fun startShell(cwd: String? = null, openMenu: Boolean = false, command: List<String>? = null): TerminalSession {
+    private fun startShell(
+        cwd: String? = null,
+        openMenu: Boolean = false,
+        command: List<String>? = null,
+        service: String? = null,
+    ): TerminalSession {
         val workDir = workDirFor(cwd)
         val shellId = nextShellId++
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, service = service, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -774,6 +973,12 @@ class TerminalService : Service() {
     private fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit): Boolean =
         activity?.takeIf { it.onScreen }?.askPermissions(permissions, answer) != null
 
+    // Not after Exit, nor with nothing running: that would bring the notification back.
+    private fun refreshNotification() {
+        if (serviceHost.exiting || (tabs.isEmpty && serviceManager.active == 0)) return
+        updateNotification()
+    }
+
     // Tab count changes can happen in the background, so update the
     // notification directly instead of calling startForeground() again.
     private fun updateNotification() {
@@ -782,24 +987,31 @@ class TerminalService : Service() {
 
     private fun buildNotification(): Notification {
         notifiedCount = tabs.tabs.size
+        val running = runningTerminalsText(tabs.tabs.count { it.service == null }, wakeLock != null, serviceManager.active)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Running terminals", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0,
             Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val exit = PendingIntent.getService(this, 1,
             Intent(this, TerminalService::class.java).setAction(ACTION_EXIT), PendingIntent.FLAG_IMMUTABLE)
+        val services = PendingIntent.getActivity(this, 4,
+            Intent(this, MainActivity::class.java).setAction(ACTION_SERVICES).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.app_name))
-            .setContentText(micNotice(micState) ?: runningTerminalsText(tabs.tabs.size, wakeLock != null))
+            .setContentText(micNotice(micState) ?: running)
             .apply {
                 micNotice(micState)?.let {
-                    setSubText(runningTerminalsText(tabs.tabs.size, wakeLock != null))
+                    setSubText(running)
                     setStyle(Notification.BigTextStyle().bigText(it))
                 }
             }
             .setContentIntent(open)
             .setOngoing(true)
+            .apply {
+                if (serviceManager.active > 0) addAction(Notification.Action.Builder(null as Icon?, "Services", services).build())
+            }
             .addAction(Notification.Action.Builder(null as Icon?, "Exit", exit).build())
             .build()
     }

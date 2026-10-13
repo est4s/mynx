@@ -95,6 +95,17 @@ class ConfigCheckTest {
         assertEquals(emptyList(), checkConfig(home))
     }
 
+    @Test
+    fun `reports the services file's problems`() {
+        write("services.conf", "[web]\ncommand = run\nrestart = sometimes\n")
+
+        assertEquals(
+            listOf(ConfigProblems("~/.config/mynx/services.conf",
+                listOf("line 3: restart must be one of: no, on-failure, always"))),
+            checkConfig(home),
+        )
+    }
+
     private fun write(path: String, text: String) =
         File(config, path).apply { parentFile.mkdirs() }.writeText(text)
 }

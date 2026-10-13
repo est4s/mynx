@@ -1832,6 +1832,163 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertIn("usage: mynx rotation [status] | lock [portrait|landscape] [--pid PID] | unlock",
                           run.stderr, args)
 
+    # --- service ------------------------------------------------------------
+
+    @staticmethod
+    def service(name, **fields):
+        base = {"name": name, "saved": True, "command": "true", "cwd": "~", "autostart": False,
+                "restart": "on-failure", "state": "stopped", "pid": None, "started": None,
+                "exit_code": None, "restarts": 0, "open": False}
+        base.update(fields)
+        return base
+
+    def test_service_list_is_a_table_that_fits_the_phone(self):
+        now = int(time.time() * 1000)
+        services = [
+            self.service("web", state="running", pid=4242, started=now - 3725_000, restarts=2),
+            self.service("db", state="stopped", exit_code=0),
+            self.service("worker", state="failed", exit_code=1, restarts=5),
+            self.service("tab-server", saved=False, state="running", started=now - 150_000),
+            self.service("api", state="stopping", started=now - 3 * 86400_000 - 7200_000),
+        ]
+        self.start_app({"service-list": {"ok": True, "services": services}})
+        for args in [("service",), ("service", "list")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            lines = run.stdout.splitlines()
+            self.assertEqual(lines[0].split(), ["NAME", "STATE", "UP", "RESTARTS"])
+            self.assertEqual(lines[1].split(), ["web", "running", "1h", "02m", "2"])
+            self.assertEqual(lines[2].split(), ["db", "stopped", "(0)", "-", "0"])
+            self.assertEqual(lines[3].split(), ["worker", "failed", "(1)", "-", "5"])
+            self.assertEqual(lines[4].split(), ["tab-server*", "running", "2m", "0"])
+            self.assertEqual(lines[5].split(), ["api", "stopping", "3d", "2h", "0"])
+            self.assertIn("* unsaved", lines[-1])
+            self.assertIn("mynx service save", lines[-1])
+            self.assertTrue(all(len(line) <= 56 for line in lines), lines)
+        self.assertEqual(self.app.requests, [["service-list"], ["service-list"]])
+
+    def test_service_list_of_one_never_run(self):
+        self.start_app({"service-list": {"ok": True, "services": [self.service("web")]}})
+        run = self.mynx("service")
+        self.assertEqual(run.stdout.splitlines()[1].split(), ["web", "stopped", "-", "0"])
+        self.assertNotIn("unsaved", run.stdout)
+
+    def test_service_list_with_none_says_how_to_add_one(self):
+        self.start_app({"service-list": {"ok": True, "services": []}})
+        run = self.mynx("service", "list")
+        self.assertEqual(run.returncode, 0)
+        self.assertIn("No services yet", run.stdout)
+        self.assertIn("mynx service add web -- python3 -m http.server 8080", run.stdout)
+
+    def test_service_list_json(self):
+        answer = {"ok": True, "services": [self.service("web")]}
+        self.start_app({"service-list": answer})
+        self.assertEqual(json.loads(self.mynx("service", "--json").stdout), answer)
+
+    def test_service_start_stop_restart_open_remove(self):
+        self.start_app({name: {"ok": True} for name in
+                        ("service-start", "service-stop", "service-restart", "service-open", "service-remove")})
+        for verb, text in [("start", "web: started"), ("stop", "web: stopped"), ("restart", "web: restarted"),
+                           ("open", ""), ("remove", "web: removed from ~/.config/mynx/services.conf")]:
+            run = self.mynx("service", verb, "web")
+            self.assertEqual((run.returncode, run.stdout.strip()), (0, text), run.stderr)
+        self.assertEqual(self.app.requests, [["service-start", "web"], ["service-stop", "web"],
+                                             ["service-restart", "web"], ["service-open", "web"],
+                                             ["service-remove", "web"]])
+
+    def test_service_errors_come_from_the_app(self):
+        self.start_app({"service-start": {"ok": False, "error": "no service named web"}})
+        run = self.mynx("service", "start", "web")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("mynx: no service named web", run.stderr)
+        run = self.mynx("service", "start", "web", "--json")
+        self.assertEqual(json.loads(run.stdout), {"ok": False, "error": "no service named web"})
+
+    def test_service_stop_waits_as_long_as_the_app_says(self):
+        folder = self.requests
+
+        def stop(name):
+            for entry in os.listdir(folder):
+                if entry.endswith(".req"):
+                    with open(os.path.join(folder, entry[:-4] + ".wait"), "w") as f:
+                        f.write("10")
+            time.sleep(1.5)  # longer than MYNX_TIMEOUT
+            return {"ok": True}
+
+        self.start_app({"service-stop": stop})
+        run = self.mynx("service", "stop", "web")
+        self.assertEqual((run.returncode, run.stdout), (0, "web: stopped\n"), run.stderr)
+
+    def test_service_log(self):
+        self.start_app({"service-log": {"ok": True, "log": "Serving HTTP on 0.0.0.0 port 8080\nGET /"}})
+        run = self.mynx("service", "log", "web")
+        self.assertEqual((run.returncode, run.stdout), (0, "Serving HTTP on 0.0.0.0 port 8080\nGET /\n"))
+        run = self.mynx("service", "log", "web", "-n", "20")
+        self.assertEqual(run.returncode, 0)
+        self.assertEqual(self.app.requests, [["service-log", "web"], ["service-log", "web", "20"]])
+        run = self.mynx("service", "log", "web", "--json")
+        self.assertEqual(json.loads(run.stdout)["log"], "Serving HTTP on 0.0.0.0 port 8080\nGET /")
+
+    def test_service_add_sends_the_command_and_options(self):
+        self.start_app({"service-add": {"ok": True}})
+        run = self.mynx("service", "add", "web", "--autostart", "--restart", "always", "--cwd", "~/site",
+                        "--restart-limit", "3", "--restart-delay", "2", "--stop-timeout", "20",
+                        "--", "python3", "-m", "http.server", "8080")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("Added web to ~/.config/mynx/services.conf", run.stdout)
+        self.assertIn("mynx service start web", run.stdout)
+        self.assertEqual(self.app.requests, [[
+            "service-add", "web", "command=python3 -m http.server 8080", "cwd=~/site", "autostart=yes",
+            "restart=always", "restart-limit=3", "restart-delay=2", "stop-timeout=20"]])
+
+    def test_service_add_keeps_one_argument_as_shell_text_and_quotes_several(self):
+        self.start_app({"service-add": {"ok": True}})
+        self.mynx("service", "add", "a", "--", "cd site && make serve")
+        self.mynx("service", "add", "b", "echo", "two  spaces", "it's")
+        self.assertEqual([r[2] for r in self.app.requests],
+                         ["command=cd site && make serve", "command=echo 'two  spaces' 'it'\"'\"'s'"])
+
+    def test_service_add_makes_a_relative_folder_absolute(self):
+        self.start_app({"service-add": {"ok": True}})
+        site = os.path.join(self.tmp.name, "site")
+        os.mkdir(site)
+        self.mynx("service", "add", "web", "--cwd", "site", "--", "true", cwd=self.tmp.name)
+        self.assertEqual(self.app.requests[0][2:], ["command=true", f"cwd={site}"])
+
+    def test_service_adopt_sends_this_tab(self):
+        self.start_app({"service-adopt": {"ok": True}})
+        run = self.mynx("service", "adopt", "web", env={"MYNX_SHELL": "3"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("This tab is now the service web", run.stdout)
+        self.assertIn("mynx service save web", run.stdout)
+        self.assertEqual(self.app.requests, [["service-adopt", "web", "3"]])
+
+    def test_service_adopt_outside_a_tab_fails(self):
+        self.start_app({})
+        run = self.mynx("service", "adopt", "web")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("only works in one of the app's tabs", run.stderr)
+        self.assertEqual(self.app.requests, [])
+
+    def test_service_save(self):
+        self.start_app({"service-save": {"ok": True}})
+        run = self.mynx("service", "save", "web")
+        self.assertEqual((run.returncode, run.stdout), (0, "Saved web to ~/.config/mynx/services.conf\n"))
+        self.mynx("service", "save", "web", "--command", "python3 -m http.server 9000")
+        self.assertEqual(self.app.requests, [["service-save", "web"],
+                                             ["service-save", "web", "command=python3 -m http.server 9000"]])
+
+    def test_service_usage(self):
+        self.start_app({})
+        for args in [("frob",), ("start",), ("start", "a", "b"), ("log", "web", "-n"), ("log", "web", "-n", "x"),
+                     ("add", "web"), ("add", "web", "--"), ("add", "--", "true"), ("add", "web", "--restart"),
+                     ("add", "web", "--bogus", "--", "true"), ("adopt",), ("save", "web", "--command"),
+                     ("remove", "a", "b"), ("list", "x")]:
+            run = self.mynx("service", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx service", run.stderr, args)
+        self.assertEqual(self.app.requests, [])
+
     # --- sound --------------------------------------------------------------
 
     SETTINGS_ON = {"ok": True, "problems": [], "settings": [

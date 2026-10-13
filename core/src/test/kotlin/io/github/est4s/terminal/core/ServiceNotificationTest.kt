@@ -23,4 +23,25 @@ class ServiceNotificationTest {
     fun `says when the wakelock is held`() {
         assertEquals("2 terminals running · wakelock held", runningTerminalsText(2, wakelock = true))
     }
+
+    @Test
+    fun `says a service was given up on, with its exit code`() {
+        assertEquals("web stopped (code 1), not restarting", serviceGaveUpText("web", 1))
+        assertEquals("web stopped, not restarting", serviceGaveUpText("web", null))
+    }
+
+    @Test
+    fun `counts the services after the terminals`() {
+        assertEquals("2 terminals · 1 service", runningTerminalsText(2, services = 1))
+        assertEquals("1 terminal · 3 services", runningTerminalsText(1, services = 3))
+        assertEquals("No terminals · 1 service", runningTerminalsText(0, services = 1))
+        assertEquals("1 terminal · 2 services · wakelock held", runningTerminalsText(1, wakelock = true, services = 2))
+    }
+
+    @Test
+    fun `the strip counts the active services, and shows nothing without any`() {
+        assertEquals("● 2", servicesMark(2))
+        assertEquals("● 1", servicesMark(1))
+        assertEquals(null, servicesMark(0))
+    }
 }

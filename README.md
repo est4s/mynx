@@ -94,8 +94,10 @@ new; `mynx notes` has the notes of every release.
 
 - Debian runs through `proot`, not a virtual machine: no `systemd`,
   Docker or kernel modules, and heavy builds are slower than on a PC.
-- Long jobs can pause while the screen is off. `mynx set wakelock on`
-  keeps them going, at some cost in battery.
+- Long jobs in a tab can pause while the screen is off. Background
+  services keep the CPU awake by themselves (`wakelock = auto`, the
+  default); `mynx set wakelock on` does it whenever the app runs, at
+  some cost in battery.
 
 ## Help and bug reports
 

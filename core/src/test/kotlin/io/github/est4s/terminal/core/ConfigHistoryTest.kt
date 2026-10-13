@@ -127,4 +127,14 @@ class ConfigHistoryTest {
         assertTrue(File(config, "fonts/Hack.ttf").exists())
         assertNull(read("settings.conf"))
     }
+
+    @Test
+    fun `the services file can be undone like the others`() {
+        history.observe("edits by hand", keep = 1)
+        write("services.conf", "[web]\ncommand = run\n")
+        history.observe("service add web", keep = 1)
+
+        assertEquals("service add web", history.undo(keep = 1))
+        assertNull(read("services.conf"))
+    }
 }

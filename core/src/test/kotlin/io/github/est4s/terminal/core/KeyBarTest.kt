@@ -138,6 +138,13 @@ class KeyBarTest {
     }
 
     @Test
+    fun `a service's tab falls back to the service bar`() {
+        assertEquals(listOf("service"), keyBarNames(null, fallback = SERVICE_KEY_BAR))
+        assertEquals(listOf("service"), keyBarNames("", fallback = SERVICE_KEY_BAR))
+        assertEquals(listOf("nnn"), keyBarNames("nnn", fallback = SERVICE_KEY_BAR), "the program's bar wins")
+    }
+
+    @Test
     fun `a report can list fallbacks, and bad names are dropped`() {
         assertEquals(listOf("my-game", "game"), keyBarNames("my-game,game"))
         assertEquals(listOf("game"), keyBarNames("../x, game"))
@@ -406,6 +413,20 @@ class KeyBarTest {
         assertEquals(listOf("Go"), loaded.buttons.map { it.label })
         assertEquals(KeyButton("VolumeDown", listOf(Key("j")), repeat = true), loaded.volumeDown)
         assertEquals(null, loaded.volumeUp)
+    }
+
+    @Test
+    fun `a service's bar sends what a running server needs`() {
+        // Its tab runs the service, not a shell, so no mynx commands here.
+        assertTrue("service" in BUILT_IN_KEY_BARS)
+        val bar = loadKeyBar("service", dir)
+
+        assertEquals("built-in service", bar.source)
+        assertEquals(emptyList(), bar.problems)
+        assertEquals(listOf("Esc", "Ctrl", "↑", "Tab", "Ctrl+C", "←", "↓", "→", "Enter", "Ctrl+D"),
+            bar.buttons.map { it.label })
+        assertEquals(parseKeyBar("x = Ctrl+C").buttons.single().strokes, bar.buttons.single { it.label == "Ctrl+C" }.strokes)
+        assertEquals(parseKeyBar("x = Ctrl+D").buttons.single().strokes, bar.buttons.single { it.label == "Ctrl+D" }.strokes)
     }
 
     @Test
