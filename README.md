@@ -51,6 +51,11 @@ sensors, microphone, speaker and flashlight.
   and packages survive app updates.
 - **Tabs** that keep running in the background and come back when you
   reopen the app. Swipe sideways to switch.
+- **Background services** for servers and daemons (a web server,
+  `sshd`, a bot), since there's no systemd: each runs in a hidden
+  terminal, restarts when it fails, can start with the app, and opens
+  as a tab when you want to see it. Define them in
+  `~/.config/mynx/services.conf` or with `mynx service add`.
 - **A key bar** above the phone's keyboard (Esc, Tab, Ctrl, arrows, …)
   that changes with what's running: the file manager, games, AI agents
   and your own programs can each have their own. A bar can make the

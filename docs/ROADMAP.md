@@ -5,22 +5,13 @@ the work log (`docs/WORKLOG.md`) has the current status and next steps.
 
 **Done:** Debian through proot, tabs, the default setup (theme, font,
 launcher menu, games), the file manager and key bars, customization
-(`mynx`, the editors, undo), agent support, Android integration, and
-polish (first run, icon, updates from GitHub Releases).
+(`mynx`, the editors, undo), agent support, Android integration,
+polish (first run, icon, updates from GitHub Releases), and background
+services.
 
 ---
 
 ## Planned
-
-### Background services
-Hidden terminal tabs for servers and daemons (a web server, `sshd`, a
-database, a bot), since there's no init to run them:
-- Start a command in a tab that doesn't show in the strip; it keeps
-  running in the background like any tab.
-- A list to see them, open one to read its output or type into it,
-  stop or restart it.
-- Optionally start them when the app starts, and restart one that
-  exits.
 
 ### Profiles *(parked)*
 A **profile** is a complete setup: theme, font, key bars, launcher menu,
