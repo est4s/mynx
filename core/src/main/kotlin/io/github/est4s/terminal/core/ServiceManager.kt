@@ -85,14 +85,25 @@ class ServiceManager<S>(
     // What to do once a service's session has ended: answer a stop, start it again, forget it.
     private val whenEnded = mutableMapOf<String, MutableList<() -> Unit>>()
 
-    /** Reads `services.conf` again. */
+    /**
+     * Reads `services.conf` again (`mynx check`, and every `service-*`
+     * request) and tells the host if that changed any service.
+     */
     fun reload() {
+        if (sync()) host.changed()
+    }
+
+    // Reads the file; true if the services or their settings changed. For
+    // callers that tell the host themselves.
+    private fun sync(): Boolean {
+        val before = services.all.map { it.def to it.saved }
         services.sync(loadServices(file).services)
+        return services.all.map { it.def to it.saved } != before
     }
 
     /** At app start: starts the autostart services and those [saved] as running. */
     fun launch(saved: SavedServices?) {
-        reload()
+        sync()
         for (name in services.toStart(saved)) runCatching { start(name, byHand = true) }
         host.changed()
     }
@@ -336,7 +347,7 @@ class ServiceManager<S>(
         if ("command" !in values) throw ServiceRefused("service-add needs command=…")
         val def = values.entries.fold(ServiceDef(name, "")) { def, (key, value) -> def.with(key, value) }
         writeFile(addService(file.takeIf { it.isFile }?.readText(), def).getOrElse { throw ServiceRefused(it.message!!) })
-        reload()
+        sync()
         host.changed()
         return ok("service" to serviceJson(services[name]!!))
     }
@@ -346,7 +357,7 @@ class ServiceManager<S>(
         val name = service.name
         if (service.saved) {
             writeFile(removeService(file.readText(), name).getOrElse { throw ServiceRefused(it.message!!) })
-            reload()
+            sync()
         }
         val forget = {
             services.remove(name)
@@ -384,7 +395,7 @@ class ServiceManager<S>(
         val def = values.entries.fold(start) { def, (key, value) -> def.with(key, value) }
         writeFile(addService(file.takeIf { it.isFile }?.readText(), def).getOrElse { throw ServiceRefused(it.message!!) })
         services.save(def)
-        reload()
+        sync()
         host.changed()
         return ok("service" to serviceJson(service))
     }

@@ -583,4 +583,68 @@ class ServiceRequestTest {
         assertEquals("start dev saved=false", host.events.last())
         assertEquals(ServiceDef("dev", "npm run dev", "~/src/app", restart = Restart.NO), manager.services["dev"]!!.def)
     }
+
+    // How many times the app heard of a change while [action] ran.
+    private fun changes(action: () -> Unit): Int {
+        val before = host.changes
+        action()
+        return host.changes - before
+    }
+
+    @Test
+    fun `list tells the app once when a hand edit added a service`() {
+        write("[web]\ncommand = run\n")
+        ask("service-list")
+        write("[web]\ncommand = run\n[db]\ncommand = postgres\n")
+
+        assertEquals(1, changes { ask("service-list") })
+        assertEquals(0, changes { ask("service-list") }, "polling an unchanged file says nothing")
+    }
+
+    @Test
+    fun `list tells the app when a hand edit removed or changed a service`() {
+        write("[web]\ncommand = run\n[db]\ncommand = postgres\n")
+        ask("service-list")
+        write("[web]\ncommand = run\n")
+        assertEquals(1, changes { ask("service-list") })
+        assertEquals(setOf("web"), manager.names)
+
+        write("[web]\ncommand = run --port 9\n")
+        assertEquals(1, changes { ask("service-list") })
+    }
+
+    @Test
+    fun `a request naming a service tells the app of a hand edit`() {
+        write("[web]\ncommand = run\n")
+        ask("service-list")
+        write("[web]\ncommand = run\n[db]\ncommand = postgres\n")
+
+        assertEquals(1, changes { ask("service-log", "web") })
+    }
+
+    @Test
+    fun `a running service whose block went is a change`() {
+        write("[web]\ncommand = run\n")
+        ask("service-start", "web")
+        write("")
+
+        assertEquals(1, changes { ask("service-list") })
+    }
+
+    @Test
+    fun `reload, as after mynx check, tells the app only of a change`() {
+        write("[web]\ncommand = run\n")
+        assertEquals(1, changes { manager.reload() })
+        assertEquals(0, changes { manager.reload() })
+        write("[web]\ncommand = run\nautostart = yes\n")
+        assertEquals(1, changes { manager.reload() })
+    }
+
+    @Test
+    fun `add tells the app once`() {
+        write("[web]\ncommand = run\n")
+        ask("service-list")
+
+        assertEquals(1, changes { ask("service-add", "db", "command=postgres") })
+    }
 }
