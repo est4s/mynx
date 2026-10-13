@@ -268,13 +268,12 @@ be reported by number):
 19. After several restarts, `ls /tmp/.mynx/` doesn't collect
    `cwd-N`/`keybar-N` files.
 
-**Open, for the maintainer** (minor, from the review, not fixed):
-- A block deleted by hand from `services.conf` while it runs stays
-  in `list` as unsaved after it ends, until `mynx service remove`
-  or an app restart.
-- `mynx service list` reloads `services.conf` but doesn't refresh
-  the app: the strip mark and tabs of services removed by hand catch
-  up at the next service change.
+**Fixed after the phone tests** (entry 112; not yet on the phone):
+20. Edit `services.conf` by hand to add a service, run `mynx check`:
+   the strip mark and the notification follow without a service
+   command. Delete a running service's block, `mynx check`: it keeps
+   running as unsaved (`web*`); stop it: it leaves the list and its
+   tab closes.
 
 ### 1. Smaller things
 
@@ -381,6 +380,20 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 
 ## Log
 
+### 2026-10-13 (112): The review's two leftovers, fixed
+
+Maintainer's request, by two agents in parallel, merged on
+`services`:
+- A service whose block is deleted by hand while it runs is
+  `orphaned`: unsaved until it ends, then gone from the list
+  (`ServicesModel.kt`, e8999de). Adopted services stay listed after
+  they end, as before.
+- A reload of `services.conf` that changes anything calls
+  `host.changed()` once (`ServiceManager.reload()`, 045381c), and the
+  app rereads the file on `mynx check` and the other reloading
+  requests, `undo` included (682a1d7).
+Phone test 20 checks both; PR #30 marked ready.
+
 ### 2026-10-13 (111): Background services confirmed on the phone
 
 The maintainer ran all 19 phone tests in "Next 0" on mynx dev (run
@@ -391,8 +404,8 @@ run 38348748133 green): `mynx` crashed (FileNotFoundError on
 old, but every `service-*` request answers that way. Test 6's
 expectation was wrong, not the code: a program that catches Ctrl+C
 and exits 0 isn't restarted under `on-failure`; kept as it is (the
-long-press Restart is for restarting). Still open: the two minor
-review items under "Open, for the maintainer"; then merging PR #30.
+long-press Restart is for restarting). Then the two review items
+were fixed (entry 112).
 
 ### 2026-10-13 (110): Review of the services branch, seams fixed
 
@@ -410,10 +423,9 @@ test-first:
   before the `.req` was deleted, failed again at every poll and held
   up the requests after it.
 - Menu: a failed Start/Stop/Restart waited for two keys.
-Not changed: a service whose block is deleted by hand while it runs
-stays listed as unsaved after it ends (like an adopted one), and
-`list`'s reload doesn't refresh tabs or the mark until the next change.
-Phone tests for parts 1-6 are still pending.
+Left for later, then fixed in entry 112: a hand-deleted block's
+service stayed listed after it ended, and `list`'s reload didn't
+refresh the app.
 
 ### 2026-10-13 (109): Service tabs, the strip's mark, Run as service (parts 2, 5, 6)
 
