@@ -436,6 +436,43 @@ class ServiceRequestTest {
     }
 
     @Test
+    fun `set changes a key in the file, leaving the service running`() {
+        write("# mine\n[web]\ncommand = run\n\n[db]\ncommand = postgres\n")
+        ask("service-start", "web")
+        val changes = host.changes
+
+        val reply = ask("service-set", "web", "autostart=yes")
+
+        assertTrue(""""name":"web","saved":true,"command":"run","cwd":"~","autostart":true,"restart":"on-failure","state":"running"""" in reply, reply)
+        assertEquals("# mine\n[web]\ncommand = run\nautostart = yes\n\n[db]\ncommand = postgres\n", conf.readText())
+        assertTrue(manager.services["web"]!!.def.autostart)
+        assertEquals(listOf("start web saved=true"), host.events)
+        assertEquals(changes + 1, host.changes)
+    }
+
+    @Test
+    fun `set refuses an unsaved or unknown one, and what it can't write`() {
+        write("[web]\ncommand = run\n")
+        host.tabs[3] = AdoptedTab("tab3", 77, "vim", "~", open = true)
+        ask("service-adopt", "notes", "3")
+        assertEquals("""{"ok":false,"error":"notes isn't in ~/.config/mynx/services.conf: mynx service save notes first"}""",
+            ask("service-set", "notes", "autostart=yes"))
+        assertEquals("""{"ok":false,"error":"no service named db (mynx service list shows them)"}""", ask("service-set", "db", "autostart=yes"))
+        assertEquals("""{"ok":false,"error":"autostart must be yes or no"}""", ask("service-set", "web", "autostart=on"))
+        assertEquals("""{"ok":false,"error":"service-set needs KEY=VALUE"}""", ask("service-set", "web"))
+        assertEquals("[web]\ncommand = run\n", conf.readText())
+    }
+
+    @Test
+    fun `set is an undo step`() {
+        write("[web]\ncommand = run\n")
+        requests.start()
+        ask("service-set", "web", "autostart=yes")
+        assertEquals("""{"ok":true,"undone":"service set web"}""", ask("undo"))
+        assertEquals("[web]\ncommand = run\n", conf.readText())
+    }
+
+    @Test
     fun `remove of an adopted one stops it and forgets it`() {
         host.tabs[3] = AdoptedTab("tab3", 77, "vim", "~", open = true)
         ask("service-adopt", "notes", "3")
