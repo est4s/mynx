@@ -87,6 +87,36 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(client.request("slow"), {"ok": True, "fix": 1})
         self.assertEqual(self.left_behind(), [])
 
+    def test_an_answer_that_comes_right_after_the_wait(self):
+        # The app writes ID.wait, then ID.reply, then deletes ID.wait:
+        # mynx can see ID.wait and find it gone when it reads it.
+        real_read = client.read
+
+        def racing_read(path):
+            if path.endswith(".wait"):
+                base = path[: -len(".wait")]
+                with open(base + ".reply", "w") as f:
+                    json.dump({"ok": True, "fast": 1}, f)
+                os.remove(path)
+            return real_read(path)
+
+        def app():
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                reqs = [n for n in os.listdir(self.folder) if n.endswith(".req")]
+                if reqs:
+                    ident = reqs[0][:-4]
+                    os.remove(os.path.join(self.folder, ident + ".req"))
+                    with open(os.path.join(self.folder, ident + ".wait"), "w") as f:
+                        f.write("10")
+                    return
+                time.sleep(0.01)
+
+        threading.Thread(target=app, daemon=True).start()
+        with mock.patch.object(client, "read", racing_read):
+            self.assertEqual(client.request("quick"), {"ok": True, "fast": 1})
+        self.assertEqual(self.left_behind(), [])
+
     def test_gives_up_after_the_wait_the_app_asked_for(self):
         LaterApp(self.folder, "0", delay=3)
         start = time.monotonic()
