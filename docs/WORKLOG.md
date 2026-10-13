@@ -43,7 +43,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Background services (planned 2026-10-12; built on branch `services`, entries 108-109, phone tests pending)
+### 0. Background services (built on branch `services`, PR #30; all phone tests passed 2026-10-13, entry 111)
 
 Roadmap "Background services": hidden tabs for servers and daemons.
 Build test-first, with a maintainer test on the phone after each part.
@@ -224,8 +224,10 @@ be reported by number):
 
 *B. Opening as a tab (part 2)*
 6. `mynx service open web` (or Services → web → Open): a tab
-   `● web` with the service bar, the server's output; Ctrl+C in it
-   restarts it in the same tab.
+   `● web` with the service bar, the server's output. Ctrl+C in it:
+   Python's server catches it and exits 0, so `on-failure` doesn't
+   restart it ("○ web: exit 0", Enter does nothing); long-press →
+   Start runs it again in the same tab.
 7. × on that tab hides it; the browser still loads; `list` says not
    open.
 8. Long-press the opened tab: Hide, Restart, Stop work; after Stop
@@ -378,6 +380,19 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-13 (111): Background services confirmed on the phone
+
+The maintainer ran all 19 phone tests in "Next 0" on mynx dev (run
+38324395547's build): all pass. One bug found and fixed (6f47077,
+run 38348748133 green): `mynx` crashed (FileNotFoundError on
+`ID.wait`) when the app answered a [Later] at once, since it writes
+`ID.wait`, then `ID.reply`, then deletes `ID.wait`. The race was
+old, but every `service-*` request answers that way. Test 6's
+expectation was wrong, not the code: a program that catches Ctrl+C
+and exits 0 isn't restarted under `on-failure`; kept as it is (the
+long-press Restart is for restarting). Still open: the two minor
+review items under "Open, for the maintainer"; then merging PR #30.
 
 ### 2026-10-13 (110): Review of the services branch, seams fixed
 
