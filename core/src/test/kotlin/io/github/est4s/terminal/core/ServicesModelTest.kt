@@ -173,7 +173,30 @@ class ServicesModelTest {
         val running = services["db"]!!
         assertFalse(running.saved)
         assertNull(services.exited("s1", 1), "no restart without its block")
-        assertEquals(ServiceState.STOPPED, running.state)
+        assertEquals(emptyList(), services.all.map { it.name }, "gone once it ends")
+        assertNull(services["db"])
+    }
+
+    @Test
+    fun `one whose block went is gone after a stop too`() {
+        services.sync(listOf(web))
+        services.started("web", "s1", 1, byHand = true)
+        services.sync(emptyList())
+        assertTrue(services.stopAsked("web"))
+        assertNull(services.exited("s1", 0))
+        assertNull(services["web"])
+    }
+
+    @Test
+    fun `a block back before it ends is saved again, and stays`() {
+        services.sync(listOf(db))
+        services.started("db", "s1", 1, byHand = true)
+        services.sync(emptyList())
+        services.sync(listOf(db))
+
+        assertTrue(services["db"]!!.saved)
+        assertEquals(1000L, services.exited("s1", 1), "restarts again")
+        assertEquals(listOf("db"), services.all.map { it.name })
     }
 
     @Test
@@ -192,6 +215,7 @@ class ServicesModelTest {
         services.sync(listOf(web))
         assertEquals(listOf("web", "vim"), services.all.map { it.name }, "sync keeps it")
         assertNull(services.exited("tab", 1))
+        assertEquals(listOf("web", "vim"), services.all.map { it.name }, "kept after it ends, for its log")
     }
 
     @Test
