@@ -202,6 +202,78 @@ app; args are strings, replies JSON with `ok`):
    service", `mynx service adopt NAME`, and saving it to
    `services.conf` from its foreground command.
 
+**Phone tests** (mynx dev, PR #30's build; numbered so results can
+be reported by number):
+
+*Setup.* In mynx dev: `mynx service add web -- python3 -m http.server
+8080`, then `mynx service list` (web, stopped).
+
+*A. Running hidden (part 1)*
+1. `mynx service start web`; `mynx service list` shows it running;
+   `mynx open http://localhost:8080` lists the home folder.
+2. `mynx service log web` shows the server's lines.
+3. `mynx service stop web` returns within a second or two;
+   `list` shows `stopped (143)`.
+4. Restart: `mynx service start web`, then in a tab
+   `pkill -f http.server`: it comes back within a few seconds
+   (`list`: restarts 1).
+5. Gave up: `mynx service add bad --restart-limit 2 -- false`,
+   `mynx service start bad`: after the restarts, a notification
+   "bad stopped (code 1), not restarting"; `list` shows failed.
+   Then `mynx service remove bad`.
+
+*B. Opening as a tab (part 2)*
+6. `mynx service open web` (or Services → web → Open): a tab
+   `● web` with the service bar, the server's output; Ctrl+C in it
+   restarts it in the same tab.
+7. × on that tab hides it; the browser still loads; `list` says not
+   open.
+8. Long-press the opened tab: Hide, Restart, Stop work; after Stop
+   the title is "○ web: stopped" and the menu offers Start.
+
+*C. Coming back, lifetime, wakelock (part 3)*
+9. With web running, swipe the app away and reopen: shell tabs come
+   back, web runs hidden (`list`, browser). This is the first test
+   of a hidden session that was never shown after a restart.
+10. Close the last tab with web running: the app goes, the
+   notification stays ("No terminals · 1 service"). Reopen: a fresh
+   tab. Stop web: with no tabs left, the app exits.
+11. Exit from the notification with web running; reopen after 5 s:
+   no service, and `ps aux` shows no python or leftover proot.
+   Exit and reopen within 3 s: a fresh tab, the notification stays.
+12. `mynx get wakelock` says `auto`; the notification says "wakelock
+   held" only while a service runs.
+
+*D. Menu, mark, notification button (parts 4-5)*
+13. With web running, `● 1` shows right of **+**; tapping it opens
+   the Services list. The notification's Services button does the
+   same, also with the app in the background.
+14. Services → web: Open, Stop/Start, Restart and Log work; Log
+   opens in the pager.
+
+*E. Run as service (part 6)*
+15. In a tab: `cd ~/Shared && python3 -m http.server 9000`, long-press
+   → Run as service. The name is prefilled `python3`; type `web2`.
+   The tab becomes `● web2`; `list` shows `web2*`.
+16. Long-press → Restart: it still serves `~/Shared` (browser on
+   :9000). `mynx service save web2` writes it to `services.conf`.
+17. `mynx service remove web2` with its tab open: the tab closes
+   after the stop.
+
+*F. Small checks*
+18. Run `htop` as a hidden service (`mynx service add top -- htop`,
+   start): the shown tab's cursor keeps blinking. Remove it after.
+19. After several restarts, `ls /tmp/.mynx/` doesn't collect
+   `cwd-N`/`keybar-N` files.
+
+**Open, for the maintainer** (minor, from the review, not fixed):
+- A block deleted by hand from `services.conf` while it runs stays
+  in `list` as unsaved after it ends, until `mynx service remove`
+  or an app restart.
+- `mynx service list` reloads `services.conf` but doesn't refresh
+  the app: the strip mark and tabs of services removed by hand catch
+  up at the next service change.
+
 ### 1. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
