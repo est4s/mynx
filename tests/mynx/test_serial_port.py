@@ -1,0 +1,248 @@
+"""Tests for tools/lib/serial-port, the pseudo-terminal of a USB serial port.
+
+Run: python3 -m unittest discover -s tests/mynx
+"""
+import importlib.machinery
+import importlib.util
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import termios
+import threading
+import time
+import unittest
+
+HELPER = os.path.join(os.path.dirname(__file__), "..", "..", "tools", "lib", "serial-port")
+
+
+def load_helper():
+    loader = importlib.machinery.SourceFileLoader("serial_port", HELPER)
+    spec = importlib.util.spec_from_loader("serial_port", loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    return module
+
+
+sp = load_helper()
+
+
+def sub(*values):
+    return bytes([255, 250, 44, *values, 255, 240])
+
+
+class EncodingTest(unittest.TestCase):
+    def test_settings_come_from_termios(self):
+        attrs = [0, 0, termios.CS8 | termios.CREAD, 0, termios.B115200, termios.B115200, []]
+        self.assertEqual((115200, 8, 1, 1, False), sp.line_settings(attrs))
+        attrs[2] = termios.CS7 | termios.PARENB | termios.CSTOPB | termios.CRTSCTS
+        self.assertEqual((115200, 7, 3, 2, True), sp.line_settings(attrs))
+        attrs[2] = termios.CS8 | termios.PARENB | termios.PARODD
+        self.assertEqual(2, sp.line_settings(attrs)[2])
+
+    def test_setup_asks_for_each_setting(self):
+        self.assertEqual(
+            sub(1, 0, 1, 0xC2, 0) + sub(2, 8) + sub(3, 1) + sub(4, 1) + sub(5, 1),
+            sp.setup((115200, 8, 1, 1, False)))
+        self.assertTrue(sp.setup((9600, 8, 1, 1, True)).endswith(sub(5, 3)))
+
+    def test_an_iac_in_a_value_is_doubled(self):
+        self.assertEqual(sub(1, 0, 0, 0, 255, 255), sp.subnegotiation(1, bytes([0, 0, 0, 255])))
+
+    def test_escape_doubles_iac(self):
+        self.assertEqual(b"a\xff\xffb", sp.escape(b"a\xffb"))
+
+    def test_unescape_drops_telnet_and_keeps_data_across_reads(self):
+        u = sp.Unescaper()
+        self.assertEqual(b"a", u.feed(bytes([97, 255, 251, 3, 255, 250, 44, 101, 0])))
+        self.assertEqual(b"\xffb", u.feed(bytes([1, 255, 240, 255, 255, 98])))
+        self.assertEqual(b"c", u.feed(bytes([255, 241, 99])))
+
+
+class FakePort:
+    """The app's RFC 2217 server, as far as the helper sees it: records
+    what each connection sent, and can send bytes to the current one."""
+
+    def __init__(self):
+        self.server = socket.socket()
+        self.server.bind(("127.0.0.1", 0))
+        self.server.listen(4)
+        self.port = self.server.getsockname()[1]
+        self.connections = []  # one bytearray per connection
+        self.current = None
+        self.closed = threading.Event()
+        threading.Thread(target=self.accept, daemon=True).start()
+
+    def accept(self):
+        while True:
+            try:
+                conn, _ = self.server.accept()
+            except OSError:
+                return
+            received = bytearray()
+            self.connections.append(received)
+            self.current = conn
+            self.closed.clear()
+            threading.Thread(target=self.read, args=(conn, received), daemon=True).start()
+
+    def read(self, conn, received):
+        while True:
+            try:
+                data = conn.recv(4096)
+            except OSError:
+                data = b""
+            if not data:
+                break
+            received.extend(data)
+        if self.current is conn:
+            self.current = None
+        self.closed.set()
+
+    def close(self):
+        self.server.close()
+
+
+def wait_for(check, what, seconds=5):
+    until = time.monotonic() + seconds
+    while not check():
+        if time.monotonic() > until:
+            raise AssertionError(f"timed out waiting for {what}")
+        time.sleep(0.02)
+
+
+class BridgeTest(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.mkdtemp()
+        self.port = FakePort()
+        self.bridge = sp.Bridge("ttyUSB0", self.port.port, self.folder)
+        self.thread = threading.Thread(target=self.bridge.run, daemon=True)
+        self.thread.start()
+        self.link = os.path.join(self.folder, "ttyUSB0")
+        wait_for(lambda: os.path.islink(self.link), "the link")
+
+    def tearDown(self):
+        self.bridge.stopped = True
+        self.thread.join(5)
+        self.port.close()
+        os.rmdir(self.folder)
+
+    def wait_for_setup(self):
+        wait_for(lambda: self.port.connections and self.port.connections[0].endswith(sub(5, 11)), "the setup")
+
+    def test_the_link_points_at_a_terminal(self):
+        self.assertTrue(os.readlink(self.link).startswith("/dev/pts/"))
+
+    def test_no_connection_while_nothing_has_it_open(self):
+        time.sleep(0.4)
+        self.assertEqual([], self.port.connections)
+
+    def test_opening_connects_with_its_settings_and_raises_dtr_and_rts(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            wait_for(lambda: len(self.port.connections) == 1, "a connection")
+            expected = (bytes([255, 251, 44]) + sp.setup((9600, 8, 1, 1, False))
+                        + sub(5, 8) + sub(5, 11))
+            wait_for(lambda: bytes(self.port.connections[0]) == expected, "the setup")
+        finally:
+            os.close(fd)
+
+    def test_bytes_go_both_ways(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            self.wait_for_setup()
+            start = len(self.port.connections[0])
+            os.write(fd, b"hi\xff")
+            wait_for(lambda: bytes(self.port.connections[0][start:]) == b"hi\xff\xff", "the bytes")
+            self.port.current.sendall(b"ok\xff\xff" + sub(101, 0, 0, 37, 128) + b"!")
+            got = b""
+            until = time.monotonic() + 5
+            while got != b"ok\xff!" and time.monotonic() < until:
+                time.sleep(0.05)
+                try:
+                    got += os.read(fd, 100)
+                except BlockingIOError:
+                    pass
+            self.assertEqual(b"ok\xff!", got)
+        finally:
+            os.close(fd)
+
+    def test_a_new_baud_rate_goes_before_the_bytes_after_it(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            self.wait_for_setup()
+            start = len(self.port.connections[0])
+            attrs = termios.tcgetattr(fd)
+            attrs[4] = attrs[5] = termios.B115200
+            termios.tcsetattr(fd, termios.TCSANOW, attrs)
+            os.write(fd, b"x")
+            wait_for(lambda: bytes(self.port.connections[0][start:]).endswith(b"x"), "the byte")
+            self.assertEqual(sp.setup((115200, 8, 1, 1, False)) + b"x", bytes(self.port.connections[0][start:]))
+        finally:
+            os.close(fd)
+
+    def test_closing_lets_go_and_opening_again_connects_again(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        wait_for(lambda: self.port.current is not None, "a connection")
+        os.close(fd)
+        wait_for(lambda: self.port.current is None, "the end of the connection")
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            wait_for(lambda: len(self.port.connections) == 2, "a second connection")
+        finally:
+            os.close(fd)
+
+    def test_bytes_written_just_before_closing_still_go(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        os.write(fd, b"bye")
+        os.close(fd)
+        wait_for(lambda: self.port.connections and bytes(self.port.connections[0]).endswith(b"bye"), "the bytes")
+
+    def test_stopping_removes_the_link(self):
+        self.bridge.stopped = True
+        self.thread.join(5)
+        self.assertFalse(os.path.lexists(self.link))
+
+
+class AppAwayTest(unittest.TestCase):
+    def test_with_no_app_the_bytes_are_dropped_and_it_keeps_trying(self):
+        folder = tempfile.mkdtemp()
+        unused = socket.socket()
+        unused.bind(("127.0.0.1", 0))
+        port = unused.getsockname()[1]
+        unused.close()
+        bridge = sp.Bridge("ttyACM0", port, folder)
+        thread = threading.Thread(target=bridge.run, daemon=True)
+        thread.start()
+        link = os.path.join(folder, "ttyACM0")
+        wait_for(lambda: os.path.islink(link), "the link")
+        fd = os.open(link, os.O_RDWR | os.O_NOCTTY)
+        os.write(fd, b"lost")
+        time.sleep(0.5)
+        self.assertGreater(bridge.retry_at, 0)
+        os.close(fd)
+        bridge.stopped = True
+        thread.join(5)
+        os.rmdir(folder)
+
+
+class CommandTest(unittest.TestCase):
+    def test_usage(self):
+        result = subprocess.run([sys.executable, HELPER, "ttyUSB0"], capture_output=True, text=True)
+        self.assertEqual(2, result.returncode)
+        self.assertIn("usage: serial-port NAME TCPPORT", result.stderr)
+
+    def test_term_stops_it_and_removes_the_link(self):
+        folder = tempfile.mkdtemp()
+        process = subprocess.Popen([sys.executable, HELPER, "ttyUSB3", "1", folder], stderr=subprocess.PIPE, text=True)
+        link = os.path.join(folder, "ttyUSB3")
+        wait_for(lambda: os.path.islink(link), "the link")
+        process.terminate()
+        self.assertEqual(0, process.wait(5))
+        self.assertFalse(os.path.lexists(link))
+        self.assertIn(f"{link} -> /dev/pts/", process.stderr.read())
+        os.rmdir(folder)
+
+
+if __name__ == "__main__":
+    unittest.main()
