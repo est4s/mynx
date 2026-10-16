@@ -128,3 +128,10 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF 'VolumeDown' "$GUIDE"
     grep -qF 'changes the volume as usual' "$GUIDE"
 }
+
+@test "the guide explains USB serial ports: both ways in, allowing, and what Android forbids" {
+    for text in "/dev/serial/ttyUSB0" "rfc2217://localhost:2217" "mynx usb allow" \
+        "one user at a time" "TIOCMSET" "/tmp/.mynx/serial/NAME.log"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}

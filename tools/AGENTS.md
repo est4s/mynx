@@ -58,6 +58,7 @@ and applies them. See "Changing settings" below.
 | The app's tools: `mynx`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/mynx/bin` |
 | Built-in key bars and themes, to read or copy | `/opt/mynx/keybars`, `/opt/mynx/themes` |
 | Licence texts of what the app bundles (`mynx about`) | `/opt/mynx/licenses` |
+| USB serial ports (boards, adapters) | `/dev/serial/ttyUSB0`, `rfc2217://localhost:2217` (see "USB serial devices") |
 
 `/opt/mynx` belongs to the app and is replaced on every app
 update; don't change it. Its `bin` comes first on the PATH. Your changes
@@ -122,6 +123,9 @@ their own.
 | `mynx service remove NAME` | stop a service and remove it from `services.conf` |
 | `mynx service autostart NAME on\|off` | whether a service starts when the app starts (its `autostart` line in `services.conf`); it doesn't start or stop it now |
 | `mynx service adopt NAME` | turn this tab into the unsaved service NAME, as it runs; `mynx service save NAME [--command CMD]` saves it to `services.conf` |
+| `mynx usb [list]` | USB serial devices: their ports' `/dev/serial` paths and `rfc2217://` URLs, or why they have none (see "USB serial devices") |
+| `mynx usb allow [DEVICE]` | ask Android to let the app use a USB serial device (the app must be on screen) |
+| `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …` |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
 | `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify`, and for Codex `--sandbox-off`/`--sandbox-on`, skip the questions) |
@@ -516,6 +520,58 @@ Commands for the phone itself, and the sound device:
   the time. A name that's taken gets ` (2)`, so nothing is overwritten.
   A notification says what was saved where.
 - `mynx notify` and `mynx open`: see "AI agents" above.
+
+### USB serial devices
+
+Boards like Arduino and ESP32, and USB-to-serial adapters, plugged in
+with a USB-C OTG cable or adapter, become serial ports in Debian. The
+app drives them through Android (no kernel drivers here): CDC ACM
+devices (Arduino Uno and Mega's ATmega16U2, Leonardo, ESP32-S2, -S3,
+-C3 and -C6's own USB, Raspberry Pi Pico, STM32's virtual COM port),
+and the CH340/CH341, CP210x, FTDI and PL2303 chips.
+
+- **Allowing it:** when one is plugged in, Android asks whether to
+  open mynx for it; OK lets the app use it until it's unplugged
+  ("always" remembers that device). One Android didn't ask about:
+  `mynx usb allow [DEVICE]`, with the app on screen. A notification
+  says when its ports are ready, and where.
+- **Each port, two ways:**
+  - `/dev/serial/ttyUSB0` (`ttyACM0` for CDC ACM devices; the next
+    one gets 1): a terminal device for programs that open a file:
+    `picocom -b 115200 /dev/serial/ttyUSB0`, `screen`, `minicom`,
+    `cat`, `stty`, `avrdude`, a script. Opening it raises DTR and RTS,
+    as on Linux (which resets an Arduino Uno), and closing it drops
+    them; the baud rate, data bits, parity and stop bits follow what
+    the program sets (9600 8N1 until one does).
+  - `rfc2217://localhost:2217` (2218 for the next port, …): the same
+    port over RFC 2217, which pyserial speaks, so tools that toggle
+    DTR and RTS themselves work: `esptool --port
+    "rfc2217://localhost:2217" …` (reset into the bootloader and
+    back), PlatformIO (`upload_port` and `monitor_port`),
+    `python3 -m serial.tools.miniterm rfc2217://localhost:2217 115200`.
+  A port has one user at a time: while a program has its
+  `/dev/serial` file open, its URL is busy, and the other way round.
+- **What Android doesn't allow:** programs here may not use the
+  modem-line calls on a terminal device (`TIOCMGET`, `TIOCMSET`,
+  `TIOCEXCL`, `tcdrain`): they fail with "Permission denied". So
+  pyserial can't open a `/dev/serial` file (use the URL), Go programs
+  such as `arduino-cli monitor` can't either, and avrdude says it
+  can't set DTR and RTS (opening the port has reset the board
+  already). Tools also can't find the ports themselves (no
+  `/dev/ttyUSB*`, no `/sys` entries): name the port.
+- `mynx usb` lists the devices with their ports, paths and URLs;
+  `mynx usb url` and `mynx usb path` print the only port's (or
+  `PORT`'s) for scripts. `--json` gives `devices`: `id`, `ids`
+  (vendor:product), `manufacturer`, `product`, `serial`, `driver`,
+  `allowed`, `error` and `ports` (`name`, `path`, `url`, `tcp_port`,
+  `in_use`).
+- The tools: `apt install picocom` (or `minicom`, `screen`),
+  `python3-serial` (pyserial, miniterm), `esptool`, `avrdude`;
+  PlatformIO with `pip`, `arduino-cli` from Arduino.
+- Each port's helper (it makes the terminal device) logs to
+  `/tmp/.mynx/serial/NAME.log`.
+- The URL is on localhost: other apps on the phone could reach it
+  too, while mynx runs and the device is plugged in.
 
 ### Themes and colours
 
