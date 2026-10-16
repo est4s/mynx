@@ -1832,6 +1832,97 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertIn("usage: mynx rotation [status] | lock [portrait|landscape] [--pid PID] | unlock",
                           run.stderr, args)
 
+    # --- usb ----------------------------------------------------------------
+
+    @staticmethod
+    def usb_device(ids="1a86:7523", product="USB Serial", ports=(), allowed=True, error=None, **fields):
+        device = {"id": "/dev/bus/usb/001/002", "ids": ids, "manufacturer": None, "product": product,
+                  "serial": None, "driver": "ch34x", "allowed": allowed, "error": error,
+                  "ports": [{"name": name, "path": f"/dev/serial/{name}", "url": f"rfc2217://localhost:{tcp}",
+                             "tcp_port": tcp, "in_use": in_use} for name, tcp, in_use in ports]}
+        device.update(fields)
+        return device
+
+    def test_usb_lists_ports_with_their_paths_and_urls(self):
+        devices = [
+            self.usb_device(ports=[("ttyUSB0", 2217, True)]),
+            self.usb_device(ids="10c4:ea70", product="CP2105", ports=[("ttyUSB1", 2218, False), ("ttyUSB2", 2219, False)]),
+            self.usb_device(ids="303a:1001", product="USB JTAG/serial debug unit", allowed=False),
+            self.usb_device(ids="0403:6001", product=None, error="couldn't open it: busy"),
+        ]
+        self.start_app({"usb-list": {"ok": True, "devices": devices}})
+        for args in [("usb",), ("usb", "list")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout,
+                             "ttyUSB0  USB Serial (1a86:7523), in use\n"
+                             "  /dev/serial/ttyUSB0\n"
+                             "  rfc2217://localhost:2217\n"
+                             "ttyUSB1  CP2105 (10c4:ea70)\n"
+                             "  /dev/serial/ttyUSB1\n"
+                             "  rfc2217://localhost:2218\n"
+                             "ttyUSB2  CP2105 (10c4:ea70)\n"
+                             "  /dev/serial/ttyUSB2\n"
+                             "  rfc2217://localhost:2219\n"
+                             "USB JTAG/serial debug unit (303a:1001): not allowed\n"
+                             "  mynx usb allow 303a:1001 (app on screen)\n"
+                             "USB device (0403:6001): couldn't open it: busy\n")
+        self.assertEqual(self.app.requests, [["usb-list"], ["usb-list"]])
+        self.assertEqual(json.loads(self.mynx("usb", "--json").stdout), {"ok": True, "devices": devices})
+
+    def test_usb_with_nothing_connected_says_how(self):
+        self.start_app({"usb-list": {"ok": True, "devices": []}})
+        run = self.mynx("usb")
+        self.assertEqual(run.returncode, 0)
+        self.assertIn("No USB serial device", run.stdout)
+        self.assertIn("OTG", run.stdout)
+
+    def test_usb_allow_asks_and_shows_the_ports(self):
+        device = self.usb_device(ports=[("ttyUSB0", 2217, False)])
+        self.start_app({"usb-allow": {"ok": True, "device": device}})
+        run = self.mynx("usb", "allow")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Allowed: USB Serial (1a86:7523)\n"
+                                     "ttyUSB0  /dev/serial/ttyUSB0\n"
+                                     "         rfc2217://localhost:2217\n")
+        self.mynx("usb", "allow", "1a86:7523")
+        self.assertEqual(self.app.requests, [["usb-allow"], ["usb-allow", "1a86:7523"]])
+
+    def test_usb_allow_refused(self):
+        self.start_app({"usb-allow": {"ok": False, "error": "access to 1a86:7523 was denied"}})
+        run = self.mynx("usb", "allow")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("access to 1a86:7523 was denied", run.stderr)
+
+    def test_usb_url_and_path_of_the_only_port_or_a_named_one(self):
+        one = [self.usb_device(ports=[("ttyUSB0", 2217, False)])]
+        self.start_app({"usb-list": {"ok": True, "devices": one}})
+        self.assertEqual(self.mynx("usb", "url").stdout, "rfc2217://localhost:2217\n")
+        self.assertEqual(self.mynx("usb", "path").stdout, "/dev/serial/ttyUSB0\n")
+        self.assertEqual(self.mynx("usb", "url", "ttyUSB0").stdout, "rfc2217://localhost:2217\n")
+        run = self.mynx("usb", "url", "ttyACM0")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no port ttyACM0 (mynx usb lists them)", run.stderr)
+        self.assertEqual(json.loads(self.mynx("usb", "url", "--json").stdout),
+                         {"ok": True, "url": "rfc2217://localhost:2217", "path": "/dev/serial/ttyUSB0", "name": "ttyUSB0"})
+
+    def test_usb_url_with_several_ports_or_none(self):
+        two = [self.usb_device(ports=[("ttyUSB0", 2217, False), ("ttyACM0", 2218, False)])]
+        self.start_app({"usb-list": {"ok": True, "devices": two}})
+        run = self.mynx("usb", "url")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("2 ports: say which (ttyUSB0, ttyACM0)", run.stderr)
+        self.app.replies["usb-list"] = {"ok": True, "devices": []}
+        run = self.mynx("usb", "path")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no USB serial port", run.stderr)
+
+    def test_usb_usage(self):
+        for args in [("usb", "list", "x"), ("usb", "allow", "a", "b"), ("usb", "url", "a", "b"), ("usb", "plug")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx usb", run.stderr, args)
+
     # --- service ------------------------------------------------------------
 
     @staticmethod
