@@ -1415,6 +1415,10 @@ COMPONENTS = [
      "source": "https://github.com/ryanoasis/nerd-fonts",
      "note": "The terminal font: JetBrains Mono "
              "(https://github.com/JetBrains/JetBrainsMono) patched by Nerd Fonts."},
+    {"name": "usb-serial-for-android", "version": "3.11.0", "license": "MIT",
+     "source": "https://github.com/mik3y/usb-serial-for-android",
+     "note": "The USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) behind "
+             "/dev/serial. Its licence and copyright are the last text below."},
     {"name": "Debian", "version": "13 (trixie)", "license": "many (see each package)",
      "source": "https://sources.debian.org",
      "note": "The Linux system in the terminal, with PulseAudio, Python, nnn, "
@@ -1424,7 +1428,7 @@ COMPONENTS = [
 
 # The licence files in /opt/mynx/licenses/, in the order they're shown:
 # the app's own first.
-LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
+LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "MIT-usb-serial-for-android"]
 
 
 def wrap(text, indent="  ", width=56):

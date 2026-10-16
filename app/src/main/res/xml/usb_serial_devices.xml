@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- USB devices that open mynx when connected (Android asks first): the
+     serial chips usb-serial-for-android drives, and any device with a
+     CDC interface (Arduino Uno's ATmega16U2, ESP32-S2/S3/C3's own USB,
+     Raspberry Pi Pico, …): Android matches a class on its interfaces too. -->
+<resources>
+    <usb-device class="2" />
+    <!-- QinHeng CH340/CH341 -->
+    <usb-device vendor-id="6790" />
+    <!-- Silicon Labs CP210x -->
+    <usb-device vendor-id="4292" />
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" />
+    <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" />
+</resources>

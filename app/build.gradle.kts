@@ -5,6 +5,8 @@ plugins {
 dependencies {
     implementation(project(":core"))
     implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
+    // USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) over Android's USB host API.
+    implementation("com.github.mik3y:usb-serial-for-android:3.11.0")
 }
 
 android {
