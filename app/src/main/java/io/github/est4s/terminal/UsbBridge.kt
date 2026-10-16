@@ -251,8 +251,8 @@ class UsbBridge(
             while (!closed) {
                 val n = try {
                     port.read(buffer, 0)
-                } catch (e: IOException) {
-                    // Unplugged: the detach broadcast closes the rest.
+                } catch (e: Exception) {
+                    // Unplugged (or closed): the detach broadcast closes the rest.
                     if (!closed) handler.post { refresh() }
                     break
                 }

@@ -19,7 +19,8 @@ are in git history: the full log up to entry 92 is
   themed icon, the title art and "m" icon). Also: the rename to mynx,
   bug reports (`mynx report`), and **mynx dev**, debug builds as a
   separate app (entry 82).
-- **Released:** v0.1.0 and v0.1.1 (2026-10-10), v0.1.2 (2026-10-12), signed with the
+- **Released:** v0.1.0 and v0.1.1 (2026-10-10), v0.1.2 (2026-10-12),
+  v0.2.0 (2026-10-13, background services), signed with the
   release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer's
   daily mynx is the release, and it updated 0.1.0 → 0.1.1 → 0.1.2
   through `mynx update` (entry 81's updates, confirmed); 0.1.2 came
@@ -35,6 +36,12 @@ are in git history: the full log up to entry 92 is
   v0.1.2 (PR #26, entry 106).
 - **Guided GitHub setup** (`mynx github`) and **bug reports**
   (`mynx report`): every path confirmed on the phone (2026-10-12).
+- **Background services:** all 21 phone tests passed (the last,
+  autostart on and off, on 2026-10-13); merged (PR #30, #32) and
+  released in v0.2.0. The plan left "Next" (git history has it:
+  `git show 8ea1266:docs/WORKLOG.md`).
+- **USB serial bridge:** built on PR #33 (entry 115), waiting for
+  the phone tests in "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -43,245 +50,132 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Background services (built on branch `services`, PR #30; all 20 phone tests passed 2026-10-13, entries 111-112)
+### 0. USB serial bridge (built on branch `usb-serial`, PR #33; phone tests below)
 
-Roadmap "Background services": hidden tabs for servers and daemons.
-Build test-first, with a maintainer test on the phone after each part.
+Roadmap "Development boards": boards (Arduino, ESP32) and USB-serial
+adapters on a USB-C OTG cable become serial ports in Debian. Planned
+and built 2026-10-16 (entry 115) while the maintainer slept, so the
+decisions are the agent's: **change any the maintainer objects to.**
 
-**Maintainer's decisions (2026-10-12):**
-- **Defined in a config file**, `~/.config/mynx/services.conf`,
-  which `mynx service add/remove` edit and `mynx check` checks.
-- **Opening a service shows it as a tab**, marked as a service, with
-  a `service` key bar. Closing that tab only hides it again; only
-  Stop ends it.
-- **Autostart is when the app starts.** Not at phone boot. Services
-  that were running also come back after Android kills the app.
-- **`wakelock = auto`**, the new default: hold the CPU awake only
-  while a service runs. `on` and `off` stay as they are.
+**How it works:**
+```
+board ─USB─ Android's USB API ─ UsbBridge (usb-serial-for-android)
+                                   │ RFC 2217 on 127.0.0.1:2217 (core's SerialServer)
+                                   ├─ esptool, PlatformIO, miniterm: rfc2217://localhost:2217
+                                   └─ serial-port helper (Debian, one per port)
+                                        pty, linked as /dev/serial/ttyUSB0
+                                        ← picocom, screen, avrdude, cat, scripts
+```
 
-**Design (agent's proposal; change it if the maintainer objects):**
-- **File format:** one `[name]` block per service, keys:
-  `command` (run by `bash --login -c`, so the PATH and `~/.profile`
-  apply), `cwd` (default `~`), `autostart = yes|no` (default no),
-  `restart = no|on-failure|always` (default on-failure),
-  `restart-limit` (quick failures in a row before giving up, default
-  5, 0 = never give up), `restart-delay` (first wait in seconds,
-  default 1, doubling up to 60), `stop-timeout` (seconds, default
-  10). Names: `[a-z0-9-]`, up to 20.
-  Parsing and checking go in core's `Services.kt`, which joins
-  `checkConfig` and undo like the other files.
-- **A service is a `TerminalSession`**, kept in the service's own
-  list (`Services<S>` in core, generic like `Tabs<S>`), not in
-  `Tabs`. It has a pty, 2000 lines of scrollback, and keys can be
-  typed into it. It gets the same `prootLaunch` as a tab (tools, TZ,
-  sound, power supply, `MYNX_SHELL`), plus `MYNX_SERVICE=NAME`.
-  **Gotcha:** a session only starts on its first `updateSize()`,
-  which normally comes from `attachSession()`. A hidden one would
-  never start, so the service calls `updateSize(80, 24)` itself.
-  Check the 0.118.3 signature first.
-- **The wrapper, `tools/lib/service-run NAME`** (from the spike,
-  below): the session runs `bash --login -c 'service-run NAME'`, and
-  the wrapper reads the command from `services.conf` (or is given it,
-  for an adopted tab). It runs the command in a process group of its
-  own that keeps the terminal, so typing and Ctrl+C reach it. It
-  writes the group's id to `/tmp/.mynx/services/NAME.pid`, and when
-  the command ends it writes its exit code to `NAME.exit` (128+N for
-  signal N). The app takes the exit code from that file, never from
-  the session.
-- **Stopping cleanly:** databases need TERM, and proot ignores it.
-  The app sends TERM to the group in `NAME.pid`, waits up to
-  `stop-timeout`, then the usual `stopProot()` (QUIT, then
-  `killProot()`, which the spike showed leaves nothing behind).
-- **Restarts:** generalise `ServerRestarts` (backoff 1 s to 60 s,
-  reset after 30 s up) into `RestartPolicy`, with the service's own
-  `restart`, `restart-delay` and `restart-limit`. `on-failure`
-  restarts on a non-zero exit, `always` on any exit. After
-  `restart-limit` quick failures in a row it gives up and posts a phone notification ("web exited
-  (code 1), not restarting"), tapping it opens the service. A
-  service stopped by `mynx` is never restarted.
-- **State:** `filesDir/state/services` records which services run.
-  On a fresh start the service runs those plus the `autostart`
-  ones. Exit in the notification clears it, as it does the tabs.
-- **Lifetime:** closing the last tab no longer exits while services
-  run. The app stays in the background, and the notification says
-  "2 terminals · 1 service" (`runningTerminalsText()`). Opening the
-  app with no tabs opens a fresh one as usual.
-- **Wakelock:** `wakelock = auto | on | off`. `auto` holds it while
-  any service runs, using the existing `applyWakelockSetting()`.
-  An old `on`/`off` keeps meaning what it did.
-- **Commands** (`mynx service`, all with `--json`), as requests to
-  the app answered in core:
-  `list` (name, state, pid, uptime, restarts, last exit code),
-  `start/stop/restart NAME`, `log NAME [-n N]` (the session's
-  transcript, from the emulator), `open NAME` (shows it as a tab;
-  the app must be on screen), `add NAME [--autostart]
-  [--restart …] [--cwd DIR] -- COMMAND…`, and `remove NAME` (stops
-  it first). `start` with no saved service of that name refuses.
-- **In the app:** an open service is a `Tab` with `service = NAME`.
-  The strip shows it with a mark (e.g. `● web`). Closing it hides it
-  and doesn't stop it. Its exit doesn't close the tab: the status
-  shows in the title until it restarts. `keybar` picks the `service`
-  bar: Hide, Restart, Stop, Ctrl+C, arrows.
-- **Menu:** a `services` action, "Services" in the built-in menu
-  after AI agents. It lists them with their state; picking one
-  offers Open, Start/Stop, Restart and Log. It shows a short how-to
-  when there are none.
-- **Seeing them from anywhere** (maintainer's decision, 2026-10-12):
-  while any service runs, the strip shows `● N` next to **+**;
-  tapping it opens the Services list (the menu's, in a new tab).
-  The app's ongoing notification gets a **Services** button that
-  does the same.
-- **Turning a tab into a service** (maintainer: nice to have, last
-  part): the tab's long-press menu gets "Run as service", and
-  `mynx service adopt NAME` does it from inside the tab
-  (`MYNX_SHELL` says which). The session moves from `Tabs` to the
-  services as it is, so nothing restarts. It's an *unsaved*
-  service: `restart = no`, not in `services.conf`, and it ends if
-  Android kills the app (a running process can't be brought back).
-  `list` marks it unsaved. Its foreground command can be read from
-  `/proc` (bash's `tpgid` → that process's `cmdline`), so "Save"
-  can offer a `services.conf` block with that command and the
-  folder, to edit before saving.
-- **Ports:** nothing below 1024 (proot's fake root). The guide
-  says so, with `sshd -p 8022` as the example.
+**Decisions (agent's; the maintainer may change them):**
+- **Two ways in, one port.** RFC 2217 carries DTR/RTS and the baud
+  rate, which pyserial (esptool, PlatformIO) speaks; a pty serves
+  programs that open a file. One user at a time: the helper connects
+  only while a program has the pty open.
+- **`/dev/serial/ttyUSB0`, not `/dev/ttyUSB0`.** proot binds are fixed
+  when a proot starts and a host path must exist then (proot resolves
+  it), so a port plugged in later can't appear at `/dev/ttyUSB0` in
+  open tabs. A bound folder of links can: `filesDir/serial` at
+  `/dev/serial` (like proot-distro's `/dev/shm`). Names follow Linux:
+  `ttyACM` for CDC ACM, else `ttyUSB`.
+- **Opening the pty raises DTR and RTS, closing drops them**, as Linux
+  does (HUPCL), so opening resets an Uno as on a PC. A fresh port is
+  9600 8N1, raw and without echo (echo would send the board's output
+  back to it).
+- **Plugging a known serial device offers to open mynx**
+  (`usb_serial_devices.xml`: any CDC interface, and the CH34x, CP210x,
+  FTDI and PL2303 vendors); OK is Android's permission for it.
+  `mynx usb allow` asks for others.
+- **No `android-usb` setting:** Android asks per device anyway.
+- **The TCP port is on localhost only**, but other apps on the phone
+  can connect to it while mynx runs (the guide says so).
+- usb-serial-for-android 3.11.0 (MIT, JitPack), credited in `mynx
+  about` with its licence (`MIT-usb-serial-for-android.txt`).
 
-**Spike results** (2026-10-12, PR #29, mynx dev, closed unmerged):
-- A session started with `updateSize(80, 24, 10, 20)` and never
-  attached runs: `python3 -m http.server 8080` served the phone's
-  browser, also after 4 min with the screen off. Its transcript can
-  be read (`emulator.screen.transcriptText`).
-- A death by signal reads as exit 0: proot reports
-  "terminated with signal 15" and exits 0, even with
-  `cmd; exit $?` (TERM to all tracees kills that bash too). Normal
-  codes come through (`exit 7` → 7). Hence the wrapper.
-- `stopProot()` on a running service leaves no process behind.
-
-**Request protocol** (the contract between core, `mynx` and the
-app; args are strings, replies JSON with `ok`):
-- `service-list` → `services`: objects with `name`, `saved`
-  (false for an adopted tab), `command`, `cwd`, `autostart`,
-  `restart`, `state` (`running`, `stopping`, `stopped`, `failed`
-  when it gave up), `pid`, `started` (ms since 1970 or null),
-  `exit_code` (last, or null), `restarts`, `open` (shown as a tab).
-- `service-start NAME`, `service-restart NAME`: answered once it's
-  started. `service-stop NAME`: a [Later], answered once it has
-  stopped (`stop-timeout` and the force included).
-- `service-log NAME [LINES]` → `log` (the transcript, last LINES,
-  default 100).
-- `service-open NAME`: shows it as a tab (app on screen).
-- `service-add NAME KEY=VALUE…`: `command=…` required; `cwd`,
-  `autostart`, `restart`, `restart-limit`, `restart-delay`,
-  `stop-timeout` optional. Refuses a name that exists.
-  `service-remove NAME`: stops it, removes its block, keeps the rest
-  of the file and its comments.
-- `service-adopt NAME SHELL`: the tab whose `MYNX_SHELL` is SHELL
-  becomes the unsaved service NAME. `service-save NAME [command=…]`
-  writes an adopted one to `services.conf`.
-- Errors as elsewhere: `ok: false`, `error` ("no service named
-  web", "web is already running", …).
+**Found while building** (in AGENTS.md "Lessons"): Android forbids the
+modem ioctls on a pty (EACCES: `TIOCMGET/SET/BIS`, `TIOCEXCL`,
+`TCSBRK` so `tcdrain`), and inotify on it. So pyserial can't open
+`/dev/serial/…` (use the URL), nor can Go programs (`arduino-cli
+monitor`), and avrdude can't toggle DTR itself (opening the port
+resets the board instead). Whether picocom and screen mind is phone
+test 4.
 
 **Parts:**
-1. **Core and commands:** `Services.kt` (format, check, add/remove
-   keeping the rest of the file), `RestartPolicy`, the requests,
-   `mynx service list/start/stop/restart/log/add/remove`. App:
-   hidden sessions, clean stop, restarts, notifications. Phone test:
-   `python3 -m http.server 8080` as a service, reached from the
-   phone's browser, stopped and restarted, killed to see a restart.
-2. **Opening as a tab:** `mynx service open`, the strip mark, hide
-   on close, the `service` key bar.
-3. **Autostart, restore, lifetime and wakelock:** the state file,
-   staying alive with no tabs, `wakelock = auto`, the notification
-   text. Phone test: swipe the app away, reopen it, and see the
-   services back.
-4. **Menu and docs:** the Services menu, `tools/AGENTS.md` (a
-   "Background services" section and the commands table), README,
-   AGENTS.md architecture, and the roadmap entry leaves.
-5. **Strip indicator and notification button:** `● N` next to
-   **+**, the notification's Services button.
-6. **Turning a tab into a service (nice to have):** "Run as
-   service", `mynx service adopt NAME`, and saving it to
-   `services.conf` from its foreground command.
+1. **Built (PR #33):** core `Rfc2217Session`, `SerialServer` (tested
+   against pyserial's own client where it's installed:
+   `PYTHONPATH=… ./gradlew :core:test`), `Usb.kt` (names, JSON,
+   `usb-list`, `usb-allow`), `prootLaunch(serialDir)`; app
+   `UsbBridge`, `UsbActivity`, the manifest filter, the "ready"
+   notification; `tools/lib/serial-port`; `mynx usb [list] | allow
+   [DEVICE] | url|path [PORT]`; the guide's "USB serial devices",
+   AGENTS.md, roadmap. README after the phone tests.
+2. **Next: catch the forbidden ioctls** so pyserial, esptool and
+   PlatformIO work on `/dev/serial/…` too. Proposal: a small
+   `LD_PRELOAD` library in `/opt/mynx/lib` (cross-compiled in CI;
+   there's no C compiler here, and `apt install gcc` would change the
+   maintainer's Debian, so ask first), set for every proot by
+   `prootLaunch` only when it exists. It acts only when the real
+   ioctl failed with EACCES on a `/dev/serial` pty: `TIOCMGET/SET/BIS/
+   BIC` ask the port's helper over a control socket
+   (`/dev/serial/.NAME.ctl`), which sends RFC 2217 SET-CONTROL;
+   `TIOCEXCL/NXCL` succeed; `tcdrain` waits for `TIOCOUTQ` to empty.
+   Static Go programs make raw system calls, so they'd need proot to
+   do it instead. **Maintainer: is a global LD_PRELOAD acceptable?**
+3. **Later:** a serial monitor tab or menu item, the README, recipes
+   in the guide (arduino-cli, PlatformIO), UF2 and raw USB (roadmap).
 
-**Phone tests** (mynx dev, PR #30's build; numbered so results can
-be reported by number):
+**Phone tests** (mynx dev, PR #33's build, `scripts/deliver.sh`;
+numbered so results can be reported by number). A board with a
+USB-serial chip (ESP32 dev board with CP2102/CH340, or an Arduino
+Uno/Nano) and an OTG adapter. First, in mynx dev: `apt update && apt
+install picocom python3-serial esptool avrdude` (what applies).
 
-*Setup.* In mynx dev: `mynx service add web -- python3 -m http.server
-8080`, then `mynx service list` (web, stopped).
+*A. Connecting*
+1. Plug the board in. Android asks whether to open mynx dev for it:
+   OK. mynx dev opens and a notification says "ttyUSB0 is ready: …"
+   (ttyACM0 for an Uno's own USB or ESP32-S3/C3's) with
+   `/dev/serial/ttyUSB0 · rfc2217://localhost:2217`. (No dialog?
+   `mynx usb` says "not allowed"; `mynx usb allow` shows Android's
+   dialog; Allow prints the port.)
+2. `mynx usb` lists the port, its path and URL; `ls -l /dev/serial/`
+   shows `ttyUSB0 -> /dev/pts/N`, also in a tab opened before
+   plugging in; `mynx usb url` prints the URL.
+3. Unplug: the notification goes, `mynx usb` says no device,
+   `/dev/serial/` is empty. Plug in again: ready again, same name.
 
-*A. Running hidden (part 1)*
-1. `mynx service start web`; `mynx service list` shows it running;
-   `mynx open http://localhost:8080` lists the home folder.
-2. `mynx service log web` shows the server's lines.
-3. `mynx service stop web` returns within a second or two;
-   `list` shows `stopped (143)`.
-4. Restart: `mynx service start web`, then in a tab
-   `pkill -f http.server`: it comes back within a few seconds
-   (`list`: restarts 1).
-5. Gave up: `mynx service add bad --restart-limit 2 -- false`,
-   `mynx service start bad`: after the restarts, a notification
-   "bad stopped (code 1), not restarting"; `list` shows failed.
-   Then `mynx service remove bad`.
+*B. Talking*
+4. With firmware that prints (an ESP32 prints its boot log at 115200
+   on reset): `picocom -b 115200 /dev/serial/ttyUSB0` shows it (press
+   the board's reset button), and typing reaches the board if its
+   firmware echoes. Ctrl+A Ctrl+X quits. What does picocom say at
+   the start and end (DTR, modem lines, errors)?
+5. An Uno (or a board that resets on DTR): opening picocom restarts
+   the sketch (its first lines show again).
+6. `python3 -m serial.tools.miniterm rfc2217://localhost:2217 115200`
+   shows the output too (Ctrl+] quits). While it runs, `mynx usb`
+   says "in use"; picocom on `/dev/serial/ttyUSB0` in another tab
+   gets nothing until miniterm quits.
 
-*B. Opening as a tab (part 2)*
-6. `mynx service open web` (or Services → web → Open): a tab
-   `● web` with the service bar, the server's output. Ctrl+C in it:
-   Python's server catches it and exits 0, so `on-failure` doesn't
-   restart it ("○ web: exit 0", Enter does nothing); long-press →
-   Start runs it again in the same tab.
-7. × on that tab hides it; the browser still loads; `list` says not
-   open.
-8. Long-press the opened tab: Hide, Restart, Stop work; after Stop
-   the title is "○ web: stopped" and the menu offers Start.
+*C. Flashing*
+7. ESP32: `esptool --port rfc2217://localhost:2217 chip_id` (Debian's
+   esptool may be `esptool.py`; v5 spells it `chip-id`) resets the
+   board into its bootloader by itself, prints the chip, and resets it
+   back.
+8. ESP32: flash something real (`esptool … write_flash 0x10000
+   app.bin`, or PlatformIO with `upload_port =
+   rfc2217://localhost:2217`), at `-b 460800` too; the board runs it.
+9. Uno: `avrdude -p m328p -c arduino -P /dev/serial/ttyACM0 -b 115200
+   -U flash:r:/tmp/uno.hex:i` (reads only): it complains about DTR,
+   then reads? (Nano with a CH340: `ttyUSB0`, often `-b 57600`.)
 
-*C. Coming back, lifetime, wakelock (part 3)*
-9. With web running, swipe the app away and reopen: shell tabs come
-   back, web runs hidden (`list`, browser). This is the first test
-   of a hidden session that was never shown after a restart.
-10. Close the last tab with web running: the app goes, the
-   notification stays ("No terminals · 1 service"). Reopen: a fresh
-   tab. Stop web: with no tabs left, the app exits.
-11. Exit from the notification with web running; reopen after 5 s:
-   no service, and `ps aux` shows no python or leftover proot.
-   Exit and reopen within 3 s: a fresh tab, the notification stays.
-12. `mynx get wakelock` says `auto`; the notification says "wakelock
-   held" only while a service runs.
-
-*D. Menu, mark, notification button (parts 4-5)*
-13. With web running, `● 1` shows right of **+**; tapping it opens
-   the Services list. The notification's Services button does the
-   same, also with the app in the background.
-14. Services → web: Open, Stop/Start, Restart and Log work; Log
-   opens in the pager.
-
-*E. Run as service (part 6)*
-15. In a tab: `cd ~/Shared && python3 -m http.server 9000`, long-press
-   → Run as service. The name is prefilled `python3`; type `web2`.
-   The tab becomes `● web2`; `list` shows `web2*`.
-16. Long-press → Restart: it still serves `~/Shared` (browser on
-   :9000). `mynx service save web2` writes it to `services.conf`.
-17. `mynx service remove web2` with its tab open: the tab closes
-   after the stop.
-
-*F. Small checks*
-18. Run `htop` as a hidden service (`mynx service add top -- htop`,
-   start): the shown tab's cursor keeps blinking. Remove it after.
-19. After several restarts, `ls /tmp/.mynx/` doesn't collect
-   `cwd-N`/`keybar-N` files.
-
-**Fixed after the phone tests** (entry 112; passed on the phone):
-20. Edit `services.conf` by hand to add a service, run `mynx check`:
-   the strip mark and the notification follow without a service
-   command. Delete a running service's block, `mynx check`: it keeps
-   running as unsaved (`web*`); stop it: it leaves the list and its
-   tab closes.
-
-**Autostart switch** (entry 114; not yet on the phone):
-21. `mynx service autostart web on`: `services.conf` gets
-   `autostart = yes` in `[web]`, the rest unchanged, and `web` keeps
-   running. Menu → Services → web shows "Autostart: on"; picking it
-   turns it off (the item says "Autostart: off", the line `no`).
-   Exit from the notification and reopen: `web` starts only while
-   autostart is on.
+*D. The app around it*
+10. With the board in, Exit from the notification, then open the app:
+    the port is ready again (`mynx usb`).
+11. Unplug while picocom runs on it: picocom ends or complains, nothing
+    hangs; plugging in again works.
+12. `cat /tmp/.mynx/serial/ttyUSB0.log` shows the helper's lines
+    (opened at 115200 baud, closed).
+13. (If there are two devices) both get names and ports 2217, 2218.
 
 ### 1. Smaller things
 
@@ -387,6 +281,25 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-16 (115): USB serial bridge, planned and built (branch `usb-serial`)
+
+The maintainer asked for a plan and as much of it built as possible
+overnight, to test in the morning. The plan, its decisions and the
+phone tests are "Next 0". Built test-first:
+- core: `Rfc2217Session` and `SerialServer` (checked against
+  pyserial 3.5's own client, from a copy in the scratchpad), `Usb.kt`,
+  `prootLaunch(serialDir)`.
+- `tools/lib/serial-port` (tests/mynx/test_serial_port.py drives it
+  with a real pty and a fake server), `mynx usb`, `mynx about`'s
+  credit.
+- app: `UsbBridge`, `UsbActivity`, the device filter, the "ready"
+  notification. Compiles only in CI.
+- Found: Android forbids the modem ioctls and inotify on a pty
+  (AGENTS.md "Lessons"); hence RFC 2217 for pyserial and, later, an
+  ioctl shim (Next 0, part 2).
+- Housekeeping: test 21 of the services passed (2026-10-13) and
+  v0.2.0 is out; the finished services plan left "Next".
 
 ### 2026-10-13 (114): Autostart on and off
 
