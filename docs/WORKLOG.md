@@ -55,9 +55,10 @@ are in git history: the full log up to entry 92 is
 
 ### 0. USB serial, part 2: a preload library for `/dev/serial` (branch `serial-preload`)
 
-**Where it stands (entry 121):** PR #34, mynx dev 180: checks 1, 2,
-3 and 5 pass on the C3. Left: 4 (Nano) and the CAM-MB with picocom's
-`--lower-dtr --lower-rts`, then 6 (README), then merge. If a check fails, the helper's log
+**Where it stands (entry 122):** PR #34, mynx dev 180: all checks
+pass (1, 2, 3, 5 on the C3; 4 on the Nano; the CAM-MB with miniterm
+and picocom; README done). Left: the maintainer merges; then this
+section and entries 120-122 can go (lessons are in AGENTS.md). If a check fails, the helper's log
 (`/tmp/.mynx/serial/NAME.log`) shows every DTR/RTS change ("DTR off,
 RTS on"); a quick check by hand without CI: `CC=gcc
 scripts/build-preload.sh /tmp/x.so; LD_PRELOAD=/tmp/x.so esptool
@@ -268,6 +269,27 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-18 (122): Preload: the Nano and the ESP32-CAM-MB pass
+
+- Check 4: avrdude (`-c arduino -b 115200`) reads the Nano's flash on
+  `/dev/serial/ttyUSB0` with no complaints; with `LD_PRELOAD=` it
+  prints `ioctl("TIOCMGET"): Permission denied` three times, as before.
+- ESP32-CAM-MB (CH340, ttyUSB1): its wiring is direct, RTS on holds EN
+  low and DTR on holds IO0 low. So from both on, DTR must drop first
+  (then RTS releases reset with IO0 high: normal boot); RTS first
+  releases reset with IO0 low ("waiting for download"). miniterm
+  `--dtr 0 --rts 0` (pyserial sets DTR, then RTS) resets it and boots
+  normally. picocom `--lower-dtr --lower-rts` lowers RTS first; since
+  its first request comes before the helper connects, the helper
+  connects with those lines and the board isn't reset at all (it keeps
+  running); Ctrl+A Ctrl+G twice resets it normally.
+- Tried and dropped: raising both lines on that early connect (as
+  Linux's open does). Then picocom's RTS-first order puts the board in
+  download mode; even both changes in one write did that 2 of 3 times
+  (USB control transfers go one line at a time). The early connect
+  stays as it was; the guide says how to reset the board in picocom.
+- README: miniterm, and resets into the bootloader.
 
 ### 2026-10-17 (121): Preload on the phone: the C3 passes 1, 2, 3, 5
 

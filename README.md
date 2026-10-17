@@ -50,8 +50,8 @@ sensors, microphone, speaker and flashlight.
 - **Development boards:** plug an Arduino, an ESP32 or a USB-serial
   adapter into a USB-C OTG cable and it becomes a serial port in
   Debian (`/dev/serial/ttyUSB0`, `rfc2217://localhost:2217`), so
-  `esptool`, `avrdude`, PlatformIO and `picocom` can flash it and
-  talk to it. CH340, CP210x, FTDI, PL2303 and native USB (CDC ACM).
+  `esptool`, `avrdude`, PlatformIO, miniterm and `picocom` can flash
+  it, reset it into its bootloader and talk to it. CH340, CP210x, FTDI, PL2303 and native USB (CDC ACM).
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
   and packages survive app updates.
 - **Tabs** that keep running in the background and come back when you

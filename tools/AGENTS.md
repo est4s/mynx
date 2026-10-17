@@ -577,10 +577,14 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - **Boards held in reset while the port is open:** some boards'
   auto-reset circuit (the ESP32-CAM-MB's, for one) keeps the chip in
   reset while DTR and RTS are both on, and opening a `/dev/serial`
-  file raises them, as on Linux. Lower them as on a PC: `picocom
-  --lower-dtr --lower-rts …`, `python3 -m serial.tools.miniterm
-  --dtr 0 --rts 0 /dev/serial/ttyUSB0 115200` (PlatformIO:
-  `monitor_dtr = 0`, `monitor_rts = 0`).
+  file raises them, as on Linux. Lower them as on a PC:
+  `python3 -m serial.tools.miniterm --dtr 0 --rts 0
+  /dev/serial/ttyUSB0 115200` resets the board and lets it boot
+  (PlatformIO: `monitor_dtr = 0`, `monitor_rts = 0`). `picocom
+  --lower-dtr --lower-rts …` opens without resetting it; Ctrl+A
+  Ctrl+G twice (RTS up, then down) resets it. A board stuck in
+  "waiting for download" was reset with DTR still on: reset it that
+  way.
 - `mynx usb` lists the devices with their ports, paths and URLs;
   `mynx usb url` and `mynx usb path` print the only port's (or
   `PORT`'s) for scripts. `--json` gives `devices`: `id`, `ids`
