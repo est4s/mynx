@@ -156,10 +156,9 @@ button, then 3, 5, 8 (write), 10-12, a CH340/CP210x board.
 **Third round** (2026-10-17, build 173, entry 118): the C3 passes
 1-4, 6-8, 10-12; a CH340 board (ESP32-CAM-MB) passes 1, 2, 7, 8
 (read), and 4 behaves as on Linux (the MB holds it in reset while
-DTR and RTS are on: documented, maintainer's decision). **Left:**
-the helper fix from entry 118 on the phone (unplug while picocom
-runs: the log shows "the port is gone" and no "opened" after the new
-link), 5 and 9 (an Uno or Nano), 13 (two devices). Then the README,
+DTR and RTS are on: documented, maintainer's decision). The helper
+fix from entry 118 passes on build 175 (unplugged while picocom ran:
+no "opened" or retry after the new link). **Left:** 5 and 9 (an Uno or Nano), 13 (two devices). Then the README,
 and merging PR #33.
 
 *A. Connecting*
