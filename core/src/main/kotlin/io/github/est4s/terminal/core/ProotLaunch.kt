@@ -44,6 +44,7 @@ fun serialPreload(toolsDir: File, enabled: Boolean): String? =
  * path) is the battery's stand-in, bound at [POWER_SUPPLY_MOUNT].
  * [service] names the background service it runs (`MYNX_SERVICE`).
  * [serialDir] (a host path) holds the USB serial ports' links, bound at [SERIAL_MOUNT].
+ * [ownDev] gives Debian a `/dev` of its own instead of the host's (see [OwnDev]).
  * [preload] (a Debian path) is a library every program in Debian loads
  * (`LD_PRELOAD`, set inside the guest only: Android's linker must not
  * see it in proot's own environment).
@@ -64,6 +65,7 @@ fun prootLaunch(
     powerSupply: String? = null,
     service: String? = null,
     serialDir: String? = null,
+    ownDev: OwnDev? = null,
     preload: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
@@ -74,7 +76,12 @@ fun prootLaunch(
         add("-0")
         add("-r"); add(paths.rootfs)
         add("-w"); add(workDir)
-        HOST_BINDS.forEach { add("-b"); add(it) }
+        if (ownDev != null) {
+            add("-b"); add("${ownDev.dir}:/dev")
+            ownDev.devices.forEach { add("-b"); add("/dev/$it") }
+            add("-b"); add("${ownDev.sysTty}:$SYS_TTY_MOUNT")
+        }
+        HOST_BINDS.filter { ownDev == null || it != "/dev" }.forEach { add("-b"); add(it) }
         fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
         powerSupply?.let { add("-b"); add("$it:$POWER_SUPPLY_MOUNT") }
         // Inside the host's /dev, which has no such folder: proot makes one up (as proot-distro's /dev/shm).

@@ -50,7 +50,8 @@ private const val READ_QUEUE = 256
  * on localhost ([SerialServer]) and runs its pseudo-terminal helper in
  * Debian ([launchHelper], `serial-port NAME TCPPORT`), whose link lives
  * in [serialDir]. Helpers' output goes to [logDir]. [ready] is told when
- * a device's ports are served, [gone] when a device left. Call from
+ * a device's ports are served, [gone] when a device left, [changed]
+ * with what Android sees whenever the served ports change. Call from
  * [handler]'s (the main) thread.
  */
 class UsbBridge(
@@ -62,6 +63,7 @@ class UsbBridge(
     private val launchHelper: (name: String, tcpPort: Int) -> Launch,
     private val ready: (UsbSerialDevice) -> Unit,
     private val gone: (String) -> Unit,
+    private val changed: (List<UsbSerialDevice>) -> Unit,
 ) {
     private val usb = context.getSystemService(UsbManager::class.java)
     private val prober = UsbSerialProber.getDefaultProber()
@@ -88,6 +90,7 @@ class UsbBridge(
         // Links from an earlier run point at terminals that are gone.
         serialDir.deleteRecursively()
         serialDir.mkdirs()
+        changed(emptyList())
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
@@ -224,7 +227,9 @@ class UsbBridge(
             errors[device.deviceName] = "couldn't open it: ${e.message ?: e.javaClass.simpleName}"
             return
         }
-        devices().firstOrNull { it.id == device.deviceName }?.let(ready)
+        val now = devices()
+        changed(now)
+        now.firstOrNull { it.id == device.deviceName }?.let(ready)
     }
 
     private fun takenNames(): Set<String> = open.values.flatMap { d -> d.ports.map { it.name } }.toSet()
@@ -242,6 +247,7 @@ class UsbBridge(
     private fun close(name: String) {
         val device = open.remove(name) ?: return
         device.ports.forEach { it.close() }
+        changed(devices())
     }
 
     private class OpenDevice {

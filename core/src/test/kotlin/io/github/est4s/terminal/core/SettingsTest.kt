@@ -63,7 +63,7 @@ class SettingsTest {
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "sound-device", "share-folder", "tab-swipe", "wakelock",
-                "update-check", "serial-preload"),
+                "update-check", "serial-preload", "serial-names"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -80,12 +80,12 @@ class SettingsTest {
                 "android-clipboard" to "off", "android-share" to "off", "android-location" to "off",
                 "android-sensors" to "off", "android-camera" to "off", "android-microphone" to "off",
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
-                "wakelock" to "on", "update-check" to "off", "serial-preload" to "off",
+                "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
-                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false).values(),
+                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false).values(),
         )
     }
 
@@ -242,6 +242,15 @@ class SettingsTest {
         val parsed = parseSettings("serial-preload = off\nserial-preload = maybe\n")
         assertFalse(parsed.settings.serialPreload)
         assertEquals(listOf("line 2: serial-preload must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `serial port names are on by default and can be turned off`() {
+        assertTrue(Settings().serialNames)
+        assertEquals("on", SETTINGS.single { it.key == "serial-names" }.default)
+        val parsed = parseSettings("serial-names = off\nserial-names = yes\n")
+        assertFalse(parsed.settings.serialNames)
+        assertEquals(listOf("line 2: serial-names must be one of: on, off"), parsed.problems)
     }
 
     @Test

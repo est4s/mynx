@@ -79,6 +79,10 @@ import io.github.est4s.terminal.core.ServiceManager
 import io.github.est4s.terminal.core.Wakelock
 import io.github.est4s.terminal.core.parseSavedServices
 import io.github.est4s.terminal.core.serialPreload
+import io.github.est4s.terminal.core.HostEntry
+import io.github.est4s.terminal.core.OwnDev
+import io.github.est4s.terminal.core.prepareOwnDev
+import io.github.est4s.terminal.core.writeSerialNames
 import io.github.est4s.terminal.core.serviceCommand
 import io.github.est4s.terminal.core.serviceGaveUpText
 import io.github.est4s.terminal.core.serviceRequests
@@ -187,6 +191,9 @@ class TerminalService : Service() {
     }
     // The USB serial ports' links, bound at /dev/serial in every proot.
     private val serialDir by lazy { File(filesDir, "serial") }
+    // Debian's own /dev and the ports' sysfs stand-in (serial-names), so tools find the ports.
+    private val devDir by lazy { File(filesDir, "dev") }
+    private val sysTtyDir by lazy { File(filesDir, "sys-tty") }
     private val usb by lazy {
         UsbBridge(
             this, mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir,
@@ -198,6 +205,7 @@ class TerminalService : Service() {
             },
             ready = ::showUsbReady,
             gone = ::clearUsbReady,
+            changed = { devices -> runCatching { writeSerialNames(devDir, sysTtyDir, devices) } },
         )
     }
     // Background services: hidden sessions (see ServiceSessions), kept running without a tab.
@@ -764,7 +772,7 @@ class TerminalService : Service() {
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, preload = serialPreload(tools.tools, currentSettings()?.serialPreload ?: true), service = service, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, ownDev = ownDev(), preload = serialPreload(tools.tools, currentSettings()?.serialPreload ?: true), service = service, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -780,6 +788,22 @@ class TerminalService : Service() {
             cwdFiles[it] = File(cwdDir, cwdName)
             keyBarFiles[it] = File(cwdDir, keyBarFileName)
         }
+    }
+
+    // Each new tab's, so a changed setting reaches new tabs. Without it (or if
+    // it can't be set up), Debian sees Android's /dev as before.
+    private fun ownDev(): OwnDev? {
+        if (currentSettings()?.serialNames == false) return null
+        return runCatching {
+            prepareOwnDev(devDir, sysTtyDir) { name ->
+                val host = File("/dev", name)
+                when {
+                    !host.exists() -> null
+                    host.isDirectory -> HostEntry.DIR
+                    else -> HostEntry.FILE
+                }
+            }
+        }.getOrNull()
     }
 
     // Read for each new tab, so tabs opened after the phone changes zone follow it.
