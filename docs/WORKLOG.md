@@ -40,10 +40,10 @@ are in git history: the full log up to entry 92 is
   autostart on and off, on 2026-10-13); merged (PR #30, #32) and
   released in v0.2.0. The plan left "Next" (git history has it:
   `git show 8ea1266:docs/WORKLOG.md`).
-- **USB serial bridge:** built on PR #33 (entry 115); every phone
-  test passes (entries 116-118: ESP32-C3, ESP32-CAM-MB, Arduino Nano
-  and Pro Micro, two at once on a hub). Merge PR #33 next; part 2
-  (LD_PRELOAD) in "Next 0".
+- **USB serial bridge:** every phone test passes (entries 116-118:
+  ESP32-C3, ESP32-CAM-MB, Arduino Nano and Pro Micro, two at once on
+  a hub); merged (PR #33), not released yet. Part 2, a preload
+  library so pyserial tools work on `/dev/serial/…`: "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -52,163 +52,107 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. USB serial bridge (built on branch `usb-serial`, PR #33; phone tests below)
+### 0. USB serial, part 2: a preload library for `/dev/serial` (branch `serial-preload`)
 
-Roadmap "Development boards": boards (Arduino, ESP32) and USB-serial
-adapters on a USB-C OTG cable become serial ports in Debian. Planned
-and built 2026-10-16 (entry 115) while the maintainer slept, so the
-decisions are the agent's: **change any the maintainer objects to.**
+The bridge (part 1) is merged (PR #33, 2026-10-17) and every phone
+test passed (entries 116-118; the plan and the tests:
+`git show d748955:docs/WORKLOG.md`). How it works and its gotchas:
+AGENTS.md "USB serial bridge" and "Lessons".
 
-**How it works:**
-```
-board ─USB─ Android's USB API ─ UsbBridge (usb-serial-for-android)
-                                   │ RFC 2217 on 127.0.0.1:2217 (core's SerialServer)
-                                   ├─ esptool, PlatformIO, miniterm: rfc2217://localhost:2217
-                                   └─ serial-port helper (Debian, one per port)
-                                        pty, linked as /dev/serial/ttyUSB0
-                                        ← picocom, screen, avrdude, cat, scripts
-```
+**The problem:** Android's SELinux refuses some calls on a pty with
+EACCES: `TIOCMGET/SET/BIS/BIC` (DTR, RTS), `TIOCEXCL`, `TCSBRK` (so
+`tcdrain()`), `TCXONC`, `TIOCGSERIAL`, and `flock`. So pyserial
+(esptool, PlatformIO, miniterm) can't open `/dev/serial/…` and must
+use `rfc2217://localhost:2217`; picocom needs `--nolock`; avrdude
+can't toggle DTR itself.
 
-**Decisions (agent's; the maintainer may change them):**
-- **Two ways in, one port.** RFC 2217 carries DTR/RTS and the baud
-  rate, which pyserial (esptool, PlatformIO) speaks; a pty serves
-  programs that open a file. One user at a time: the helper connects
-  only while a program has the pty open.
-- **`/dev/serial/ttyUSB0`, not `/dev/ttyUSB0`.** proot binds are fixed
-  when a proot starts and a host path must exist then (proot resolves
-  it), so a port plugged in later can't appear at `/dev/ttyUSB0` in
-  open tabs. A bound folder of links can: `filesDir/serial` at
-  `/dev/serial` (like proot-distro's `/dev/shm`). Names follow Linux:
-  `ttyACM` for CDC ACM, else `ttyUSB`.
-- **Opening the pty raises DTR and RTS, closing drops them**, as Linux
-  does (HUPCL), so opening resets an Uno as on a PC. A fresh port is
-  9600 8N1, raw and without echo (echo would send the board's output
-  back to it).
-- **Plugging a known serial device offers to open mynx**
-  (`usb_serial_devices.xml`: any CDC interface, and the CH34x, CP210x,
-  FTDI and PL2303 vendors); OK is Android's permission for it.
-  `mynx usb allow` asks for others.
-- **No `android-usb` setting:** Android asks per device anyway.
-- **The TCP port is on localhost only**, but other apps on the phone
-  can connect to it while mynx runs (the guide says so).
-- usb-serial-for-android 3.11.0 (MIT, JitPack), credited in `mynx
-  about` with its licence (`MIT-usb-serial-for-android.txt`).
+**Decided (maintainer, 2026-10-17): option 3, a global `LD_PRELOAD`.**
+Rejected: leaving it as is (the URL only), an opt-in wrapper
+(`serial-run esptool …`), patching proot (would cover Go programs too,
+but more patches on proot's C).
 
-**Found while building** (in AGENTS.md "Lessons"): Android forbids the
-modem ioctls on a pty (EACCES: `TIOCMGET/SET/BIS`, `TIOCEXCL`,
-`TCSBRK` so `tcdrain`), and inotify on it. So pyserial can't open
-`/dev/serial/…` (use the URL), nor can Go programs (`arduino-cli
-monitor`), and avrdude can't toggle DTR itself (opening the port
-resets the board instead). Whether picocom and screen mind is phone
-test 4.
+**The design (agent's; change it if it doesn't hold up):**
+- `/opt/mynx/lib/libmynx-serial.so`, a small C library (keep it to a
+  few hundred lines: every program in Debian loads it).
+- `prootLaunch` sets `LD_PRELOAD` to it in every proot (tabs,
+  services, the helpers) **only when the file exists**: a missing
+  preload makes ld.so warn on every program start. Off switch: a
+  setting (`serial-preload = on | off`, default on) and `unset
+  LD_PRELOAD` in a shell. Not `/etc/ld.so.preload`: that's the user's
+  Debian.
+- It wraps `ioctl`, `tcdrain`, `flock` (and `tcflow`, `tcsendbreak`
+  if needed). Each calls the real one first (`dlsym(RTLD_NEXT, …)`)
+  and only acts when that failed with EACCES **and** the fd is a
+  `/dev/serial` pty (`/proc/self/fd/N` reads `/dev/pts/N`; a link in
+  `/dev/serial/` points at it). Everything else passes through
+  unchanged, errno kept.
+  - `TIOCMSET/BIS/BIC`: ask the port's helper over a control socket
+    (`/dev/serial/.NAME.ctl`), which sends RFC 2217 SET-CONTROL
+    (DTR/RTS on/off), so esptool's reset really reaches the board.
+    Keep "DTR first when raising, RTS first when dropping" (Lessons).
+  - `TIOCMGET`: the lines as the helper last set them (plus CTS/DSR/CD
+    if the helper learns them from NOTIFY-MODEMSTATE; else report
+    them on).
+  - `TIOCEXCL`/`TIOCNXCL`, `flock`: succeed (the helper allows one
+    user at a time already).
+  - `tcdrain`: wait until `TIOCOUTQ` says the pty's output is empty
+    (and the helper has sent it, if that's easy).
+- **glibc's `tcdrain()` doesn't go through the `ioctl` symbol** (it
+  makes the system call inline), so wrapping `ioctl` alone won't
+  catch it: wrap `tcdrain` itself. Python's `fcntl.ioctl` and
+  `termios.tcdrain` call the libc symbols, so pyserial is covered.
+- **Static programs** (Go: `arduino-cli monitor`) skip libc: not
+  covered; say so in the guide.
+- `serial-port` (Python) gets the control socket: a request
+  (`set DTR 1`, `get`) → SET-CONTROL to the app, answer `ok`/the
+  lines. While no program has the pty open nothing asks, so it can
+  stay in the same `select()` loop.
 
-**Parts:**
-1. **Built (PR #33):** core `Rfc2217Session`, `SerialServer` (tested
-   against pyserial's own client where it's installed:
-   `PYTHONPATH=… ./gradlew :core:test`), `Usb.kt` (names, JSON,
-   `usb-list`, `usb-allow`), `prootLaunch(serialDir)`; app
-   `UsbBridge`, `UsbActivity`, the manifest filter, the "ready"
-   notification; `tools/lib/serial-port`; `mynx usb [list] | allow
-   [DEVICE] | url|path [PORT]`; the guide's "USB serial devices",
-   AGENTS.md, roadmap. README after the phone tests.
-2. **Next: catch the forbidden ioctls** so pyserial, esptool and
-   PlatformIO work on `/dev/serial/…` too. Proposal: a small
-   `LD_PRELOAD` library in `/opt/mynx/lib` (cross-compiled in CI;
-   there's no C compiler here, and `apt install gcc` would change the
-   maintainer's Debian, so ask first), set for every proot by
-   `prootLaunch` only when it exists. It acts only when the real
-   ioctl failed with EACCES on a `/dev/serial` pty: `TIOCMGET/SET/BIS/
-   BIC` ask the port's helper over a control socket
-   (`/dev/serial/.NAME.ctl`), which sends RFC 2217 SET-CONTROL;
-   `TIOCEXCL/NXCL` succeed; `tcdrain` waits for `TIOCOUTQ` to empty.
-   Static Go programs make raw system calls, so they'd need proot to
-   do it instead. **Maintainer: is a global LD_PRELOAD acceptable?**
-3. **Later:** a serial monitor tab or menu item, the README, recipes
-   in the guide (arduino-cli, PlatformIO), UF2 and raw USB (roadmap).
+**Build:** it must link against **Debian's glibc** (arm64), not
+Android's bionic, so not with the NDK. In CI: `gcc-aarch64-linux-gnu`
+on the runner, or inside the rootfs build's Debian container
+(QEMU), then into `assets/tools.tar.xz` through
+`scripts/pack-tools.sh` (`/opt/mynx/lib`). Both workflows (build and
+release) build the same assets: change both.
 
-**Phone tests** (mynx dev, PR #33's build, `scripts/deliver.sh`;
-numbered so results can be reported by number). A board with a
-USB-serial chip (ESP32 dev board with CP2102/CH340, or an Arduino
-Uno/Nano) and an OTG adapter. First, in mynx dev: `apt update && apt
-install picocom python3-serial esptool avrdude` (what applies).
+**Tests (TDD):** the helper's control socket in
+`tests/mynx/test_serial_port.py`; the library from Python tests that
+compile it (skipped where there's no `cc`) and run a small program
+under `LD_PRELOAD` against a fake: a real EACCES only happens on
+Android, so a test hook (an env var naming the paths to treat as
+refused, read only by the test build or under `MYNX_SERIAL_TEST`)
+makes the real call fail. CI installs `gcc`. Add the C source and its
+tests to `scripts/check-tdd.sh`. `prootLaunch` and the setting: core
+tests.
 
-**First round** (2026-10-17, build 171, ESP32-C3 on `ttyACM0`):
-1-2 pass. 4: picocom needs `--nolock` (flock refused), then got
-nothing: the pty helper couldn't reach the server (fixed, entry 116).
-6: the URL works and blocks the pty while in use. 7: reset into the
-bootloader and chip detection work; the stub fails (queued reads,
-entry 116); `--no-stub` chip_id, flash_id and read_mem work. Next
-round, with the fixes: 4, 7 with the stub, then 3, 5, 8, 10-12, and a
-CH340 or CP210x board (per-port connections change every device's
-open).
+**Working in mynx dev** (the maintainer's plan): only mynx dev has
+`/dev/serial` and the board, and its Debian may get `gcc` (`apt
+install gcc`; not in the release mynx's Debian, the maintainer's).
+So build the `.so` there and try it by hand, `LD_PRELOAD=./x.so
+esptool --port /dev/serial/ttyACM0 chip_id`, before CI. Setup there:
+`mynx github`, clone the repo, `scripts/setup.sh`,
+`openjdk-21-jdk-headless` and `bats` for the tests. Installing a new
+mynx dev build restarts the app and ends the agent's session there
+(`claude -c` resumes it). The two Debians share nothing but GitHub:
+push before switching.
 
-**Second round** (2026-10-17, build 172, entry 117): 7 passes with the
-stub. `read_flash` (8, read only) lost bytes after 20-90 KB; fixed?
-(256 queued reads). 4: picocom opens and connects, but each client's
-exit left the board in its bootloader (fixed: RTS dropped first). 8
-(write) passes: MicroPython flashed, the OLED shows the logo. Next:
-build with 256 reads and the RTS order; with MicroPython on the board
-the agent can test 4 and 6 itself (send `print(...)` and read the
-answer, twice in a row), then
-`esptool --port rfc2217://localhost:2217 read_flash 0 0x400000
-f.bin` twice and `cmp` (the agent can run it), 4 with the reset
-button, then 3, 5, 8 (write), 10-12, a CH340/CP210x board.
-
-**Third round** (2026-10-17, build 173, entry 118): the C3 passes
-1-4, 6-8, 10-12; a CH340 board (ESP32-CAM-MB) passes 1, 2, 7, 8
-(read), and 4 behaves as on Linux (the MB holds it in reset while
-DTR and RTS are on: documented, maintainer's decision). The helper
-fix from entry 118 passes on build 175 (unplugged while picocom ran:
-no "opened" or retry after the new link); a Nano passes 5 and 9, and
-13 passes on a hub (entry 118). **Every test is done:** the README
-says it ships; merge PR #33 once its build is green.
-
-*A. Connecting*
-1. Plug the board in. Android asks whether to open mynx dev for it:
-   OK. mynx dev opens and a notification says "ttyUSB0 is ready: …"
-   (ttyACM0 for an Uno's own USB or ESP32-S3/C3's) with
-   `/dev/serial/ttyUSB0 · rfc2217://localhost:2217`. (No dialog?
-   `mynx usb` says "not allowed"; `mynx usb allow` shows Android's
-   dialog; Allow prints the port.)
-2. `mynx usb` lists the port, its path and URL; `ls -l /dev/serial/`
-   shows `ttyUSB0 -> /dev/pts/N`, also in a tab opened before
-   plugging in; `mynx usb url` prints the URL.
-3. Unplug: the notification goes, `mynx usb` says no device,
-   `/dev/serial/` is empty. Plug in again: ready again, same name.
-
-*B. Talking*
-4. With firmware that prints (an ESP32 prints its boot log at 115200
-   on reset): `picocom -b 115200 /dev/serial/ttyUSB0` shows it (press
-   the board's reset button), and typing reaches the board if its
-   firmware echoes. Ctrl+A Ctrl+X quits. What does picocom say at
-   the start and end (DTR, modem lines, errors)?
-5. An Uno (or a board that resets on DTR): opening picocom restarts
-   the sketch (its first lines show again).
-6. `python3 -m serial.tools.miniterm rfc2217://localhost:2217 115200`
-   shows the output too (Ctrl+] quits). While it runs, `mynx usb`
-   says "in use"; picocom on `/dev/serial/ttyUSB0` in another tab
-   gets nothing until miniterm quits.
-
-*C. Flashing*
-7. ESP32: `esptool --port rfc2217://localhost:2217 chip_id` (Debian's
-   esptool may be `esptool.py`; v5 spells it `chip-id`) resets the
-   board into its bootloader by itself, prints the chip, and resets it
-   back.
-8. ESP32: flash something real (`esptool … write_flash 0x10000
-   app.bin`, or PlatformIO with `upload_port =
-   rfc2217://localhost:2217`), at `-b 460800` too; the board runs it.
-9. Uno: `avrdude -p m328p -c arduino -P /dev/serial/ttyACM0 -b 115200
-   -U flash:r:/tmp/uno.hex:i` (reads only): it complains about DTR,
-   then reads? (Nano with a CH340: `ttyUSB0`, often `-b 57600`.)
-
-*D. The app around it*
-10. With the board in, Exit from the notification, then open the app:
-    the port is ready again (`mynx usb`).
-11. Unplug while picocom runs on it: picocom ends or complains, nothing
-    hangs; plugging in again works.
-12. `cat /tmp/.mynx/serial/ttyUSB0.log` shows the helper's lines
-    (opened at 115200 baud, closed).
-13. (If there are two devices) both get names and ports 2217, 2218.
+**Done when** (phone, mynx dev, ESP32-C3 with MicroPython and the
+CH340 ESP32-CAM-MB):
+1. `esptool --port /dev/serial/ttyACM0 chip_id` resets into the
+   bootloader, prints the chip, resets back; `read_flash` of 4 MB
+   matches one read over the URL (`cmp`).
+2. `python3 -m serial.tools.miniterm /dev/serial/ttyACM0 115200`:
+   the REPL answers; quitting leaves the board running (not in its
+   bootloader).
+3. `picocom -b 115200 /dev/serial/ttyACM0` without `--nolock` works;
+   its start shows the modem lines without errors.
+4. avrdude on a Nano (`/dev/serial/ttyUSB0`, `-c arduino`) no longer
+   complains about DTR.
+5. `serial-preload off` (new tabs): 1 fails as before; other programs
+   don't notice the library at all (`ls`, `apt`, `python3`, `git`
+   start with no warnings, on or off).
+6. Then: the guide (pyserial tools work on the path, Go ones need the
+   URL), AGENTS.md, README.
 
 ### 1. Smaller things
 
@@ -312,6 +256,17 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-17 (119): Part 2 of USB serial decided: a global LD_PRELOAD
+
+PR #33 merged; local `main` updated. The maintainer chose option 3
+of four for the forbidden pty ioctls: a small preload library loaded
+into every proot (the others: the URL only, an opt-in wrapper,
+patching proot). The design, its build (against Debian's glibc, not
+the NDK), tests and "Done when" are in "Next 0". The maintainer
+continues it in mynx dev with an agent there, on branch
+`serial-preload`. The bridge's done plan and phone tests left "Next"
+(`git show d748955:docs/WORKLOG.md`).
 
 ### 2026-10-17 (118): Third round: the C3 passes; a CH340 board
 
