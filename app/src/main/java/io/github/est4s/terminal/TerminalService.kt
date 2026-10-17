@@ -86,6 +86,12 @@ import io.github.est4s.terminal.core.AdoptedTab
 import io.github.est4s.terminal.core.Foreground
 import io.github.est4s.terminal.core.foregroundCommand
 import io.github.est4s.terminal.core.servicesMark
+import io.github.est4s.terminal.core.SERIAL_LOG_DIR
+import io.github.est4s.terminal.core.SERIAL_PORT_HELPER
+import io.github.est4s.terminal.core.UsbSerialDevice
+import io.github.est4s.terminal.core.usbReadyText
+import io.github.est4s.terminal.core.usbReadyTitle
+import io.github.est4s.terminal.core.usbRequests
 import java.io.File
 import java.util.TimeZone
 import java.util.WeakHashMap
@@ -117,6 +123,9 @@ private const val ROTATION_SWEEP_MS = 1000L
 private const val SERVICES_CHANNEL_ID = "services"
 // "Not restarting" notifications: one per service name.
 private const val SERVICE_NOTICE_ID_BASE = 3000
+private const val USB_CHANNEL_ID = "usb"
+// "ttyUSB0 is ready" notifications: one per USB device.
+private const val USB_NOTICE_ID_BASE = 4000
 // How long Exit lets the services stop cleanly (TERM) before onDestroy forces them.
 private const val EXIT_GRACE_MS = 3000L
 private val LOCATION_PERMISSIONS = arrayOf(
@@ -171,7 +180,23 @@ class TerminalService : Service() {
                 batteryRequests(batteryReader::read) +
                 vibrations.requests() +
                 updater.requests { apk -> onMain { openInstaller(apk) } } +
-                serviceRequests(serviceManager),
+                serviceRequests(serviceManager) +
+                usbRequests(usb::devices, usb::allow),
+        )
+    }
+    // The USB serial ports' links, bound at /dev/serial in every proot.
+    private val serialDir by lazy { File(filesDir, "serial") }
+    private val usb by lazy {
+        UsbBridge(
+            this, mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir,
+            launchHelper = { name, port ->
+                prootLaunch(
+                    prootPaths(), toolsDir = tools.tools.absolutePath, serialDir = serialDir.absolutePath,
+                    command = listOf("/usr/bin/python3", SERIAL_PORT_HELPER, name, port.toString()),
+                )
+            },
+            ready = ::showUsbReady,
+            gone = ::clearUsbReady,
         )
     }
     // Background services: hidden sessions (see ServiceSessions), kept running without a tab.
@@ -294,6 +319,8 @@ class TerminalService : Service() {
         requests.start()
         watchRequests()
         applySoundSetting()
+        serialDir.mkdirs()
+        runCatching { usb.start() }
         launchServices()
         applyWakelockSetting()
         keepPowerSupply()
@@ -363,7 +390,14 @@ class TerminalService : Service() {
     fun cameOnScreen() {
         clearNoticeOfShownTab()
         mic.update()
+        // A device allowed through Android's "open mynx?" dialog, which opened the app.
+        runCatching { usb.refresh() }
         applyWakelockSetting() // the settings file may have been edited by hand
+    }
+
+    /** A USB device may have been allowed: serve its ports. */
+    fun refreshUsb() {
+        runCatching { usb.refresh() }
     }
 
     // Before any shell starts, so none runs old tools while they're replaced.
@@ -468,6 +502,7 @@ class TerminalService : Service() {
         recorder.stopAll()
         mic.stop()
         sound.stop()
+        runCatching { usb.stop() }
         killAll()
         stopServices()
         releaseWakeLock()
@@ -728,7 +763,7 @@ class TerminalService : Service() {
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, service = service, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, service = service, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
             runCatching { File(path).inputStream().use { it.read() } }.isSuccess
         })
         return TerminalSession(
@@ -897,6 +932,32 @@ class TerminalService : Service() {
             .setAutoCancel(true)
             .build())
     }
+
+    // A USB serial device's ports are served: where to find them. Tapping opens the app.
+    private fun showUsbReady(device: UsbSerialDevice) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(
+            NotificationChannel(USB_CHANNEL_ID, "USB devices", NotificationManager.IMPORTANCE_DEFAULT))
+        val id = usbNoticeId(device.id)
+        val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val tap = PendingIntent.getActivity(this, id, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val text = usbReadyText(device)
+        manager.notify(id, Notification.Builder(this, USB_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(usbReadyTitle(device))
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build())
+    }
+
+    private fun clearUsbReady(deviceId: String) {
+        getSystemService(NotificationManager::class.java).cancel(usbNoticeId(deviceId))
+    }
+
+    private fun usbNoticeId(deviceId: String) = USB_NOTICE_ID_BASE + Math.floorMod(deviceId.hashCode(), 1000)
 
     // Answers `mynx notify`: null when shown, else why not.
     private fun showNotice(notice: Notice): String? {

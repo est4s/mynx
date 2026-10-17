@@ -329,6 +329,29 @@ See `docs/ROADMAP.md` "How it works". The details:
   execs Pulse, so the watcher waits for its pid to become
   `pulseaudio`. The service adds the `microphone` type and names the
   programs in its notification (`micNotice()`).
+- **USB serial bridge** (`core/.../Rfc2217.kt`, `SerialServer.kt`,
+  `Usb.kt`, `app/.../UsbBridge.kt`, `UsbActivity.kt`,
+  `tools/lib/serial-port`; agent's design, 2026-10-16, PR #33): the
+  app drives the device with usb-serial-for-android (JitPack, MIT,
+  credited in `mynx about`) and serves each port over RFC 2217 on
+  127.0.0.1 from 2217 (`SerialServer`: one client at a time, others
+  refused; a client leaving drops DTR and RTS, as a close does on
+  Linux; writes go through a queue thread so neither the USB reader
+  nor the session waits on the network). For programs that want a
+  device file, the app runs `serial-port NAME TCPPORT` per port in a
+  proot of its own (restarted like the sound server): it makes a pty,
+  links it as `/dev/serial/NAME` (the app's `filesDir/serial`, bound
+  there in every proot, `prootLaunch(serialDir =)`; proot makes up
+  the folder inside the host's `/dev`, as proot-distro's `/dev/shm`),
+  and is the RFC 2217 client only while a program has the pty open
+  (`POLLHUP` on the master says nobody has; polled ten times a
+  second), following its termios (read from the master, which
+  shares them). Names follow Linux (`ttyName()`: `ttyACM` for CDC
+  ACM, else `ttyUSB`). Permission: `res/xml/usb_serial_devices.xml`
+  makes Android offer to open the app (`UsbActivity`, which tells
+  `MainActivity`, which refreshes the bridge), and `mynx usb allow`
+  asks with `requestPermission` (a mutable, explicit PendingIntent).
+  Requests: `usb-list`, `usb-allow` (`usbRequests()`).
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
@@ -550,6 +573,38 @@ Bugs that took a phone round to find; keep them from coming back.
   shell's `claude` function calls) adds the flag and
   `CLAUDE_CODE_NO_FLICKER=1`, unless settings.json says
   `"tui": "default"`.
+- **Android forbids the modem ioctls on a pty** (`TIOCMGET`/`TIOCMSET`/
+  `TIOCMBIS`, `TIOCEXCL`, `TCSBRK` so `tcdrain`, `TCXONC`,
+  `TIOCGSERIAL`: EACCES, from SELinux), `flock` (picocom needs
+  `--nolock`), and inotify on `/dev/pts/N`
+  too. `TCFLSH`, `FIONREAD`, `TIOCOUTQ` and termios work. So pyserial
+  can't open a pty (its open sets DTR and only ignores EINVAL and
+  ENOTTY); it takes the `rfc2217://` URL instead.
+- **Bind `127.0.0.1`, not `getLoopbackAddress()`**: on Android that's
+  `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
+  `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was
+  refused while `rfc2217://localhost` worked.
+- **Keep many USB reads queued** (`UsbBridge`, `setReadQueue(256, …)`):
+  with one read at a time, an ESP32-C3's USB-Serial-JTAG under
+  esptool's stub sent only the first packet of each reply (`c0 01`)
+  and lost the rest (the ROM loader, `--no-stub`, was fine); 16 fixed
+  that, but `read_flash` still lost bytes after 20-90 KB. Likely (until
+  256 works on the phone): the device drops what the host doesn't
+  collect in time, a short packet ends a
+  read and the stub sends 63-byte ones, so 16 reads held 1 KB. Linux
+  queues each read again in the kernel as it completes; on Android
+  our thread must collect it first (it runs at audio priority). The library's queue goes through
+  each driver's `read`, so FTDI's status bytes are still stripped.
+  Each port gets its own `UsbDeviceConnection`: `requestWait()`
+  returns any request of the connection, so ports sharing one would
+  take each other's data.
+- **Drop RTS before DTR** (`SerialServer`, a client leaving): DTR
+  off with RTS on resets an ESP32 through the usual auto-reset
+  circuit and a C3's USB-Serial-JTAG, into the bootloader when DTR
+  was on just before, so every client that left (miniterm, a pty
+  program) left the board in download mode. Linux changes both
+  lines in one request; usb-serial-for-android sets them one at a
+  time, so the order matters. Raising (the helper): DTR first.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

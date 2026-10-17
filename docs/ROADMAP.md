@@ -71,20 +71,27 @@ APIs like `mynx sensor` and `mynx camera`, each with `--json` and an
 ### Development boards
 Flash and talk to boards like **Arduino** and **ESP32** over a USB-C OTG
 cable, using standard tools.
-- A **USB serial bridge** in the app: Android's USB API to a normal serial
-  port in Debian (`/dev/ttyUSB0`). CH340, CP210x, FTDI, ATmega16U2 and
-  native-USB ESP32-S2/S3/C3 boards.
+- A **USB serial bridge** in the app *(PR #33; tested with an ESP32-C3, an ESP32-CAM-MB,
+  an Arduino Nano and a Pro Micro)*: Android's
+  USB API (usb-serial-for-android) to serial ports in Debian. Each port
+  is a pseudo-terminal at `/dev/serial/ttyUSB0` and RFC 2217 at
+  `rfc2217://localhost:2217`, which carries the bootloader reset
+  (DTR/RTS) for pyserial and `esptool`. CH340, CP210x, FTDI, PL2303 and
+  CDC ACM (ATmega16U2, native-USB ESP32-S2/S3/C3, Pico).
+- Next: Android forbids the modem ioctls (`TIOCMGET`/`TIOCMSET`,
+  `TIOCEXCL`, `tcdrain`) on a pseudo-terminal, so pyserial and Go
+  programs can't open `/dev/serial/…`. Catch them for those ports (an
+  `LD_PRELOAD` library, or proot), passing DTR/RTS to the bridge; and
+  a `/dev/ttyUSB0` name tools find by themselves.
 - `arduino-cli`, PlatformIO, `esptool`, `avrdude`, `picocom` against that
-  port; AVR and ESP32 toolchains run on arm64.
-- Bootloader reset (DTR/RTS) passed through; holding BOOT as a fallback.
-  A pseudo-terminal can't carry DTR/RTS, so either serve RFC 2217 on
-  localhost (pyserial and `esptool` take `rfc2217://`) or have proot
-  catch the modem ioctls on that port.
+  port; AVR and ESP32 toolchains run on arm64. Holding BOOT as a
+  fallback for the reset.
 - **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's
   drive. **Raw USB** (STM32 DFU, …) through `libusb`
   (`libusb_wrap_sys_device` on the fd Android hands the app).
-- A serial monitor tab, a "board connected" notification, `mynx usb`,
-  and the agent guide, so an agent can write, build and flash firmware.
+- A serial monitor tab, and the agent guide's recipes, so an agent can
+  write, build and flash firmware. (`mynx usb`, the "ready"
+  notification and the guide's section come with the bridge.)
 
 ### Bluetooth
 Android doesn't let apps reach the Bluetooth hardware, so BlueZ can't

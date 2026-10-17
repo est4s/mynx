@@ -86,6 +86,13 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `binds the serial ports' folder over dev serial`() {
+        val binds = prootLaunch(paths, serialDir = "/data/files/serial").argv.valuesAfter("-b")
+
+        assertEquals(listOf("/dev", "/proc", "/sys", "/storage", "/data/files/serial:/dev/serial"), binds)
+    }
+
+    @Test
     fun `has the shell write its folder to a file after each prompt`() {
         val argv = prootLaunch(paths, cwdFile = "/tmp/.mynx/cwd-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

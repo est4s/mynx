@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+"""Gives a USB serial port a pseudo-terminal in Debian, at /dev/serial/NAME.
+
+The app runs one for each port it serves (usage: serial-port NAME
+TCPPORT [FOLDER]). The port itself is the app's RFC 2217 server on
+localhost TCPPORT. While a program has the terminal open, this is
+connected to it: bytes go both ways, the terminal's baud rate, data
+bits, parity and stop bits follow what the program sets, and DTR and
+RTS are up, as on Linux, where opening a port raises them (which
+resets an Arduino) and closing it drops them. While nothing has it
+open, the port is free for rfc2217:// clients (esptool, PlatformIO).
+"""
+import errno
+import os
+import select
+import signal
+import socket
+import sys
+import termios
+import time
+import tty
+
+IAC, DONT, DO, WONT, WILL, SB, SE = 255, 254, 253, 252, 251, 250, 240
+COM_PORT = 44
+SET_BAUDRATE, SET_DATASIZE, SET_PARITY, SET_STOPSIZE, SET_CONTROL = 1, 2, 3, 4, 5
+NO_FLOW, HW_FLOW, DTR_ON, RTS_ON = 1, 3, 8, 11
+# How often to look whether a program opened the terminal (Android
+# allows no inotify on it), and to try the app again when it's away.
+IDLE = 0.1
+RETRY = 1.0
+
+SPEEDS = {getattr(termios, n): int(n[1:]) for n in dir(termios) if n[:1] == "B" and n[1:].isdigit()}
+SIZES = {termios.CS5: 5, termios.CS6: 6, termios.CS7: 7, termios.CS8: 8}
+CMSPAR = getattr(termios, "CMSPAR", 0o10000000000)
+
+
+def line_settings(attrs):
+    """(baud, data bits, RFC 2217 parity, RFC 2217 stop size, hardware flow) from tcgetattr()."""
+    cflag = attrs[2]
+    baud = SPEEDS.get(attrs[5], 9600)
+    size = SIZES.get(cflag & termios.CSIZE, 8)
+    if not cflag & termios.PARENB:
+        parity = 1
+    elif cflag & CMSPAR:
+        parity = 4 if cflag & termios.PARODD else 5
+    else:
+        parity = 2 if cflag & termios.PARODD else 3
+    stop = 2 if cflag & termios.CSTOPB else 1
+    return baud, size, parity, stop, bool(cflag & termios.CRTSCTS)
+
+
+def subnegotiation(what, value):
+    return bytes([IAC, SB, COM_PORT, what]) + escape(value) + bytes([IAC, SE])
+
+
+def setup(settings):
+    """The RFC 2217 requests that set the port as [settings] say."""
+    baud, size, parity, stop, flow = settings
+    return (subnegotiation(SET_BAUDRATE, baud.to_bytes(4, "big"))
+            + subnegotiation(SET_DATASIZE, bytes([size]))
+            + subnegotiation(SET_PARITY, bytes([parity]))
+            + subnegotiation(SET_STOPSIZE, bytes([stop]))
+            + subnegotiation(SET_CONTROL, bytes([HW_FLOW if flow else NO_FLOW])))
+
+
+def escape(data):
+    return bytes(data).replace(b"\xff", b"\xff\xff")
+
+
+class Unescaper:
+    """Telnet's stream back to data: commands and subnegotiations are
+    dropped (the answers to our requests), doubled IACs undone, also
+    across reads."""
+
+    def __init__(self):
+        self.mode = "data"
+
+    def feed(self, data):
+        out = bytearray()
+        for b in data:
+            if self.mode == "data":
+                if b == IAC:
+                    self.mode = "iac"
+                else:
+                    out.append(b)
+            elif self.mode == "iac":
+                if b == IAC:
+                    out.append(IAC)
+                    self.mode = "data"
+                elif b == SB:
+                    self.mode = "sub"
+                elif b in (DO, DONT, WILL, WONT):
+                    self.mode = "option"
+                else:
+                    self.mode = "data"
+            elif self.mode == "option":
+                self.mode = "data"
+            elif self.mode == "sub":
+                if b == IAC:
+                    self.mode = "sub-iac"
+            elif self.mode == "sub-iac":
+                self.mode = "data" if b == SE else "sub"
+        return bytes(out)
+
+
+def log(name, text):
+    print(f"{time.strftime('%H:%M:%S')} {name}: {text}", file=sys.stderr, flush=True)
+
+
+class Bridge:
+    def __init__(self, name, tcp_port, folder, host="127.0.0.1"):
+        self.name = name
+        self.address = (host, tcp_port)
+        self.link = os.path.join(folder, name)
+        self.master = None
+        self.tty = None
+        self.sock = None
+        self.unescaper = None
+        self.settings = None
+        self.stopped = False
+        self.retry_at = 0.0
+
+    def make_terminal(self):
+        """The pseudo-terminal, raw at 9600 8N1 (as Linux leaves a fresh
+        port, but without echo, which would send the board's output back
+        to it), and its link."""
+        self.master, slave = os.openpty()
+        self.tty = os.ttyname(slave)
+        tty.setraw(slave)
+        attrs = termios.tcgetattr(slave)
+        attrs[2] |= termios.CLOCAL | termios.CREAD
+        attrs[4] = attrs[5] = termios.B9600
+        termios.tcsetattr(slave, termios.TCSANOW, attrs)
+        os.close(slave)
+        os.set_blocking(self.master, False)
+        tmp = os.path.join(os.path.dirname(self.link), f".{self.name}.tmp")
+        if os.path.lexists(tmp):
+            os.unlink(tmp)
+        os.symlink(self.tty, tmp)
+        os.replace(tmp, self.link)
+
+    def owns_link(self):
+        try:
+            return os.readlink(self.link) == self.tty
+        except OSError:
+            return False
+
+    def remove_link(self):
+        if self.owns_link():
+            try:
+                os.unlink(self.link)
+            except OSError:
+                pass
+
+    def opened(self):
+        """Whether a program has the terminal open, and whether it left bytes to send."""
+        poll = select.poll()
+        poll.register(self.master, select.POLLIN)
+        events = dict(poll.poll(0)).get(self.master, 0)
+        return not events & select.POLLHUP, bool(events & select.POLLIN)
+
+    def connect(self):
+        if time.monotonic() < self.retry_at:
+            return False
+        try:
+            self.sock = socket.create_connection(self.address, timeout=2)
+        except OSError as e:
+            self.retry_at = time.monotonic() + RETRY
+            log(self.name, f"the app's port isn't there ({e.strerror or e}); trying again")
+            return False
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.unescaper = Unescaper()
+        self.settings = line_settings(termios.tcgetattr(self.master))
+        self.sock.sendall(bytes([IAC, WILL, COM_PORT]) + setup(self.settings)
+                          + subnegotiation(SET_CONTROL, bytes([DTR_ON]))
+                          + subnegotiation(SET_CONTROL, bytes([RTS_ON])))
+        log(self.name, f"opened at {self.settings[0]} baud")
+        return True
+
+    def disconnect(self, why):
+        if self.sock:
+            try:
+                self.sock.close()
+            except OSError:
+                pass
+            self.sock = None
+            log(self.name, why)
+
+    def follow_settings(self):
+        """Sends the terminal's settings when a program changed them."""
+        now = line_settings(termios.tcgetattr(self.master))
+        if now != self.settings:
+            self.settings = now
+            self.sock.sendall(setup(now))
+            log(self.name, f"now {now[0]} baud")
+
+    def from_terminal(self):
+        """What the program wrote goes to the port; False when it has closed the terminal."""
+        try:
+            data = os.read(self.master, 4096)
+        except BlockingIOError:
+            return True
+        except OSError as e:
+            if e.errno == errno.EIO:
+                return False
+            raise
+        if data and self.sock:
+            self.follow_settings()
+            self.sock.sendall(escape(data))
+        return True
+
+    def to_terminal(self):
+        """The port's bytes go to the program; False when the app closed the connection."""
+        try:
+            data = self.sock.recv(4096)
+        except OSError:
+            return False
+        if not data:
+            return False
+        data = self.unescaper.feed(data)
+        try:
+            os.write(self.master, data)
+        except BlockingIOError:
+            pass  # the program isn't reading: like a serial port's overrun, the bytes are lost
+        except OSError as e:
+            if e.errno != errno.EIO:
+                raise
+        return True
+
+    def step(self, wait=0.25):
+        """One round: connect while the terminal is open, pass bytes along, and let go once it's closed."""
+        is_open, pending = self.opened()
+        if self.sock is None:
+            if is_open or pending:
+                if self.connect():
+                    return
+            if pending and self.sock is None:
+                # Nowhere to send it: drop it, as a port with no device would.
+                self.from_terminal()
+            time.sleep(IDLE)
+            return
+        if not is_open and not pending:
+            self.disconnect("closed")
+            return
+        poll = select.poll()
+        poll.register(self.master, select.POLLIN)
+        poll.register(self.sock, select.POLLIN)
+        for fd, events in poll.poll(int(wait * 1000)):
+            if fd == self.master and events & select.POLLIN:
+                self.from_terminal()
+            elif fd == self.sock.fileno() and not self.to_terminal():
+                self.disconnect("the app closed the port")
+                self.retry_at = time.monotonic() + RETRY
+                return
+        if self.sock and is_open:
+            self.follow_settings()
+        if not is_open and self.sock:
+            self.disconnect("closed")
+
+    def run(self):
+        self.make_terminal()
+        log(self.name, f"{self.link} -> {self.tty}, port {self.address[1]}")
+        try:
+            while not self.stopped:
+                # The app takes the link away when the port goes, and a new
+                # helper replaces it when it's back: this one must not reach
+                # the new port (it would raise DTR and RTS) before it's stopped.
+                if not self.owns_link():
+                    self.disconnect("the port is gone")
+                    break
+                try:
+                    self.step()
+                except OSError as e:
+                    self.disconnect(f"lost the port ({e.strerror or e})")
+                    self.retry_at = time.monotonic() + RETRY
+        finally:
+            self.disconnect("stopped")
+            self.remove_link()
+
+
+def main(argv):
+    if len(argv) not in (3, 4) or not argv[2].isdigit():
+        print("usage: serial-port NAME TCPPORT [FOLDER]", file=sys.stderr)
+        return 2
+    bridge = Bridge(argv[1], int(argv[2]), argv[3] if len(argv) == 4 else "/dev/serial")
+
+    def stop(*_):
+        bridge.stopped = True
+
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, stop)
+    bridge.run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

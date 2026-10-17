@@ -30,6 +30,8 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <!-- The USB serial bridge; phones without USB host still install the app. -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
     <application
         android:name=".TerminalApp"
@@ -68,6 +70,21 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+        </activity>
+
+        <!-- Android offers to open the app when a USB serial device is connected;
+             saying yes allows the device. -->
+        <activity
+            android:name=".UsbActivity"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_serial_devices" />
         </activity>
 
         <!-- Authorities follow the application ID, so mynx dev (.dev) installs beside mynx. -->

@@ -32,6 +32,7 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * is the phone's, as [debianTimeZone] gives it. [powerSupply] (a host
  * path) is the battery's stand-in, bound at [POWER_SUPPLY_MOUNT].
  * [service] names the background service it runs (`MYNX_SERVICE`).
+ * [serialDir] (a host path) holds the USB serial ports' links, bound at [SERIAL_MOUNT].
  * [command] runs instead of the login bash.
  */
 fun prootLaunch(
@@ -48,6 +49,7 @@ fun prootLaunch(
     timeZone: String? = null,
     powerSupply: String? = null,
     service: String? = null,
+    serialDir: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
@@ -60,6 +62,8 @@ fun prootLaunch(
         HOST_BINDS.forEach { add("-b"); add(it) }
         fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
         powerSupply?.let { add("-b"); add("$it:$POWER_SUPPLY_MOUNT") }
+        // Inside the host's /dev, which has no such folder: proot makes one up (as proot-distro's /dev/shm).
+        serialDir?.let { add("-b"); add("$it:$SERIAL_MOUNT") }
         toolsDir?.let {
             add("-b"); add("$it:$TOOLS_MOUNT")
         }

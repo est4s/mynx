@@ -45,6 +45,7 @@ Commands:
   rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
+  usb        usb [list] | allow [DEVICE] | url|path [PORT]: USB serial ports
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
@@ -761,6 +762,65 @@ def uptime_text(seconds):
     return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
 
 
+USB_USAGE = "usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT]"
+
+
+def cmd_usb(args, as_json):
+    sub, rest = (args[0], args[1:]) if args else ("list", [])
+    if sub == "list" and not rest:
+        answer = request("usb-list")
+        out(as_json, answer, usb_text(answer["devices"]))
+        return 0
+    if sub == "allow" and len(rest) <= 1:
+        answer = request("usb-allow", *rest)
+        device = answer["device"]
+        lines = [f"Allowed: {usb_label(device)}"]
+        for port in device["ports"]:
+            lines += [f"{port['name']:<8} {port['path']}", f"{'':<8} {port['url']}"]
+        if device.get("error"):
+            lines.append(f"but {device['error']}")
+        out(as_json, answer, "\n".join(lines))
+        return 0
+    if sub in ("url", "path") and len(rest) <= 1:
+        ports = [port for device in request("usb-list")["devices"] for port in device["ports"]]
+        if rest:
+            ports = [port for port in ports if port["name"] == rest[0]]
+            if not ports:
+                raise Failure(f"no port {rest[0]} (mynx usb lists them)")
+        if not ports:
+            raise Failure("no USB serial port (mynx usb lists devices)")
+        if len(ports) > 1:
+            raise Failure(f"{len(ports)} ports: say which ({', '.join(p['name'] for p in ports)})")
+        port = ports[0]
+        out(as_json, {"ok": True, "url": port["url"], "path": port["path"], "name": port["name"]}, port[sub])
+        return 0
+    raise Usage(USB_USAGE)
+
+
+def usb_label(device):
+    return f"{device.get('product') or 'USB device'} ({device['ids']})"
+
+
+def usb_text(devices):
+    """Each port with its path and URL; devices without ports say why."""
+    if not devices:
+        return ("No USB serial device. Connect one with a USB-C OTG adapter or\n"
+                "cable; Android asks whether mynx may use it.")
+    lines = []
+    for device in devices:
+        label = usb_label(device)
+        for port in device["ports"]:
+            lines += [f"{port['name']:<8} {label}{', in use' if port['in_use'] else ''}",
+                      f"  {port['path']}", f"  {port['url']}"]
+        if not device["allowed"]:
+            lines += [f"{label}: not allowed", f"  mynx usb allow {device['ids']} (app on screen)"]
+        elif device.get("error"):
+            lines.append(f"{label}: {device['error']}")
+        elif not device["ports"]:
+            lines.append(f"{label}: no port yet; the app is opening it")
+    return "\n".join(lines)
+
+
 SOUND_USAGE = "usage: mynx sound [status] | start | install [--yes]"
 # Keep in step with rootfs/Dockerfile, which puts them in new Debians.
 SOUND_PACKAGES = "pulseaudio pulseaudio-utils libasound2-plugins alsa-utils"
@@ -1357,6 +1417,10 @@ COMPONENTS = [
      "source": "https://github.com/ryanoasis/nerd-fonts",
      "note": "The terminal font: JetBrains Mono "
              "(https://github.com/JetBrains/JetBrainsMono) patched by Nerd Fonts."},
+    {"name": "usb-serial-for-android", "version": "3.11.0", "license": "MIT",
+     "source": "https://github.com/mik3y/usb-serial-for-android",
+     "note": "The USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) behind "
+             "/dev/serial. Its licence and copyright are the last text below."},
     {"name": "Debian", "version": "13 (trixie)", "license": "many (see each package)",
      "source": "https://sources.debian.org",
      "note": "The Linux system in the terminal, with PulseAudio, Python, nnn, "
@@ -1366,7 +1430,7 @@ COMPONENTS = [
 
 # The licence files in /opt/mynx/licenses/, in the order they're shown:
 # the app's own first.
-LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1"]
+LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "MIT-usb-serial-for-android"]
 
 
 def wrap(text, indent="  ", width=56):
@@ -1824,7 +1888,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
-    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service,
+    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 

@@ -199,6 +199,8 @@ class MainActivity : Activity() {
         showShellFromNotification()
         tabToOpen = commandOf(intent)
         openCommandTab()
+        // On screen already, so onStart won't look for it.
+        if (intent.action == ACTION_USB_ALLOWED) service?.refreshUsb()
     }
 
     private fun commandOf(intent: Intent?): List<String>? = when (intent?.action) {
