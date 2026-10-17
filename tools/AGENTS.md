@@ -650,8 +650,12 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
     in `platformio.ini`, `upload_port = /dev/serial/ttyUSB0` and
     `monitor_port = /dev/serial/ttyUSB0` (or the URL), since it can't
     find ports itself; `pio run -t upload`, `pio device monitor`.
-    Its AVR and ESP32 toolchains run on arm64; the first build
-    downloads them (hundreds of MB for ESP32).
+    Its AVR toolchain installs and builds. **Its ESP32 toolchains
+    don't install here yet:** PlatformIO copies each unpacked package
+    and trips over the hard links proot fakes ("[Errno 22] Invalid
+    argument"); use arduino-cli's `esp32:esp32` core (after `mynx
+    fix-links ~/.arduino15`, it builds for the C3: about 1.5 GB, a
+    first build of about 13 minutes) or esptool with a ready firmware.
   - **avrdude** (`apt install avrdude`): `avrdude -p atmega328p -c
     arduino -b 115200 -P /dev/serial/ttyUSB0 -U flash:w:sketch.hex`
     (57600 for old Nano bootloaders); opening the port resets the

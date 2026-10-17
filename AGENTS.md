@@ -561,7 +561,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   file", `lstat` gives EPERM). Pointing them at the moved `.l2s.*`
   files again doesn't help (proot still refuses `lstat`); replacing
   each name with a copy of its file does: `mynx fix-links DIR`
-  (`tools/lib/mynx/links.py`, the user guide's recipes).
+  (`tools/lib/mynx/links.py`, the user guide's recipes). **Not fixed:**
+  proot's `getdents` reports a faked hard link as `DT_LNK` while
+  `readlink` on it gives EINVAL, so Python's `shutil.copytree(…,
+  symlinks=True)` fails on any tree with hard links: PlatformIO's
+  ESP32 toolchains don't install. A proot patch (report `DT_REG`
+  for them) would fix it.
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the maintainer can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.

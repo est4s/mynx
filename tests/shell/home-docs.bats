@@ -136,3 +136,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }
+
+@test "the guide's board recipes: each tool on a /dev/serial port, and what proot breaks" {
+    for text in "esptool --port" "mpremote connect /dev/serial/" "arduino-cli upload -p" \
+        "mynx fix-links ~/.arduino15" "upload_port" "avrdude -p" "1200 baud touch" \
+        "ESP32 toolchains" "mynx usb monitor"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
