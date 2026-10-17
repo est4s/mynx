@@ -71,18 +71,20 @@ APIs like `mynx sensor` and `mynx camera`, each with `--json` and an
 ### Development boards
 Flash and talk to boards like **Arduino** and **ESP32** over a USB-C OTG
 cable, using standard tools.
-- A **USB serial bridge** in the app *(PR #33; tested with an ESP32-C3, an ESP32-CAM-MB,
-  an Arduino Nano and a Pro Micro)*: Android's
-  USB API (usb-serial-for-android) to serial ports in Debian. Each port
-  is a pseudo-terminal at `/dev/serial/ttyUSB0` and RFC 2217 at
-  `rfc2217://localhost:2217`, which carries the bootloader reset
-  (DTR/RTS) for pyserial and `esptool`. CH340, CP210x, FTDI, PL2303 and
-  CDC ACM (ATmega16U2, native-USB ESP32-S2/S3/C3, Pico).
-- Next: Android forbids the modem ioctls (`TIOCMGET`/`TIOCMSET`,
-  `TIOCEXCL`, `tcdrain`) on a pseudo-terminal, so pyserial and Go
-  programs can't open `/dev/serial/…`. Catch them for those ports (an
-  `LD_PRELOAD` library, or proot), passing DTR/RTS to the bridge; and
-  a `/dev/ttyUSB0` name tools find by themselves.
+- A **USB serial bridge** in the app *(PR #33 and #34; tested with an
+  ESP32-C3, an ESP32-CAM-MB, an Arduino Nano and a Pro Micro)*:
+  Android's USB API (usb-serial-for-android) to serial ports in Debian.
+  Each port is a pseudo-terminal at `/dev/serial/ttyUSB0` and RFC 2217
+  at `rfc2217://localhost:2217`, which carries the bootloader reset
+  (DTR/RTS). CH340, CP210x, FTDI, PL2303 and CDC ACM (ATmega16U2,
+  native-USB ESP32-S2/S3/C3, Pico). A preload library steps in where
+  Android forbids the modem calls on a pseudo-terminal, so pyserial
+  tools (`esptool`, miniterm, PlatformIO), `picocom` and `avrdude`
+  work on the path.
+- Next: port names tools find by themselves (`/dev/ttyUSB0`, and
+  what `pyserial`'s port list and PlatformIO's auto-detect read).
+  Static programs (Go: `arduino-cli monitor`) skip the preload
+  library and need the URL.
 - `arduino-cli`, PlatformIO, `esptool`, `avrdude`, `picocom` against that
   port; AVR and ESP32 toolchains run on arm64. Holding BOOT as a
   fallback for the reset.
