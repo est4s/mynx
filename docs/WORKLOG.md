@@ -289,20 +289,18 @@ in step 7.
   for `rogue`/`drive`/`flap` and the generic `game` bar, hold-to-repeat
   on arrows, each tab keeping its own bar.
 
-### Hardware keyboard checks (later)
-The maintainer has no hardware keyboard, so these are untested. Run them when
-one is available (Bluetooth/USB keyboard), or with a soft keyboard that
-sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
-- Ctrl+Shift+T opens a tab; Ctrl+Shift+W closes the selected one
-- Ctrl+Tab / Ctrl+Shift+Tab go to the next / previous tab, wrapping round
-- Ctrl+Alt+1…9 jump to tab N (no-op past the last tab)
-- Ctrl+Shift+PgUp / PgDn move the selected tab left / right
-- Ctrl+Shift+R opens the rename dialog; Enter in it saves, Esc cancels
-- holding a shortcut acts once (no row of new tabs)
-- Ctrl+T, Ctrl+W, Tab, Ctrl+Alt+0 still reach the shell (e.g. Ctrl+W
-  deletes a word in bash)
-- Android doesn't swallow Ctrl+Tab or Ctrl+Alt+digits before the app sees
-  them (if it does, pick other defaults in `tabShortcut()`)
+### Hardware keyboard checks
+Tried 2026-10-17 with the maintainer's first external keyboard (mynx
+dev 175). **Pass:** Ctrl+Shift+T and Ctrl+Shift+W; holding Ctrl+Shift+T
+opens one tab; Ctrl+Tab and Ctrl+Shift+Tab, wrapping round; Ctrl+Alt+1…9
+(nothing past the last tab), and Android swallows none of them;
+Ctrl+Shift+R, with Enter saving and Esc cancelling; Ctrl+W, Ctrl+T and
+Ctrl+Alt+0 still reach bash.
+
+**Left, with another keyboard:** Ctrl+Shift+PgUp / PgDn move the
+selected tab left / right. Not testable: this keyboard's Fn+Up/Down
+sends nothing at all (`cat -v` printed nothing, even without
+Ctrl+Shift).
 
 ### Small open items
 - The wakelock is a setting (10.2); a notification action to toggle it
