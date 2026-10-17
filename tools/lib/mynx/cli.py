@@ -816,6 +816,8 @@ def usb_text(devices):
             lines += [f"{label}: not allowed", f"  mynx usb allow {device['ids']} (app on screen)"]
         elif device.get("error"):
             lines.append(f"{label}: {device['error']}")
+        elif not device["ports"]:
+            lines.append(f"{label}: no port yet; the app is opening it")
     return "\n".join(lines)
 
 

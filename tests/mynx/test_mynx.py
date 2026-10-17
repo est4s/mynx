@@ -1878,6 +1878,14 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertIn("No USB serial device", run.stdout)
         self.assertIn("OTG", run.stdout)
 
+    def test_usb_an_allowed_device_without_ports_yet_says_so(self):
+        # Seen on the phone: between Android's OK and the app opening it.
+        device = self.usb_device(ids="2341:8037", product="Arduino Micro")
+        self.start_app({"usb-list": {"ok": True, "devices": [device]}})
+        run = self.mynx("usb")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Arduino Micro (2341:8037): no port yet; the app is opening it\n")
+
     def test_usb_allow_asks_and_shows_the_ports(self):
         device = self.usb_device(ports=[("ttyUSB0", 2217, False)])
         self.start_app({"usb-allow": {"ok": True, "device": device}})

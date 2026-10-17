@@ -40,9 +40,10 @@ are in git history: the full log up to entry 92 is
   autostart on and off, on 2026-10-13); merged (PR #30, #32) and
   released in v0.2.0. The plan left "Next" (git history has it:
   `git show 8ea1266:docs/WORKLOG.md`).
-- **USB serial bridge:** built on PR #33 (entry 115); after three
-  phone rounds (entries 116-118) the ESP32-C3 passes every test and a
-  CH340 board (ESP32-CAM-MB) the ones it can; what's left in "Next 0".
+- **USB serial bridge:** built on PR #33 (entry 115); every phone
+  test passes (entries 116-118: ESP32-C3, ESP32-CAM-MB, Arduino Nano
+  and Pro Micro, two at once on a hub). Merge PR #33 next; part 2
+  (LD_PRELOAD) in "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -158,8 +159,9 @@ button, then 3, 5, 8 (write), 10-12, a CH340/CP210x board.
 (read), and 4 behaves as on Linux (the MB holds it in reset while
 DTR and RTS are on: documented, maintainer's decision). The helper
 fix from entry 118 passes on build 175 (unplugged while picocom ran:
-no "opened" or retry after the new link). **Left:** 5 and 9 (an Uno or Nano), 13 (two devices). Then the README,
-and merging PR #33.
+no "opened" or retry after the new link); a Nano passes 5 and 9, and
+13 passes on a hub (entry 118). **Every test is done:** the README
+says it ships; merge PR #33 once its build is green.
 
 *A. Connecting*
 1. Plug the board in. Android asks whether to open mynx dev for it:
@@ -345,6 +347,16 @@ mynx dev 173 (entry 117's fixes), tested with the maintainer:
   stops once `/dev/serial/NAME` no longer points at its pty (the app
   deletes it, a new helper replaces it). Tests in
   `test_serial_port.py`.
+- **Later the same day (build 175):** an Arduino Pro Micro
+  (2341:8037, `ttyACM0`, a MIDI sketch: its serial number reads
+  "MIDI") connects; once `mynx usb` caught it allowed with no port
+  yet, and printed nothing: now it says the app is opening it. An
+  Arduino Nano (CH340): opening the pty resets it into optiboot, so
+  `avrdude -c arduino -b 115200` reads all its flash (7 s, twice
+  identical) despite its `TIOCMGET` errors: **5 and 9 pass.** **13
+  passes:** the C3 and the Nano on a hub (with a power bank on its
+  PD port) get ports 2218 and 2217; the C3's REPL answered 20 of 20
+  over its URL while avrdude read the Nano through its pty.
 - Noted, not done: a program on the pty while the URL is busy gets
   silence with no hint (the helper retries every 2 s; the log says
   "the app closed the port"). Could say "busy" in the log or

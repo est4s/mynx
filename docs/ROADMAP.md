@@ -71,7 +71,8 @@ APIs like `mynx sensor` and `mynx camera`, each with `--json` and an
 ### Development boards
 Flash and talk to boards like **Arduino** and **ESP32** over a USB-C OTG
 cable, using standard tools.
-- A **USB serial bridge** in the app *(being built: PR #33)*: Android's
+- A **USB serial bridge** in the app *(PR #33; tested with an ESP32-C3, an ESP32-CAM-MB,
+  an Arduino Nano and a Pro Micro)*: Android's
   USB API (usb-serial-for-android) to serial ports in Debian. Each port
   is a pseudo-terminal at `/dev/serial/ttyUSB0` and RFC 2217 at
   `rfc2217://localhost:2217`, which carries the bootloader reset
