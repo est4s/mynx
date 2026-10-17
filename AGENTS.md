@@ -352,6 +352,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   `MainActivity`, which refreshes the bridge), and `mynx usb allow`
   asks with `requestPermission` (a mutable, explicit PendingIntent).
   Requests: `usb-list`, `usb-allow` (`usbRequests()`).
+  **Serial monitor** (`tools/apps/serial`, `mynx usb monitor`, bar
+  `serial`): an app like the others, so the menu's Apps lists it; it
+  opens the `/dev/serial` path and sets DTR/RTS with plain
+  `TIOCMBIS`/`TIOCMBIC`, which the preload passes to the helper. No
+  new-tab request: open a tab and run it (or Apps). Its resets follow
+  esptool's sequences (`reset()`); the plain reset pulses RTS (an
+  ESP32's EN) and then DTR (an Arduino's reset capacitor).
 - **Serial preload** (`tools/src/libmynx-serial.c`,
   `scripts/build-preload.sh`; maintainer's decision, 2026-10-17: a
   global `LD_PRELOAD`, not a wrapper or a proot patch): Android refuses
@@ -548,6 +555,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   then remove the original. tar is fine: proot shows each linked file
   as a plain one, so tar stores its contents, and the `.l2s.*` files
   can be left out (`scripts/backup-root.sh`).
+  **Installers do it too:** arduino-cli unpacks each toolchain into a
+  temporary folder and renames it into place, so avr-gcc's linked
+  binaries (`avr-g++`, `avr/bin/as`) dangle ("fork/exec …: no such
+  file", `lstat` gives EPERM). Pointing them at the moved `.l2s.*`
+  files again doesn't help (proot still refuses `lstat`); replacing
+  each name with a copy of its file does: `mynx fix-links DIR`
+  (`tools/lib/mynx/links.py`, the user guide's recipes).
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the maintainer can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.

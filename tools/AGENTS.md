@@ -127,6 +127,7 @@ their own.
 | `mynx usb allow [DEVICE]` | ask Android to let the app use a USB serial device (the app must be on screen) |
 | `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …` |
 | `mynx usb monitor [PORT] [--baud N] [--lower]` | a serial monitor on a port, in this tab (the `serial` app): Ctrl+T then a key resets the board, changes the baud, … (see "USB serial devices") |
+| `mynx fix-links DIR…` | repair the hard links an installer broke by moving the folder it unpacked (arduino-cli's toolchains: see "USB serial devices") |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
 | `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify`, and for Codex `--sandbox-off`/`--sandbox-on`, skip the questions) |
@@ -618,6 +619,51 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   away (unplugged, a board restarting its USB) it waits and opens it
   again. DTR and RTS go through the serial library: with
   `serial-preload off` it can't set them and says so.
+- **Recipes** (name the port: `/dev/serial/…` or its URL, from
+  `mynx usb`; `mynx usb path` prints the only one's):
+  - **esptool** (`apt install esptool`): `esptool --port
+    /dev/serial/ttyACM0 chip_id`; flash with `esptool --port … write_flash
+    0x0 firmware.bin` (`--no-stub` for the original ESP32, S2 and S3
+    with Debian's esptool, see above). Then `mynx usb monitor`.
+  - **MicroPython** with `mpremote` (`apt install pipx`, `pipx install
+    mpremote`): `mpremote connect /dev/serial/ttyACM0 ls`, `… cp
+    main.py :`, `… repl`; the URL works too. Its shortcuts (`a0`,
+    `u0`, `auto`) look for `/dev/ttyACM0` and don't find it.
+  - **arduino-cli** (Arduino's installer: `curl -fsSL
+    https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh
+    | BINDIR=~/.local/bin sh`): `arduino-cli core install arduino:avr`,
+    then **`mynx fix-links ~/.arduino15`** (after every core or tool
+    install: see below), `arduino-cli compile -b
+    arduino:avr:nano:cpu=atmega328old Blink` and `arduino-cli upload -p
+    /dev/serial/ttyUSB0 -b arduino:avr:nano:cpu=atmega328old Blink`
+    (it runs avrdude, which the serial library covers). Its own
+    `monitor` is a Go program: use `mynx usb monitor`. Boards that
+    upload after a 1200 baud touch (Leonardo, Micro, Pro Micro) jump
+    to a bootloader that is a new USB device for about 8 s: Android
+    asks for it again (tick "always" once) and it gets a port of its
+    own; upload to that one with avrdude: `stty -F
+    /dev/serial/ttyACM0 1200` (the touch), then `avrdude -p atmega32u4
+    -c avr109 -P /dev/serial/ttyACM0 -U flash:w:Blink.ino.hex` with the
+    port `mynx usb` shows then (`arduino-cli compile --output-dir .`
+    writes the `.hex`).
+  - **PlatformIO** (`apt install pipx`, `pipx install platformio`):
+    in `platformio.ini`, `upload_port = /dev/serial/ttyUSB0` and
+    `monitor_port = /dev/serial/ttyUSB0` (or the URL), since it can't
+    find ports itself; `pio run -t upload`, `pio device monitor`.
+    Its AVR and ESP32 toolchains run on arm64; the first build
+    downloads them (hundreds of MB for ESP32).
+  - **avrdude** (`apt install avrdude`): `avrdude -p atmega328p -c
+    arduino -b 115200 -P /dev/serial/ttyUSB0 -U flash:w:sketch.hex`
+    (57600 for old Nano bootloaders); opening the port resets the
+    board into its bootloader.
+- **`mynx fix-links DIR…`:** proot can't make hard links on Android,
+  so it fakes them with symlinks that hold absolute paths (to
+  `.l2s.*` files). An installer that unpacks into a temporary folder
+  and then moves it breaks them: arduino-cli's toolchains fail with
+  "fork/exec …/avr-g++: no such file or directory" and the files
+  can't even be listed ("Operation not permitted"). `mynx fix-links
+  ~/.arduino15` makes each broken name a copy of its file. `--json`
+  gives `fixed` (how many, by folder).
 
 ### Themes and colours
 

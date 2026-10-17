@@ -1939,6 +1939,29 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(run.returncode, 2)
         self.assertIn("needs a terminal", run.stderr)
 
+    def test_fix_links_copies_files_whose_faked_hard_links_a_move_broke(self):
+        pkg = os.path.join(self.home, "pkg")
+        os.makedirs(pkg)
+        with open(os.path.join(pkg, ".l2s.cc0001.0002"), "w") as f:
+            f.write("cc")
+        os.symlink("/old/.l2s.cc0001.0002", os.path.join(pkg, ".l2s.cc0001"))
+        os.symlink("/old/.l2s.cc0001", os.path.join(pkg, "cc"))
+        run = self.mynx("fix-links", pkg)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, f"{pkg}: fixed 1 link\n")
+        with open(os.path.join(pkg, "cc")) as f:
+            self.assertEqual("cc", f.read())
+        self.assertEqual(json.loads(self.mynx("fix-links", pkg, "--json").stdout),
+                         {"ok": True, "fixed": {pkg: 0}})
+
+    def test_fix_links_needs_folders(self):
+        run = self.mynx("fix-links")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: mynx fix-links DIR", run.stderr)
+        run = self.mynx("fix-links", os.path.join(self.home, "nope"))
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("not a folder", run.stderr)
+
     def test_usb_usage(self):
         for args in [("usb", "list", "x"), ("usb", "allow", "a", "b"), ("usb", "url", "a", "b"), ("usb", "plug")]:
             run = self.mynx(*args)
