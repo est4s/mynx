@@ -18,6 +18,17 @@ internal val HOST_BINDS = listOf("/dev", "/proc", "/sys", "/storage")
 
 private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+/** The app's serial library in Debian (see [serialPreload]). */
+const val SERIAL_PRELOAD = "$TOOLS_MOUNT/lib/libmynx-serial.so"
+
+/**
+ * The [prootLaunch] preload for the serial library: [SERIAL_PRELOAD] when
+ * [enabled] and the tools at [toolsDir] (a host path) have it. A missing
+ * preload would make ld.so warn at every program start.
+ */
+fun serialPreload(toolsDir: File, enabled: Boolean): String? =
+    SERIAL_PRELOAD.takeIf { enabled && File(toolsDir, "lib/libmynx-serial.so").isFile }
+
 /**
  * Command that starts a login bash inside Debian. [fakeProc] maps `/proc`
  * files Android blocks to stand-ins (see [writeFakeProc]). With [cwdFile]
@@ -33,6 +44,9 @@ private const val DEBIAN_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/b
  * path) is the battery's stand-in, bound at [POWER_SUPPLY_MOUNT].
  * [service] names the background service it runs (`MYNX_SERVICE`).
  * [serialDir] (a host path) holds the USB serial ports' links, bound at [SERIAL_MOUNT].
+ * [preload] (a Debian path) is a library every program in Debian loads
+ * (`LD_PRELOAD`, set inside the guest only: Android's linker must not
+ * see it in proot's own environment).
  * [command] runs instead of the login bash.
  */
 fun prootLaunch(
@@ -50,6 +64,7 @@ fun prootLaunch(
     powerSupply: String? = null,
     service: String? = null,
     serialDir: String? = null,
+    preload: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
@@ -84,6 +99,7 @@ fun prootLaunch(
         soundSocket?.let { add("PULSE_SERVER=unix:$it") }
         // Debian's own zone is UTC; a TZ set in .bashrc still wins.
         timeZone?.let { add("TZ=$it") }
+        preload?.let { add("LD_PRELOAD=$it") }
         addAll(command)
     }
     val env = mapOf(

@@ -35,6 +35,8 @@ data class Settings(
     val wakelock: Wakelock = Wakelock.AUTO,
     /** Whether the app checks GitHub about once a day for a new version (release builds). */
     val updateCheck: Boolean = true,
+    /** Whether programs in Debian get the app's serial library preloaded (new tabs and services). */
+    val serialPreload: Boolean = true,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -55,6 +57,7 @@ data class Settings(
         "tab-swipe" to if (tabSwipe) "on" else "off",
         "wakelock" to wakelock.word,
         "update-check" to if (updateCheck) "on" else "off",
+        "serial-preload" to if (serialPreload) "on" else "off",
     )
 }
 
@@ -199,6 +202,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("update-check", listOf("on", "off")),
         { copy(updateCheck = it == "on") },
+    ),
+    SettingDef(
+        "serial-preload", "Whether programs here load the app's serial library, so tools like esptool and picocom work on /dev/serial ports (new tabs and services).",
+        "on", listOf("on", "off"),
+        oneOf("serial-preload", listOf("on", "off")),
+        { copy(serialPreload = it == "on") },
     ),
 )
 
