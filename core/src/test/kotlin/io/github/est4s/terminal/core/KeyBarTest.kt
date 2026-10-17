@@ -430,6 +430,20 @@ class KeyBarTest {
     }
 
     @Test
+    fun `the serial monitor's bar sends its commands after Ctrl+T`() {
+        assertTrue("serial" in BUILT_IN_KEY_BARS)
+        val bar = loadKeyBar("serial", dir)
+
+        assertEquals(emptyList(), bar.problems)
+        val reset = parseKeyBar("x = Ctrl+T r").buttons.single().strokes
+        assertEquals(reset, bar.buttons.single { it.label == "Reset" }.strokes)
+        for (label in listOf("Boot", "Baud−", "Baud+", "Hex", "Time", "Quit")) {
+            assertEquals(parseKeyBar("x = Ctrl+T").buttons.single().strokes.single(),
+                bar.buttons.single { it.label == label }.strokes.first(), label)
+        }
+    }
+
+    @Test
     fun `no built-in bar takes the volume keys`() {
         for (name in BUILT_IN_KEY_BARS) {
             val loaded = loadKeyBar(name, dir)

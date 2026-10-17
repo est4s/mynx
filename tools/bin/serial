@@ -1,0 +1,3 @@
+#!/bin/sh
+# The serial monitor, with its key bar (also mynx usb monitor). Source: /opt/mynx/apps/serial
+exec keybar serial,shell "$(dirname "$0")/../apps/serial" "$@"

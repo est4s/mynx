@@ -45,7 +45,7 @@ Commands:
   rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
-  usb        usb [list] | allow [DEVICE] | url|path [PORT]: USB serial ports
+  usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB serial ports
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
@@ -762,7 +762,9 @@ def uptime_text(seconds):
     return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
 
 
-USB_USAGE = "usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT]"
+USB_USAGE = "usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT] | monitor [PORT] [--baud N]"
+# The serial monitor's command (tools/bin/serial), next to this library.
+SERIAL_MONITOR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "bin", "serial")
 
 
 def cmd_usb(args, as_json):
@@ -781,6 +783,8 @@ def cmd_usb(args, as_json):
             lines.append(f"but {device['error']}")
         out(as_json, answer, "\n".join(lines))
         return 0
+    if sub == "monitor" and not as_json:
+        os.execv(SERIAL_MONITOR, [SERIAL_MONITOR, *rest])
     if sub in ("url", "path") and len(rest) <= 1:
         ports = [port for device in request("usb-list")["devices"] for port in device["ports"]]
         if rest:
@@ -818,6 +822,8 @@ def usb_text(devices):
             lines.append(f"{label}: {device['error']}")
         elif not device["ports"]:
             lines.append(f"{label}: no port yet; the app is opening it")
+    if any(device["ports"] for device in devices):
+        lines.append("A serial monitor: mynx usb monitor [PORT]")
     return "\n".join(lines)
 
 

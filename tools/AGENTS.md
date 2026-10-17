@@ -53,7 +53,7 @@ and applies them. See "Changing settings" below.
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
 | Menu state (last choices) | `~/.local/state/mynx/menu` |
-| Apps | `/opt/mynx/apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`), yours in `~/apps` |
+| Apps | `/opt/mynx/apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`, `serial`), yours in `~/apps` |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
 | The app's tools: `mynx`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/mynx/bin` |
 | Built-in key bars and themes, to read or copy | `/opt/mynx/keybars`, `/opt/mynx/themes` |
@@ -126,6 +126,7 @@ their own.
 | `mynx usb [list]` | USB serial devices: their ports' `/dev/serial` paths and `rfc2217://` URLs, or why they have none (see "USB serial devices") |
 | `mynx usb allow [DEVICE]` | ask Android to let the app use a USB serial device (the app must be on screen) |
 | `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …` |
+| `mynx usb monitor [PORT] [--baud N] [--lower]` | a serial monitor on a port, in this tab (the `serial` app): Ctrl+T then a key resets the board, changes the baud, … (see "USB serial devices") |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
 | `mynx agent install NAME` | install `claude`, `codex` or `gemini` with its official installer (shows the commands and asks first; `--yes`, `--notify`/`--no-notify`, and for Codex `--sandbox-off`/`--sandbox-on`, skip the questions) |
@@ -601,6 +602,22 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `/tmp/.mynx/serial/NAME.log`.
 - The URL is on localhost: other apps on the phone could reach it
   too, while mynx runs and the device is plugged in.
+- **Serial monitor:** `mynx usb monitor [PORT] [--baud N]` (the
+  `serial` command, the menu's Apps → Serial monitor) shows what the
+  board sends and sends what you type, Enter as CR, at 115200 baud
+  unless given. With several ports it asks which. Its key bar,
+  `serial`, has Esc, Ctrl, Tab, the arrows, Ctrl+C, Ctrl+D (a
+  MicroPython REPL's) and its commands, Ctrl+T then a key: `q` quit
+  (Ctrl+] too), `r` reset the board (an RTS pulse for an ESP32's EN,
+  then a DTR pulse for an Arduino's reset), `b` into the bootloader
+  (esptool's sequence; the 1200 baud touch for Arduino's native USB
+  and the Pico), `+`/`-` baud, `x` hex, `s` timestamps, `e` local
+  echo, `n` line ending (CR, LF, CR LF), `D`/`R` DTR/RTS on or off,
+  `h` the keys. Opening raises DTR and RTS, as on Linux; `--lower`
+  drops them (DTR first: the ESP32-CAM-MB boots). When the port goes
+  away (unplugged, a board restarting its USB) it waits and opens it
+  again. DTR and RTS go through the serial library: with
+  `serial-preload off` it can't set them and says so.
 
 ### Themes and colours
 
@@ -675,7 +692,7 @@ with `pager`.
 Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, `pager`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
 apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
-`metronome`, `service` for a background service shown as a tab, and
+`metronome`, `serial` for the serial monitor, `service` for a background service shown as a tab, and
 `agent` for AI agents (`claude`, `codex` and `gemini` typed in the shell,
 or started with `mynx agent start`; an agent's own bar, e.g. `claude`,
 wins when it exists). Typing them by name works through bash functions
@@ -745,6 +762,7 @@ shows the generic game bar until `my-tool.conf` exists.
   | `dbmeter` | a sound level meter | the microphone |
   | `tuner` | a guitar tuner (`--demo`) | the microphone, the speaker, numpy |
   | `metronome` | a metronome with tap and clap tempo | the speaker, the flashlight, vibration, numpy |
+  | `serial` | a serial monitor for a USB board (`mynx usb monitor`) | a `/dev/serial` port |
 
   The microphone apps read it through the sound device with `parec`
   (`/opt/mynx/apps/mic.py`). `tuner` and `metronome` need numpy and

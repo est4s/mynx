@@ -1,0 +1,453 @@
+#!/usr/bin/env python3
+# label: Serial monitor
+"""serial: a serial monitor for a USB board (also `mynx usb monitor`).
+
+usage: serial [PORT] [--baud N] [--lower]
+
+PORT is a name from `mynx usb` (ttyACM0), a path, or nothing for the
+only port. --baud sets the speed (115200 unless given). Opening the
+port raises DTR and RTS, as on Linux; --lower drops them (DTR first),
+for boards those hold in reset (the ESP32-CAM-MB).
+
+What you type goes to the board. Ctrl+T then a key is a command:
+  q quit (Ctrl+] too)    r reset the board   b into its bootloader
+  + - baud up, down      x hex               s timestamps
+  e local echo           n line ending (CR, LF, CR LF)
+  D DTR on/off           R RTS on/off        h these keys
+Ctrl+T Ctrl+T sends a Ctrl+T. A port that goes away (unplugged, a
+board that restarts its USB) is waited for and opened again.
+"""
+import codecs
+import errno
+import fcntl
+import os
+import select
+import signal
+import struct
+import sys
+import termios
+import time
+import tty
+
+# the app's own library, next to the apps folder (/opt/mynx/lib)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
+from mynx.client import Failure, request  # noqa: E402
+
+BAUDS = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
+CTRL_T, CTRL_BRACKET = 0x14, 0x1D
+EOLS = {"cr": b"\r", "lf": b"\n", "crlf": b"\r\n"}
+DIM, RESET = "\x1b[2m", "\x1b[0m"
+
+KEYS_HELP = """Ctrl+T then: q quit (Ctrl+] too), r reset the board, b into its
+bootloader, + - baud up and down, x hex, s timestamps, e local echo,
+n line ending, D DTR on/off, R RTS on/off, h these keys"""
+
+
+class Problem(Exception):
+    """Something to tell the user before the monitor starts."""
+
+
+def choose_port(wanted, ports):
+    """The port to open: by name or path, or the only one there is."""
+    names = ", ".join(p["name"] for p in ports)
+    if wanted is None:
+        if not ports:
+            raise Problem("No USB serial port. Connect a board (mynx usb lists them).")
+        if len(ports) > 1:
+            raise Problem(f"{len(ports)} ports: say which ({names})")
+        return ports[0]
+    for port in ports:
+        if wanted in (port["name"], port["path"]):
+            return port
+    if "/" in wanted:
+        name = os.path.basename(wanted)
+        if wanted.startswith("/dev/pts/"):
+            name = "pts-" + name
+        return {"name": name, "path": wanted, "ids": None}
+    raise Problem(f"no port {wanted} (ports: {names or 'none'})")
+
+
+def pick(ports, ask=input):
+    """Several ports and a person to ask: which one."""
+    lines = [f"{i} {p['name']}  {p.get('product') or p.get('ids') or ''}".rstrip()
+             for i, p in enumerate(ports, 1)]
+    answer = ask("\n".join(lines) + "\nWhich port? ").strip()
+    if not answer.isdigit() or not 1 <= int(answer) <= len(ports):
+        raise Problem(f"no port {answer}")
+    return ports[int(answer) - 1]
+
+
+def boot_kind(port):
+    """How this device goes into its bootloader."""
+    vendor = (port.get("ids") or "").split(":")[0]
+    if vendor == "303a":
+        return "usb-jtag"  # an ESP32's own USB (C3, S3, C6)
+    if port["name"].startswith("ttyACM"):
+        return "touch"  # Arduino's native USB, Pico: the 1200 baud touch
+    return "classic"  # a USB-serial chip wired to EN and IO0
+
+
+def step_baud(baud, step):
+    if step > 0:
+        return next((b for b in BAUDS if b > baud), BAUDS[-1])
+    return next((b for b in reversed(BAUDS) if b < baud), BAUDS[0])
+
+
+def stamp(at):
+    return DIM + time.strftime("%H:%M:%S", time.localtime(at)) + f".{int(at % 1 * 1000):03d} " + RESET
+
+
+class Keys:
+    """Typed bytes into what to send and the commands after Ctrl+T."""
+
+    def __init__(self):
+        self.eol = "cr"
+        self.prefix = False
+
+    def feed(self, data):
+        actions, text = [], bytearray()
+
+        def flush():
+            if text:
+                actions.append(("send", bytes(text)))
+                text.clear()
+
+        for b in data:
+            if self.prefix:
+                self.prefix = False
+                if b == CTRL_T:
+                    text.append(b)
+                else:
+                    flush()
+                    actions.append(("command", chr(b)))
+            elif b == CTRL_T:
+                self.prefix = True
+            elif b == CTRL_BRACKET:
+                flush()
+                actions.append(("command", "q"))
+            elif b == 0x0D:
+                text += EOLS[self.eol]
+            else:
+                text.append(b)
+        flush()
+        return actions
+
+
+class Display:
+    """What the board sends, as text (or hex), with timestamps if asked."""
+
+    def __init__(self):
+        self.hex = False
+        self.stamps = False
+        self.at_start = True
+        self.column = 0
+        self.decoder = codecs.getincrementaldecoder("utf-8")("replace")
+
+    def feed(self, data, now):
+        out = []
+        if self.hex:
+            for b in data:
+                if self.at_start and self.stamps:
+                    out.append(stamp(now))
+                out.append(f"{b:02x} ")
+                self.at_start = False
+                self.column += 1
+                if b == 0x0A or self.column == 16:
+                    out.append("\n")
+                    self.at_start, self.column = True, 0
+            return "".join(out).replace(" \n", "\n")
+        text = self.decoder.decode(data)
+        if not self.stamps:
+            if text:
+                self.at_start = text.endswith("\n")
+            return text
+        for line in text.splitlines(keepends=True):
+            if self.at_start:
+                out.append(stamp(now))
+            out.append(line)
+            self.at_start = line.endswith("\n")
+        return "".join(out)
+
+    def note(self, text):
+        start = "" if self.at_start else "\r\n"
+        self.at_start, self.column = True, 0
+        return f"{start}{DIM}— {text} —{RESET}\r\n"
+
+
+class Lines:
+    """DTR and RTS: through the app's serial library on /dev/serial."""
+
+    def __init__(self, fd):
+        self.fd = fd
+        self.dtr = self.rts = True  # what opening a port does on Linux
+
+    def set(self, dtr=None, rts=None):
+        for bit, value, name in ((termios.TIOCM_DTR, dtr, "dtr"), (termios.TIOCM_RTS, rts, "rts")):
+            if value is None:
+                continue
+            fcntl.ioctl(self.fd, termios.TIOCMBIS if value else termios.TIOCMBIC, struct.pack("I", bit))
+            setattr(self, name, value)
+
+
+def reset(kind, lines, port, sleep=time.sleep):
+    """A board reset ("reset"), or into its bootloader (the other kinds)."""
+    s = lines.set
+    if kind == "reset":
+        # RTS first, as the helper drops them; an RTS pulse resets an
+        # ESP32 through EN, then a DTR pulse an Arduino through its capacitor.
+        s(rts=False); s(dtr=False); sleep(0.1)
+        s(rts=True); sleep(0.2); s(rts=False); sleep(0.05)
+        s(dtr=True); sleep(0.1); s(dtr=False)
+    elif kind == "classic":  # esptool's ClassicReset
+        s(dtr=False); s(rts=True); sleep(0.1)
+        s(dtr=True); s(rts=False); sleep(0.05); s(dtr=False)
+    elif kind == "usb-jtag":  # esptool's USBJTAGSerialReset
+        s(rts=False); s(dtr=False); sleep(0.1)
+        s(dtr=True); s(rts=False); sleep(0.1)
+        s(rts=True); s(dtr=False); s(rts=True); sleep(0.1)
+        s(dtr=False); s(rts=False)
+    elif kind == "touch":  # Arduino's 1200 baud touch
+        port.set_baud(1200)
+        s(dtr=False)
+
+
+class Port:
+    def __init__(self, path, baud):
+        self.path, self.baud = path, baud
+        self.fd = None
+        self.lines = None
+
+    def open(self):
+        self.fd = os.open(self.path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        self.target = os.path.realpath(self.path)
+        self.lines = Lines(self.fd)
+        attrs = termios.tcgetattr(self.fd)
+        attrs[0] = 0  # iflag: no translation, no flow control
+        attrs[1] = 0
+        attrs[2] = termios.CS8 | termios.CREAD | termios.CLOCAL
+        attrs[3] = 0
+        attrs[6] = list(attrs[6])
+        attrs[6][termios.VMIN], attrs[6][termios.VTIME] = 0, 0
+        termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
+        self.set_baud(self.baud)
+
+    def set_baud(self, baud):
+        attrs = termios.tcgetattr(self.fd)
+        speed = getattr(termios, f"B{baud}")
+        attrs[4] = attrs[5] = speed
+        termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
+
+    def gone(self):
+        """Unplugged: its /dev/serial link went, or points at a new pty."""
+        try:
+            return os.path.realpath(self.path) != self.target or not os.path.exists(self.path)
+        except OSError:
+            return True
+
+    def close(self):
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except OSError:
+                pass
+            self.fd = None
+
+
+class Monitor:
+    def __init__(self, port_info, baud, lower):
+        self.info = port_info
+        self.port = Port(port_info["path"], baud)
+        self.lower = lower
+        self.keys = Keys()
+        self.display = Display()
+        self.echo = False
+        self.out = sys.stdout.buffer
+
+    def write(self, text):
+        self.out.write(text.encode("utf-8", "replace"))
+        self.out.flush()
+
+    def note(self, text):
+        self.write(self.display.note(text))
+
+    def open(self):
+        self.port.open()
+        if self.lower:
+            self.try_lines(dtr=False)
+            self.try_lines(rts=False)
+
+    def try_lines(self, **lines):
+        try:
+            self.port.lines.set(**lines)
+            return True
+        except OSError as e:
+            hint = " (serial-preload off?)" if e.errno == errno.EACCES else ""
+            self.note(f"can't set DTR/RTS: {e.strerror}{hint}")
+            return False
+
+    def command(self, key):
+        port = self.port
+        if key == "q":
+            return False
+        if key == "h":
+            self.write(self.display.note("keys") + KEYS_HELP.replace("\n", "\r\n") + "\r\n")
+        elif key in "+-":
+            baud = step_baud(port.baud, 1 if key == "+" else -1)
+            port.baud = baud
+            port.set_baud(baud)
+            self.note(f"{baud} baud")
+        elif key == "x":
+            self.display.hex = not self.display.hex
+            self.note("hex" if self.display.hex else "text")
+        elif key == "s":
+            self.display.stamps = not self.display.stamps
+            self.note("timestamps " + ("on" if self.display.stamps else "off"))
+        elif key == "e":
+            self.echo = not self.echo
+            self.note("local echo " + ("on" if self.echo else "off"))
+        elif key == "n":
+            order = list(EOLS)
+            self.keys.eol = order[(order.index(self.keys.eol) + 1) % len(order)]
+            self.note("Enter sends " + {"cr": "CR", "lf": "LF", "crlf": "CR LF"}[self.keys.eol])
+        elif key in "DR":
+            name = "dtr" if key == "D" else "rts"
+            value = not getattr(port.lines, name)
+            if self.try_lines(**{name: value}):
+                self.note(f"{name.upper()} {'on' if value else 'off'}")
+        elif key in "rb":
+            kind = "reset" if key == "r" else boot_kind(self.info)
+            try:
+                reset(kind, port.lines, port)
+                self.note("reset" if key == "r" else "into the bootloader")
+                if kind == "touch":
+                    time.sleep(0.5)
+                    if not port.gone():
+                        port.set_baud(port.baud)
+            except OSError as e:
+                hint = " (serial-preload off?)" if e.errno == errno.EACCES else ""
+                self.note(f"can't reset: {e.strerror}{hint}")
+        else:
+            self.note(f"Ctrl+T {key!r}: not a command (Ctrl+T h lists them)")
+        return True
+
+    def wait_for_port(self, stdin):
+        self.port.close()
+        self.note(f"{self.info['name']} is gone; waiting for it (Ctrl+T q quits)")
+        while True:
+            if select.select([stdin], [], [], 0.5)[0]:
+                for kind, value in self.keys.feed(os.read(stdin, 1024)):
+                    if kind == "command" and value == "q":
+                        return False
+            if os.path.exists(self.port.path):
+                try:
+                    self.open()
+                    self.note(f"{self.info['name']} is back")
+                    return True
+                except OSError:
+                    self.port.close()
+
+    def run(self, stdin):
+        self.write(f"\x1b]0;serial {self.info['name']}\a")
+        self.note(f"{self.info['name']} at {self.port.baud} baud. Ctrl+T h for keys, Ctrl+] quits")
+        checked = time.monotonic()
+        while True:
+            fds = [stdin] + ([self.port.fd] if self.port.fd is not None else [])
+            ready = select.select(fds, [], [], 0.5)[0]
+            if self.port.fd in ready:
+                try:
+                    data = os.read(self.port.fd, 4096)
+                except OSError as e:
+                    data = b"" if e.errno in (errno.EIO, errno.EBADF) else None
+                    if data is None:
+                        raise
+                if data:
+                    self.write(self.display.feed(data, time.time()))
+                elif not self.wait_for_port(stdin):
+                    return 0
+            if stdin in ready:
+                for kind, value in self.keys.feed(os.read(stdin, 1024)):
+                    if kind == "send":
+                        try:
+                            os.write(self.port.fd, value)
+                        except (OSError, TypeError):
+                            pass
+                        if self.echo:
+                            self.write(value.decode("utf-8", "replace"))
+                    elif not self.command(value):
+                        return 0
+            if time.monotonic() - checked > 0.5:
+                checked = time.monotonic()
+                if self.port.gone() and not self.wait_for_port(stdin):
+                    return 0
+
+
+def ask_ports():
+    try:
+        return [port for device in request("usb-list")["devices"]
+                for port in device["ports"]
+                for port in [{**port, "ids": device.get("ids"), "product": device.get("product")}]]
+    except Failure as e:
+        raise Problem(str(e))
+
+
+def parse(argv):
+    wanted, baud, lower = None, 115200, False
+    args = list(argv)
+    while args:
+        arg = args.pop(0)
+        if arg == "--baud":
+            value = args.pop(0) if args else ""
+            if not value.isdigit() or int(value) not in BAUDS:
+                raise Problem(f"--baud is one of {', '.join(map(str, BAUDS))}")
+            baud = int(value)
+        elif arg == "--lower":
+            lower = True
+        elif arg.startswith("-") or wanted is not None:
+            raise Problem("usage: serial [PORT] [--baud N] [--lower]")
+        else:
+            wanted = arg
+    return wanted, baud, lower
+
+
+def main(argv):
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
+    try:
+        wanted, baud, lower = parse(argv)
+        if not sys.stdin.isatty():
+            print("serial: needs a terminal", file=sys.stderr)
+            return 2
+        ports = [] if wanted and "/" in wanted else ask_ports()
+        info = pick(ports) if wanted is None and len(ports) > 1 else choose_port(wanted, ports)
+        monitor = Monitor(info, baud, lower)
+        try:
+            monitor.open()
+        except OSError as e:
+            raise Problem(f"can't open {info['path']}: {e.strerror}")
+    except (Problem, EOFError, KeyboardInterrupt) as e:
+        print(f"serial: {str(e) or 'no port chosen'}", file=sys.stderr)
+        return 2
+
+    def finish(*_):
+        raise SystemExit(0)
+
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, finish)
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        attrs = termios.tcgetattr(fd)
+        attrs[1] |= termios.OPOST | termios.ONLCR  # a board's lone \n starts a line too
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        return monitor.run(fd)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        monitor.port.close()
+        sys.stdout.write(RESET + "\n")
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
