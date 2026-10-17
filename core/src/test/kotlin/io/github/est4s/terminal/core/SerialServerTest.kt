@@ -19,7 +19,7 @@ class SerialServerTest {
     @AfterTest
     fun close() = server.close()
 
-    private fun connect() = Socket(InetAddress.getLoopbackAddress(), server.port).apply { soTimeout = 3000 }
+    private fun connect() = Socket("127.0.0.1", server.port).apply { soTimeout = 3000 }
 
     private fun waitFor(what: String, check: () -> Boolean) {
         val until = System.currentTimeMillis() + 3000
@@ -37,9 +37,10 @@ class SerialServerTest {
     }
 
     @Test
-    fun `listens on localhost only`() {
+    fun `listens on IPv4 localhost only`() {
+        // The Debian side connects to 127.0.0.1; Android's loopback address is ::1.
         assertTrue(server.port > 0)
-        assertEquals(InetAddress.getLoopbackAddress(), server.address)
+        assertEquals(InetAddress.getByName("127.0.0.1"), server.address)
     }
 
     @Test

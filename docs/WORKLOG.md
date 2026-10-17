@@ -40,8 +40,8 @@ are in git history: the full log up to entry 92 is
   autostart on and off, on 2026-10-13); merged (PR #30, #32) and
   released in v0.2.0. The plan left "Next" (git history has it:
   `git show 8ea1266:docs/WORKLOG.md`).
-- **USB serial bridge:** built on PR #33 (entry 115), waiting for
-  the phone tests in "Next 0".
+- **USB serial bridge:** built on PR #33 (entry 115); first phone
+  tests found two bugs, fixed in entry 116; next round in "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -129,6 +129,16 @@ numbered so results can be reported by number). A board with a
 USB-serial chip (ESP32 dev board with CP2102/CH340, or an Arduino
 Uno/Nano) and an OTG adapter. First, in mynx dev: `apt update && apt
 install picocom python3-serial esptool avrdude` (what applies).
+
+**First round** (2026-10-17, build 171, ESP32-C3 on `ttyACM0`):
+1-2 pass. 4: picocom needs `--nolock` (flock refused), then got
+nothing: the pty helper couldn't reach the server (fixed, entry 116).
+6: the URL works and blocks the pty while in use. 7: reset into the
+bootloader and chip detection work; the stub fails (queued reads,
+entry 116); `--no-stub` chip_id, flash_id and read_mem work. Next
+round, with the fixes: 4, 7 with the stub, then 3, 5, 8, 10-12, and a
+CH340 or CP210x board (per-port connections change every device's
+open).
 
 *A. Connecting*
 1. Plug the board in. Android asks whether to open mynx dev for it:
@@ -281,6 +291,25 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-17 (116): First phone tests of the USB serial bridge; two fixes
+
+Tested PR #33's build (mynx dev 171) with an ESP32-C3 board (built-in
+USB-Serial-JTAG, 303a:1001, so `ttyACM0`). Results in Next 0, "First
+round". Fixed on `usb-serial` (subagents; not yet on the phone):
+- **The ptys never reached the board:** `SerialServer` bound
+  `InetAddress.getLoopbackAddress()`, which is `::1` on Android;
+  `serial-port` connects to 127.0.0.1 and was refused every time.
+  Now bound to 127.0.0.1 (test asserts it). `rfc2217://localhost`
+  still works: pyserial's `create_connection` falls back to IPv4.
+- **esptool's stub lost reply bytes** over the C3's USB-Serial-JTAG
+  (only the first packet, `c0 01`, arrived; `--no-stub` was fine).
+  Guess: the stub drops a packet the host doesn't collect at once.
+  `UsbBridge` now keeps 16 reads queued (`setReadQueue`, as Linux's
+  cdc-acm), and each port has its own `UsbDeviceConnection`
+  (`requestWait()` is per connection). Compiles only in CI.
+- Found: picocom's `flock` on the pty is refused ("cannot lock");
+  `--nolock` works. Left for the ioctl shim or the guide.
 
 ### 2026-10-16 (115): USB serial bridge, planned and built (branch `usb-serial`)
 

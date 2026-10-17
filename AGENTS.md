@@ -579,6 +579,20 @@ Bugs that took a phone round to find; keep them from coming back.
   too. `TCFLSH`, `FIONREAD`, `TIOCOUTQ` and termios work. So pyserial
   can't open a pty (its open sets DTR and only ignores EINVAL and
   ENOTTY); it takes the `rfc2217://` URL instead.
+- **Bind `127.0.0.1`, not `getLoopbackAddress()`**: on Android that's
+  `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
+  `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was
+  refused while `rfc2217://localhost` worked.
+- **Keep USB reads queued** (`UsbBridge`, `setReadQueue(16, …)`):
+  with one read at a time, an ESP32-C3's USB-Serial-JTAG under
+  esptool's stub sent only the first packet of each reply (`c0 01`)
+  and lost the rest; the ROM loader (`--no-stub`) was fine. Linux's
+  cdc-acm keeps 16 reads queued. (The cause is a guess until the
+  stub works on the phone with the queue: work log, Next 0.) The library's queue goes through
+  each driver's `read`, so FTDI's status bytes are still stripped.
+  Each port gets its own `UsbDeviceConnection`: `requestWait()`
+  returns any request of the connection, so ports sharing one would
+  take each other's data.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

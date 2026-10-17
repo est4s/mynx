@@ -22,7 +22,8 @@ private val END = ByteArray(0)
  * [fromLine]; with no client it's dropped.
  */
 class SerialServer(private val line: SerialLine, port: Int) : Closeable {
-    private val server = ServerSocket(port, 4, InetAddress.getLoopbackAddress())
+    // 127.0.0.1, which the Debian side connects to: Android's getLoopbackAddress() is ::1.
+    private val server = ServerSocket(port, 4, InetAddress.getByName("127.0.0.1"))
     val port: Int get() = server.localPort
     val address: InetAddress get() = server.inetAddress
 

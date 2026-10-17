@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbDeviceConnection
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Handler
@@ -39,6 +38,8 @@ import kotlin.concurrent.thread
 
 private const val ACTION_USB_PERMISSION = "io.github.est4s.terminal.USB_PERMISSION"
 private const val WRITE_TIMEOUT_MS = 5000
+// Reads kept queued on each port, as Linux's cdc-acm keeps 16.
+private const val READ_QUEUE = 16
 
 /**
  * The USB serial bridge: opens the serial devices Android lets the app
@@ -187,23 +188,33 @@ class UsbBridge(
 
     private fun openDevice(driver: UsbSerialDriver) {
         val device = driver.device
-        val connection = usb.openDevice(device)
-        if (connection == null) {
-            errors[device.deviceName] = "Android wouldn't open it"
-            return
-        }
-        val opened = OpenDevice(connection)
+        val opened = OpenDevice()
         open[device.deviceName] = opened
         try {
             for (port in driver.ports) {
                 val name = ttyName(usbDriverName(driver.javaClass.simpleName), takenNames())
+                // A connection per port: requestWait() returns any request of its
+                // connection, so ports sharing one would read each other's data.
+                // The port's close() closes it.
+                val connection = usb.openDevice(device) ?: throw IOException("Android gave no connection")
                 port.open(connection)
-                val line = UsbLine(port)
-                line.configure(LineSettings())
-                line.setDtr(false)
-                line.setRts(false)
-                val server = newServer(line)
-                opened.ports += OpenPort(name, port, server).also { it.start() }
+                try {
+                    // Keeps the IN endpoint polled while a read is handed on. An
+                    // ESP32-C3's USB-Serial-JTAG under esptool's stub dropped all but
+                    // the first packet of each reply with one read at a time, as if it
+                    // gives up on a packet the host doesn't collect at once.
+                    port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64) * 16)
+                    val line = UsbLine(port)
+                    line.configure(LineSettings())
+                    line.setDtr(false)
+                    line.setRts(false)
+                    val server = newServer(line)
+                    opened.ports += OpenPort(name, port, server).also { it.start() }
+                } catch (e: Exception) {
+                    // Not in opened.ports yet, so close() won't reach it.
+                    runCatching { port.close() }
+                    throw e
+                }
             }
         } catch (e: Exception) {
             close(device.deviceName)
@@ -228,10 +239,9 @@ class UsbBridge(
     private fun close(name: String) {
         val device = open.remove(name) ?: return
         device.ports.forEach { it.close() }
-        runCatching { device.connection.close() }
     }
 
-    private class OpenDevice(val connection: UsbDeviceConnection) {
+    private class OpenDevice {
         val ports = mutableListOf<OpenPort>()
     }
 
@@ -246,8 +256,8 @@ class UsbBridge(
         }
 
         private fun readLoop() {
-            val size = runCatching { port.readEndpoint.maxPacketSize }.getOrDefault(64).coerceAtLeast(64) * 16
-            val buffer = ByteArray(size)
+            // With a read queue, each read must take exactly its buffers' size.
+            val buffer = ByteArray(port.readQueueBufferSize)
             while (!closed) {
                 val n = try {
                     port.read(buffer, 0)
@@ -298,7 +308,7 @@ class UsbBridge(
             closed = true
             process?.let(::stopHelper)
             server.close()
-            // Ends the blocking read.
+            // Cancels the queued reads, which ends the blocking one, and closes the connection.
             runCatching { port.close() }
             // The helper is killed, so its link stays: take it away here.
             File(serialDir, name).delete()
