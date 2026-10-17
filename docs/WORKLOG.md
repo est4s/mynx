@@ -55,10 +55,9 @@ are in git history: the full log up to entry 92 is
 
 ### 0. USB serial, part 2: a preload library for `/dev/serial` (branch `serial-preload`)
 
-**Where it stands (entry 120):** written as designed below and
-tested off the phone; not yet pushed or built in CI. Next: push, open
-the PR, `scripts/deliver.sh`, then the "Done when" list with the
-boards. If a check fails, the helper's log
+**Where it stands (entry 121):** PR #34, mynx dev 180: checks 1, 2,
+3 and 5 pass on the C3. Left: 4 (Nano) and the CAM-MB with picocom's
+`--lower-dtr --lower-rts`, then 6 (README), then merge. If a check fails, the helper's log
 (`/tmp/.mynx/serial/NAME.log`) shows every DTR/RTS change ("DTR off,
 RTS on"); a quick check by hand without CI: `CC=gcc
 scripts/build-preload.sh /tmp/x.so; LD_PRELOAD=/tmp/x.so esptool
@@ -269,6 +268,30 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-17 (121): Preload on the phone: the C3 passes 1, 2, 3, 5
+
+mynx dev 180 (PR #34), ESP32-C3 with MicroPython on `ttyACM0`:
+- **1:** `esptool --port /dev/serial/ttyACM0 chip_id` resets into the
+  bootloader, runs the stub, hard-resets (the helper's log shows each
+  DTR/RTS change); `read_flash` of 4 MB on the path (366 s) is
+  identical to one over the URL. esptool says "Failed to get PID of a
+  device on /dev/pts/4, using standard reset sequence" (no sysfs):
+  harmless.
+- **2:** pyserial on the path (as miniterm opens it): the REPL
+  answers twice in a row, so the board stays out of its bootloader;
+  `cts`, `dsr`, `cd` read True.
+- **3:** picocom without `--nolock`: no errors, the REPL answers.
+- **5:** without `LD_PRELOAD` pyserial fails at `TIOCMBIS` (EACCES)
+  as before; with `serial-preload off` a new service gets no
+  `LD_PRELOAD`, on gets the library; `ls`, `python3`, `git`, `apt`,
+  `esptool` start silently with it.
+- **Seen once, not this change:** the first 4 MB `read_flash` over
+  the URL failed after 4 min ("Corrupt data, expected 0x1000 bytes but
+  received 0xc72"), the app on screen; the retry was fine. Entry
+  117's lost bytes are rarer with 256 queued reads, not gone.
+- Left: 4 (avrdude on the Nano) and the ESP32-CAM-MB with `picocom
+  --lower-dtr --lower-rts`; then the README (6).
 
 ### 2026-10-17 (120): USB serial part 2: the preload library
 
