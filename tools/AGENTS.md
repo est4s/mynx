@@ -205,6 +205,12 @@ One `key = value` per line; `mynx settings` describes each.
   load the app's serial library (`LD_PRELOAD`), so tools like esptool
   and picocom work on `/dev/serial` ports (see "USB serial devices").
   New tabs and services follow it.
+- `serial-names`: `on` (default) or `off`: whether USB serial ports
+  also appear as `/dev/ttyUSB0` and `/dev/ttyACM0`, with their USB
+  details in `/sys/class/tty`, so tools find them by themselves. For
+  that Debian gets a `/dev` of its own, with the phone's device files
+  it needs (`null`, `tty`, `pts`, …); `off` shows Android's `/dev` as
+  before. New tabs and services follow it.
 
 ### Undo
 
@@ -573,9 +579,21 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   stays refused. **Not covered:** static programs, which don't load
   it, such as Go ones (`arduino-cli monitor`): use the URL. With
   `serial-preload off`, or `unset LD_PRELOAD`, pyserial can't open a
-  `/dev/serial` file at all and picocom needs `--nolock`. Tools also
-  can't find the ports themselves (no `/dev/ttyUSB*`, no `/sys`
-  entries): name the port.
+  `/dev/serial` file at all and picocom needs `--nolock`.
+- **Finding the ports:** each port is also `/dev/ttyUSB0` or
+  `/dev/ttyACM0` (a link to its `/dev/serial` file), and
+  `/sys/class/tty/NAME` has its USB details as on Linux (vendor and
+  product IDs, serial number, maker and name). So tools that look for
+  ports find them by themselves: `python3 -m serial.tools.list_ports
+  -v`, `esptool` with no `--port`, PlatformIO's auto-detect,
+  `arduino-cli board list`. It's the `serial-names` setting (on): for
+  it, Debian has a `/dev` of its own, which the app fills (the
+  phone's `null`, `zero`, `random`, `urandom`, `tty`, `ptmx`, `pts`,
+  the GPU's files, …; not its own `ttyS*` ports). With it off, or in
+  a tab opened before it was on, name the port: `/dev/serial/…`.
+  esptool still says "Failed to get PID of a device on /dev/pts/N"
+  (it follows the link to the terminal): harmless, it uses the usual
+  reset.
 - **Boards held in reset while the port is open:** some boards'
   auto-reset circuit (the ESP32-CAM-MB's, for one) keeps the chip in
   reset while DTR and RTS are both on, and opening a `/dev/serial`

@@ -163,6 +163,35 @@ Ctrl+Shift).
 
 ## Log
 
+### 2026-10-18 (124): Serial port names tools find (branch `serial-names`)
+
+Overnight, a subagent, not on the phone yet. `/dev/ttyACM0` and
+`/dev/ttyUSB0`, and a `/sys/class/tty` stand-in with each port's USB
+details, so `list_ports`, esptool with no `--port`, PlatformIO and
+`arduino-cli board list` find the ports (setting `serial-names`, on).
+- **Why a `/dev` of Debian's own:** pyserial (`glob('/dev/ttyACM*')`)
+  and go.bug.st/serial (`ReadDir("/dev")`) list `/dev`, and Android
+  refuses that to apps (checked: EACCES, also `/dev/pts`). Binds don't
+  show in listings (proot has no `getdents` emulation, `glue.c` says
+  so), and a bind whose host path is missing at start is dropped
+  (`new_binding()` realpaths it), so per-name binds over Android's
+  `/dev` can't come and go. A folder of ours at `/dev`, with the
+  phone's device files bound into it, is listable and its links change
+  freely. Rejected: a proot patch (`getdents` for binds), wrapping
+  `opendir` in the preload library (every program, and Go skips it).
+- **Fallback:** `serial-names off` (new tabs) gives Android's `/dev`
+  back, exactly as before; the helpers never get the own `/dev`.
+- **Checked off the phone:** pyserial 3.5's `list_ports_linux` run
+  against a written tree (paths swapped) gives `USB VID:PID=303A:1001
+  SER=AA LOCATION=1-1:1.0` and `1A86:7523 LOCATION=1-2`, with
+  products as descriptions. go.bug.st/serial's code read, not run.
+- **Unsure until the phone:** whether anything in Debian needed a
+  host `/dev` entry not in `HOST_DEVICES` (only those the phone has
+  are bound; `ls /dev` shows what's there); proot following a link in
+  the bound folder that's made after it started (it should: it's how
+  `/dev/serial` links work). esptool still warns "Failed to get PID
+  … /dev/pts/N" (it follows the link): harmless.
+
 ### 2026-10-18 (123): USB serial docs cleaned up
 
 PR #34 is merged, so its plan (Next 0) and entries 115-122 left the

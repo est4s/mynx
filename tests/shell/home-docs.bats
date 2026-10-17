@@ -131,7 +131,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the guide explains USB serial ports: both ways in, allowing, and what Android forbids" {
     for text in "/dev/serial/ttyUSB0" "rfc2217://localhost:2217" "mynx usb allow" \
-        "one user at a time" "TIOCMSET" "libmynx-serial.so" "serial-preload" "Go ones" "/tmp/.mynx/serial/NAME.log" \
+        "one user at a time" "TIOCMSET" "libmynx-serial.so" "serial-preload" "serial-names" "/dev/ttyACM0" "list_ports" "Go ones" "/tmp/.mynx/serial/NAME.log" \
         "Ctrl+G twice" "waiting for download"; do
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done

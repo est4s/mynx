@@ -377,6 +377,27 @@ See `docs/ROADMAP.md` "How it works". The details:
   `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
   `-DMYNX_SERIAL_TEST`, which refuses those calls itself on a port
   (a desktop allows them) and reads `MYNX_SERIAL_DIR`.
+- **Serial port names** (`core/.../SerialNames.kt`; agent's design,
+  2026-10-18, the `serial-names` setting, on): tools find ports by
+  listing `/dev` (pyserial's `list_ports`, go.bug.st/serial's
+  enumerator for arduino-cli) and read their USB details from
+  `/sys/class/tty/NAME/device`. Android doesn't let apps list its
+  `/dev`, proot's binds are fixed when it starts (a bind whose host
+  path is missing is dropped with a warning; proot doesn't emulate
+  `getdents`, so binds never show in a listing), and ports come and
+  go. So tabs and services get a `/dev` of their own
+  (`prootLaunch(ownDev =)`): `filesDir/dev`, with each of
+  `HOST_DEVICES` the phone has bound in (a placeholder file or folder
+  for each, so listings show it; never the phone's `ttyS*`), Linux's
+  `fd`/`stdin`/… links, and a link `ttyACM0` → `serial/ttyACM0` per
+  port, which the app makes and removes as ports change
+  (`writeSerialNames()`, from `UsbBridge`'s `changed`); proot follows
+  a link's guest-path contents, so it changes with no new bind.
+  `filesDir/sys-tty` at `/sys/class/tty` is laid out as the kernel's
+  (CDC ACM: `device` is the interface, subsystem `usb`; else the
+  port under its interface, subsystem `usb-serial`; `idVendor`,
+  `idProduct`, `serial`, `manufacturer`, `product` on the device).
+  The helpers keep Android's `/dev`. Off: as before.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
