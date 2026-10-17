@@ -575,7 +575,8 @@ Bugs that took a phone round to find; keep them from coming back.
   `"tui": "default"`.
 - **Android forbids the modem ioctls on a pty** (`TIOCMGET`/`TIOCMSET`/
   `TIOCMBIS`, `TIOCEXCL`, `TCSBRK` so `tcdrain`, `TCXONC`,
-  `TIOCGSERIAL`: EACCES, from SELinux), and inotify on `/dev/pts/N`
+  `TIOCGSERIAL`: EACCES, from SELinux), `flock` (picocom needs
+  `--nolock`), and inotify on `/dev/pts/N`
   too. `TCFLSH`, `FIONREAD`, `TIOCOUTQ` and termios work. So pyserial
   can't open a pty (its open sets DTR and only ignores EINVAL and
   ENOTTY); it takes the `rfc2217://` URL instead.
@@ -583,16 +584,27 @@ Bugs that took a phone round to find; keep them from coming back.
   `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
   `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was
   refused while `rfc2217://localhost` worked.
-- **Keep USB reads queued** (`UsbBridge`, `setReadQueue(16, …)`):
+- **Keep many USB reads queued** (`UsbBridge`, `setReadQueue(256, …)`):
   with one read at a time, an ESP32-C3's USB-Serial-JTAG under
   esptool's stub sent only the first packet of each reply (`c0 01`)
-  and lost the rest; the ROM loader (`--no-stub`) was fine. Linux's
-  cdc-acm keeps 16 reads queued. (The cause is a guess until the
-  stub works on the phone with the queue: work log, Next 0.) The library's queue goes through
+  and lost the rest (the ROM loader, `--no-stub`, was fine); 16 fixed
+  that, but `read_flash` still lost bytes after 20-90 KB. Likely (until
+  256 works on the phone): the device drops what the host doesn't
+  collect in time, a short packet ends a
+  read and the stub sends 63-byte ones, so 16 reads held 1 KB. Linux
+  queues each read again in the kernel as it completes; on Android
+  our thread must collect it first (it runs at audio priority). The library's queue goes through
   each driver's `read`, so FTDI's status bytes are still stripped.
   Each port gets its own `UsbDeviceConnection`: `requestWait()`
   returns any request of the connection, so ports sharing one would
   take each other's data.
+- **Drop RTS before DTR** (`SerialServer`, a client leaving): DTR
+  off with RTS on resets an ESP32 through the usual auto-reset
+  circuit and a C3's USB-Serial-JTAG, into the bootloader when DTR
+  was on just before, so every client that left (miniterm, a pty
+  program) left the board in download mode. Linux changes both
+  lines in one request; usb-serial-for-android sets them one at a
+  time, so the order matters. Raising (the helper): DTR first.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

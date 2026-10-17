@@ -17,7 +17,7 @@ private val END = ByteArray(0)
 /**
  * Serves [line] over RFC 2217 on localhost [port] (0: any free one), to
  * one client at a time: others are refused while one is connected. A
- * client leaving drops DTR and RTS, as closing a port does on Linux.
+ * client leaving drops RTS and DTR, as closing a port does on Linux.
  * The port's [settings] outlast clients. The port's data goes to
  * [fromLine]; with no client it's dropped.
  */
@@ -108,8 +108,10 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
             }
             queue.put(END)
             runCatching { socket.close() }
-            runCatching { line.setDtr(false) }
+            // RTS first: DTR off with RTS on is how an ESP32's auto-reset (and a
+            // C3's USB-Serial-JTAG) reset it, into the bootloader after DTR on.
             runCatching { line.setRts(false) }
+            runCatching { line.setDtr(false) }
         }
     }
 }

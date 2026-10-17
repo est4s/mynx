@@ -66,10 +66,12 @@ class SerialServerTest {
     }
 
     @Test
-    fun `a client leaving drops DTR and RTS, as closing a port does on Linux, and frees it`() {
+    fun `a client leaving drops RTS and then DTR, as closing a port does on Linux, and frees it`() {
         connect().use { it.readBytes(9) }
         waitFor("the drop") { !server.busy }
-        assertEquals(listOf("dtr false", "rts false"), line.callList())
+        // DTR first would pass through RTS alone, which an ESP32's auto-reset
+        // (and a C3's USB-Serial-JTAG) take as a reset into the bootloader.
+        assertEquals(listOf("rts false", "dtr false"), line.callList())
         connect().use { assertEquals(9, it.readBytes(9).size) }
     }
 

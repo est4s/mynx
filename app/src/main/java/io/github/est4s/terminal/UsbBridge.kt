@@ -38,8 +38,11 @@ import kotlin.concurrent.thread
 
 private const val ACTION_USB_PERMISSION = "io.github.est4s.terminal.USB_PERMISSION"
 private const val WRITE_TIMEOUT_MS = 5000
-// Reads kept queued on each port, as Linux's cdc-acm keeps 16.
-private const val READ_QUEUE = 16
+// Reads kept queued on each port. Linux's cdc-acm keeps 16, but it queues
+// each again as it completes; here our thread must collect it first. A short
+// packet ends a read, and esptool's stub on an ESP32-C3's USB-Serial-JTAG
+// sends 63-byte ones, so 16 reads held 1 KB and lost bytes mid-read_flash.
+private const val READ_QUEUE = 256
 
 /**
  * The USB serial bridge: opens the serial devices Android lets the app
@@ -258,6 +261,8 @@ class UsbBridge(
         private fun readLoop() {
             // With a read queue, each read must take exactly its buffers' size.
             val buffer = ByteArray(port.readQueueBufferSize)
+            // A late collect leaves the device no read to fill.
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
             while (!closed) {
                 val n = try {
                     port.read(buffer, 0)

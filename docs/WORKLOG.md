@@ -140,6 +140,18 @@ round, with the fixes: 4, 7 with the stub, then 3, 5, 8, 10-12, and a
 CH340 or CP210x board (per-port connections change every device's
 open).
 
+**Second round** (2026-10-17, build 172, entry 117): 7 passes with the
+stub. `read_flash` (8, read only) lost bytes after 20-90 KB; fixed?
+(256 queued reads). 4: picocom opens and connects, but each client's
+exit left the board in its bootloader (fixed: RTS dropped first). 8
+(write) passes: MicroPython flashed, the OLED shows the logo. Next:
+build with 256 reads and the RTS order; with MicroPython on the board
+the agent can test 4 and 6 itself (send `print(...)` and read the
+answer, twice in a row), then
+`esptool --port rfc2217://localhost:2217 read_flash 0 0x400000
+f.bin` twice and `cmp` (the agent can run it), 4 with the reset
+button, then 3, 5, 8 (write), 10-12, a CH340/CP210x board.
+
 *A. Connecting*
 1. Plug the board in. Android asks whether to open mynx dev for it:
    OK. mynx dev opens and a notification says "ttyUSB0 is ready: …"
@@ -291,6 +303,37 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-17 (117): Second round on the phone; read_flash loses bytes
+
+mynx dev 172 (entry 116's fixes), the same ESP32-C3, tested by the
+agent from the maintainer's Debian (mynx dev's):
+- **7 passes:** `esptool chip_id` with the stub ("Stub running"), so
+  the read queue fixed the stub's replies.
+- **8 (read only): `read_flash` fails** with "Corrupt data, expected
+  0x1000 bytes but received 0xb54" after 20-90 KB, at a different
+  point each run; each 4 KB block alone reads fine. A failed run can
+  hang until killed; the port works again after. Likely cause: the
+  stub sends 63-byte (short) packets on USB-Serial-JTAG, each ending
+  a read, so 16 queued reads held only ~1 KB, and the device drops
+  what isn't collected in time. Raised to 256 reads and the USB read
+  thread to audio priority (compiles only in CI).
+- **4:** picocom (`--nolock`) opens the pty and the helper connects
+  (log: "opened at 115200 baud", "closed"); the URL is refused
+  meanwhile. The board's output not seen yet (its firmware may not
+  print; the reset button is the maintainer's). The guide's picocom
+  line now has `--nolock`.
+- **8 (writing) passes:** with the maintainer's OK, the agent backed
+  up the board's sketch (`--no-stub read_flash 0 0x150000`, twice,
+  identical: `~/esp32c3-backup.bin`), erased it and wrote MicroPython
+  v1.29.0 (1.75 MB in 5.4 s, hash verified), then drew the "m" and
+  "mynx" on its 0.42" OLED (SSD1306 72x40 at column 28, I2C 5/6)
+  through the raw REPL over the URL. The maintainer saw it work.
+- **Found: every client leaving put the C3 in its bootloader**, so
+  the board went silent after one session (URL or pty). The server
+  dropped DTR then RTS: (1,1) → (0,1) is the auto-reset's reset, and
+  DTR on just before means download mode. Now RTS first (core test).
+  Explains test 4's silence.
 
 ### 2026-10-17 (116): First phone tests of the USB serial bridge; two fixes
 

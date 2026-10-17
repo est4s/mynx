@@ -538,7 +538,7 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - **Each port, two ways:**
   - `/dev/serial/ttyUSB0` (`ttyACM0` for CDC ACM devices; the next
     one gets 1): a terminal device for programs that open a file:
-    `picocom -b 115200 /dev/serial/ttyUSB0`, `screen`, `minicom`,
+    `picocom --nolock -b 115200 /dev/serial/ttyUSB0`, `screen`, `minicom`,
     `cat`, `stty`, `avrdude`, a script. Opening it raises DTR and RTS,
     as on Linux (which resets an Arduino Uno), and closing it drops
     them; the baud rate, data bits, parity and stop bits follow what
@@ -553,7 +553,8 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `/dev/serial` file open, its URL is busy, and the other way round.
 - **What Android doesn't allow:** programs here may not use the
   modem-line calls on a terminal device (`TIOCMGET`, `TIOCMSET`,
-  `TIOCEXCL`, `tcdrain`): they fail with "Permission denied". So
+  `TIOCEXCL`, `tcdrain`), or lock it with `flock`: they fail with
+  "Permission denied". So picocom needs `--nolock`,
   pyserial can't open a `/dev/serial` file (use the URL), Go programs
   such as `arduino-cli monitor` can't either, and avrdude says it
   can't set DTR and RTS (opening the port has reset the board
