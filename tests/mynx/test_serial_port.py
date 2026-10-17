@@ -204,8 +204,9 @@ class BridgeTest(unittest.TestCase):
         fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
         try:
             wait_for(lambda: self.port.current is not None, "a connection")
+            connection = self.port.current  # the helper may let go first, which clears current
             change_link()
-            self.port.current.close()
+            connection.close()
             self.thread.join(5)
             self.assertFalse(self.thread.is_alive())
             time.sleep(sp.RETRY + 0.3)
