@@ -117,8 +117,15 @@ jobs:
           scripts/release-notes.py build/release-notes.json \
             --tag "$GITHUB_REF_NAME" --notes-out build/release-notes.md
 
+      # Debian's programs load it, so it's built for Debian's glibc, not with the NDK.
+      - name: Build the serial preload library
+        run: |
+          sudo apt-get install -y -qq gcc-aarch64-linux-gnu >/dev/null
+          mkdir -p build
+          scripts/build-preload.sh build/libmynx-serial.so
+
       - name: Add the app's tools (mynx, editors, themes, release notes)
-        run: scripts/pack-tools.sh app/src/main/assets build/release-notes.json
+        run: PRELOAD=build/libmynx-serial.so scripts/pack-tools.sh app/src/main/assets build/release-notes.json
 
       - name: Add the terminal font
         run: scripts/fetch-font.sh app/src/main/assets/fonts

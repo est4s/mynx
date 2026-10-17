@@ -43,7 +43,8 @@ are in git history: the full log up to entry 92 is
 - **USB serial bridge:** every phone test passes (entries 116-118:
   ESP32-C3, ESP32-CAM-MB, Arduino Nano and Pro Micro, two at once on
   a hub); merged (PR #33), not released yet. Part 2, a preload
-  library so pyserial tools work on `/dev/serial/…`: "Next 0".
+  library so pyserial tools work on `/dev/serial/…`: built and
+  tested off the phone (entry 120); the phone tests are "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -53,6 +54,18 @@ are in git history: the full log up to entry 92 is
 ## Next
 
 ### 0. USB serial, part 2: a preload library for `/dev/serial` (branch `serial-preload`)
+
+**Where it stands (entry 120):** written as designed below and
+tested off the phone; not yet pushed or built in CI. Next: push, open
+the PR, `scripts/deliver.sh`, then the "Done when" list with the
+boards. If a check fails, the helper's log
+(`/tmp/.mynx/serial/NAME.log`) shows every DTR/RTS change ("DTR off,
+RTS on"); a quick check by hand without CI: `CC=gcc
+scripts/build-preload.sh /tmp/x.so; LD_PRELOAD=/tmp/x.so esptool
+--port /dev/serial/ttyACM0 chip_id`. Unsure until the phone: whether
+proot passes the control socket's `connect()` between two proots
+(the sound server's socket does), and `TIOCGSERIAL` (not wrapped:
+pyserial only uses it for low latency and odd baud rates).
 
 The bridge (part 1) is merged (PR #33, 2026-10-17) and every phone
 test passed (entries 116-118; the plan and the tests:
@@ -256,6 +269,36 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-17 (120): USB serial part 2: the preload library
+
+In mynx dev 175 (gcc installed there), with a subagent for the
+Kotlin part. No board was plugged in, so nothing tried on hardware.
+- `tools/src/libmynx-serial.c` (~230 lines): wraps `ioctl`,
+  `tcdrain`, `tcflow`, `flock`; steps in only on EACCES for a
+  `/dev/serial` pty. TIOCM GET/SET/BIS/BIC go to the helper;
+  TIOCEXCL/NXCL, TCXONC, flock succeed; tcdrain (and TCSBRK≠0) waits
+  for TIOCOUTQ to reach 0; a break (TCSBRK 0) stays refused.
+- `serial-port`: a control socket `/dev/serial/.NAME.ctl`; the lines
+  are state (both up while open, back up when the program closes),
+  sent in the safe order (`control_changes()`: RTS drops first, DTR
+  rises first, swapping passes through both off). A request before the
+  helper noticed the open connects at once with those lines, so
+  esptool's open doesn't flash both lines up first.
+- Setting `serial-preload` (on), `prootLaunch(preload =)`,
+  `serialPreload()`, wired in `startShell` (tabs and services; the
+  helpers don't get it). Commit 9f1fb15 (subagent).
+- CI: `scripts/build-preload.sh` (cross gcc), `PRELOAD=` to
+  `pack-tools.sh`, in both workflows. The tests compile it with the
+  runner's own cc.
+- Tests: `test_serial_port.py` (control socket, order) and
+  `test_serial_preload.py` (a program under the test build: lines,
+  order, tcdrain, other files untouched, the real build silent).
+  **TDD note:** the helper's tests failed first; the C library was
+  written before its tests, which were then checked to fail with
+  the wrappers disabled.
+- The guide (`serial-preload`, the USB section) and AGENTS.md are
+  updated as if it works; the README waits for the phone ("Done when" 6).
 
 ### 2026-10-17 (119): Part 2 of USB serial decided: a global LD_PRELOAD
 

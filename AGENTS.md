@@ -352,6 +352,24 @@ See `docs/ROADMAP.md` "How it works". The details:
   `MainActivity`, which refreshes the bridge), and `mynx usb allow`
   asks with `requestPermission` (a mutable, explicit PendingIntent).
   Requests: `usb-list`, `usb-allow` (`usbRequests()`).
+- **Serial preload** (`tools/src/libmynx-serial.c`,
+  `scripts/build-preload.sh`; maintainer's decision, 2026-10-17: a
+  global `LD_PRELOAD`, not a wrapper or a proot patch): Android refuses
+  the modem-line ioctls, `TIOCEXCL`, `tcdrain`, `tcflow` and `flock` on
+  a pty. The library wraps `ioctl`, `tcdrain`, `tcflow` and `flock`;
+  each calls the real one first and acts only on EACCES for a
+  `/dev/serial` pty (`/proc/self/fd/N` matched against the links),
+  else returns as it was, errno kept. DTR/RTS go to `serial-port`'s
+  control socket (`/dev/serial/.NAME.ctl`, one line per connection:
+  `get|set|bis|bic BITS` → `ok BITS`), which sends SET-CONTROL in the
+  safe order (`control_changes()`). `prootLaunch(preload =)` sets
+  `LD_PRELOAD` inside `env -i` only (never proot's own environment:
+  Android's linker), and only when the tools have the file and
+  `serial-preload` is on (`serialPreload()`). Built for Debian's glibc,
+  not with the NDK: CI cross-compiles with `gcc-aarch64-linux-gnu` and
+  `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
+  `-DMYNX_SERIAL_TEST`, which refuses those calls itself on a port
+  (a desktop allows them) and reads `MYNX_SERIAL_DIR`.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
@@ -580,6 +598,10 @@ Bugs that took a phone round to find; keep them from coming back.
   too. `TCFLSH`, `FIONREAD`, `TIOCOUTQ` and termios work. So pyserial
   can't open a pty (its open sets DTR and only ignores EINVAL and
   ENOTTY); it takes the `rfc2217://` URL instead.
+- **glibc's `tcdrain()`, `tcflow()`, `tcsendbreak()` and `flock()`
+  make the system call themselves**, not through the `ioctl` symbol,
+  so a preload must wrap each of them; Python's `fcntl` and `termios`
+  call the libc symbols, so pyserial goes through the wrappers.
 - **Bind `127.0.0.1`, not `getLoopbackAddress()`**: on Android that's
   `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
   `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was
