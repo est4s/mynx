@@ -198,6 +198,33 @@ class BridgeTest(unittest.TestCase):
         os.close(fd)
         wait_for(lambda: self.port.connections and bytes(self.port.connections[0]).endswith(b"bye"), "the bytes")
 
+    def lose_the_port(self, change_link):
+        """The app drops the connection and changes the link while a program
+        still has the old terminal open, as when a board is unplugged."""
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            wait_for(lambda: self.port.current is not None, "a connection")
+            change_link()
+            self.port.current.close()
+            self.thread.join(5)
+            self.assertFalse(self.thread.is_alive())
+            time.sleep(sp.RETRY + 0.3)
+            self.assertEqual(1, len(self.port.connections))
+        finally:
+            os.close(fd)
+
+    def test_a_removed_link_stops_it_without_connecting_again(self):
+        self.lose_the_port(lambda: os.unlink(self.link))
+        self.assertFalse(os.path.lexists(self.link))
+
+    def test_a_replaced_link_stops_it_and_stays(self):
+        def replace():
+            os.unlink(self.link)
+            os.symlink("/dev/pts/999", self.link)
+        self.lose_the_port(replace)
+        self.assertEqual("/dev/pts/999", os.readlink(self.link))
+        os.unlink(self.link)
+
     def test_stopping_removes_the_link(self):
         self.bridge.stopped = True
         self.thread.join(5)

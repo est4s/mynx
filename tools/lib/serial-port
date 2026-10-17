@@ -139,12 +139,18 @@ class Bridge:
         os.symlink(self.tty, tmp)
         os.replace(tmp, self.link)
 
-    def remove_link(self):
+    def owns_link(self):
         try:
-            if os.readlink(self.link) == self.tty:
-                os.unlink(self.link)
+            return os.readlink(self.link) == self.tty
         except OSError:
-            pass
+            return False
+
+    def remove_link(self):
+        if self.owns_link():
+            try:
+                os.unlink(self.link)
+            except OSError:
+                pass
 
     def opened(self):
         """Whether a program has the terminal open, and whether it left bytes to send."""
@@ -256,6 +262,12 @@ class Bridge:
         log(self.name, f"{self.link} -> {self.tty}, port {self.address[1]}")
         try:
             while not self.stopped:
+                # The app takes the link away when the port goes, and a new
+                # helper replaces it when it's back: this one must not reach
+                # the new port (it would raise DTR and RTS) before it's stopped.
+                if not self.owns_link():
+                    self.disconnect("the port is gone")
+                    break
                 try:
                     self.step()
                 except OSError as e:

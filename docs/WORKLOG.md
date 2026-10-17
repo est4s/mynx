@@ -40,8 +40,9 @@ are in git history: the full log up to entry 92 is
   autostart on and off, on 2026-10-13); merged (PR #30, #32) and
   released in v0.2.0. The plan left "Next" (git history has it:
   `git show 8ea1266:docs/WORKLOG.md`).
-- **USB serial bridge:** built on PR #33 (entry 115); first phone
-  tests found two bugs, fixed in entry 116; next round in "Next 0".
+- **USB serial bridge:** built on PR #33 (entry 115); after three
+  phone rounds (entries 116-118) the ESP32-C3 passes every test and a
+  CH340 board (ESP32-CAM-MB) the ones it can; what's left in "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -151,6 +152,15 @@ answer, twice in a row), then
 `esptool --port rfc2217://localhost:2217 read_flash 0 0x400000
 f.bin` twice and `cmp` (the agent can run it), 4 with the reset
 button, then 3, 5, 8 (write), 10-12, a CH340/CP210x board.
+
+**Third round** (2026-10-17, build 173, entry 118): the C3 passes
+1-4, 6-8, 10-12; a CH340 board (ESP32-CAM-MB) passes 1, 2, 7, 8
+(read), and 4 behaves as on Linux (the MB holds it in reset while
+DTR and RTS are on: documented, maintainer's decision). **Left:**
+the helper fix from entry 118 on the phone (unplug while picocom
+runs: the log shows "the port is gone" and no "opened" after the new
+link), 5 and 9 (an Uno or Nano), 13 (two devices). Then the README,
+and merging PR #33.
 
 *A. Connecting*
 1. Plug the board in. Android asks whether to open mynx dev for it:
@@ -303,6 +313,43 @@ sends real Ctrl/Alt key events (e.g. Hacker's Keyboard):
 ---
 
 ## Log
+
+### 2026-10-17 (118): Third round: the C3 passes; a CH340 board
+
+mynx dev 173 (entry 117's fixes), tested with the maintainer:
+- **ESP32-C3 (USB-Serial-JTAG, `ttyACM0`):** 1, 2, 3, 4, 6, 7, 8
+  (write, and `read_flash` of all 4 MB twice: identical, 366 s each,
+  92 kbit/s, so 256 queued reads fixed it), 10, 11, 12 pass. The
+  MicroPython REPL answers twice in a row over the URL and the pty,
+  and the board stays out of its bootloader after each client (RTS
+  first works). The reset button restarts the C3's USB: picocom ends
+  ("read zero bytes from port", as on Linux) and the port is back in
+  a second. One earlier 4 MB read stalled for good (no CPU, waiting
+  on a read with no timeout) while the app may have been off screen;
+  not seen again in two full runs.
+- **ESP32-CAM on an ESP32-CAM-MB (CH340, 1a86:7523, `ttyUSB0`):** 1,
+  2, 7 (`--no-stub`: Debian's esptool has no stub for the ESP32, S2
+  or S3; baud change to 460800 works) and 8 (read 256 KB twice,
+  identical) pass. **4:** the MB holds the chip in reset while DTR and
+  RTS are both on (checked over the URL: both on, silent; both off,
+  it boots), and opening the pty raises both, as Linux does. On a PC
+  `picocom --lower-dtr --lower-rts` avoids it; those need the
+  forbidden modem calls. **Maintainer's decision: leave it** and
+  document miniterm with `--dtr 0 --rts 0`; part 2 (LD_PRELOAD) would
+  make picocom's flags work later. Guide updated, also with
+  `--no-stub`.
+- **Fixed: an old helper reached the new port.** After an unplug (or
+  a C3's reset) the old helper, stopped by SIGQUIT but still alive for
+  a second, retried while a program held its pty, and connected to
+  the re-plugged device's new server, raising DTR and RTS (log:
+  "opened at 115200 baud" right after the new link). The helper now
+  stops once `/dev/serial/NAME` no longer points at its pty (the app
+  deletes it, a new helper replaces it). Tests in
+  `test_serial_port.py`.
+- Noted, not done: a program on the pty while the URL is busy gets
+  silence with no hint (the helper retries every 2 s; the log says
+  "the app closed the port"). Could say "busy" in the log or
+  `mynx usb`.
 
 ### 2026-10-17 (117): Second round on the phone; read_flash loses bytes
 

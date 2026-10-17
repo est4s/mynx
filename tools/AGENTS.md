@@ -560,6 +560,14 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   can't set DTR and RTS (opening the port has reset the board
   already). Tools also can't find the ports themselves (no
   `/dev/ttyUSB*`, no `/sys` entries): name the port.
+- **Boards held in reset while the port is open:** some boards'
+  auto-reset circuit (the ESP32-CAM-MB's, for one) keeps the chip in
+  reset while DTR and RTS are both on, and opening a `/dev/serial`
+  file raises them, as on Linux. On a PC `picocom --lower-dtr
+  --lower-rts` gets round it, but that needs the forbidden calls; use
+  the URL with the lines off: `python3 -m serial.tools.miniterm
+  --dtr 0 --rts 0 rfc2217://localhost:2217 115200` (PlatformIO:
+  `monitor_dtr = 0`, `monitor_rts = 0`).
 - `mynx usb` lists the devices with their ports, paths and URLs;
   `mynx usb url` and `mynx usb path` print the only port's (or
   `PORT`'s) for scripts. `--json` gives `devices`: `id`, `ids`
@@ -568,7 +576,10 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `in_use`).
 - The tools: `apt install picocom` (or `minicom`, `screen`),
   `python3-serial` (pyserial, miniterm), `esptool`, `avrdude`;
-  PlatformIO with `pip`, `arduino-cli` from Arduino.
+  PlatformIO with `pip`, `arduino-cli` from Arduino. Debian's
+  `esptool` has no flasher stub for the original ESP32, S2 and S3
+  ("No such file … stub_flasher_32.json"): add `--no-stub` (slower),
+  or install esptool with `pip`.
 - Each port's helper (it makes the terminal device) logs to
   `/tmp/.mynx/serial/NAME.log`.
 - The URL is on localhost: other apps on the phone could reach it
