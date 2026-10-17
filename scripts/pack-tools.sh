@@ -3,9 +3,10 @@
 # (mynx, menu, the editors, …) plus core's built-in key bars and
 # themes, for reading and copying. The app unpacks it on each update;
 # Debian sees it at /opt/mynx. NOTES, from scripts/release-notes.py,
-# becomes release-notes.json (mynx notes).
+# becomes release-notes.json (mynx notes). PRELOAD, from
+# scripts/build-preload.sh, becomes lib/libmynx-serial.so.
 #
-#   scripts/pack-tools.sh app/src/main/assets [NOTES]
+#   PRELOAD=build/libmynx-serial.so scripts/pack-tools.sh app/src/main/assets [NOTES]
 set -euo pipefail
 
 out=${1:?usage: pack-tools.sh OUT_DIR [NOTES]}
@@ -20,6 +21,7 @@ trap 'rm -rf "$stage"' EXIT
 cp -a "$repo/tools/." "$stage/"
 cp -a "$resources/keybars" "$resources/themes" "$stage/"
 [[ -z $notes ]] || cp "$notes" "$stage/release-notes.json"
+[[ -z ${PRELOAD:-} ]] || cp "$PRELOAD" "$stage/lib/libmynx-serial.so"
 # The home folder's pointers to the guide, for Debians installed before it.
 mkdir "$stage/home"
 cp "$repo/rootfs/root/AGENTS.md" "$repo/rootfs/root/CLAUDE.md" "$stage/home/"

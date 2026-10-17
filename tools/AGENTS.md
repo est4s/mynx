@@ -199,6 +199,10 @@ One `key = value` per line; `mynx settings` describes each.
 - `update-check`: `on` (default) or `off`: whether the app checks
   GitHub about once a day for a new version and tells you (see
   "Updates"). `mynx update` works either way.
+- `serial-preload`: `on` (default) or `off`: whether programs here
+  load the app's serial library (`LD_PRELOAD`), so tools like esptool
+  and picocom work on `/dev/serial` ports (see "USB serial devices").
+  New tabs and services follow it.
 
 ### Undo
 
@@ -538,36 +542,49 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - **Each port, two ways:**
   - `/dev/serial/ttyUSB0` (`ttyACM0` for CDC ACM devices; the next
     one gets 1): a terminal device for programs that open a file:
-    `picocom --nolock -b 115200 /dev/serial/ttyUSB0`, `screen`, `minicom`,
-    `cat`, `stty`, `avrdude`, a script. Opening it raises DTR and RTS,
-    as on Linux (which resets an Arduino Uno), and closing it drops
-    them; the baud rate, data bits, parity and stop bits follow what
-    the program sets (9600 8N1 until one does).
+    `picocom -b 115200 /dev/serial/ttyUSB0`, `screen`, `minicom`,
+    `cat`, `stty`, `avrdude`, pyserial and the tools built on it
+    (`esptool --port /dev/serial/ttyACM0 …`, miniterm, PlatformIO), a
+    script. Opening it raises DTR and RTS, as on Linux (which resets
+    an Arduino Uno), and closing it drops them; programs can set them
+    too (esptool's reset into the bootloader). The baud rate, data
+    bits, parity and stop bits follow what the program sets (9600 8N1
+    until one does).
   - `rfc2217://localhost:2217` (2218 for the next port, …): the same
-    port over RFC 2217, which pyserial speaks, so tools that toggle
-    DTR and RTS themselves work: `esptool --port
+    port over RFC 2217, which pyserial speaks, also for programs the
+    serial library can't reach (see below): `esptool --port
     "rfc2217://localhost:2217" …` (reset into the bootloader and
     back), PlatformIO (`upload_port` and `monitor_port`),
     `python3 -m serial.tools.miniterm rfc2217://localhost:2217 115200`.
   A port has one user at a time: while a program has its
   `/dev/serial` file open, its URL is busy, and the other way round.
-- **What Android doesn't allow:** programs here may not use the
-  modem-line calls on a terminal device (`TIOCMGET`, `TIOCMSET`,
-  `TIOCEXCL`, `tcdrain`), or lock it with `flock`: they fail with
-  "Permission denied". So picocom needs `--nolock`,
-  pyserial can't open a `/dev/serial` file (use the URL), Go programs
-  such as `arduino-cli monitor` can't either, and avrdude says it
-  can't set DTR and RTS (opening the port has reset the board
-  already). Tools also can't find the ports themselves (no
-  `/dev/ttyUSB*`, no `/sys` entries): name the port.
+- **What Android doesn't allow, and the serial library:** Android
+  refuses programs the modem-line calls on a terminal device
+  (`TIOCMGET`, `TIOCMSET`, `TIOCMBIS`, `TIOCMBIC`, `TIOCEXCL`,
+  `tcdrain`, `tcflow`) and `flock` on it ("Permission denied"). The
+  app's library, `/opt/mynx/lib/libmynx-serial.so`, loaded into every
+  program through `LD_PRELOAD` (the `serial-preload` setting), steps
+  in only when one of those fails on a `/dev/serial` port: DTR and RTS
+  go to the port's helper (its control socket is
+  `/dev/serial/.NAME.ctl`), which sets them on the board; CTS, DSR and
+  CD always read as on; locks and `tcdrain` succeed. Sending a break
+  stays refused. **Not covered:** static programs, which don't load
+  it, such as Go ones (`arduino-cli monitor`): use the URL. With
+  `serial-preload off`, or `unset LD_PRELOAD`, pyserial can't open a
+  `/dev/serial` file at all and picocom needs `--nolock`. Tools also
+  can't find the ports themselves (no `/dev/ttyUSB*`, no `/sys`
+  entries): name the port.
 - **Boards held in reset while the port is open:** some boards'
   auto-reset circuit (the ESP32-CAM-MB's, for one) keeps the chip in
   reset while DTR and RTS are both on, and opening a `/dev/serial`
-  file raises them, as on Linux. On a PC `picocom --lower-dtr
-  --lower-rts` gets round it, but that needs the forbidden calls; use
-  the URL with the lines off: `python3 -m serial.tools.miniterm
-  --dtr 0 --rts 0 rfc2217://localhost:2217 115200` (PlatformIO:
-  `monitor_dtr = 0`, `monitor_rts = 0`).
+  file raises them, as on Linux. Lower them as on a PC:
+  `python3 -m serial.tools.miniterm --dtr 0 --rts 0
+  /dev/serial/ttyUSB0 115200` resets the board and lets it boot
+  (PlatformIO: `monitor_dtr = 0`, `monitor_rts = 0`). `picocom
+  --lower-dtr --lower-rts …` opens without resetting it; Ctrl+A
+  Ctrl+G twice (RTS up, then down) resets it. A board stuck in
+  "waiting for download" was reset with DTR still on: reset it that
+  way.
 - `mynx usb` lists the devices with their ports, paths and URLs;
   `mynx usb url` and `mynx usb path` print the only port's (or
   `PORT`'s) for scripts. `--json` gives `devices`: `id`, `ids`

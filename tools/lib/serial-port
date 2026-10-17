@@ -9,6 +9,12 @@ bits, parity and stop bits follow what the program sets, and DTR and
 RTS are up, as on Linux, where opening a port raises them (which
 resets an Arduino) and closing it drops them. While nothing has it
 open, the port is free for rfc2217:// clients (esptool, PlatformIO).
+
+Android refuses the modem-line ioctls on a pty, so programs can't set
+DTR and RTS themselves: libmynx-serial.so (preloaded) asks this helper
+instead, on the control socket /dev/serial/.NAME.ctl, one request per
+connection: "get 0", "set BITS", "bis BITS" or "bic BITS" (TIOCM_*
+bits), answered "ok BITS" with the lines as they are then.
 """
 import errno
 import os
@@ -23,7 +29,10 @@ import tty
 IAC, DONT, DO, WONT, WILL, SB, SE = 255, 254, 253, 252, 251, 250, 240
 COM_PORT = 44
 SET_BAUDRATE, SET_DATASIZE, SET_PARITY, SET_STOPSIZE, SET_CONTROL = 1, 2, 3, 4, 5
-NO_FLOW, HW_FLOW, DTR_ON, RTS_ON = 1, 3, 8, 11
+NO_FLOW, HW_FLOW, DTR_ON, DTR_OFF, RTS_ON, RTS_OFF = 1, 3, 8, 9, 11, 12
+TIOCM_DTR, TIOCM_RTS = 0x002, 0x004
+# The port's inputs aren't followed: CTS, CD and DSR always read as on.
+INPUTS = 0x020 | 0x040 | 0x100
 # How often to look whether a program opened the terminal (Android
 # allows no inotify on it), and to try the app again when it's away.
 IDLE = 0.1
@@ -61,6 +70,17 @@ def setup(settings):
             + subnegotiation(SET_PARITY, bytes([parity]))
             + subnegotiation(SET_STOPSIZE, bytes([stop]))
             + subnegotiation(SET_CONTROL, bytes([HW_FLOW if flow else NO_FLOW])))
+
+
+def control_changes(old, new):
+    """The SET-CONTROL values that take the lines (DTR, RTS) from [old]
+    (None: unknown, send both) to [new]. RTS drops before DTR and DTR
+    rises before RTS: with DTR off and RTS on, an ESP32's auto-reset
+    circuit resets it, into its bootloader if DTR was on just before;
+    switching from one line to the other passes through both off."""
+    steps = [(1, False, RTS_OFF), (0, True, DTR_ON), (0, False, DTR_OFF), (1, True, RTS_ON)]
+    return [value for line, on, value in steps
+            if new[line] == on and (old is None or old[line] != on)]
 
 
 def escape(data):
@@ -112,6 +132,9 @@ class Bridge:
         self.name = name
         self.address = (host, tcp_port)
         self.link = os.path.join(folder, name)
+        self.ctl_path = os.path.join(folder, f".{name}.ctl")
+        self.ctl = None
+        self.lines = (True, True)  # DTR, RTS: up while a program has it open, as on Linux
         self.master = None
         self.tty = None
         self.sock = None
@@ -138,6 +161,12 @@ class Bridge:
             os.unlink(tmp)
         os.symlink(self.tty, tmp)
         os.replace(tmp, self.link)
+        if os.path.lexists(self.ctl_path):
+            os.unlink(self.ctl_path)
+        self.ctl = socket.socket(socket.AF_UNIX)
+        self.ctl.bind(self.ctl_path)
+        self.ctl.listen(4)
+        self.ctl.setblocking(False)
 
     def owns_link(self):
         try:
@@ -146,11 +175,72 @@ class Bridge:
             return False
 
     def remove_link(self):
+        if self.ctl:
+            self.ctl.close()
+            self.ctl = None
+            try:
+                os.unlink(self.ctl_path)
+            except OSError:
+                pass
         if self.owns_link():
             try:
                 os.unlink(self.link)
             except OSError:
                 pass
+
+    def control(self, command, value):
+        """A control socket request: the lines as they are after it."""
+        bits = (TIOCM_DTR if self.lines[0] else 0) | (TIOCM_RTS if self.lines[1] else 0)
+        if command == "set":
+            bits = value
+        elif command == "bis":
+            bits |= value
+        elif command == "bic":
+            bits &= ~value
+        elif command != "get":
+            return "error"
+        old, self.lines = self.lines, (bool(bits & TIOCM_DTR), bool(bits & TIOCM_RTS))
+        if self.sock is None:
+            # Asked before this saw the program open the terminal: connect
+            # now, with these lines, rather than raising both first.
+            if self.opened()[0]:
+                self.connect()
+        elif old != self.lines:
+            self.sock.sendall(b"".join(subnegotiation(SET_CONTROL, bytes([c]))
+                                       for c in control_changes(old, self.lines)))
+            log(self.name, f"DTR {'on' if self.lines[0] else 'off'}, RTS {'on' if self.lines[1] else 'off'}")
+        bits = (TIOCM_DTR if self.lines[0] else 0) | (TIOCM_RTS if self.lines[1] else 0)
+        return f"ok {bits | INPUTS}"
+
+    def serve_control(self):
+        """Answers the programs waiting on the control socket."""
+        while True:
+            try:
+                conn, _ = self.ctl.accept()
+            except (BlockingIOError, InterruptedError):
+                return
+            with conn:
+                try:
+                    conn.settimeout(1)
+                    request = b""
+                    while not request.endswith(b"\n") and len(request) < 100:
+                        data = conn.recv(100)
+                        if not data:
+                            break
+                        request += data
+                    words = request.decode(errors="replace").split()
+                    if len(words) == 2 and words[1].isdigit():
+                        reply = self.control(words[0], int(words[1]))
+                    else:
+                        reply = "error"
+                    conn.sendall(reply.encode() + b"\n")
+                except OSError:
+                    pass
+
+    def wait(self, seconds):
+        """Sleeps up to [seconds], answering control requests meanwhile."""
+        if select.select([self.ctl], [], [], seconds)[0]:
+            self.serve_control()
 
     def opened(self):
         """Whether a program has the terminal open, and whether it left bytes to send."""
@@ -172,8 +262,8 @@ class Bridge:
         self.unescaper = Unescaper()
         self.settings = line_settings(termios.tcgetattr(self.master))
         self.sock.sendall(bytes([IAC, WILL, COM_PORT]) + setup(self.settings)
-                          + subnegotiation(SET_CONTROL, bytes([DTR_ON]))
-                          + subnegotiation(SET_CONTROL, bytes([RTS_ON])))
+                          + b"".join(subnegotiation(SET_CONTROL, bytes([c]))
+                                     for c in control_changes(None, self.lines)))
         log(self.name, f"opened at {self.settings[0]} baud")
         return True
 
@@ -237,16 +327,21 @@ class Bridge:
             if pending and self.sock is None:
                 # Nowhere to send it: drop it, as a port with no device would.
                 self.from_terminal()
-            time.sleep(IDLE)
+            self.wait(IDLE)
             return
         if not is_open and not pending:
-            self.disconnect("closed")
+            self.closed()
             return
         poll = select.poll()
         poll.register(self.master, select.POLLIN)
         poll.register(self.sock, select.POLLIN)
+        poll.register(self.ctl, select.POLLIN)
         for fd, events in poll.poll(int(wait * 1000)):
-            if fd == self.master and events & select.POLLIN:
+            if self.sock is None:
+                return
+            if fd == self.ctl.fileno():
+                self.serve_control()
+            elif fd == self.master and events & select.POLLIN:
                 self.from_terminal()
             elif fd == self.sock.fileno() and not self.to_terminal():
                 self.disconnect("the app closed the port")
@@ -255,7 +350,11 @@ class Bridge:
         if self.sock and is_open:
             self.follow_settings()
         if not is_open and self.sock:
-            self.disconnect("closed")
+            self.closed()
+
+    def closed(self):
+        self.disconnect("closed")
+        self.lines = (True, True)
 
     def run(self):
         self.make_terminal()

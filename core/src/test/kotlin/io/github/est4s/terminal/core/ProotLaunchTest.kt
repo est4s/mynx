@@ -1,7 +1,10 @@
 package io.github.est4s.terminal.core
 
+import java.io.File
+import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProotLaunchTest {
@@ -249,6 +252,31 @@ class ProotLaunchTest {
 
         assertTrue("TZ=Europe/Istanbul" in shellEnv, shellEnv.toString())
         assertTrue(prootLaunch(paths).argv.none { it.startsWith("TZ=") })
+    }
+
+    @Test
+    fun `preloads a library in the guest, never in proot's own environment`() {
+        val launch = prootLaunch(paths, preload = "/opt/mynx/lib/libmynx-serial.so")
+        val shellEnv = launch.argv.subList(launch.argv.indexOf("/usr/bin/env"), launch.argv.indexOf("/bin/bash"))
+
+        assertTrue("LD_PRELOAD=/opt/mynx/lib/libmynx-serial.so" in shellEnv, shellEnv.toString())
+        assertTrue(launch.env.keys.none { it.startsWith("LD_") }, launch.env.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("LD_PRELOAD=") })
+    }
+
+    @Test
+    fun `preloads the serial library only when it's on and the tools have it`() {
+        val tools = createTempDirectory("tools").toFile()
+        try {
+            assertNull(serialPreload(tools, enabled = true))
+            File(tools, "lib").mkdirs()
+            File(tools, "lib/libmynx-serial.so").writeText("")
+            assertEquals("/opt/mynx/lib/libmynx-serial.so", SERIAL_PRELOAD)
+            assertEquals(SERIAL_PRELOAD, serialPreload(tools, enabled = true))
+            assertNull(serialPreload(tools, enabled = false))
+        } finally {
+            tools.deleteRecursively()
+        }
     }
 
     private fun List<String>.valueAfter(flag: String) = this[indexOf(flag) + 1]

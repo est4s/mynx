@@ -232,6 +232,114 @@ class BridgeTest(unittest.TestCase):
         self.assertFalse(os.path.lexists(self.link))
 
 
+DTR, RTS = 0x002, 0x004
+INPUTS = 0x020 | 0x040 | 0x100  # CTS, CD, DSR: always on
+
+
+def ask(folder, line):
+    """One request to the helper's control socket, as libmynx-serial.so sends it."""
+    with socket.socket(socket.AF_UNIX) as s:
+        s.settimeout(5)
+        s.connect(os.path.join(folder, ".ttyUSB0.ctl"))
+        s.sendall(line.encode() + b"\n")
+        reply = b""
+        while not reply.endswith(b"\n"):
+            data = s.recv(100)
+            if not data:
+                break
+            reply += data
+        return reply.decode()
+
+
+class LinesTest(unittest.TestCase):
+    def test_raising_goes_dtr_first_and_dropping_rts_first(self):
+        on, off = (True, True), (False, False)
+        self.assertEqual([8, 11], sp.control_changes(off, on))
+        self.assertEqual([12, 9], sp.control_changes(on, off))
+
+    def test_switching_from_one_line_to_the_other_passes_through_both_off(self):
+        self.assertEqual([12, 8], sp.control_changes((False, True), (True, False)))
+        self.assertEqual([9, 11], sp.control_changes((True, False), (False, True)))
+
+    def test_only_changes_are_sent_and_with_no_old_state_both_are(self):
+        self.assertEqual([], sp.control_changes((True, False), (True, False)))
+        self.assertEqual([9, 11], sp.control_changes(None, (False, True)))
+
+
+class ControlTest(BridgeTest):
+    def open_and_set_up(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        self.addCleanup(os.close, fd)
+        self.wait_for_setup()
+        return len(self.port.connections[0])
+
+    def sent_since(self, start, expected):
+        wait_for(lambda: bytes(self.port.connections[0][start:]) == expected, f"{expected!r}")
+
+    def test_get_reports_dtr_and_rts_up_and_the_inputs_on(self):
+        self.open_and_set_up()
+        self.assertEqual(f"ok {DTR | RTS | INPUTS}\n", ask(self.folder, "get 0"))
+
+    def test_bic_drops_a_line_on_the_port(self):
+        start = self.open_and_set_up()
+        self.assertEqual(f"ok {RTS | INPUTS}\n", ask(self.folder, f"bic {DTR}"))
+        self.sent_since(start, sub(5, 9))
+
+    def test_set_drops_rts_first_and_raises_dtr_first(self):
+        start = self.open_and_set_up()
+        self.assertEqual(f"ok {INPUTS}\n", ask(self.folder, "set 0"))
+        self.assertEqual(f"ok {DTR | RTS | INPUTS}\n", ask(self.folder, f"set {DTR | RTS}"))
+        self.sent_since(start, sub(5, 12) + sub(5, 9) + sub(5, 8) + sub(5, 11))
+
+    def test_bis_raises_a_line(self):
+        start = self.open_and_set_up()
+        ask(self.folder, f"bic {RTS}")
+        self.assertEqual(f"ok {DTR | RTS | INPUTS}\n", ask(self.folder, f"bis {RTS}"))
+        self.sent_since(start, sub(5, 12) + sub(5, 11))
+
+    def test_a_bad_request_is_refused(self):
+        self.open_and_set_up()
+        self.assertEqual("error\n", ask(self.folder, "fly 3"))
+
+    def test_closing_puts_the_lines_back_up_for_the_next_program(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        self.wait_for_setup()
+        ask(self.folder, "set 0")
+        os.close(fd)
+        wait_for(lambda: self.port.current is None, "the end of the connection")
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            wait_for(lambda: len(self.port.connections) == 2 and self.port.connections[1].endswith(sub(5, 8) + sub(5, 11)), "both up")
+        finally:
+            os.close(fd)
+
+    def test_stopping_removes_the_socket(self):
+        socket_path = os.path.join(self.folder, ".ttyUSB0.ctl")
+        self.assertTrue(os.path.exists(socket_path))
+        self.bridge.stopped = True
+        self.thread.join(5)
+        self.assertFalse(os.path.lexists(socket_path))
+
+
+class EarlyControlTest(unittest.TestCase):
+    def test_a_request_before_the_helper_saw_the_open_connects_with_those_lines(self):
+        folder = tempfile.mkdtemp()
+        port = FakePort()
+        bridge = sp.Bridge("ttyUSB0", port.port, folder)
+        bridge.make_terminal()
+        fd = os.open(os.path.join(folder, "ttyUSB0"), os.O_RDWR | os.O_NOCTTY)
+        try:
+            self.assertEqual(f"ok {RTS | INPUTS}", bridge.control("set", RTS))
+            expected = bytes([255, 251, 44]) + sp.setup((9600, 8, 1, 1, False)) + sub(5, 9) + sub(5, 11)
+            wait_for(lambda: port.connections and bytes(port.connections[0]) == expected, "the setup")
+        finally:
+            os.close(fd)
+            bridge.disconnect("done")
+            bridge.remove_link()
+            port.close()
+            os.rmdir(folder)
+
+
 class AppAwayTest(unittest.TestCase):
     def test_with_no_app_the_bytes_are_dropped_and_it_keeps_trying(self):
         folder = tempfile.mkdtemp()
