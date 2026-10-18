@@ -76,6 +76,27 @@ class SerialServerTest {
     }
 
     @Test
+    fun `the port stays taken until a leaving client's lines are down`() {
+        // Otherwise a new client could connect and have its lines dropped by the old one.
+        val dtrDropped = java.util.concurrent.CountDownLatch(1)
+        val slow = FakeLine()
+        val slowLine = object : SerialLine by slow {
+            override fun setDtr(on: Boolean) { dtrDropped.await(3, TimeUnit.SECONDS); slow.setDtr(on) }
+        }
+        val server = SerialServer(slowLine, port = 0).also { it.start() }
+        try {
+            Socket("127.0.0.1", server.port).use { it.soTimeout = 3000; it.readBytes(9) }
+            waitFor("RTS down") { "rts false" in slow.callList() }
+            assertTrue(server.busy)
+            dtrDropped.countDown()
+            waitFor("the drop") { !server.busy }
+            assertEquals(listOf("rts false", "dtr false"), slow.callList())
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun `settings outlast a client`() {
         connect().use { s ->
             s.readBytes(9)

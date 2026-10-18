@@ -101,10 +101,12 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
             close()
         }
 
+        private var closing = false
+
         fun close() {
             synchronized(this@SerialServer) {
-                if (client !== this) return
-                client = null
+                if (client !== this || closing) return
+                closing = true
             }
             queue.put(END)
             runCatching { socket.close() }
@@ -112,6 +114,8 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
             // C3's USB-Serial-JTAG) reset it, into the bootloader after DTR on.
             runCatching { line.setRts(false) }
             runCatching { line.setDtr(false) }
+            // Only now, so the next client's lines aren't dropped by this one.
+            synchronized(this@SerialServer) { client = null }
         }
     }
 }
