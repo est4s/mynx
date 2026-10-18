@@ -59,9 +59,19 @@ are in git history: the full log up to entry 92 is
 ### 0. USB serial, part 3: tests on the phone (branch `usb-serial-3`)
 
 Built overnight by two subagents (entries 124-125), all in one PR so
-there's one build to test. Nothing has run on hardware yet. Boards:
-ESP32-C3 with MicroPython (`ttyACM0`), CH340 Nano (`ttyUSB0`), Pro
+there's one build to test. Boards: ESP32-C3 with MicroPython
+(`ttyACM0`), CH340 Nano (`ttyUSB0`, new bootloader: FQBN
+`arduino:avr:nano`, a printing sketch `~/sketches/Tick` on it), Pro
 Micro. Do A first: it doesn't touch `/dev`.
+
+**Entry 126 ran what an agent can (build 186):** passed 1-4, 7, 9 (by
+`env -u LD_PRELOAD`), 10 and 12; 6 crashed, 11 and 13-18 failed;
+fixes in the working tree (not yet built). **Left for the maintainer,
+on the next build:** 1's key bar, 5, 6, 8, 11 (`mynx usb` right after
+the touch: which step the bootloader's open fails at), 13's `htop`/
+`mc`/`claude` and a new tab, 14-20. Then find out why the Caterina
+bootloader can't be opened (entry 126, problem 5) and why the Pro
+Micro sat unopened (problem 6).
 
 **A. Serial monitor** (`mynx usb monitor`, Apps → Serial monitor;
 commands are Ctrl+T then a key, `h` lists them)
@@ -238,6 +248,49 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-18 (126): USB serial part 3, an agent's phone tests
+
+On mynx dev build 186, a C3 and a Nano plugged in. The agent drove
+the monitor on a pty (a script sending keys) and ran part C as a
+throwaway service (services get the own `/dev` as new tabs do, and
+the agent's tab kept Android's).
+- **Passed:** monitor tests 1-4, 7, 9 (the reset is refused with
+  "can't reset: Permission denied (serial-preload off?)"), Ctrl+T `h`
+  `e` `n` `D` `R`, an unknown key, Ctrl+]; arduino-cli (fix-links
+  "fixed 24 links", Tick compiled and uploaded); mpremote by path and
+  URL; in the own `/dev`: null, urandom, tty, ptys, `<( )`, apt, git,
+  sound.
+- **Fixed, test-first:** (1) the port picker crashed ("prompt string
+  cannot contain null characters"): the C3's USB strings end in a NUL
+  (`Espressif\0`), which Android passes on; `usbString()` drops them
+  (also the double space in `mynx usb`, and sysfs's `product`). (2)
+  No `/dev/ttyACM0` or `/sys/class/tty` entries: `writeSerialNames()`
+  wrote into `filesDir/dev` before any tab had made it, failing
+  quietly (`runCatching`), and nothing changed afterwards; it makes
+  the folder now. (3) proot warned "can't sanitize binding /dev/full"
+  (and `fuse`), leaving empty files: Android allows `access()` on them
+  but not `stat()`; the probe uses `Os.stat`, and `prepareOwnDev()`
+  removes placeholders for devices the probe no longer finds.
+- Turning DTR off with RTS on (Ctrl+T `D`) puts the C3 into download
+  mode: its USB-Serial-JTAG's reset logic, not a bug.
+- **Pro Micro (test 11), three problems.** (4) The 1200 baud touch
+  never reached it: `stty -F … 1200` opens, sets and closes between
+  two of `serial-port`'s looks (10 a second), so it saw nothing; and
+  the monitor's Ctrl+T `b` (baud, then DTR off) reached the board as
+  DTR off, then 1200 (lines go at once, settings at the next poll).
+  Fixed in the helper, test-first: a line change sends changed
+  settings first, and settings changed while nobody seemed to have it
+  open are replayed as an open and a close (held `QUICK_OPEN`, 0.2 s:
+  with none the board didn't react; 0.1 s worked, tried with the
+  fixed helper run by hand). (5) Its bootloader (2341:0036
+  "Arduino Leonardo", Caterina) is never served: "couldn't open it:
+  controlTransfer failed", every time, so avrdude has no port. Not
+  understood; the error now names the step (`openDevice()`), so the
+  next build says which. (6) Once plugged in, it sat at "no port yet;
+  the app is opening it" for about 40 minutes (also seen once at build
+  175), `mynx usb allow` didn't help; then it had `ttyACM1`. Not
+  understood either.
 
 ### 2026-10-18 (125): Serial monitor, board tools, one PR (branch `usb-serial-3`)
 

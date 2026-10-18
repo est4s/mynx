@@ -643,6 +643,12 @@ Bugs that took a phone round to find; keep them from coming back.
   make the system call themselves**, not through the `ioctl` symbol,
   so a preload must wrap each of them; Python's `fcntl` and `termios`
   call the libc symbols, so pyserial goes through the wrappers.
+- **Android lets apps `access()` some `/dev` files it won't let them
+  `stat()`** (`/dev/full`, `/dev/fuse` on the Pixel 10), so
+  `File.exists()` says yes and proot drops the bind with a warning:
+  probe with `Os.stat`, as proot does.
+- **USB strings can end in a NUL** (an ESP32-C3's `Espressif\0`):
+  Android passes them on, so they go through `usbString()`.
 - **Bind `127.0.0.1`, not `getLoopbackAddress()`**: on Android that's
   `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
   `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was
