@@ -644,7 +644,7 @@ Bugs that took a phone round to find; keep them from coming back.
   so a preload must wrap each of them; Python's `fcntl` and `termios`
   call the libc symbols, so pyserial goes through the wrappers.
 - **Android lets apps `access()` some `/dev` files it won't let them
-  `stat()`** (`/dev/full`, `/dev/fuse` on the Pixel 10), so
+  `stat()`** (`/dev/full`, `/dev/fuse` on a OnePlus Nord 2, Android 13), so
   `File.exists()` says yes and proot drops the bind with a warning:
   probe with `Os.stat`, as proot does.
 - **USB strings can end in a NUL** (an ESP32-C3's `Espressif\0`):

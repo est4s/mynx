@@ -303,6 +303,16 @@ the agent's tab kept Android's).
   closes an unplugged one). Not yet on the phone. `~/sketches`:
   `touch-flash.sh PORT` (touch, wait for 2341:0036, avrdude),
   `probe-boot.py`, `esc-exit.py`.
+- **Build 191:** test 11 passes: the stty touch, the bootloader's
+  port, avrdude flashed and verified Tick (4238 bytes), and it prints
+  at 9600. But the sketch's port after the flash (the board restarting
+  by itself) sat at "the app is opening it" again, `mynx usb allow`
+  didn't help, a replug did. The code shows no way to be allowed, in
+  `open` and portless without an error, so a temporary trace
+  (`bridge.log` in `/tmp/.mynx/serial`, `UsbBridge.trace()`) logs each
+  broadcast, refresh, open and close. Next: flash again
+  (`~/sketches/touch-flash.sh`), read the trace, fix, remove it. The
+  phone in these tests is a OnePlus Nord 2 (DN2103), Android 13.
 - **Pro Micro (test 11), three problems.** (4) The 1200 baud touch
   never reached it: `stty -F … 1200` opens, sets and closes between
   two of `serial-port`'s looks (10 a second), so it saw nothing; and
