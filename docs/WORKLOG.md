@@ -66,7 +66,10 @@ Micro. Do A first: it doesn't touch `/dev`.
 
 **Entry 126 ran what an agent can (build 186):** passed 1-4, 7, 9 (by
 `env -u LD_PRELOAD`), 10 and 12; 6 crashed, 11 and 13-18 failed;
-fixes in the working tree (not yet built). **Left for the maintainer,
+fixed in 9e8fa46 and 73a91c3, built in run 39111972962
+(`Download/mynx-dev-39111972962.apk`). Port names follow the plug-in
+order: after a re-open the Pro Micro was `ttyACM0`, the C3 `ttyACM1`
+(check `mynx usb`). **Left for the maintainer,
 on the next build:** 1's key bar, 5, 6, 8, 11 (`mynx usb` right after
 the touch: which step the bootloader's open fails at), 13's `htop`/
 `mc`/`claude` and a new tab, 14-20. Then find out why the Caterina
