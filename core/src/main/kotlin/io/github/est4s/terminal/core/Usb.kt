@@ -49,6 +49,9 @@ fun ttyName(driver: String, taken: Set<String>): String {
 fun tcpPorts(taken: Set<Int>): Sequence<Int> =
     generateSequence(FIRST_SERIAL_TCP_PORT) { it + 1 }.filter { it !in taken }.takeWhile { it <= 65535 }
 
+/** A device's string (maker, product, serial) without the NULs some boards end it with; null if nothing's left. */
+fun usbString(text: String?): String? = text?.replace("\u0000", "")?.trim()?.takeIf { it.isNotEmpty() }
+
 /** `vvvv:pppp`, as lsusb shows them. */
 fun usbIds(vendorId: Int, productId: Int): String = "%04x:%04x".format(vendorId, productId)
 

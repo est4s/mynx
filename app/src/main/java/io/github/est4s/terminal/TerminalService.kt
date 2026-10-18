@@ -795,11 +795,13 @@ class TerminalService : Service() {
     private fun ownDev(): OwnDev? {
         if (currentSettings()?.serialNames == false) return null
         return runCatching {
+            // stat, as proot checks a bind: Android lets apps see that /dev/full and
+            // /dev/fuse exist (File.exists) but not stat them, and proot drops those.
             prepareOwnDev(devDir, sysTtyDir) { name ->
-                val host = File("/dev", name)
+                val mode = runCatching { Os.stat("/dev/$name").st_mode }.getOrNull()
                 when {
-                    !host.exists() -> null
-                    host.isDirectory -> HostEntry.DIR
+                    mode == null -> null
+                    OsConstants.S_ISDIR(mode) -> HostEntry.DIR
                     else -> HostEntry.FILE
                 }
             }

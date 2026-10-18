@@ -69,6 +69,25 @@ class SerialNamesTest {
     }
 
     @Test
+    fun `a device the phone no longer gives loses its placeholder`() {
+        prepareOwnDev(dev, sysTty) { if (it == "full") HostEntry.FILE else hostDev[it] }
+        prepare()
+
+        assertFalse(File(dev, "full").exists())
+        assertTrue(File(dev, "null").isFile)
+    }
+
+    @Test
+    fun `ports that came before the own dev was first set up get their names`() {
+        // The app writes the names as ports come, perhaps before any tab has set the folders up.
+        writeSerialNames(dev, sysTty, listOf(c3))
+        prepare()
+
+        assertEquals("serial/ttyACM0", link(File(dev, "ttyACM0")))
+        assertTrue(File(sysTty, "ttyACM0/device").exists())
+    }
+
+    @Test
     fun `each port gets its Linux name in dev, pointing at its dev serial link`() {
         prepare()
         writeSerialNames(dev, sysTty, listOf(c3, nano))

@@ -38,6 +38,16 @@ class UsbNamesTest {
     }
 
     @Test
+    fun `a device's strings lose the NULs some boards end them with`() {
+        // An ESP32-C3's USB-Serial-JTAG gives "Espressif\u0000": Android passes it on.
+        assertEquals("Espressif", usbString("Espressif\u0000"))
+        assertEquals("USB JTAG/serial debug unit", usbString("USB JTAG/serial debug unit\u0000 "))
+        assertEquals("USB Serial", usbString("USB Serial"))
+        assertNull(usbString("\u0000"))
+        assertNull(usbString(null))
+    }
+
+    @Test
     fun `IDs are four hex digits`() {
         assertEquals("1a86:7523", usbIds(0x1a86, 0x7523))
         assertEquals("0403:6001", usbIds(0x403, 0x6001))

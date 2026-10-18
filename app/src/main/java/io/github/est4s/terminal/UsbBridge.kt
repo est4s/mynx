@@ -30,6 +30,7 @@ import io.github.est4s.terminal.core.processPid
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.tcpPorts
 import io.github.est4s.terminal.core.ttyName
+import io.github.est4s.terminal.core.usbString
 import io.github.est4s.terminal.core.usbDriverName
 import io.github.est4s.terminal.core.usbIds
 import java.io.File
@@ -140,10 +141,10 @@ class UsbBridge(
                 id = device.deviceName,
                 vendorId = device.vendorId,
                 productId = device.productId,
-                manufacturer = runCatching { device.manufacturerName }.getOrNull(),
-                product = runCatching { device.productName }.getOrNull(),
+                manufacturer = usbString(runCatching { device.manufacturerName }.getOrNull()),
+                product = usbString(runCatching { device.productName }.getOrNull()),
                 // Android only gives the serial number to an app allowed to use the device.
-                serial = if (usb.hasPermission(device)) runCatching { device.serialNumber }.getOrNull() else null,
+                serial = if (usb.hasPermission(device)) usbString(runCatching { device.serialNumber }.getOrNull()) else null,
                 driver = usbDriverName(driver.javaClass.simpleName),
                 allowed = usb.hasPermission(device),
                 ports = open[device.deviceName]?.ports?.map { SerialPortInfo(it.name, it.server.port, it.server.busy) }.orEmpty(),
@@ -196,6 +197,8 @@ class UsbBridge(
         val device = driver.device
         val opened = OpenDevice()
         open[device.deviceName] = opened
+        // Named in the error, so a device that refuses one step says which.
+        var step = "opening it"
         try {
             for (port in driver.ports) {
                 val name = ttyName(usbDriverName(driver.javaClass.simpleName), takenNames())
@@ -203,6 +206,7 @@ class UsbBridge(
                 // connection, so ports sharing one would read each other's data.
                 // The port's close() closes it.
                 val connection = usb.openDevice(device) ?: throw IOException("Android gave no connection")
+                step = "opening its port"
                 port.open(connection)
                 try {
                     // Keeps the IN endpoint polled while a read is handed on. An
@@ -211,9 +215,13 @@ class UsbBridge(
                     // gives up on a packet the host doesn't collect at once.
                     port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64) * 16)
                     val line = UsbLine(port)
+                    step = "setting 9600 8N1"
                     line.configure(LineSettings())
+                    step = "dropping DTR"
                     line.setDtr(false)
+                    step = "dropping RTS"
                     line.setRts(false)
+                    step = "serving it"
                     val server = newServer(line)
                     opened.ports += OpenPort(name, port, server).also { it.start() }
                 } catch (e: Exception) {
@@ -224,7 +232,7 @@ class UsbBridge(
             }
         } catch (e: Exception) {
             close(device.deviceName)
-            errors[device.deviceName] = "couldn't open it: ${e.message ?: e.javaClass.simpleName}"
+            errors[device.deviceName] = "couldn't open it ($step): ${e.message ?: e.javaClass.simpleName}"
             return
         }
         val now = devices()

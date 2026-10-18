@@ -51,8 +51,9 @@ fun prepareOwnDev(devDir: File, sysTtyDir: File, probe: (String) -> HostEntry?):
     devDir.mkdirs()
     sysTtyDir.mkdirs()
     val devices = HOST_DEVICES.filter { name ->
-        val kind = probe(name) ?: return@filter false
         val placeholder = File(devDir, name)
+        // Gone from the host (or no longer allowed): an empty file there would only stand in for it.
+        val kind = probe(name) ?: return@filter false.also { placeholder.deleteRecursively() }
         if (kind == HostEntry.DIR) placeholder.mkdirs() else if (!placeholder.exists()) placeholder.createNewFile()
         true
     }
@@ -71,6 +72,7 @@ fun prepareOwnDev(devDir: File, sysTtyDir: File, probe: (String) -> HostEntry?):
 fun writeSerialNames(devDir: File, sysTtyDir: File, devices: List<UsbSerialDevice>) {
     val withPorts = devices.filter { it.ports.isNotEmpty() }
     val names = withPorts.flatMap { d -> d.ports.map { it.name } }.toSet()
+    devDir.mkdirs()
     devDir.listFiles().orEmpty()
         .filter { PORT_NAME.matches(it.name) && it.name !in names }
         .forEach { Files.deleteIfExists(it.toPath()) }
