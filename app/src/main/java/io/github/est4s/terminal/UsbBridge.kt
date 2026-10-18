@@ -361,9 +361,11 @@ private class UsbLine(private val port: UsbSerialPort) : SerialLine {
     }
 
     // Drivers that have no such line throw UnsupportedOperationException: there's nothing to set.
-    override fun setDtr(on: Boolean) = unsupportedIsFine { port.setDTR(on) }
+    // An Arduino's Caterina bootloader refuses CDC's line-state request
+    // ("controlTransfer failed"); Linux's cdc-acm carries on, and so do we.
+    override fun setDtr(on: Boolean) = unsupportedIsFine { refusedIsFine { port.setDTR(on) } }
 
-    override fun setRts(on: Boolean) = unsupportedIsFine { port.setRTS(on) }
+    override fun setRts(on: Boolean) = unsupportedIsFine { refusedIsFine { port.setRTS(on) } }
 
     override fun setBreak(on: Boolean) = unsupportedIsFine { port.setBreak(on) }
 
@@ -391,6 +393,13 @@ private class UsbLine(private val port: UsbSerialPort) : SerialLine {
             (if (UsbSerialPort.ControlLine.RI in lines) 0x40 else 0) or
             (if (UsbSerialPort.ControlLine.CD in lines) 0x80 else 0)
     }.getOrDefault(0)
+
+    private fun refusedIsFine(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: IOException) {
+        }
+    }
 
     private fun unsupportedIsFine(block: () -> Unit) {
         try {
