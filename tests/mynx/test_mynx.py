@@ -1927,15 +1927,19 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(run.returncode, 2)
         self.assertIn("no USB serial port", run.stderr)
 
+    def monitor_env(self):
+        # As in the app, where the tools' bin (keybar) comes first on the PATH.
+        return {"MYNX_KEYBAR_FILE": "", "PATH": os.path.dirname(MYNX) + ":" + os.environ["PATH"]}
+
     def test_usb_monitor_runs_the_serial_monitor_with_its_key_bar(self):
-        run = self.mynx("usb", "monitor", "--help", env={"MYNX_KEYBAR_FILE": ""})
+        run = self.mynx("usb", "monitor", "--help", env=self.monitor_env())
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("serial: a serial monitor", run.stdout)
         with open(os.path.join(os.path.dirname(MYNX), "serial")) as f:
             self.assertIn("keybar serial,shell ", f.read())
 
     def test_usb_monitor_needs_a_terminal(self):
-        run = self.mynx("usb", "monitor", "ttyACM0", env={"MYNX_KEYBAR_FILE": ""})
+        run = self.mynx("usb", "monitor", "ttyACM0", env=self.monitor_env())
         self.assertEqual(run.returncode, 2)
         self.assertIn("needs a terminal", run.stderr)
 
