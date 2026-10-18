@@ -263,6 +263,14 @@ morning); two subagents, merged by the main agent. Not on the phone.
   change:** `serial-names` off by default for this round, since a
   broken own `/dev` would break every new tab with no shell left to
   turn it off; the plan turns it on from a running tab.
+- **Found in CI, fixed:** the monitor's tests needed `keybar` on the
+  PATH (the phone has `/opt/mynx/bin`, CI doesn't); and a race in
+  `SerialServer`: it freed the port before dropping a leaving
+  client's RTS and DTR, so a new client could have its lines dropped
+  (the drop-order test flaked on it). Now freed after; test added.
+- **Build:** `Download/mynx-dev-39082299921.apk` (PR #36's run
+  39082299921), copied with `deliver.sh --no-open`: open it from the
+  Files app to install mynx dev.
 - Left out: UF2 and raw USB (Android-side work: mass storage, the
   USB fd into Debian), static Go programs (needs a proot patch).
 - Known flaky under load (passed alone): `test_undo_list` (needs
