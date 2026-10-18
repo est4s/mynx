@@ -585,8 +585,10 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `/sys/class/tty/NAME` has its USB details as on Linux (vendor and
   product IDs, serial number, maker and name). So tools that look for
   ports find them by themselves: `python3 -m serial.tools.list_ports
-  -v`, `esptool` with no `--port`, PlatformIO's auto-detect,
-  `arduino-cli board list`. It's the `serial-names` setting (off
+  -v`, `esptool` with no `--port`, PlatformIO's auto-detect. Not
+  `arduino-cli board list`: its serial discovery needs a USB event
+  socket Android doesn't give apps ("Cannot START: permission
+  denied"); name the port with `-p`. It's the `serial-names` setting (off
   for now: `mynx set serial-names on`, then a new tab): for it,
   Debian has a `/dev` of its own, which the app fills (the
   phone's `null`, `zero`, `random`, `urandom`, `tty`, `ptmx`, `pts`,

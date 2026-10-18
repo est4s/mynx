@@ -69,12 +69,14 @@ Micro. Do A first: it doesn't touch `/dev`.
 fixed in 9e8fa46 and 73a91c3, built in run 39111972962
 (`Download/mynx-dev-39111972962.apk`). Port names follow the plug-in
 order: after a re-open the Pro Micro was `ttyACM0`, the C3 `ttyACM1`
-(check `mynx usb`). **Left for the maintainer,
-on the next build:** 1's key bar, 5, 6, 8, 11 (`mynx usb` right after
-the touch: which step the bootloader's open fails at), 13's `htop`/
-`mc`/`claude` and a new tab, 14-20. Then find out why the Caterina
-bootloader can't be opened (entry 126, problem 5) and why the Pro
-Micro sat unopened (problem 6).
+(check `mynx usb`). On build 187 the agent also passed 6, 13 (in a
+service), 14's links, 15-17; 18 can't work (entry 126). **Left:**
+install e34c12f's build (Caterina fix), then the agent can do 11
+(touch, then `touch-flash.sh` in `~/sketches` flashes Tick to the
+bootloader). **The maintainer's:** 1's key bar, 5, 8, 13 in a real new
+tab (`htop`, `mc`, `claude`), 14's unplug and replug, 19 (hub), 20.
+Then find out why the Pro Micro once sat unopened (entry 126, problem
+6).
 
 **A. Serial monitor** (`mynx usb monitor`, Apps → Serial monitor;
 commands are Ctrl+T then a key, `h` lists them)
@@ -133,8 +135,8 @@ new tab misbehaves, run `mynx set serial-names off` in the old one.)
 16. `esptool chip_id` with no `--port` finds the C3.
 17. `cat /sys/class/tty/ttyUSB0/device/../../idVendor` → `1a86`;
     `avrdude -c arduino -P /dev/ttyUSB0 -b 115200 -p m328p` reads it.
-18. If installed: `arduino-cli board list` (and `pio device list`)
-    shows both with VID/PID.
+18. ~~`arduino-cli board list`~~ can't work (entry 126): `pio device
+    list` instead, if PlatformIO is installed.
 19. Both on a hub: both names; unplugging one removes only its own.
 20. `mynx set serial-names off`, new tab: `ls /dev` is refused as
     before, `/dev/serial/…` works. If 13-19 pass: make `on` the
@@ -277,6 +279,18 @@ the agent's tab kept Android's).
   removes placeholders for devices the probe no longer finds.
 - Turning DTR off with RTS on (Ctrl+T `D`) puts the C3 into download
   mode: its USB-Serial-JTAG's reset logic, not a bug.
+- **Later, on build 187 (run 39111972962):** 6 passes (a numbered
+  list of all three); part C in a throwaway service: 13 (no proot
+  warnings, no `full`/`fuse`), 14's links, 15 (`list_ports`: all three
+  with VID:PID, serial, product), 16 (esptool tries the Nano first,
+  ~10 s, then finds the C3) and 17 pass. **18 can't pass:** arduino-cli's
+  serial-discovery (Go, static) needs a `NETLINK_KOBJECT_UEVENT`
+  socket even for a plain START, and Android refuses apps one
+  (checked: EACCES from `socket()`); the guide no longer promises
+  `board list`. The stty touch now reaches the Pro Micro; its
+  bootloader failed at "dropping DTR": Caterina refuses CDC's
+  line-state request, which Linux's cdc-acm shrugs off. `UsbLine`
+  now does too (e34c12f, not yet on the phone).
 - **Pro Micro (test 11), three problems.** (4) The 1200 baud touch
   never reached it: `stty -F … 1200` opens, sets and closes between
   two of `serial-port`'s looks (10 a second), so it saw nothing; and
