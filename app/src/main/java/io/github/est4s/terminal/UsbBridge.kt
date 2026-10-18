@@ -281,9 +281,14 @@ class UsbBridge(
                 val n = try {
                     port.read(buffer, 0)
                 } catch (e: Exception) {
-                    // Unplugged (or closed): the detach broadcast closes the rest.
-                    if (!closed) handler.post { refresh() }
-                    break
+                    if (closed) break
+                    // Unplugged: refresh() closes it. Or still there: the library
+                    // checks the device after an empty packet and gives up if it
+                    // doesn't answer in 200 ms, as a Pro Micro's bootloader doesn't
+                    // after a command it ignores (avrdude's ESC). Keep reading.
+                    handler.post { refresh() }
+                    Thread.sleep(100)
+                    continue
                 }
                 if (n > 0) server.fromLine(buffer, n)
             }

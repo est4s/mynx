@@ -291,6 +291,18 @@ the agent's tab kept Android's).
   bootloader failed at "dropping DTR": Caterina refuses CDC's
   line-state request, which Linux's cdc-acm shrugs off. `UsbLine`
   now does too (e34c12f, not yet on the phone).
+- **Build 189 (2026-10-19):** the bootloader now gets a port (same
+  name, `ttyACM0`, as the sketch it replaces), and answers avr109 by
+  hand (`S` → `CATERIN`, `V` → `10`), but avrdude got "programmer is
+  not responding": after avrdude's first byte, ESC, which Caterina
+  ignores, nothing came back while writes still arrived (`E` made it
+  leave in 0.6 s). usb-serial-for-android checks the device with
+  GET_STATUS (200 ms) after an empty packet and throws when it
+  doesn't answer; the read loop took that as an unplug and stopped.
+  It now keeps reading while the port is open (refresh() still
+  closes an unplugged one). Not yet on the phone. `~/sketches`:
+  `touch-flash.sh PORT` (touch, wait for 2341:0036, avrdude),
+  `probe-boot.py`, `esc-exit.py`.
 - **Pro Micro (test 11), three problems.** (4) The 1200 baud touch
   never reached it: `stty -F … 1200` opens, sets and closes between
   two of `serial-port`'s looks (10 a second), so it saw nothing; and
