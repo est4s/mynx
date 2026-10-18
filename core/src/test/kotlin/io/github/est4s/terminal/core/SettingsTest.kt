@@ -245,11 +245,11 @@ class SettingsTest {
     }
 
     @Test
-    fun `serial port names are on by default and can be turned off`() {
-        assertTrue(Settings().serialNames)
-        assertEquals("on", SETTINGS.single { it.key == "serial-names" }.default)
-        val parsed = parseSettings("serial-names = off\nserial-names = yes\n")
-        assertFalse(parsed.settings.serialNames)
+    fun `serial port names are off by default until confirmed on the phone, and can be turned on`() {
+        assertFalse(Settings().serialNames)
+        assertEquals("off", SETTINGS.single { it.key == "serial-names" }.default)
+        val parsed = parseSettings("serial-names = on\nserial-names = yes\n")
+        assertTrue(parsed.settings.serialNames)
         assertEquals(listOf("line 2: serial-names must be one of: on, off"), parsed.problems)
     }
 

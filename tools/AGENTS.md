@@ -205,8 +205,8 @@ One `key = value` per line; `mynx settings` describes each.
   load the app's serial library (`LD_PRELOAD`), so tools like esptool
   and picocom work on `/dev/serial` ports (see "USB serial devices").
   New tabs and services follow it.
-- `serial-names`: `on` (default) or `off`: whether USB serial ports
-  also appear as `/dev/ttyUSB0` and `/dev/ttyACM0`, with their USB
+- `serial-names`: `off` (default, for now) or `on`: whether USB
+  serial ports also appear as `/dev/ttyUSB0` and `/dev/ttyACM0`, with their USB
   details in `/sys/class/tty`, so tools find them by themselves. For
   that Debian gets a `/dev` of its own, with the phone's device files
   it needs (`null`, `tty`, `pts`, …); `off` shows Android's `/dev` as
@@ -586,8 +586,9 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   product IDs, serial number, maker and name). So tools that look for
   ports find them by themselves: `python3 -m serial.tools.list_ports
   -v`, `esptool` with no `--port`, PlatformIO's auto-detect,
-  `arduino-cli board list`. It's the `serial-names` setting (on): for
-  it, Debian has a `/dev` of its own, which the app fills (the
+  `arduino-cli board list`. It's the `serial-names` setting (off
+  for now: `mynx set serial-names on`, then a new tab): for it,
+  Debian has a `/dev` of its own, which the app fills (the
   phone's `null`, `zero`, `random`, `urandom`, `tty`, `ptmx`, `pts`,
   the GPU's files, …; not its own `ttyS*` ports). With it off, or in
   a tab opened before it was on, name the port: `/dev/serial/…`.

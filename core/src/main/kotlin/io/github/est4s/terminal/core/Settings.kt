@@ -38,7 +38,7 @@ data class Settings(
     /** Whether programs in Debian get the app's serial library preloaded (new tabs and services). */
     val serialPreload: Boolean = true,
     /** Whether USB serial ports also get the names Linux tools look for, in a `/dev` of Debian's own (new tabs and services). */
-    val serialNames: Boolean = true,
+    val serialNames: Boolean = false,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -214,7 +214,7 @@ val SETTINGS: List<SettingDef> = listOf(
     ),
     SettingDef(
         "serial-names", "Whether USB serial ports also appear as /dev/ttyUSB0 and /dev/ttyACM0, with their USB details, so tools find them by themselves (Debian gets a /dev of its own; new tabs and services).",
-        "on", listOf("on", "off"),
+        "off", listOf("on", "off"),
         oneOf("serial-names", listOf("on", "off")),
         { copy(serialNames = it == "on") },
     ),

@@ -46,6 +46,8 @@ are in git history: the full log up to entry 92 is
   once on a hub). Not released yet. The plans and tests:
   `git show d748955:docs/WORKLOG.md` (bridge),
   `git show 46bd16c:docs/WORKLOG.md` (preload, entries 115-122).
+- **USB serial part 3** (serial monitor, board tools, port names):
+  built overnight on `usb-serial-3`, phone tests are "Next 0".
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -53,6 +55,80 @@ are in git history: the full log up to entry 92 is
 
 
 ## Next
+
+### 0. USB serial, part 3: tests on the phone (branch `usb-serial-3`)
+
+Built overnight by two subagents (entries 124-125), all in one PR so
+there's one build to test. Nothing has run on hardware yet. Boards:
+ESP32-C3 with MicroPython (`ttyACM0`), CH340 Nano (`ttyUSB0`), Pro
+Micro. Do A first: it doesn't touch `/dev`.
+
+**A. Serial monitor** (`mynx usb monitor`, Apps → Serial monitor;
+commands are Ctrl+T then a key, `h` lists them)
+1. C3: `mynx usb monitor ttyACM0`: the header says "ttyACM0 at 115200
+   baud"; Enter gives `>>>`, Ctrl+D soft-reboots; the `serial` key
+   bar shows.
+2. Ctrl+T `r`: "— reset —", the boot banner and `>>>` (not "waiting
+   for download").
+3. Ctrl+T `b`: "— into the bootloader —"; quit (Ctrl+T `q`), then
+   `esptool --port /dev/serial/ttyACM0 chip_id` talks to it and
+   resets it back to normal.
+4. Ctrl+T `+`/`-`, `x`, `s`: a note each; hex breaks after 16 bytes
+   or a newline; `s` puts `HH:MM:SS.mmm` before each line.
+5. Unplug the C3 while monitoring: "ttyACM0 is gone; waiting"; plug
+   it back (OK in Android's dialog): "ttyACM0 is back", REPL answers.
+6. Both boards in, Apps → Serial monitor: a numbered list, "Which
+   port?". With no board: the error stays until a key.
+7. Nano with a printing sketch: `mynx usb monitor ttyUSB0 --baud
+   9600` shows its output; Ctrl+T `r` restarts the sketch.
+8. The key bar's Reset, Boot, Baud−, Baud+, Hex, Time, Quit work.
+9. `mynx set serial-preload off`, a new tab, the monitor, Ctrl+T `r`:
+   "can't set DTR/RTS: Permission denied (serial-preload off?)", and
+   the monitor keeps running. Set it back on.
+
+**B. Board tools** (in mynx dev's Debian; big downloads)
+10. arduino-cli (arm64 release) → `core install arduino:avr`; compile
+    Blink fails with "fork/exec …avr-g++" until `mynx fix-links
+    ~/.arduino15` ("fixed N links"); then `compile` and `upload -p
+    /dev/serial/ttyUSB0 -b arduino:avr:nano:cpu=atmega328old` work.
+11. Pro Micro: `stty -F /dev/serial/ttyACM0 1200` → Android asks about
+    a new device (tick "always"), `mynx usb` shows its bootloader's
+    port within ~8 s; `avrdude -p atmega32u4 -c avr109 -P
+    /dev/serial/THAT -U flash:w:Blink.ino.hex` flashes it. Also Ctrl+T
+    `b` in the monitor. `arduino-cli upload` directly is expected to
+    fail (Go, no preload).
+12. mpremote (`pipx install mpremote` or a venv): `mpremote connect
+    /dev/serial/ttyACM0 ls`, and with `rfc2217://localhost:2217`.
+
+**C. Port names** (`serial-names`, **off by default** in this build:
+it gives Debian a `/dev` of its own, and if that's broken no new tab
+would start. Keep a tab open that started before turning it on; if a
+new tab misbehaves, run `mynx set serial-names off` in the old one.)
+13. `mynx set serial-names on`, open a new tab: it starts with no
+    proot warnings. `ls -la /dev` shows null, zero, random, urandom,
+    tty, ptmx, pts, serial, fd, stdin, stdout, stderr (no ttyS0).
+    `echo hi > /dev/null`, `head -c4 /dev/urandom | od`, `tty`, `cat
+    <(echo x)`, `python3 -c 'import os; os.openpty()'`, `apt update`,
+    `git status`, `htop`, `mc`, `claude` work. Restart a service and
+    check `mynx sound` / `paplay` still work.
+14. C3 in: `ls -l /dev/ttyACM0` → `serial/ttyACM0`, `readlink -f`
+    → `/dev/pts/N`. Unplug: gone in a second or two; plug: back, in
+    the already-open tab.
+15. `python3 -m serial.tools.list_ports -v`: `/dev/ttyACM0` with `USB
+    VID:PID=303A:1001 SER=… LOCATION=1-1:1.0` and its product; with
+    the Nano also `/dev/ttyUSB0`, `1A86:7523`.
+16. `esptool chip_id` with no `--port` finds the C3.
+17. `cat /sys/class/tty/ttyUSB0/device/../../idVendor` → `1a86`;
+    `avrdude -c arduino -P /dev/ttyUSB0 -b 115200 -p m328p` reads it.
+18. If installed: `arduino-cli board list` (and `pio device list`)
+    shows both with VID/PID.
+19. Both on a hub: both names; unplugging one removes only its own.
+20. `mynx set serial-names off`, new tab: `ls /dev` is refused as
+    before, `/dev/serial/…` works. If 13-19 pass: make `on` the
+    default (SettingsTest, Settings.kt, the guide, AGENTS.md).
+
+If something fails: the helper's log `/tmp/.mynx/serial/NAME.log`
+shows each DTR/RTS change.
 
 ### 1. Smaller things
 
@@ -163,12 +239,42 @@ Ctrl+Shift).
 
 ## Log
 
+### 2026-10-18 (125): Serial monitor, board tools, one PR (branch `usb-serial-3`)
+
+Overnight, at the maintainer's request (good night, test in the
+morning); two subagents, merged by the main agent. Not on the phone.
+- **Serial monitor:** `tools/apps/serial` (Apps → Serial monitor),
+  `mynx usb monitor [PORT]`, the `serial` key bar. Ctrl+T commands as
+  in miniterm; reset (RTS off, DTR off, an RTS pulse, a DTR pulse),
+  bootloader (esptool's classic or USB-JTAG sequence by vendor, else
+  the 1200-baud touch), reopens a port that comes back. No `--tab`:
+  no request opens a tab with a command yet.
+- **`mynx fix-links DIR…`:** arduino-cli unpacks into a temp folder
+  and renames it, which breaks proot's fake hard links (AGENTS.md
+  "proot notes"); replacing each with a copy works. arduino-cli 1.5.2
+  then builds Blink for the Nano, Leonardo and C3 (esp32 core 1.5 GB,
+  13 min first build). PlatformIO 6.2.0 builds AVR, but its ESP32
+  toolchains fail to install (`copytree(symlinks=True)`: proot's
+  getdents says DT_LNK for a fake hard link, `readlink` says EINVAL):
+  the guide sends ESP32 users to arduino-cli.
+- Recipes in the guide's USB section: esptool, mpremote, arduino-cli,
+  PlatformIO, avrdude.
+- Merged with entry 124 (port names) into one PR. **Main agent's
+  change:** `serial-names` off by default for this round, since a
+  broken own `/dev` would break every new tab with no shell left to
+  turn it off; the plan turns it on from a running tab.
+- Left out: UF2 and raw USB (Android-side work: mass storage, the
+  USB fd into Debian), static Go programs (needs a proot patch).
+- Known flaky under load (passed alone): `test_undo_list` (needs
+  `TZ=`), `test_audio_play_stops_quietly_on_ctrl_c`, a
+  `SerialServerTest` timing test.
+
 ### 2026-10-18 (124): Serial port names tools find (branch `serial-names`)
 
 Overnight, a subagent, not on the phone yet. `/dev/ttyACM0` and
 `/dev/ttyUSB0`, and a `/sys/class/tty` stand-in with each port's USB
 details, so `list_ports`, esptool with no `--port`, PlatformIO and
-`arduino-cli board list` find the ports (setting `serial-names`, on).
+`arduino-cli board list` find the ports (setting `serial-names`).
 - **Why a `/dev` of Debian's own:** pyserial (`glob('/dev/ttyACM*')`)
   and go.bug.st/serial (`ReadDir("/dev")`) list `/dev`, and Android
   refuses that to apps (checked: EACCES, also `/dev/pts`). Binds don't

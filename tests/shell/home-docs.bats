@@ -144,3 +144,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }
+
+@test "the guide gives serial-names off by default, and how to turn it on" {
+    grep -qF '`serial-names`: `off` (default, for now) or `on`' "$GUIDE"
+    grep -qF 'mynx set serial-names on' "$GUIDE"
+}

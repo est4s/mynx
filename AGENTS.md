@@ -378,7 +378,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   `-DMYNX_SERIAL_TEST`, which refuses those calls itself on a port
   (a desktop allows them) and reads `MYNX_SERIAL_DIR`.
 - **Serial port names** (`core/.../SerialNames.kt`; agent's design,
-  2026-10-18, the `serial-names` setting, on): tools find ports by
+  2026-10-18, the `serial-names` setting, off until confirmed on
+  the phone): tools find ports by
   listing `/dev` (pyserial's `list_ports`, go.bug.st/serial's
   enumerator for arduino-cli) and read their USB details from
   `/sys/class/tty/NAME/device`. Android doesn't let apps list its
