@@ -36,6 +36,9 @@ INPUTS = 0x020 | 0x040 | 0x100
 # How often to look whether a program opened the terminal (Android
 # allows no inotify on it), and to try the app again when it's away.
 IDLE = 0.1
+# How long an open too quick to see is held: with none, the 1200 baud
+# touch didn't reach a Pro Micro (tried on the phone; 0.1 s did).
+QUICK_OPEN = 0.2
 RETRY = 1.0
 
 SPEEDS = {getattr(termios, n): int(n[1:]) for n in dir(termios) if n[:1] == "B" and n[1:].isdigit()}
@@ -156,6 +159,7 @@ class Bridge:
         termios.tcsetattr(slave, termios.TCSANOW, attrs)
         os.close(slave)
         os.set_blocking(self.master, False)
+        self.settings = line_settings(termios.tcgetattr(self.master))
         tmp = os.path.join(os.path.dirname(self.link), f".{self.name}.tmp")
         if os.path.lexists(tmp):
             os.unlink(tmp)
@@ -206,6 +210,9 @@ class Bridge:
             if self.opened()[0]:
                 self.connect()
         elif old != self.lines:
+            # The program may have changed the settings just before (the 1200
+            # baud touch): the port gets them first, as it would on Linux.
+            self.follow_settings()
             self.sock.sendall(b"".join(subnegotiation(SET_CONTROL, bytes([c]))
                                        for c in control_changes(old, self.lines)))
             log(self.name, f"DTR {'on' if self.lines[0] else 'off'}, RTS {'on' if self.lines[1] else 'off'}")
@@ -324,6 +331,13 @@ class Bridge:
             if is_open or pending:
                 if self.connect():
                     return
+            elif line_settings(termios.tcgetattr(self.master)) != self.settings:
+                # Opened, changed and closed between two looks (`stty -F PORT
+                # 1200`): the port gets it as an open and a close.
+                if self.connect():
+                    time.sleep(QUICK_OPEN)
+                    self.closed()
+                self.settings = line_settings(termios.tcgetattr(self.master))
             if pending and self.sock is None:
                 # Nowhere to send it: drop it, as a port with no device would.
                 self.from_terminal()
