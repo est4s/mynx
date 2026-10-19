@@ -47,7 +47,9 @@ are in git history: the full log up to entry 92 is
   `git show d748955:docs/WORKLOG.md` (bridge),
   `git show 46bd16c:docs/WORKLOG.md` (preload, entries 115-122).
 - **USB serial part 3** (serial monitor, board tools, port names):
-  built overnight on `usb-serial-3`, phone tests are "Next 0".
+  every phone test passed (entry 126) but 18, which can't (arduino-cli
+  `board list`); `serial-names` is on by default now. PR #36 is ready
+  to merge ("Next 0").
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -56,7 +58,16 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. USB serial, part 3: tests on the phone (branch `usb-serial-3`)
+### 0. USB serial, part 3: merge PR #36 (branch `usb-serial-3`)
+
+**Done:** every test below passed on the phone (entry 126), but 18,
+which can't (Android refuses the USB event socket arduino-cli's
+discovery needs); `serial-names` is on by default since (maintainer's
+decision, 2026-10-19). Left: the maintainer merges PR #36 once its
+build is green (a Markdown-only last commit needs an admin merge).
+Then, if it comes back, problem 6 of entry 126 (a Pro Micro allowed
+with no port after restarting by itself; `git show a35033d` has a
+trace to add). The plan and tests stay below until the merge.
 
 Built overnight by two subagents (entries 124-125), all in one PR so
 there's one build to test. Boards: ESP32-C3 with MicroPython

@@ -149,7 +149,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF 'board list`: its serial discovery needs a USB event' "$GUIDE"
 }
 
-@test "the guide gives serial-names off by default, and how to turn it on" {
-    grep -qF '`serial-names`: `off` (default, for now) or `on`' "$GUIDE"
-    grep -qF 'mynx set serial-names on' "$GUIDE"
+@test "the guide gives serial-names on by default, and how to turn it off" {
+    grep -qF '`serial-names`: `on` (default) or `off`' "$GUIDE"
+    grep -qF 'mynx set serial-names off' "$GUIDE"
 }

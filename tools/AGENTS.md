@@ -205,7 +205,7 @@ One `key = value` per line; `mynx settings` describes each.
   load the app's serial library (`LD_PRELOAD`), so tools like esptool
   and picocom work on `/dev/serial` ports (see "USB serial devices").
   New tabs and services follow it.
-- `serial-names`: `off` (default, for now) or `on`: whether USB
+- `serial-names`: `on` (default) or `off`: whether USB
   serial ports also appear as `/dev/ttyUSB0` and `/dev/ttyACM0`, with their USB
   details in `/sys/class/tty`, so tools find them by themselves. For
   that Debian gets a `/dev` of its own, with the phone's device files
@@ -588,12 +588,12 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   -v`, `esptool` with no `--port`, PlatformIO's auto-detect. Not
   `arduino-cli board list`: its serial discovery needs a USB event
   socket Android doesn't give apps ("Cannot START: permission
-  denied"); name the port with `-p`. It's the `serial-names` setting (off
-  for now: `mynx set serial-names on`, then a new tab): for it,
+  denied"); name the port with `-p`. It's the `serial-names` setting (on;
+  `mynx set serial-names off`, then a new tab, turns it off): for it,
   Debian has a `/dev` of its own, which the app fills (the
   phone's `null`, `zero`, `random`, `urandom`, `tty`, `ptmx`, `pts`,
   the GPU's files, …; not its own `ttyS*` ports). With it off, or in
-  a tab opened before it was on, name the port: `/dev/serial/…`.
+  a tab opened while it was off, name the port: `/dev/serial/…`.
   esptool still says "Failed to get PID of a device on /dev/pts/N"
   (it follows the link to the terminal): harmless, it uses the usual
   reset.
