@@ -313,6 +313,14 @@ the agent's tab kept Android's).
   broadcast, refresh, open and close. Next: flash again
   (`~/sketches/touch-flash.sh`), read the trace, fix, remove it. The
   phone in these tests is a OnePlus Nord 2 (DN2103), Android 13.
+- **Build 192 (with the trace):** five flashes in a row, the sketch's
+  port came back each time (bootloader detached, sketch attached
+  0.3 s later, served within 40 ms): problem 6 didn't show. The trace
+  caught the Nano dropping off and coming back by itself 9 s after a
+  flash (the hub's power, as the Pro Micro restarts?), handled fine;
+  such a drop during an attach may be problem 6. The trace was removed
+  (maintainer's decision); `git show a35033d` has it, to add again if
+  the stuck port comes back.
 - **Pro Micro (test 11), three problems.** (4) The 1200 baud touch
   never reached it: `stty -F … 1200` opens, sets and closes between
   two of `serial-port`'s looks (10 a second), so it saw nothing; and

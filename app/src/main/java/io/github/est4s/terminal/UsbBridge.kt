@@ -73,19 +73,8 @@ class UsbBridge(
     private val asking = mutableMapOf<String, MutableList<(String?) -> Unit>>()
     private var started = false
 
-    // TEMPORARY (entry 126, problem 6): why a board that restarts by itself
-    // can sit allowed with no port. In Debian: /tmp/.mynx/serial/bridge.log.
-    private fun trace(text: String) {
-        runCatching {
-            logDir.mkdirs()
-            val at = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.ROOT).format(java.util.Date())
-            File(logDir, "bridge.log").appendText("$at ${Thread.currentThread().name}: $text\n")
-        }
-    }
-
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            trace("broadcast ${intent.action?.substringAfterLast('.')} ${deviceOf(intent)?.deviceName}")
             if (intent.action == ACTION_USB_PERMISSION) {
                 val device = deviceOf(intent)
                 val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
@@ -131,10 +120,6 @@ class UsbBridge(
         if (!started) return
         val drivers = runCatching { prober.findAllDrivers(usb) }.getOrDefault(emptyList())
         val present = drivers.map { it.device.deviceName }.toSet()
-        trace("refresh: " + drivers.joinToString { d ->
-            val n = d.device.deviceName
-            "$n ${usbIds(d.device.vendorId, d.device.productId)} open=${n in open}(${open[n]?.ports?.size}) error=${n in errors} allowed=${usb.hasPermission(d.device)} ports=${d.ports.size}"
-        } + "; open=" + open.keys)
         open.keys.filter { it !in present }.forEach { name ->
             close(name)
             gone(name)
@@ -211,7 +196,6 @@ class UsbBridge(
     private fun openDevice(driver: UsbSerialDriver) {
         val device = driver.device
         val opened = OpenDevice()
-        trace("open ${device.deviceName}: ${driver.ports.size} ports")
         open[device.deviceName] = opened
         // Named in the error, so a device that refuses one step says which.
         var step = "opening it"
@@ -249,10 +233,8 @@ class UsbBridge(
         } catch (e: Exception) {
             close(device.deviceName)
             errors[device.deviceName] = "couldn't open it ($step): ${e.message ?: e.javaClass.simpleName}"
-            trace("open ${device.deviceName} failed ($step): $e")
             return
         }
-        trace("open ${device.deviceName}: served ${opened.ports.map { it.name }}")
         val now = devices()
         changed(now)
         now.firstOrNull { it.id == device.deviceName }?.let(ready)
@@ -272,7 +254,6 @@ class UsbBridge(
 
     private fun close(name: String) {
         val device = open.remove(name) ?: return
-        trace("close $name ${device.ports.map { it.name }}")
         device.ports.forEach { it.close() }
         changed(devices())
     }
