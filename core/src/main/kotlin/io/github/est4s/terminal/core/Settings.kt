@@ -37,6 +37,8 @@ data class Settings(
     val updateCheck: Boolean = true,
     /** Whether programs in Debian get the app's serial library preloaded (new tabs and services). */
     val serialPreload: Boolean = true,
+    /** Whether USB serial ports also get the names Linux tools look for, in a `/dev` of Debian's own (new tabs and services). */
+    val serialNames: Boolean = true,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -58,6 +60,7 @@ data class Settings(
         "wakelock" to wakelock.word,
         "update-check" to if (updateCheck) "on" else "off",
         "serial-preload" to if (serialPreload) "on" else "off",
+        "serial-names" to if (serialNames) "on" else "off",
     )
 }
 
@@ -208,6 +211,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("serial-preload", listOf("on", "off")),
         { copy(serialPreload = it == "on") },
+    ),
+    SettingDef(
+        "serial-names", "Whether USB serial ports also appear as /dev/ttyUSB0 and /dev/ttyACM0, with their USB details, so tools find them by themselves (Debian gets a /dev of its own; new tabs and services).",
+        "on", listOf("on", "off"),
+        oneOf("serial-names", listOf("on", "off")),
+        { copy(serialNames = it == "on") },
     ),
 )
 

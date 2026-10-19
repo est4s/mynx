@@ -30,6 +30,7 @@ import io.github.est4s.terminal.core.processPid
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.tcpPorts
 import io.github.est4s.terminal.core.ttyName
+import io.github.est4s.terminal.core.usbString
 import io.github.est4s.terminal.core.usbDriverName
 import io.github.est4s.terminal.core.usbIds
 import java.io.File
@@ -50,7 +51,8 @@ private const val READ_QUEUE = 256
  * on localhost ([SerialServer]) and runs its pseudo-terminal helper in
  * Debian ([launchHelper], `serial-port NAME TCPPORT`), whose link lives
  * in [serialDir]. Helpers' output goes to [logDir]. [ready] is told when
- * a device's ports are served, [gone] when a device left. Call from
+ * a device's ports are served, [gone] when a device left, [changed]
+ * with what Android sees whenever the served ports change. Call from
  * [handler]'s (the main) thread.
  */
 class UsbBridge(
@@ -62,6 +64,7 @@ class UsbBridge(
     private val launchHelper: (name: String, tcpPort: Int) -> Launch,
     private val ready: (UsbSerialDevice) -> Unit,
     private val gone: (String) -> Unit,
+    private val changed: (List<UsbSerialDevice>) -> Unit,
 ) {
     private val usb = context.getSystemService(UsbManager::class.java)
     private val prober = UsbSerialProber.getDefaultProber()
@@ -88,6 +91,7 @@ class UsbBridge(
         // Links from an earlier run point at terminals that are gone.
         serialDir.deleteRecursively()
         serialDir.mkdirs()
+        changed(emptyList())
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
@@ -137,10 +141,10 @@ class UsbBridge(
                 id = device.deviceName,
                 vendorId = device.vendorId,
                 productId = device.productId,
-                manufacturer = runCatching { device.manufacturerName }.getOrNull(),
-                product = runCatching { device.productName }.getOrNull(),
+                manufacturer = usbString(runCatching { device.manufacturerName }.getOrNull()),
+                product = usbString(runCatching { device.productName }.getOrNull()),
                 // Android only gives the serial number to an app allowed to use the device.
-                serial = if (usb.hasPermission(device)) runCatching { device.serialNumber }.getOrNull() else null,
+                serial = if (usb.hasPermission(device)) usbString(runCatching { device.serialNumber }.getOrNull()) else null,
                 driver = usbDriverName(driver.javaClass.simpleName),
                 allowed = usb.hasPermission(device),
                 ports = open[device.deviceName]?.ports?.map { SerialPortInfo(it.name, it.server.port, it.server.busy) }.orEmpty(),
@@ -193,6 +197,8 @@ class UsbBridge(
         val device = driver.device
         val opened = OpenDevice()
         open[device.deviceName] = opened
+        // Named in the error, so a device that refuses one step says which.
+        var step = "opening it"
         try {
             for (port in driver.ports) {
                 val name = ttyName(usbDriverName(driver.javaClass.simpleName), takenNames())
@@ -200,6 +206,7 @@ class UsbBridge(
                 // connection, so ports sharing one would read each other's data.
                 // The port's close() closes it.
                 val connection = usb.openDevice(device) ?: throw IOException("Android gave no connection")
+                step = "opening its port"
                 port.open(connection)
                 try {
                     // Keeps the IN endpoint polled while a read is handed on. An
@@ -208,9 +215,13 @@ class UsbBridge(
                     // gives up on a packet the host doesn't collect at once.
                     port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64) * 16)
                     val line = UsbLine(port)
+                    step = "setting 9600 8N1"
                     line.configure(LineSettings())
+                    step = "dropping DTR"
                     line.setDtr(false)
+                    step = "dropping RTS"
                     line.setRts(false)
+                    step = "serving it"
                     val server = newServer(line)
                     opened.ports += OpenPort(name, port, server).also { it.start() }
                 } catch (e: Exception) {
@@ -221,10 +232,12 @@ class UsbBridge(
             }
         } catch (e: Exception) {
             close(device.deviceName)
-            errors[device.deviceName] = "couldn't open it: ${e.message ?: e.javaClass.simpleName}"
+            errors[device.deviceName] = "couldn't open it ($step): ${e.message ?: e.javaClass.simpleName}"
             return
         }
-        devices().firstOrNull { it.id == device.deviceName }?.let(ready)
+        val now = devices()
+        changed(now)
+        now.firstOrNull { it.id == device.deviceName }?.let(ready)
     }
 
     private fun takenNames(): Set<String> = open.values.flatMap { d -> d.ports.map { it.name } }.toSet()
@@ -242,6 +255,7 @@ class UsbBridge(
     private fun close(name: String) {
         val device = open.remove(name) ?: return
         device.ports.forEach { it.close() }
+        changed(devices())
     }
 
     private class OpenDevice {
@@ -267,9 +281,14 @@ class UsbBridge(
                 val n = try {
                     port.read(buffer, 0)
                 } catch (e: Exception) {
-                    // Unplugged (or closed): the detach broadcast closes the rest.
-                    if (!closed) handler.post { refresh() }
-                    break
+                    if (closed) break
+                    // Unplugged: refresh() closes it. Or still there: the library
+                    // checks the device after an empty packet and gives up if it
+                    // doesn't answer in 200 ms, as a Pro Micro's bootloader doesn't
+                    // after a command it ignores (avrdude's ESC). Keep reading.
+                    handler.post { refresh() }
+                    Thread.sleep(100)
+                    continue
                 }
                 if (n > 0) server.fromLine(buffer, n)
             }
@@ -347,9 +366,11 @@ private class UsbLine(private val port: UsbSerialPort) : SerialLine {
     }
 
     // Drivers that have no such line throw UnsupportedOperationException: there's nothing to set.
-    override fun setDtr(on: Boolean) = unsupportedIsFine { port.setDTR(on) }
+    // An Arduino's Caterina bootloader refuses CDC's line-state request
+    // ("controlTransfer failed"); Linux's cdc-acm carries on, and so do we.
+    override fun setDtr(on: Boolean) = unsupportedIsFine { refusedIsFine { port.setDTR(on) } }
 
-    override fun setRts(on: Boolean) = unsupportedIsFine { port.setRTS(on) }
+    override fun setRts(on: Boolean) = unsupportedIsFine { refusedIsFine { port.setRTS(on) } }
 
     override fun setBreak(on: Boolean) = unsupportedIsFine { port.setBreak(on) }
 
@@ -377,6 +398,13 @@ private class UsbLine(private val port: UsbSerialPort) : SerialLine {
             (if (UsbSerialPort.ControlLine.RI in lines) 0x40 else 0) or
             (if (UsbSerialPort.ControlLine.CD in lines) 0x80 else 0)
     }.getOrDefault(0)
+
+    private fun refusedIsFine(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: IOException) {
+        }
+    }
 
     private fun unsupportedIsFine(block: () -> Unit) {
         try {

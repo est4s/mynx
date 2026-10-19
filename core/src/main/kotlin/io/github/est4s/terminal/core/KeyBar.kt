@@ -161,6 +161,7 @@ internal fun isKeyBarName(name: String) = BAR_NAME.matches(name)
 val BUILT_IN_KEY_BARS = listOf(
     "shell", "nnn", "menu", "mynx-edit", "game", "neon-rogue", "neon-drive", "neon-flap", "agent",
     "compass", "incline", "torch", "spectrum", "dbmeter", "tuner", "metronome", "pager", "service",
+    "serial",
 )
 
 /** A built-in bar's file, as shipped with the app. */

@@ -352,6 +352,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   `MainActivity`, which refreshes the bridge), and `mynx usb allow`
   asks with `requestPermission` (a mutable, explicit PendingIntent).
   Requests: `usb-list`, `usb-allow` (`usbRequests()`).
+  **Serial monitor** (`tools/apps/serial`, `mynx usb monitor`, bar
+  `serial`): an app like the others, so the menu's Apps lists it; it
+  opens the `/dev/serial` path and sets DTR/RTS with plain
+  `TIOCMBIS`/`TIOCMBIC`, which the preload passes to the helper. No
+  new-tab request: open a tab and run it (or Apps). Its resets follow
+  esptool's sequences (`reset()`); the plain reset pulses RTS (an
+  ESP32's EN) and then DTR (an Arduino's reset capacitor).
 - **Serial preload** (`tools/src/libmynx-serial.c`,
   `scripts/build-preload.sh`; maintainer's decision, 2026-10-17: a
   global `LD_PRELOAD`, not a wrapper or a proot patch): Android refuses
@@ -370,6 +377,28 @@ See `docs/ROADMAP.md` "How it works". The details:
   `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
   `-DMYNX_SERIAL_TEST`, which refuses those calls itself on a port
   (a desktop allows them) and reads `MYNX_SERIAL_DIR`.
+- **Serial port names** (`core/.../SerialNames.kt`; agent's design,
+  2026-10-18, the `serial-names` setting, on since the phone
+  tests of 2026-10-19): tools find ports by
+  listing `/dev` (pyserial's `list_ports`, go.bug.st/serial's
+  enumerator for arduino-cli) and read their USB details from
+  `/sys/class/tty/NAME/device`. Android doesn't let apps list its
+  `/dev`, proot's binds are fixed when it starts (a bind whose host
+  path is missing is dropped with a warning; proot doesn't emulate
+  `getdents`, so binds never show in a listing), and ports come and
+  go. So tabs and services get a `/dev` of their own
+  (`prootLaunch(ownDev =)`): `filesDir/dev`, with each of
+  `HOST_DEVICES` the phone has bound in (a placeholder file or folder
+  for each, so listings show it; never the phone's `ttyS*`), Linux's
+  `fd`/`stdin`/… links, and a link `ttyACM0` → `serial/ttyACM0` per
+  port, which the app makes and removes as ports change
+  (`writeSerialNames()`, from `UsbBridge`'s `changed`); proot follows
+  a link's guest-path contents, so it changes with no new bind.
+  `filesDir/sys-tty` at `/sys/class/tty` is laid out as the kernel's
+  (CDC ACM: `device` is the interface, subsystem `usb`; else the
+  port under its interface, subsystem `usb-serial`; `idVendor`,
+  `idProduct`, `serial`, `manufacturer`, `product` on the device).
+  The helpers keep Android's `/dev`. Off: as before.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
@@ -548,6 +577,18 @@ See `docs/ROADMAP.md` "How it works". The details:
   then remove the original. tar is fine: proot shows each linked file
   as a plain one, so tar stores its contents, and the `.l2s.*` files
   can be left out (`scripts/backup-root.sh`).
+  **Installers do it too:** arduino-cli unpacks each toolchain into a
+  temporary folder and renames it into place, so avr-gcc's linked
+  binaries (`avr-g++`, `avr/bin/as`) dangle ("fork/exec …: no such
+  file", `lstat` gives EPERM). Pointing them at the moved `.l2s.*`
+  files again doesn't help (proot still refuses `lstat`); replacing
+  each name with a copy of its file does: `mynx fix-links DIR`
+  (`tools/lib/mynx/links.py`, the user guide's recipes). **Not fixed:**
+  proot's `getdents` reports a faked hard link as `DT_LNK` while
+  `readlink` on it gives EINVAL, so Python's `shutil.copytree(…,
+  symlinks=True)` fails on any tree with hard links: PlatformIO's
+  ESP32 toolchains don't install. A proot patch (report `DT_REG`
+  for them) would fix it.
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the maintainer can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.
@@ -602,6 +643,12 @@ Bugs that took a phone round to find; keep them from coming back.
   make the system call themselves**, not through the `ioctl` symbol,
   so a preload must wrap each of them; Python's `fcntl` and `termios`
   call the libc symbols, so pyserial goes through the wrappers.
+- **Android lets apps `access()` some `/dev` files it won't let them
+  `stat()`** (`/dev/full`, `/dev/fuse` on a OnePlus Nord 2, Android 13), so
+  `File.exists()` says yes and proot drops the bind with a warning:
+  probe with `Os.stat`, as proot does.
+- **USB strings can end in a NUL** (an ESP32-C3's `Espressif\0`):
+  Android passes them on, so they go through `usbString()`.
 - **Bind `127.0.0.1`, not `getLoopbackAddress()`**: on Android that's
   `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
   `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was

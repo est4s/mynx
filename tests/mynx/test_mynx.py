@@ -1867,7 +1867,8 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
                              "  rfc2217://localhost:2219\n"
                              "USB JTAG/serial debug unit (303a:1001): not allowed\n"
                              "  mynx usb allow 303a:1001 (app on screen)\n"
-                             "USB device (0403:6001): couldn't open it: busy\n")
+                             "USB device (0403:6001): couldn't open it: busy\n"
+                             "A serial monitor: mynx usb monitor [PORT]\n")
         self.assertEqual(self.app.requests, [["usb-list"], ["usb-list"]])
         self.assertEqual(json.loads(self.mynx("usb", "--json").stdout), {"ok": True, "devices": devices})
 
@@ -1925,6 +1926,45 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("usb", "path")
         self.assertEqual(run.returncode, 2)
         self.assertIn("no USB serial port", run.stderr)
+
+    def monitor_env(self):
+        # As in the app, where the tools' bin (keybar) comes first on the PATH.
+        return {"MYNX_KEYBAR_FILE": "", "PATH": os.path.dirname(MYNX) + ":" + os.environ["PATH"]}
+
+    def test_usb_monitor_runs_the_serial_monitor_with_its_key_bar(self):
+        run = self.mynx("usb", "monitor", "--help", env=self.monitor_env())
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("serial: a serial monitor", run.stdout)
+        with open(os.path.join(os.path.dirname(MYNX), "serial")) as f:
+            self.assertIn("keybar serial,shell ", f.read())
+
+    def test_usb_monitor_needs_a_terminal(self):
+        run = self.mynx("usb", "monitor", "ttyACM0", env=self.monitor_env())
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("needs a terminal", run.stderr)
+
+    def test_fix_links_copies_files_whose_faked_hard_links_a_move_broke(self):
+        pkg = os.path.join(self.home, "pkg")
+        os.makedirs(pkg)
+        with open(os.path.join(pkg, ".l2s.cc0001.0002"), "w") as f:
+            f.write("cc")
+        os.symlink("/old/.l2s.cc0001.0002", os.path.join(pkg, ".l2s.cc0001"))
+        os.symlink("/old/.l2s.cc0001", os.path.join(pkg, "cc"))
+        run = self.mynx("fix-links", pkg)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, f"{pkg}: fixed 1 link\n")
+        with open(os.path.join(pkg, "cc")) as f:
+            self.assertEqual("cc", f.read())
+        self.assertEqual(json.loads(self.mynx("fix-links", pkg, "--json").stdout),
+                         {"ok": True, "fixed": {pkg: 0}})
+
+    def test_fix_links_needs_folders(self):
+        run = self.mynx("fix-links")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: mynx fix-links DIR", run.stderr)
+        run = self.mynx("fix-links", os.path.join(self.home, "nope"))
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("not a folder", run.stderr)
 
     def test_usb_usage(self):
         for args in [("usb", "list", "x"), ("usb", "allow", "a", "b"), ("usb", "url", "a", "b"), ("usb", "plug")]:

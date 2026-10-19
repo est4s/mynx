@@ -16,7 +16,7 @@ APPS = os.path.join(ROOT, "tools", "apps")
 BIN = os.path.join(ROOT, "tools", "bin")
 BARS = os.path.join(ROOT, "core", "src", "main", "resources", "io", "github", "est4s",
                     "terminal", "core", "keybars")
-NAMES = ["compass", "incline", "torch", "spectrum", "dbmeter", "tuner", "metronome"]
+NAMES = ["compass", "incline", "torch", "spectrum", "dbmeter", "tuner", "metronome", "serial"]
 
 
 def load_needs():

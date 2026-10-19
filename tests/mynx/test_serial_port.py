@@ -192,6 +192,21 @@ class BridgeTest(unittest.TestCase):
         finally:
             os.close(fd)
 
+    def test_an_open_too_quick_to_see_still_reaches_the_port_with_its_settings(self):
+        # `stty -F PORT 1200`, the 1200 baud touch: open, set, close, all
+        # between two of the helper's looks. Linux would raise DTR, set the
+        # speed and drop DTR again.
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        attrs = termios.tcgetattr(fd)
+        attrs[4] = attrs[5] = termios.B1200
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        os.close(fd)
+        wait_for(lambda: self.port.connections and sp.setup((1200, 8, 1, 1, False)) in bytes(self.port.connections[0]),
+                 "the settings")
+        wait_for(lambda: self.port.current is None, "the end of the connection")
+        time.sleep(0.4)
+        self.assertEqual(1, len(self.port.connections))
+
     def test_bytes_written_just_before_closing_still_go(self):
         fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
         os.write(fd, b"bye")
@@ -296,6 +311,18 @@ class ControlTest(BridgeTest):
         ask(self.folder, f"bic {RTS}")
         self.assertEqual(f"ok {DTR | RTS | INPUTS}\n", ask(self.folder, f"bis {RTS}"))
         self.sent_since(start, sub(5, 12) + sub(5, 11))
+
+    def test_a_new_baud_rate_goes_before_a_line_change_after_it(self):
+        # Arduino's 1200 baud touch: the baud rate, then DTR off. The helper
+        # only polls the settings, while the line change comes at once.
+        start = self.open_and_set_up()
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        self.addCleanup(os.close, fd)
+        attrs = termios.tcgetattr(fd)
+        attrs[4] = attrs[5] = termios.B1200
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
+        ask(self.folder, f"bic {DTR}")
+        self.sent_since(start, sp.setup((1200, 8, 1, 1, False)) + sub(5, 9))
 
     def test_a_bad_request_is_refused(self):
         self.open_and_set_up()

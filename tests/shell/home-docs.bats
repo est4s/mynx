@@ -131,8 +131,25 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the guide explains USB serial ports: both ways in, allowing, and what Android forbids" {
     for text in "/dev/serial/ttyUSB0" "rfc2217://localhost:2217" "mynx usb allow" \
-        "one user at a time" "TIOCMSET" "libmynx-serial.so" "serial-preload" "Go ones" "/tmp/.mynx/serial/NAME.log" \
+        "one user at a time" "TIOCMSET" "libmynx-serial.so" "serial-preload" "serial-names" "/dev/ttyACM0" "list_ports" "Go ones" "/tmp/.mynx/serial/NAME.log" \
         "Ctrl+G twice" "waiting for download"; do
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
+}
+
+@test "the guide's board recipes: each tool on a /dev/serial port, and what proot breaks" {
+    for text in "esptool --port" "mpremote connect /dev/serial/" "arduino-cli upload -p" \
+        "mynx fix-links ~/.arduino15" "upload_port" "avrdude -p" "1200 baud touch" \
+        "ESP32 toolchains" "mynx usb monitor"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
+
+@test "the guide says arduino-cli board list can't find ports here" {
+    grep -qF 'board list`: its serial discovery needs a USB event' "$GUIDE"
+}
+
+@test "the guide gives serial-names on by default, and how to turn it off" {
+    grep -qF '`serial-names`: `on` (default) or `off`' "$GUIDE"
+    grep -qF 'mynx set serial-names off' "$GUIDE"
 }

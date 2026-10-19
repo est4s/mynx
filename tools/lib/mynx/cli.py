@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.parse
 
-from . import agents, notes
+from . import agents, links, notes
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
@@ -45,7 +45,8 @@ Commands:
   rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
-  usb        usb [list] | allow [DEVICE] | url|path [PORT]: USB serial ports
+  usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB serial ports
+  fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
@@ -762,7 +763,9 @@ def uptime_text(seconds):
     return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
 
 
-USB_USAGE = "usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT]"
+USB_USAGE = "usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT] | monitor [PORT] [--baud N]"
+# The serial monitor's command (tools/bin/serial), next to this library.
+SERIAL_MONITOR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "bin", "serial")
 
 
 def cmd_usb(args, as_json):
@@ -781,6 +784,8 @@ def cmd_usb(args, as_json):
             lines.append(f"but {device['error']}")
         out(as_json, answer, "\n".join(lines))
         return 0
+    if sub == "monitor" and not as_json:
+        os.execv(SERIAL_MONITOR, [SERIAL_MONITOR, *rest])
     if sub in ("url", "path") and len(rest) <= 1:
         ports = [port for device in request("usb-list")["devices"] for port in device["ports"]]
         if rest:
@@ -818,7 +823,23 @@ def usb_text(devices):
             lines.append(f"{label}: {device['error']}")
         elif not device["ports"]:
             lines.append(f"{label}: no port yet; the app is opening it")
+    if any(device["ports"] for device in devices):
+        lines.append("A serial monitor: mynx usb monitor [PORT]")
     return "\n".join(lines)
+
+
+def cmd_fix_links(args, as_json):
+    """proot fakes hard links with absolute symlinks, which break when an
+    installer moves the folder it unpacked (arduino-cli's toolchains)."""
+    if not args:
+        raise Usage("usage: mynx fix-links DIR...")
+    for folder in args:
+        if not os.path.isdir(folder):
+            raise Failure(f"{folder}: not a folder")
+    fixed = {folder: links.fix_moved_links(folder) for folder in args}
+    out(as_json, {"ok": True, "fixed": fixed},
+        "\n".join(f"{folder}: fixed {n} link{'' if n == 1 else 's'}" for folder, n in fixed.items()))
+    return 0
 
 
 SOUND_USAGE = "usage: mynx sound [status] | start | install [--yes]"
@@ -1889,6 +1910,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb,
+    "fix-links": cmd_fix_links,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 

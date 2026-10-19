@@ -96,6 +96,18 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `with a dev of its own, Debian gets the host's devices in it and the ports' sysfs stand-in`() {
+        val own = OwnDev(dir = "/data/files/dev", devices = listOf("null", "pts"), sysTty = "/data/files/sys-tty")
+        val binds = prootLaunch(paths, ownDev = own, serialDir = "/data/files/serial").argv.valuesAfter("-b")
+
+        assertEquals(
+            listOf("/data/files/dev:/dev", "/dev/null", "/dev/pts", "/data/files/sys-tty:/sys/class/tty",
+                "/proc", "/sys", "/storage", "/data/files/serial:/dev/serial"),
+            binds,
+        )
+    }
+
+    @Test
     fun `has the shell write its folder to a file after each prompt`() {
         val argv = prootLaunch(paths, cwdFile = "/tmp/.mynx/cwd-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
