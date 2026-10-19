@@ -81,19 +81,27 @@ cable, using standard tools.
   Android forbids the modem calls on a pseudo-terminal, so pyserial
   tools (`esptool`, miniterm, PlatformIO), `picocom` and `avrdude`
   work on the path.
-- Next: port names tools find by themselves (`/dev/ttyUSB0`, and
-  what `pyserial`'s port list and PlatformIO's auto-detect read).
-  Static programs (Go: `arduino-cli monitor`) skip the preload
-  library and need the URL.
-- `arduino-cli`, PlatformIO, `esptool`, `avrdude`, `picocom` against that
-  port; AVR and ESP32 toolchains run on arm64. Holding BOOT as a
-  fallback for the reset.
+- **Port names, a serial monitor and board tools** *(PR #36; tested
+  with an ESP32-C3, an Arduino Nano and a Pro Micro on a hub)*: ports
+  are also `/dev/ttyACM0` and `/dev/ttyUSB0`, with their USB details in
+  `/sys/class/tty`, so pyserial's port list, esptool and PlatformIO find
+  them (`serial-names`, on). `mynx usb monitor` with its key bar
+  (resets, bootloader, baud, hex, timestamps). `mynx fix-links` for
+  arduino-cli's toolchains, and the agent guide's recipes (esptool,
+  mpremote, arduino-cli, PlatformIO, avrdude, the 1200 baud touch), so
+  an agent can write, build and flash firmware.
+- **Next: Go programs.** Static programs skip the preload library:
+  `arduino-cli monitor` needs the URL, and `arduino-cli board list`
+  finds nothing, since its discovery needs a USB event socket Android
+  refuses apps. Both need proot to step in (the modem calls on a
+  `/dev/serial` port, and a stand-in for the uevent socket).
+- PlatformIO's ESP32 toolchains don't install: proot's `getdents` says
+  a faked hard link is a symlink while `readlink` fails on it (a proot
+  patch). arduino-cli's ESP32 core works meanwhile.
 - **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's
-  drive. **Raw USB** (STM32 DFU, …) through `libusb`
-  (`libusb_wrap_sys_device` on the fd Android hands the app).
-- A serial monitor tab, and the agent guide's recipes, so an agent can
-  write, build and flash firmware. (`mynx usb`, the "ready"
-  notification and the guide's section come with the bridge.)
+  drive. **Raw USB** (STM32 DFU, `picotool`, CMSIS-DAP probes for
+  OpenOCD and probe-rs) through `libusb` (`libusb_wrap_sys_device` on
+  the fd Android hands the app).
 
 ### Bluetooth
 Android doesn't let apps reach the Bluetooth hardware, so BlueZ can't

@@ -63,9 +63,10 @@ are in git history: the full log up to entry 92 is
 **Done:** every test below passed on the phone (entry 126), but 18,
 which can't (Android refuses the USB event socket arduino-cli's
 discovery needs); `serial-names` is on by default since (maintainer's
-decision, 2026-10-19). Left: the maintainer merges PR #36 once its
-build is green (a Markdown-only last commit needs an admin merge).
-Then, if it comes back, problem 6 of entry 126 (a Pro Micro allowed
+decision, 2026-10-19). Merged 2026-10-19 at the maintainer's
+request; **no release yet:** Go programs come first (the roadmap's
+"Next" under Development boards: `arduino-cli monitor` and `board
+list` under proot). Then, if it comes back, problem 6 of entry 126 (a Pro Micro allowed
 with no port after restarting by itself; `git show a35033d` has a
 trace to add). The plan and tests stay below until the merge.
 
