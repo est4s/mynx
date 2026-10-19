@@ -313,6 +313,14 @@ the agent's tab kept Android's).
   broadcast, refresh, open and close. Next: flash again
   (`~/sketches/touch-flash.sh`), read the trace, fix, remove it. The
   phone in these tests is a OnePlus Nord 2 (DN2103), Android 13.
+- **The maintainer's tests, build 192 (2026-10-19), all pass:** the
+  `serial` bar (1), its buttons (8), the C3 unplugged and back while
+  monitoring (5), `serial-names on` in a new tab (13: no proot
+  warnings, no `full`/`fuse`, htop, mc, claude), a name gone and back
+  on unplug in an open tab (14), one board unplugged from the hub
+  removes only its name (19), `serial-names off` as before (20).
+  Aside: mc needs F10 to quit, which the phone's keyboard lacks: Esc 0
+  works (no mc key bar yet).
 - **Build 192 (with the trace):** five flashes in a row, the sketch's
   port came back each time (bootloader detached, sketch attached
   0.3 s later, served within 40 ms): problem 6 didn't show. The trace
