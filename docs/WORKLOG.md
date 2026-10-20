@@ -50,7 +50,8 @@ are in git history: the full log up to entry 92 is
   every phone test passed (entry 126) but 18 (arduino-cli `board
   list`); merged (PR #36). Not released yet.
 - **Go programs** (proot's `mynx_serial` extension, branch
-  `go-serial`): built, not yet tested on the phone ("Next 0").
+  `go-serial`): every phone test passed (entry 129); PR #37 is ready
+  to merge ("Next 0").
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -59,60 +60,14 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Go programs: test the `go-serial` branch on the phone
+### 0. Go programs: merge PR #37 (branch `go-serial`)
 
-**Built, not yet on the phone** (entry 127): proot's `mynx_serial`
-extension (AGENTS.md) answers the modem calls on `/dev/serial` ports
-for static programs, and gives programs a stand-in for the uevent
-socket, to which the app sends ports coming and going. proot itself
-can't be tested in the app's Debian (a nested proot crashes), so
-everything here is new on the phone. Then a release (USB serial,
-parts 1-3 and this: v0.3.0, the maintainer's call). Part 3's plan and
-tests: `git show dceef9c:docs/WORKLOG.md`.
-
-**On the phone so far (entry 128, build 199):** 1, 2, 3, 5, 6, 7 and
-`board list` (without `--watch`) pass. **Left: 4's events.** A replug
-sent the watch nothing, though a hand-sent message reached it (so
-proot's side works): the app's `UeventSender` failed silently. The
-next build logs each send and error to `/tmp/.mynx/serial/uevents.log`:
-run the watch in a service (below), replug the Nano, read the log.
-
-How the tests ran: in a background service (`mynx service add boards
--- SCRIPT`, output to a file), which gets a new proot and the own
-`/dev` while the agent's tab keeps the old one; arduino-cli by its
-full path (services don't get `~/.local/bin`); `arduino-cli monitor`
-needs a stdin that stays open (`sleep 15 | …`), else it quits at
-once. A fake port must run in another proot than the program that
-uses it (a service): proot waits for the helper's answer, so a
-helper it traces itself deadlocks it for 2 s (EACCES). That can't
-happen with the app's helpers, each in a proot of its own.
-
-Install the PR's build in mynx dev, open a **new tab** (the old ones
-run the old proot). An agent can do 1-3 with no board:
-1. Plain tabs still work: `htop`, `mc`, `apt update`, `git status`,
-   `claude`; no proot warnings.
-2. `python3 -c "import socket; s=socket.socket(16, 3, 15);
-   s.bind((0, 1)); print(s)"`: no "Permission denied";
-   `ls -a /dev/serial/.uevent` shows a socket while it runs.
-3. With `serial-preload off` and a new tab, `test_serial_preload`'s
-   PROGRAM against a hand-made port (a `FakePort` and `serial-port`
-   bridge, its link in `/dev/serial`) gets the same answers as with
-   the preload.
-
-With boards (Nano with Tick on `ttyUSB0`, the C3 on `ttyACM0`):
-4. `arduino-cli board list`: both, with VID/PID. `board list --watch`:
-   unplug the Nano ("remove"), plug it back ("add", after Android's OK).
-5. `arduino-cli monitor -p /dev/serial/ttyUSB0 -c baudrate=9600`
-   (also `/dev/ttyUSB0`): Tick's output; Ctrl+C. The C3's REPL on
-   `ttyACM0` at 115200.
-6. The preload's paths still pass: `esptool chip_id`, `mynx usb
-   monitor` reset (Ctrl+T `r`), `picocom` without `--nolock`, and an
-   arduino-cli upload.
-7. With `serial-preload off`, a new tab: `mynx usb monitor` resets
-   the board (proot does it now), `esptool chip_id` by path.
-
-If something fails, `PROOT_VERBOSE=2` in a throwaway proot shows its
-calls; proot's own warnings go to the tab.
+**Done:** every phone test passed (entries 128-129, build 201):
+`arduino-cli board list` (and `--watch`, unplug and replug),
+`arduino-cli monitor` on the Nano and the C3, the preload's paths
+with and without it. Merge when the maintainer says; then a release
+(USB serial parts 1-3 and this: v0.3.0, the maintainer's call). The
+test plan and how the tests ran: `git show 2eaa373:docs/WORKLOG.md`.
 
 ### 1. Smaller things
 
@@ -222,6 +177,16 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (129): Go programs: every phone test passed (build 201)
+
+- Build 200's log showed why replugs sent nothing: `LocalSocket`
+  creates its socket in `connect()`, and `soTimeout` was set before
+  it ("socket not created"). Fixed in 2eaa373 (AGENTS.md's lessons).
+- Build 201: `board list --watch` printed `remove /dev/ttyUSB0` and
+  then `add /dev/ttyUSB0` as the Nano was unplugged and plugged back;
+  `uevents.log` says "sent" for both. The log stays, beside the
+  helpers' logs.
 
 ### 2026-10-20 (128): Go programs on the phone (build 199)
 
