@@ -1426,7 +1426,9 @@ COMPONENTS = [
      "note": "Termux's fork of PRoot, which runs Debian. The app runs it as a separate "
              "program (libproot.so, libproot-loader.so), built from the tagged "
              "source with one line added so it compiles (#include <string.h> in "
-             "src/extension/ashmem_memfd/ashmem_memfd.c)."},
+             "src/extension/ashmem_memfd/ashmem_memfd.c), and the app's own extension "
+             "for USB serial ports, mynx_serial, with the lines that build and turn it "
+             "on; their source: https://github.com/est4s/mynx/tree/main/proot"},
     {"name": "talloc", "version": "2.5.0", "license": "LGPL-3.0-or-later",
      "source": "https://www.samba.org/ftp/talloc/talloc-2.5.0.tar.gz",
      "note": "Samba's memory allocator, linked into proot statically, with its "

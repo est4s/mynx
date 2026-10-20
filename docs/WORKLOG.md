@@ -47,8 +47,10 @@ are in git history: the full log up to entry 92 is
   `git show d748955:docs/WORKLOG.md` (bridge),
   `git show 46bd16c:docs/WORKLOG.md` (preload, entries 115-122).
 - **USB serial part 3** (serial monitor, board tools, port names):
-  every phone test passed (entry 126) but 18, which can't (arduino-cli
-  `board list`); `serial-names` is on by default now. PR #36 is ready
+  every phone test passed (entry 126) but 18 (arduino-cli `board
+  list`); merged (PR #36). Not released yet.
+- **Go programs** (proot's `mynx_serial` extension, branch
+  `go-serial`): every phone test passed (entry 129); PR #37 is ready
   to merge ("Next 0").
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
@@ -58,104 +60,14 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. USB serial, part 3: merge PR #36 (branch `usb-serial-3`)
+### 0. Go programs: merge PR #37 (branch `go-serial`)
 
-**Done:** every test below passed on the phone (entry 126), but 18,
-which can't (Android refuses the USB event socket arduino-cli's
-discovery needs); `serial-names` is on by default since (maintainer's
-decision, 2026-10-19). Merged 2026-10-19 at the maintainer's
-request; **no release yet:** Go programs come first (the roadmap's
-"Next" under Development boards: `arduino-cli monitor` and `board
-list` under proot). Then, if it comes back, problem 6 of entry 126 (a Pro Micro allowed
-with no port after restarting by itself; `git show a35033d` has a
-trace to add). The plan and tests stay below until the merge.
-
-Built overnight by two subagents (entries 124-125), all in one PR so
-there's one build to test. Boards: ESP32-C3 with MicroPython
-(`ttyACM0`), CH340 Nano (`ttyUSB0`, new bootloader: FQBN
-`arduino:avr:nano`, a printing sketch `~/sketches/Tick` on it), Pro
-Micro. Do A first: it doesn't touch `/dev`.
-
-**Entry 126 ran what an agent can (build 186):** passed 1-4, 7, 9 (by
-`env -u LD_PRELOAD`), 10 and 12; 6 crashed, 11 and 13-18 failed;
-fixed in 9e8fa46 and 73a91c3, built in run 39111972962
-(`Download/mynx-dev-39111972962.apk`). Port names follow the plug-in
-order: after a re-open the Pro Micro was `ttyACM0`, the C3 `ttyACM1`
-(check `mynx usb`). On build 187 the agent also passed 6, 13 (in a
-service), 14's links, 15-17; 18 can't work (entry 126). **Left:**
-install e34c12f's build (Caterina fix), then the agent can do 11
-(touch, then `touch-flash.sh` in `~/sketches` flashes Tick to the
-bootloader). **The maintainer's:** 1's key bar, 5, 8, 13 in a real new
-tab (`htop`, `mc`, `claude`), 14's unplug and replug, 19 (hub), 20.
-Then find out why the Pro Micro once sat unopened (entry 126, problem
-6).
-
-**A. Serial monitor** (`mynx usb monitor`, Apps → Serial monitor;
-commands are Ctrl+T then a key, `h` lists them)
-1. C3: `mynx usb monitor ttyACM0`: the header says "ttyACM0 at 115200
-   baud"; Enter gives `>>>`, Ctrl+D soft-reboots; the `serial` key
-   bar shows.
-2. Ctrl+T `r`: "— reset —", the boot banner and `>>>` (not "waiting
-   for download").
-3. Ctrl+T `b`: "— into the bootloader —"; quit (Ctrl+T `q`), then
-   `esptool --port /dev/serial/ttyACM0 chip_id` talks to it and
-   resets it back to normal.
-4. Ctrl+T `+`/`-`, `x`, `s`: a note each; hex breaks after 16 bytes
-   or a newline; `s` puts `HH:MM:SS.mmm` before each line.
-5. Unplug the C3 while monitoring: "ttyACM0 is gone; waiting"; plug
-   it back (OK in Android's dialog): "ttyACM0 is back", REPL answers.
-6. Both boards in, Apps → Serial monitor: a numbered list, "Which
-   port?". With no board: the error stays until a key.
-7. Nano with a printing sketch: `mynx usb monitor ttyUSB0 --baud
-   9600` shows its output; Ctrl+T `r` restarts the sketch.
-8. The key bar's Reset, Boot, Baud−, Baud+, Hex, Time, Quit work.
-9. `mynx set serial-preload off`, a new tab, the monitor, Ctrl+T `r`:
-   "can't set DTR/RTS: Permission denied (serial-preload off?)", and
-   the monitor keeps running. Set it back on.
-
-**B. Board tools** (in mynx dev's Debian; big downloads)
-10. arduino-cli (arm64 release) → `core install arduino:avr`; compile
-    Blink fails with "fork/exec …avr-g++" until `mynx fix-links
-    ~/.arduino15` ("fixed N links"); then `compile` and `upload -p
-    /dev/serial/ttyUSB0 -b arduino:avr:nano:cpu=atmega328old` work.
-11. Pro Micro: `stty -F /dev/serial/ttyACM0 1200` → Android asks about
-    a new device (tick "always"), `mynx usb` shows its bootloader's
-    port within ~8 s; `avrdude -p atmega32u4 -c avr109 -P
-    /dev/serial/THAT -U flash:w:Blink.ino.hex` flashes it. Also Ctrl+T
-    `b` in the monitor. `arduino-cli upload` directly is expected to
-    fail (Go, no preload).
-12. mpremote (`pipx install mpremote` or a venv): `mpremote connect
-    /dev/serial/ttyACM0 ls`, and with `rfc2217://localhost:2217`.
-
-**C. Port names** (`serial-names`, **off by default** in this build:
-it gives Debian a `/dev` of its own, and if that's broken no new tab
-would start. Keep a tab open that started before turning it on; if a
-new tab misbehaves, run `mynx set serial-names off` in the old one.)
-13. `mynx set serial-names on`, open a new tab: it starts with no
-    proot warnings. `ls -la /dev` shows null, zero, random, urandom,
-    tty, ptmx, pts, serial, fd, stdin, stdout, stderr (no ttyS0).
-    `echo hi > /dev/null`, `head -c4 /dev/urandom | od`, `tty`, `cat
-    <(echo x)`, `python3 -c 'import os; os.openpty()'`, `apt update`,
-    `git status`, `htop`, `mc`, `claude` work. Restart a service and
-    check `mynx sound` / `paplay` still work.
-14. C3 in: `ls -l /dev/ttyACM0` → `serial/ttyACM0`, `readlink -f`
-    → `/dev/pts/N`. Unplug: gone in a second or two; plug: back, in
-    the already-open tab.
-15. `python3 -m serial.tools.list_ports -v`: `/dev/ttyACM0` with `USB
-    VID:PID=303A:1001 SER=… LOCATION=1-1:1.0` and its product; with
-    the Nano also `/dev/ttyUSB0`, `1A86:7523`.
-16. `esptool chip_id` with no `--port` finds the C3.
-17. `cat /sys/class/tty/ttyUSB0/device/../../idVendor` → `1a86`;
-    `avrdude -c arduino -P /dev/ttyUSB0 -b 115200 -p m328p` reads it.
-18. ~~`arduino-cli board list`~~ can't work (entry 126): `pio device
-    list` instead, if PlatformIO is installed.
-19. Both on a hub: both names; unplugging one removes only its own.
-20. `mynx set serial-names off`, new tab: `ls /dev` is refused as
-    before, `/dev/serial/…` works. If 13-19 pass: make `on` the
-    default (SettingsTest, Settings.kt, the guide, AGENTS.md).
-
-If something fails: the helper's log `/tmp/.mynx/serial/NAME.log`
-shows each DTR/RTS change.
+**Done:** every phone test passed (entries 128-129, build 201):
+`arduino-cli board list` (and `--watch`, unplug and replug),
+`arduino-cli monitor` on the Nano and the C3, the preload's paths
+with and without it. Merge when the maintainer says; then a release
+(USB serial parts 1-3 and this: v0.3.0, the maintainer's call). The
+test plan and how the tests ran: `git show 2eaa373:docs/WORKLOG.md`.
 
 ### 1. Smaller things
 
@@ -265,6 +177,68 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (129): Go programs: every phone test passed (build 201)
+
+- Build 200's log showed why replugs sent nothing: `LocalSocket`
+  creates its socket in `connect()`, and `soTimeout` was set before
+  it ("socket not created"). Fixed in 2eaa373 (AGENTS.md's lessons).
+- Build 201: `board list --watch` printed `remove /dev/ttyUSB0` and
+  then `add /dev/ttyUSB0` as the Nano was unplugged and plugged back;
+  `uevents.log` says "sent" for both. The log stays, beside the
+  helpers' logs.
+
+### 2026-10-20 (128): Go programs on the phone (build 199)
+
+- **Pass:** a uevent socket is made and bound; without the preload
+  proot answers TIOCM*, TIOCEXCL and tcdrain with the preload's
+  values and the bytes reach the port (a fake port in a service);
+  with both, PROGRAM passes whole. With the Nano and the C3:
+  `arduino-cli board list` lists both (VID:PID right), `arduino-cli
+  monitor` shows Tick (opening resets the Nano: DTR through proot)
+  and the C3's REPL (`print(6*7)` → 42); `esptool chip_id` with and
+  without the preload; pyserial resets the Nano by DTR with no
+  preload.
+- **Fails:** `board list --watch` gets no event on a replug. A
+  message sent by hand (`connect` + `send` from Debian; `sendto` with
+  a path isn't translated by proot: ENOENT) reached it, and dead
+  sockets weren't deleted, so the app's sender got nowhere and said
+  nothing. It now logs to `/tmp/.mynx/serial/uevents.log`.
+- `serial-names` was off in mynx dev's Debian (from before it became
+  the default); turned on for these tests.
+
+### 2026-10-20 (127): Go programs, proot's mynx_serial extension (branch `go-serial`)
+
+- Why: Go programs are static, so the preload never loads; Android
+  refuses arduino-cli's discovery `socket(AF_NETLINK, SOCK_RAW,
+  NETLINK_KOBJECT_UEVENT)` itself (EACCES, checked here), and
+  go.bug.st/serial's open fails on `TIOCEXCL`.
+- Done, test-first where it can be: `proot/mynx_serial/ports.c`
+  (refused requests, the port by its pty, asking the helper, the
+  socket's path; `test_proot_serial.py`, against the real
+  `serial-port`), `mynx_serial.c` (the proot glue, built here with
+  gcc against Termux's proot: it compiles, but can't run), the patch
+  and `build-proot.sh`, the cache key (`proot/**`), core's
+  `SerialUevents` and `ueventSockets()`, `MYNX_SERIAL_DIR` in
+  `prootLaunch`'s env, the app's `UeventSender`, the guides and `mynx
+  about` (our extension is compiled into GPL proot: its source is
+  linked there).
+- Decisions: the uevent stand-in is a Unix datagram socket per
+  program, sent to by the app (so `read()` gets one message at a
+  time, as from the kernel); only tty `add`/`remove`, no USB device
+  events. `tcdrain` doesn't wait under proot. The preload stays: it
+  covers `flock`, `tcflow` and a waiting `tcdrain`.
+- Tried and dropped: running a natively built proot inside the app's
+  proot, to test the extension here: its loader crashes (signal 11)
+  right after the first execve under the outer proot's ptrace.
+- Local test runs: `test_undo_list` fails on `main` too (it compares
+  clock times, off by the phone's time zone). `SerialServerTest`'s
+  "a client leaving drops RTS and then DTR" failed under load: a real
+  race (the client was assigned after its greeting went out), fixed
+  in its own commit, bb9dfb4. A few `test_mynx` ones failed once each
+  under load and pass when run again.
+- Installed in the maintainer's Debian for this: `gcc`, `make`,
+  `gawk`, `libtalloc-dev`.
 
 ### 2026-10-18 (126): USB serial part 3, an agent's phone tests
 

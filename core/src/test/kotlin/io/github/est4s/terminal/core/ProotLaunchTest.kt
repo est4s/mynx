@@ -96,6 +96,12 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `tells proot the serial ports' folder, for programs the preload can't reach`() {
+        assertEquals("/data/files/serial", prootLaunch(paths, serialDir = "/data/files/serial").env["MYNX_SERIAL_DIR"])
+        assertEquals(null, prootLaunch(paths).env["MYNX_SERIAL_DIR"])
+    }
+
+    @Test
     fun `with a dev of its own, Debian gets the host's devices in it and the ports' sysfs stand-in`() {
         val own = OwnDev(dir = "/data/files/dev", devices = listOf("null", "pts"), sysTty = "/data/files/sys-tty")
         val binds = prootLaunch(paths, ownDev = own, serialDir = "/data/files/serial").argv.valuesAfter("-b")

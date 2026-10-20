@@ -67,7 +67,7 @@ jobs:
         id: proot-cache
         with:
           path: build/proot
-          key: proot-${{ hashFiles('scripts/build-proot.sh') }}-ndk-${{ steps.ndk.outputs.version }}
+          key: proot-${{ hashFiles('scripts/build-proot.sh', 'proot/**') }}-ndk-${{ steps.ndk.outputs.version }}
 
       - name: Build proot
         if: steps.proot-cache.outputs.cache-hit != 'true'

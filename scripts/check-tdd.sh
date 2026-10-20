@@ -11,6 +11,7 @@ pairs=(
     "core/src/main/ core/src/test/"
     "rootfs/root/ tests/shell/"
     "tools/ tests/"
+    "proot/ tests/"
     "scripts/backup-root.sh tests/shell/"
     "scripts/restore-root.sh tests/shell/"
 )

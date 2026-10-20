@@ -43,7 +43,9 @@ fun serialPreload(toolsDir: File, enabled: Boolean): String? =
  * is the phone's, as [debianTimeZone] gives it. [powerSupply] (a host
  * path) is the battery's stand-in, bound at [POWER_SUPPLY_MOUNT].
  * [service] names the background service it runs (`MYNX_SERVICE`).
- * [serialDir] (a host path) holds the USB serial ports' links, bound at [SERIAL_MOUNT].
+ * [serialDir] (a host path) holds the USB serial ports' links, bound at [SERIAL_MOUNT];
+ * proot's mynx_serial extension gets it too (`MYNX_SERIAL_DIR`), for
+ * programs the [preload] can't reach (static ones, like Go's).
  * [ownDev] gives Debian a `/dev` of its own instead of the host's (see [OwnDev]).
  * [preload] (a Debian path) is a library every program in Debian loads
  * (`LD_PRELOAD`, set inside the guest only: Android's linker must not
@@ -109,10 +111,11 @@ fun prootLaunch(
         preload?.let { add("LD_PRELOAD=$it") }
         addAll(command)
     }
-    val env = mapOf(
-        "PROOT_LOADER" to paths.loader,
-        "PROOT_TMP_DIR" to paths.tmpDir,
-    )
+    val env = buildMap {
+        put("PROOT_LOADER", paths.loader)
+        put("PROOT_TMP_DIR", paths.tmpDir)
+        serialDir?.let { put("MYNX_SERIAL_DIR", it) }
+    }
     return Launch(argv, env)
 }
 
