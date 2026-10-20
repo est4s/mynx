@@ -68,9 +68,9 @@ USB serial parts 1-3 and Go programs (PR #33, #34, #36, #37) are on
 
 ### Then, development boards (suggested order; the maintainer picks)
 
-1. **PlatformIO's ESP32 toolchains:** the proot side is on branch
-   `proot-hardlink-dtype` (entry 131), not committed yet. Next:
-   commit, push, open a PR, let CI build it, then the phone tests in entry 131. Only once
+1. **PlatformIO's ESP32 toolchains:** the proot side is PR #39
+   (branch `proot-hardlink-dtype`, entry 131). Next: CI's build in
+   mynx dev, then the phone tests in entry 131. Only once
    they pass: the user guide's PlatformIO recipe (`tools/AGENTS.md`,
    "Its ESP32 toolchains don't install here yet") and the README if
    it says so.
