@@ -8,15 +8,19 @@ import io.github.est4s.terminal.core.SerialUevents
 import io.github.est4s.terminal.core.ueventSockets
 import java.io.File
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Tells programs watching for USB serial ports (arduino-cli's `board
  * list`) that ports came or went: core's [SerialUevents] to each stand-in
  * uevent socket proot made in [serialDir]. On a thread of its own, so a
  * program that stops reading can't hold up the app; a socket nobody holds
- * any more is deleted.
+ * any more is deleted. What it sends, and why it couldn't, goes to [log]
+ * (in Debian, beside the port helpers' logs).
  */
-class UeventSender(private val serialDir: File) {
+class UeventSender(private val serialDir: File, private val log: File) {
     private val uevents = SerialUevents()
     private val handler by lazy { Handler(HandlerThread("uevents").apply { start() }.looper) }
 
@@ -24,7 +28,10 @@ class UeventSender(private val serialDir: File) {
     fun changed(names: Set<String>) {
         handler.post {
             val messages = uevents.changed(names)
-            if (messages.isNotEmpty()) ueventSockets(serialDir).forEach { send(it, messages) }
+            if (messages.isEmpty()) return@post
+            val sockets = ueventSockets(serialDir)
+            note("ports ${names.sorted()}: ${messages.size} message(s) to ${sockets.size} socket(s)")
+            sockets.forEach { send(it, messages) }
         }
     }
 
@@ -35,9 +42,19 @@ class UeventSender(private val serialDir: File) {
                 s.connect(LocalSocketAddress(socket.path, LocalSocketAddress.Namespace.FILESYSTEM))
                 messages.forEach { s.outputStream.write(it) }
             }
-        } catch (e: IOException) {
+            note("${socket.name}: sent")
+        } catch (e: Exception) {
             // Refused: its program has gone. A full one (timed out) loses these.
-            if (e.message.orEmpty().contains("refused", ignoreCase = true)) socket.delete()
+            val gone = e is IOException && e.message.orEmpty().contains("refused", ignoreCase = true)
+            if (gone) socket.delete()
+            note("${socket.name}: ${if (gone) "gone, deleted" else "${e.javaClass.simpleName}: ${e.message}"}")
+        }
+    }
+
+    private fun note(line: String) {
+        runCatching {
+            log.parentFile?.mkdirs()
+            log.appendText(SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(Date()) + " " + line + "\n")
         }
     }
 }

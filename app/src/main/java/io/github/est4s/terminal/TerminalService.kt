@@ -194,7 +194,7 @@ class TerminalService : Service() {
     // Debian's own /dev and the ports' sysfs stand-in (serial-names), so tools find the ports.
     private val devDir by lazy { File(filesDir, "dev") }
     private val sysTtyDir by lazy { File(filesDir, "sys-tty") }
-    private val uevents by lazy { UeventSender(serialDir) }
+    private val uevents by lazy { UeventSender(serialDir, File(rootfs, "$SERIAL_LOG_DIR/uevents.log")) }
     private val usb by lazy {
         UsbBridge(
             this, mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir,

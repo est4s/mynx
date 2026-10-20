@@ -70,6 +70,23 @@ everything here is new on the phone. Then a release (USB serial,
 parts 1-3 and this: v0.3.0, the maintainer's call). Part 3's plan and
 tests: `git show dceef9c:docs/WORKLOG.md`.
 
+**On the phone so far (entry 128, build 199):** 1, 2, 3, 5, 6, 7 and
+`board list` (without `--watch`) pass. **Left: 4's events.** A replug
+sent the watch nothing, though a hand-sent message reached it (so
+proot's side works): the app's `UeventSender` failed silently. The
+next build logs each send and error to `/tmp/.mynx/serial/uevents.log`:
+run the watch in a service (below), replug the Nano, read the log.
+
+How the tests ran: in a background service (`mynx service add boards
+-- SCRIPT`, output to a file), which gets a new proot and the own
+`/dev` while the agent's tab keeps the old one; arduino-cli by its
+full path (services don't get `~/.local/bin`); `arduino-cli monitor`
+needs a stdin that stays open (`sleep 15 | …`), else it quits at
+once. A fake port must run in another proot than the program that
+uses it (a service): proot waits for the helper's answer, so a
+helper it traces itself deadlocks it for 2 s (EACCES). That can't
+happen with the app's helpers, each in a proot of its own.
+
 Install the PR's build in mynx dev, open a **new tab** (the old ones
 run the old proot). An agent can do 1-3 with no board:
 1. Plain tabs still work: `htop`, `mc`, `apt update`, `git status`,
@@ -205,6 +222,25 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (128): Go programs on the phone (build 199)
+
+- **Pass:** a uevent socket is made and bound; without the preload
+  proot answers TIOCM*, TIOCEXCL and tcdrain with the preload's
+  values and the bytes reach the port (a fake port in a service);
+  with both, PROGRAM passes whole. With the Nano and the C3:
+  `arduino-cli board list` lists both (VID:PID right), `arduino-cli
+  monitor` shows Tick (opening resets the Nano: DTR through proot)
+  and the C3's REPL (`print(6*7)` → 42); `esptool chip_id` with and
+  without the preload; pyserial resets the Nano by DTR with no
+  preload.
+- **Fails:** `board list --watch` gets no event on a replug. A
+  message sent by hand (`connect` + `send` from Debian; `sendto` with
+  a path isn't translated by proot: ENOENT) reached it, and dead
+  sockets weren't deleted, so the app's sender got nowhere and said
+  nothing. It now logs to `/tmp/.mynx/serial/uevents.log`.
+- `serial-names` was off in mynx dev's Debian (from before it became
+  the default); turned on for these tests.
 
 ### 2026-10-20 (127): Go programs, proot's mynx_serial extension (branch `go-serial`)
 
