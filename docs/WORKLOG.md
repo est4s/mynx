@@ -68,9 +68,12 @@ USB serial parts 1-3 and Go programs (PR #33, #34, #36, #37) are on
 
 ### Then, development boards (suggested order; the maintainer picks)
 
-1. **PlatformIO's ESP32 toolchains** (AGENTS.md's proot notes): make
-   proot's `getdents` report a faked hard link as `DT_REG`, in our
-   extension (`proot/`), so `shutil.copytree` works.
+1. **PlatformIO's ESP32 toolchains:** the proot side is on branch
+   `proot-hardlink-dtype` (entry 131), not committed yet. Next:
+   commit, push, open a PR, let CI build it, then the phone tests in entry 131. Only once
+   they pass: the user guide's PlatformIO recipe (`tools/AGENTS.md`,
+   "Its ESP32 toolchains don't install here yet") and the README if
+   it says so.
 2. The small serial items under "Small open items" (a busy port's
    silence, the 4 MB `read_flash`) and entry 126's problem 6 (a Pro
    Micro allowed with no port; `git show a35033d` has a trace).
@@ -185,6 +188,42 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (131): faked hard links as regular files in listings
+
+- **Problem:** link2symlink's faked hard link is a symlink on the host;
+  every path call dereferences it (`lstat`: regular, `readlink`:
+  EINVAL), but `getdents64` comes from the kernel: `DT_LNK`. So
+  `os.scandir` says symlink, `shutil.copytree(symlinks=True)` calls
+  `readlink` and gets EINVAL, and PlatformIO's ESP32 toolchains fail
+  to install. Reproduced in this Debian with `ln a/f a/g` and
+  `copytree`.
+- **Fix:** a new proot extension, `proot/mynx_links/` (AGENTS.md
+  "proot's mynx_links extension"): at `getdents64`'s exit, each
+  `DT_LNK` record whose symlink leads to `.l2s.*` and on to a file
+  gets that file's type. Same decision as link2symlink's
+  `resolve_faked_hard_link()`, so broken ones and the `.l2s.*` links
+  themselves stay `DT_LNK`. Turned on by `--link2symlink` (the patch
+  adds it to `handle_option_link2symlink()`). The About credit says
+  so.
+- **Checked here:** `links.c` against real `getdents64` buffers
+  (`tests/mynx/test_proot_links.py`, 7 tests, seen failing with the
+  fix taken out); the patched proot builds natively with gcc, and
+  both new files with `-Wall -Wextra -Werror`. Not run: a nested
+  proot can't run here.
+- **Phone tests (after CI builds it), in mynx dev:**
+  1. `mkdir -p /tmp/t/a && cd /tmp/t && echo hi >a/f && ln a/f a/g`,
+     then `python3 -c "import os; print([(e.name, e.is_symlink())
+     for e in os.scandir('a')])"`: `f` and `g` False (were True).
+  2. `python3 -c "import shutil; shutil.copytree('a', 'b',
+     symlinks=True)"` works; `cat b/g` says hi.
+  3. `ls -la a`, `find a -type l` (only `.l2s.f0001`), `git status`
+     in a repo, `cp -a`, `tar`: as before.
+  4. `pipx install platformio`, a project with `board = esp32-c3-devkitm-1`,
+     `pio run`: the toolchains install and it builds (the real goal;
+     another obstacle may show up after this one).
+  5. Nothing feels slower (`ls -R /usr | wc -l`, a big `git status`):
+     every `getdents64` now stops in proot.
 
 ### 2026-10-20 (130): PR #37 merged; docs caught up
 

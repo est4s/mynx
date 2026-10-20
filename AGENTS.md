@@ -427,6 +427,18 @@ See `docs/ROADMAP.md` "How it works". The details:
   `socket` exits, so it costs nothing new. A nested proot can't run
   in the app's Debian (the inner loader crashes under the outer's
   ptrace), so proot itself isn't tested here.
+- **proot's mynx_links extension** (`proot/mynx_links/`; agent's
+  design, 2026-10-20): link2symlink fakes a hard link as a symlink
+  that every path call dereferences (`lstat`: a regular file,
+  `readlink`: EINVAL), but `getdents64` comes from the kernel and says
+  `DT_LNK`, so `shutil.copytree(symlinks=True)` fails on it
+  (PlatformIO's ESP32 toolchains). At `getdents64`'s exit it gives
+  each faked hard link the type of its file (`links.c`, decided as
+  link2symlink's `resolve_faked_hard_link()` does; tested natively,
+  `tests/mynx/test_proot_links.py`). Turned on with `--link2symlink`
+  (the patch's `handle_option_link2symlink()`), not by a variable.
+  Every `getdents64` now stops in proot (one `readlink` per symlink
+  listed); the old 32-bit `getdents` isn't covered.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
@@ -611,12 +623,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   file", `lstat` gives EPERM). Pointing them at the moved `.l2s.*`
   files again doesn't help (proot still refuses `lstat`); replacing
   each name with a copy of its file does: `mynx fix-links DIR`
-  (`tools/lib/mynx/links.py`, the user guide's recipes). **Not fixed:**
-  proot's `getdents` reports a faked hard link as `DT_LNK` while
+  (`tools/lib/mynx/links.py`, the user guide's recipes). **Listings:**
+  proot's `getdents` reported a faked hard link as `DT_LNK` while
   `readlink` on it gives EINVAL, so Python's `shutil.copytree(…,
-  symlinks=True)` fails on any tree with hard links: PlatformIO's
-  ESP32 toolchains don't install. A proot patch (report `DT_REG`
-  for them) would fix it.
+  symlinks=True)` failed on any tree with hard links (PlatformIO's
+  ESP32 toolchains): the mynx_links extension (above) reports its
+  file's type instead.
 - **On-device debugging without logcat:** write a trace file to
   `getExternalFilesDir(null)`; the maintainer can `cat` it from the app's own
   Debian under `/storage/emulated/0/Android/data/io.github.est4s.terminal/files/`.
