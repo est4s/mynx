@@ -312,7 +312,7 @@ class MynxTest(unittest.TestCase):
                      "JetBrains Mono Nerd Font", "OFL-1.1",
                      "usb-serial-for-android", "https://github.com/mik3y/usb-serial-for-android",
                      "Debian", "/usr/share/doc/", "PulseAudio",
-                     "separate program"]:
+                     "separate program", "https://github.com/est4s/mynx/tree/main/proot"]:
             self.assertIn(part, text)
         for name in self.LICENSES:
             self.assertIn(f"full text of {name}", text)

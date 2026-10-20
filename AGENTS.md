@@ -399,6 +399,34 @@ See `docs/ROADMAP.md` "How it works". The details:
   port under its interface, subsystem `usb-serial`; `idVendor`,
   `idProduct`, `serial`, `manufacturer`, `product` on the device).
   The helpers keep Android's `/dev`. Off: as before.
+- **proot's mynx_serial extension** (`proot/mynx_serial/`,
+  `proot/proot.patch`; agent's design, 2026-10-19): static programs
+  (Go's: arduino-cli's `monitor` and `board list`) don't load the
+  preload, so proot steps in, turned on by `MYNX_SERIAL_DIR` (the
+  host's ports folder) in proot's environment (`prootLaunch(serialDir
+  =)`). `scripts/build-proot.sh` copies the folder into proot's
+  `src/extension/` and applies the patch (the makefile, the callback's
+  declaration, `cli.c`'s check of the variable). `ports.c` is what it
+  decides (tested natively, `tests/mynx/test_proot_serial.py`);
+  `mynx_serial.c` only moves registers and memory, so it's tested on
+  the phone. **ioctl:** a refused request on an fd whose
+  `/proc/PID/fd` link is a port's pty is answered at the enter stage
+  (the helper asked from proot, the call voided, 0 poked at the exit);
+  the preload's real call then succeeds, so with both nothing happens
+  twice. `tcdrain` doesn't wait (every tracee is stopped while proot
+  works); `flock` and `tcflow` aren't covered. **uevents:** Android
+  refuses `socket(AF_NETLINK, …, NETLINK_KOBJECT_UEVENT)` itself, so
+  that call becomes a Unix datagram socket, bound by a chained
+  `bind()` at `DIR/.uevent/PID-N` (the address written below the
+  stack pointer, as `sysvipc` does); the program's own
+  `bind(AF_NETLINK)` on it (known by its inode) is voided. The app's
+  `UeventSender` sends core's `SerialUevents` (the kernel's `add` and
+  `remove` messages for the ports' ttys, SEQNUM last) to every socket
+  there after `writeSerialNames()`, off the main thread, deleting the
+  ones that refuse. Termux's proot already stops at `ioctl` and
+  `socket` exits, so it costs nothing new. A nested proot can't run
+  in the app's Debian (the inner loader crashes under the outer's
+  ptrace), so proot itself isn't tested here.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

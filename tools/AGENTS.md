@@ -576,19 +576,23 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   go to the port's helper (its control socket is
   `/dev/serial/.NAME.ctl`), which sets them on the board; CTS, DSR and
   CD always read as on; locks and `tcdrain` succeed. Sending a break
-  stays refused. **Not covered:** static programs, which don't load
-  it, such as Go ones (`arduino-cli monitor`): use the URL. With
-  `serial-preload off`, or `unset LD_PRELOAD`, pyserial can't open a
-  `/dev/serial` file at all and picocom needs `--nolock`.
+  stays refused. Static programs, which don't load it (Go ones, such
+  as `arduino-cli monitor`), get the same from proot itself, for the
+  modem-line calls, `TIOCEXCL` and `tcdrain` (which doesn't wait);
+  `flock` and `tcflow` stay refused for them. With `serial-preload
+  off`, or `unset LD_PRELOAD`, every program gets just that:
+  picocom then needs `--nolock`.
 - **Finding the ports:** each port is also `/dev/ttyUSB0` or
   `/dev/ttyACM0` (a link to its `/dev/serial` file), and
   `/sys/class/tty/NAME` has its USB details as on Linux (vendor and
   product IDs, serial number, maker and name). So tools that look for
   ports find them by themselves: `python3 -m serial.tools.list_ports
-  -v`, `esptool` with no `--port`, PlatformIO's auto-detect. Not
-  `arduino-cli board list`: its serial discovery needs a USB event
-  socket Android doesn't give apps ("Cannot START: permission
-  denied"); name the port with `-p`. It's the `serial-names` setting (on;
+  -v`, `esptool` with no `--port`, PlatformIO's auto-detect,
+  `arduino-cli board list` (also `board list --watch`). Android
+  doesn't give apps the kernel's USB event socket, which tools watch
+  for ports coming and going: proot gives a program that opens it a
+  stand-in, and the app sends it the kernel's `add` and `remove`
+  messages for the ports' ttys (no others). It's the `serial-names` setting (on;
   `mynx set serial-names off`, then a new tab, turns it off): for it,
   Debian has a `/dev` of its own, which the app fills (the
   phone's `null`, `zero`, `random`, `urandom`, `tty`, `ptmx`, `pts`,
@@ -638,8 +642,8 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `h` the keys. Opening raises DTR and RTS, as on Linux; `--lower`
   drops them (DTR first: the ESP32-CAM-MB boots). When the port goes
   away (unplugged, a board restarting its USB) it waits and opens it
-  again. DTR and RTS go through the serial library: with
-  `serial-preload off` it can't set them and says so.
+  again. DTR and RTS go to the port's helper, through the serial
+  library or proot.
 - **Recipes** (name the port: `/dev/serial/…` or its URL, from
   `mynx usb`; `mynx usb path` prints the only one's):
   - **esptool** (`apt install esptool`): `esptool --port
@@ -657,8 +661,10 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
     install: see below), `arduino-cli compile -b
     arduino:avr:nano:cpu=atmega328old Blink` and `arduino-cli upload -p
     /dev/serial/ttyUSB0 -b arduino:avr:nano:cpu=atmega328old Blink`
-    (it runs avrdude, which the serial library covers). Its own
-    `monitor` is a Go program: use `mynx usb monitor`. Boards that
+    (it runs avrdude, which the serial library covers);
+    `arduino-cli board list` finds the board, and `arduino-cli monitor
+    -p /dev/serial/ttyUSB0 -c baudrate=115200` shows its output, as
+    `mynx usb monitor` does. Boards that
     upload after a 1200 baud touch (Leonardo, Micro, Pro Micro) jump
     to a bootloader that is a new USB device for about 8 s: Android
     asks for it again (tick "always" once) and it gets a port of its

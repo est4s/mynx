@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build Termux's proot fork for arm64 Android, with talloc linked statically.
+# Build Termux's proot fork for arm64 Android, with talloc linked statically,
+# and the app's own extension (proot/: mynx_serial, for USB serial ports).
 # Output: libproot.so and libproot-loader.so in the given directory (they ship
 # as native libraries because Android only executes files from the app's
 # native library dir).
@@ -16,6 +17,7 @@ TALLOC_SHA256=912afa237510ae542a7733998eb18a12bcda35ab6729c8e2ddb43e8d0ebab007
 API=26                      # = minSdk
 
 out=$(realpath -m "${1:?usage: build-proot.sh <out-dir>}")
+repo=$(cd "$(dirname "$0")/.." && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -76,6 +78,9 @@ cd "$work"
 git clone -q --depth 1 --branch "$PROOT_TAG" https://github.com/termux/proot.git
 # Uses strcmp/memset without including string.h; current clang rejects that.
 sed -i '1i #include <string.h>' proot/src/extension/ashmem_memfd/ashmem_memfd.c
+# The app's extension, and the lines that build it and turn it on.
+cp -r "$repo/proot/mynx_serial" proot/src/extension/
+git -C proot apply "$repo/proot/proot.patch"
 # The loader is a separate file found through PROOT_LOADER at runtime: the
 # bundled one would be extracted to app storage, where Android forbids exec.
 # Flags go in through the environment: on the command line they would replace

@@ -194,6 +194,7 @@ class TerminalService : Service() {
     // Debian's own /dev and the ports' sysfs stand-in (serial-names), so tools find the ports.
     private val devDir by lazy { File(filesDir, "dev") }
     private val sysTtyDir by lazy { File(filesDir, "sys-tty") }
+    private val uevents by lazy { UeventSender(serialDir) }
     private val usb by lazy {
         UsbBridge(
             this, mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir,
@@ -205,7 +206,11 @@ class TerminalService : Service() {
             },
             ready = ::showUsbReady,
             gone = ::clearUsbReady,
-            changed = { devices -> runCatching { writeSerialNames(devDir, sysTtyDir, devices) } },
+            changed = { devices ->
+                runCatching { writeSerialNames(devDir, sysTtyDir, devices) }
+                // After the names: a tool told of a port looks for it there.
+                uevents.changed(devices.flatMap { d -> d.ports.map { it.name } }.toSet())
+            },
         )
     }
     // Background services: hidden sessions (see ServiceSessions), kept running without a tab.

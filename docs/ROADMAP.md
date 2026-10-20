@@ -90,11 +90,12 @@ cable, using standard tools.
   arduino-cli's toolchains, and the agent guide's recipes (esptool,
   mpremote, arduino-cli, PlatformIO, avrdude, the 1200 baud touch), so
   an agent can write, build and flash firmware.
-- **Next: Go programs.** Static programs skip the preload library:
-  `arduino-cli monitor` needs the URL, and `arduino-cli board list`
-  finds nothing, since its discovery needs a USB event socket Android
-  refuses apps. Both need proot to step in (the modem calls on a
-  `/dev/serial` port, and a stand-in for the uevent socket).
+- **Go programs** *(branch `go-serial`)*: static programs skip the
+  preload library, so proot steps in (an extension of ours): the modem
+  calls on a `/dev/serial` port, for `arduino-cli monitor`, and a
+  stand-in for the kernel's USB event socket Android refuses apps, to
+  which the app sends ports coming and going, for `arduino-cli board
+  list`.
 - PlatformIO's ESP32 toolchains don't install: proot's `getdents` says
   a faked hard link is a symlink while `readlink` fails on it (a proot
   patch). arduino-cli's ESP32 core works meanwhile.

@@ -1,0 +1,40 @@
+diff --git a/src/GNUmakefile b/src/GNUmakefile
+index 5ade279..ce43572 100644
+--- a/src/GNUmakefile
++++ b/src/GNUmakefile
+@@ -83,6 +83,8 @@ OBJECTS += \
+ 	extension/hidden_files/hidden_files.o \
+ 	extension/mountinfo/mountinfo.o \
+ 	extension/port_switch/port_switch.o \
++	extension/mynx_serial/mynx_serial.o \
++	extension/mynx_serial/ports.o \
+ 	extension/sysvipc/sysvipc.o \
+ 	extension/sysvipc/sysvipc_msg.o \
+ 	extension/sysvipc/sysvipc_sem.o \
+diff --git a/src/cli/cli.c b/src/cli/cli.c
+index bbc6400..76f89a2 100644
+--- a/src/cli/cli.c
++++ b/src/cli/cli.c
+@@ -484,6 +484,10 @@ int main(int argc, char *const argv[])
+ 	if (NULL == getenv("PROOT_NO_MOUNTINFO"))
+ 		initialize_extension(tracee, mountinfo_callback, NULL);
+ 
++	/* mynx: the USB serial ports' host folder.  */
++	if (NULL != getenv("MYNX_SERIAL_DIR"))
++		initialize_extension(tracee, mynx_serial_callback, getenv("MYNX_SERIAL_DIR"));
++
+ 	/* Start the first tracee.  */
+ 	status = launch_process(tracee, &argv[status]);
+ 	if (status < 0) {
+diff --git a/src/extension/extension.h b/src/extension/extension.h
+index 7df1fa0..e496609 100644
+--- a/src/extension/extension.h
++++ b/src/extension/extension.h
+@@ -229,6 +229,7 @@ extern int kompat_callback(Extension *extension, ExtensionEvent event, intptr_t
+ extern int fake_id0_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
+ extern int hidden_files_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
+ extern int port_switch_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
++extern int mynx_serial_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
+ extern int link2symlink_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
+ extern int fix_symlink_size_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
+ #if defined(__ANDROID__) || defined(__BIONIC__)
