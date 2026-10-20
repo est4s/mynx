@@ -18,6 +18,10 @@
 
 #define PREFIX ".l2s."	/* link2symlink's, on Android */
 
+#ifndef IFTODT	/* glibc's; bionic lacks it */
+#define IFTODT(mode) (((mode) & 0170000) >> 12)
+#endif
+
 struct dirent64_record {
 	uint64_t d_ino;
 	int64_t d_off;

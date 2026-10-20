@@ -142,6 +142,20 @@ class LinksTest(unittest.TestCase):
         self.assertEqual(200, changed)
         self.assertTrue(all(found[f"tool-{n}"] == DT_REG for n in range(1, 201)))
 
+    def test_it_builds_and_works_without_libcs_IFTODT(self):
+        # Android's bionic has the DT_* names but not glibc's IFTODT.
+        wrapper = os.path.join(self.build_dir, "bionic_like.c")
+        with open(wrapper, "w") as f:
+            f.write(f'#include <dirent.h>\n#include <sys/stat.h>\n#undef IFTODT\n#include "{os.path.abspath(SOURCE)}"\n')
+        library = os.path.join(self.build_dir, "bionic_like.so")
+        subprocess.run([CC, "-shared", "-fPIC", "-Wall", "-Werror", "-o", library, wrapper], check=True)
+        lib = ctypes.CDLL(library)
+        lib.mynx_links_fix_types.argtypes = self.lib.mynx_links_fix_types.argtypes
+        self.fake_hard_link("tool", 1)
+        buf, length = getdents64(self.folder)
+        self.assertEqual(1, lib.mynx_links_fix_types(self.folder.encode(), buf, length))
+        self.assertEqual(DT_REG, types(buf, length)["tool"])
+
     def test_a_cut_buffer_is_read_only_up_to_its_end(self):
         self.fake_hard_link("first", 1)
         buf, length = getdents64(self.folder)
