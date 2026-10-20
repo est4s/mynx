@@ -841,6 +841,10 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
   PR's branch when it's merged (the repo's auto-delete setting, on
   since 2026-10-13, maintainer's decision); delete the local branch
   yourself.
+- **Docs before a merge** (maintainer's rule, 2026-10-20): never
+  merge a branch without first updating the docs it makes stale (the
+  work log's status and "Next", the roadmap, the README, this file),
+  in that PR.
 - **Releases:** only the maintainer tags a release (`docs/RELEASING.md`); an
   agent never creates or pushes `v*` tags.
 - **README:** short, for users: what ships today, install, licence.

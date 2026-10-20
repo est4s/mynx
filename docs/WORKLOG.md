@@ -47,11 +47,10 @@ are in git history: the full log up to entry 92 is
   `git show d748955:docs/WORKLOG.md` (bridge),
   `git show 46bd16c:docs/WORKLOG.md` (preload, entries 115-122).
 - **USB serial part 3** (serial monitor, board tools, port names):
-  every phone test passed (entry 126) but 18 (arduino-cli `board
-  list`); merged (PR #36). Not released yet.
-- **Go programs** (proot's `mynx_serial` extension, branch
-  `go-serial`): every phone test passed (entry 129); PR #37 is ready
-  to merge ("Next 0").
+  merged (PR #36). Not released yet.
+- **Go programs** (proot's `mynx_serial` extension: `arduino-cli
+  board list` and `monitor`): every phone test passed (entry 129);
+  merged (PR #37). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -60,14 +59,23 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Go programs: merge PR #37 (branch `go-serial`)
+### 0. Release v0.3.0 (the maintainer's)
 
-**Done:** every phone test passed (entries 128-129, build 201):
-`arduino-cli board list` (and `--watch`, unplug and replug),
-`arduino-cli monitor` on the Nano and the C3, the preload's paths
-with and without it. Merge when the maintainer says; then a release
-(USB serial parts 1-3 and this: v0.3.0, the maintainer's call). The
-test plan and how the tests ran: `git show 2eaa373:docs/WORKLOG.md`.
+USB serial parts 1-3 and Go programs (PR #33, #34, #36, #37) are on
+`main`, tested on the phone, unreleased. Only the maintainer tags
+(`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
+`git show 2eaa373:docs/WORKLOG.md`.
+
+### Then, development boards (suggested order; the maintainer picks)
+
+1. **PlatformIO's ESP32 toolchains** (AGENTS.md's proot notes): make
+   proot's `getdents` report a faked hard link as `DT_REG`, in our
+   extension (`proot/`), so `shutil.copytree` works.
+2. The small serial items under "Small open items" (a busy port's
+   silence, the 4 MB `read_flash`) and entry 126's problem 6 (a Pro
+   Micro allowed with no port; `git show a35033d` has a trace).
+3. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
+   milestone of their own.
 
 ### 1. Smaller things
 
@@ -177,6 +185,13 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (130): PR #37 merged; docs caught up
+
+- PR #37 merged at the maintainer's request (9eafb45), before the work
+  log and roadmap were updated, so this PR does that. **Maintainer's
+  rule:** never merge a branch without first updating the docs it
+  makes stale (work log, roadmap, README, AGENTS.md), in that PR.
 
 ### 2026-10-20 (129): Go programs: every phone test passed (build 201)
 

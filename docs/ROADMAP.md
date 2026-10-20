@@ -90,7 +90,8 @@ cable, using standard tools.
   arduino-cli's toolchains, and the agent guide's recipes (esptool,
   mpremote, arduino-cli, PlatformIO, avrdude, the 1200 baud touch), so
   an agent can write, build and flash firmware.
-- **Go programs** *(branch `go-serial`)*: static programs skip the
+- **Go programs** *(PR #37; tested with an Arduino Nano and an
+  ESP32-C3)*: static programs skip the
   preload library, so proot steps in (an extension of ours): the modem
   calls on a `/dev/serial` port, for `arduino-cli monitor`, and a
   stand-in for the kernel's USB event socket Android refuses apps, to
