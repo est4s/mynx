@@ -145,8 +145,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
-@test "the guide says arduino-cli board list can't find ports here" {
-    grep -qF 'board list`: its serial discovery needs a USB event' "$GUIDE"
+@test "the guide says arduino-cli's Go tools work: board list finds ports, monitor talks" {
+    grep -qF '`arduino-cli board list` (also `board list --watch`)' "$GUIDE"
+    grep -qF 'arduino-cli monitor
+    -p /dev/serial/ttyUSB0' "$GUIDE"
+    ! grep -qF 'is a Go program: use' "$GUIDE"
 }
 
 @test "the guide gives serial-names on by default, and how to turn it off" {
