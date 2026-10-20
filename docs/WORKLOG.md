@@ -51,6 +51,9 @@ are in git history: the full log up to entry 92 is
 - **Go programs** (proot's `mynx_serial` extension: `arduino-cli
   board list` and `monitor`): every phone test passed (entry 129);
   merged (PR #37). Not released yet.
+- **PlatformIO's ESP32 toolchains** (proot's `mynx_links`
+  extension): a C3 project builds on the phone (entry 132); merged
+  (PR #39). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -61,16 +64,19 @@ are in git history: the full log up to entry 92 is
 
 ### 0. Release v0.3.0 (the maintainer's)
 
-USB serial parts 1-3 and Go programs (PR #33, #34, #36, #37) are on
-`main`, tested on the phone, unreleased. Only the maintainer tags
+USB serial parts 1-3, Go programs and PlatformIO's ESP32 toolchains
+(PR #33, #34, #36, #37, #39) are on `main`, tested on the phone,
+unreleased. Only the maintainer tags
 (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
 ### Then, development boards (suggested order; the maintainer picks)
 
-1. **PlatformIO's ESP32 toolchains** (AGENTS.md's proot notes): make
-   proot's `getdents` report a faked hard link as `DT_REG`, in our
-   extension (`proot/`), so `shutil.copytree` works.
+1. **Android's process limit** (entry 132): confirm on the Nord 2
+   that the user guide's adb steps ("How it runs") stop Android
+   killing a big build (PlatformIO's C3 build in `~/sketches/pio-c3`
+   in mynx dev), and fix the guide if they don't. Merged without it
+   at the maintainer's request (PR #39).
 2. The small serial items under "Small open items" (a busy port's
    silence, the 4 MB `read_flash`) and entry 126's problem 6 (a Pro
    Micro allowed with no port; `git show a35033d` has a trace).
@@ -185,6 +191,78 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (133): PR #39 merged
+
+- At the maintainer's request, with the adb check of entry 132 still
+  open (now "Next" item 1). The docs went into the PR first.
+
+### 2026-10-20 (132): PR #39 on the phone; Android kills big builds
+
+- **Build 206 (6dffadb), in mynx dev on the maintainer's OnePlus Nord
+  2 (Android 13):** `scandir` says `f`/`g` aren't symlinks and
+  `copytree` works; `ls`, `find`, `git status` as before; `ls -R /usr`
+  32,073 entries in 3.7 s. A service walking `~/.platformio` five
+  times (16,688 files) survived; none of its 78 listed symlinks is a
+  faked hard link. **`pio run` for `esp32-c3-devkitm-1`:** every
+  toolchain installed and the build succeeded (61 files, 117 s,
+  `firmware.bin`).
+- **First fix (6dffadb):** CI's NDK build failed on `IFTODT` (glibc
+  only); glibc's definition where libc has none, and a test building
+  `links.c` without it.
+- **Android kills big builds:** three `pio run`s ended with proot
+  killed (tracees left running, ENOSYS: "Function not implemented"),
+  once two proots at once (a tab's and a service's); the third time
+  only the tab's (Claude Code's) and the build finished. The app
+  stayed up. Taken as Android 12+'s phantom process killer (the
+  maintainer saw it on another phone and fixed it with a setting);
+  the Nord 2's Android 13 has no switch in Developer options, so the
+  user guide ("How it runs") gives each version's way, adb included
+  (wireless debugging from the app itself). **Not yet confirmed:**
+  that those adb commands stop it on this phone.
+- **Seen, not fixed (not from this PR, as far as the code says):**
+  `cp -a` and `tar` fail on a `.l2s.*` intermediate link ("Too many
+  levels of symbolic links": link2symlink's `lstat` says regular
+  file); PlatformIO's cleanup of its temporary folders says
+  "Directory not empty" (the guide calls it harmless: installs finish).
+- Guide: PlatformIO's ESP32 recipe, Android's process limit; tests in
+  `home-docs.bats`. Roadmap: the PlatformIO item.
+
+### 2026-10-20 (131): faked hard links as regular files in listings
+
+- **Problem:** link2symlink's faked hard link is a symlink on the host;
+  every path call dereferences it (`lstat`: regular, `readlink`:
+  EINVAL), but `getdents64` comes from the kernel: `DT_LNK`. So
+  `os.scandir` says symlink, `shutil.copytree(symlinks=True)` calls
+  `readlink` and gets EINVAL, and PlatformIO's ESP32 toolchains fail
+  to install. Reproduced in this Debian with `ln a/f a/g` and
+  `copytree`.
+- **Fix:** a new proot extension, `proot/mynx_links/` (AGENTS.md
+  "proot's mynx_links extension"): at `getdents64`'s exit, each
+  `DT_LNK` record whose symlink leads to `.l2s.*` and on to a file
+  gets that file's type. Same decision as link2symlink's
+  `resolve_faked_hard_link()`, so broken ones and the `.l2s.*` links
+  themselves stay `DT_LNK`. Turned on by `--link2symlink` (the patch
+  adds it to `handle_option_link2symlink()`). The About credit says
+  so.
+- **Checked here:** `links.c` against real `getdents64` buffers
+  (`tests/mynx/test_proot_links.py`, 7 tests, seen failing with the
+  fix taken out); the patched proot builds natively with gcc, and
+  both new files with `-Wall -Wextra -Werror`. Not run: a nested
+  proot can't run here.
+- **Phone tests (after CI builds it), in mynx dev:**
+  1. `mkdir -p /tmp/t/a && cd /tmp/t && echo hi >a/f && ln a/f a/g`,
+     then `python3 -c "import os; print([(e.name, e.is_symlink())
+     for e in os.scandir('a')])"`: `f` and `g` False (were True).
+  2. `python3 -c "import shutil; shutil.copytree('a', 'b',
+     symlinks=True)"` works; `cat b/g` says hi.
+  3. `ls -la a`, `find a -type l` (only `.l2s.f0001`), `git status`
+     in a repo, `cp -a`, `tar`: as before.
+  4. `pipx install platformio`, a project with `board = esp32-c3-devkitm-1`,
+     `pio run`: the toolchains install and it builds (the real goal;
+     another obstacle may show up after this one).
+  5. Nothing feels slower (`ls -R /usr | wc -l`, a big `git status`):
+     every `getdents64` now stops in proot.
 
 ### 2026-10-20 (130): PR #37 merged; docs caught up
 

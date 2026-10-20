@@ -1,11 +1,13 @@
 diff --git a/src/GNUmakefile b/src/GNUmakefile
-index 5ade279..ce43572 100644
+index 5ade279..b3e0194 100644
 --- a/src/GNUmakefile
 +++ b/src/GNUmakefile
-@@ -83,6 +83,8 @@ OBJECTS += \
+@@ -83,6 +83,10 @@ OBJECTS += \
  	extension/hidden_files/hidden_files.o \
  	extension/mountinfo/mountinfo.o \
  	extension/port_switch/port_switch.o \
++	extension/mynx_links/mynx_links.o \
++	extension/mynx_links/links.o \
 +	extension/mynx_serial/mynx_serial.o \
 +	extension/mynx_serial/ports.o \
  	extension/sysvipc/sysvipc.o \
@@ -26,14 +28,31 @@ index bbc6400..76f89a2 100644
  	/* Start the first tracee.  */
  	status = launch_process(tracee, &argv[status]);
  	if (status < 0) {
+diff --git a/src/cli/proot.c b/src/cli/proot.c
+index eb92071..abf54f7 100644
+--- a/src/cli/proot.c
++++ b/src/cli/proot.c
+@@ -290,6 +290,11 @@ static int handle_option_link2symlink(Tracee *tracee, const Cli *cli UNUSED, con
+ 	if (status < 0)
+ 		note(tracee, WARNING, INTERNAL, "link2symlink not initialized");
+ 
++	/* mynx: its faked hard links as regular files in listings too.  */
++	status = initialize_extension(tracee, mynx_links_callback, NULL);
++	if (status < 0)
++		note(tracee, WARNING, INTERNAL, "mynx_links not initialized");
++
+ 	return 0;
+ }
+ 
 diff --git a/src/extension/extension.h b/src/extension/extension.h
-index 7df1fa0..e496609 100644
+index 7df1fa0..91aef77 100644
 --- a/src/extension/extension.h
 +++ b/src/extension/extension.h
-@@ -229,6 +229,7 @@ extern int kompat_callback(Extension *extension, ExtensionEvent event, intptr_t
+@@ -229,6 +229,8 @@ extern int kompat_callback(Extension *extension, ExtensionEvent event, intptr_t
  extern int fake_id0_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
  extern int hidden_files_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
  extern int port_switch_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
++extern int mynx_links_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
 +extern int mynx_serial_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
  extern int link2symlink_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
  extern int fix_symlink_size_callback(Extension *extension, ExtensionEvent event, intptr_t d1, intptr_t d2);
