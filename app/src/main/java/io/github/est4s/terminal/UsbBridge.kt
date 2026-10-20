@@ -45,6 +45,11 @@ private const val WRITE_TIMEOUT_MS = 5000
 // packet ends a read, and esptool's stub on an ESP32-C3's USB-Serial-JTAG
 // sends 63-byte ones, so 16 reads held 1 KB and lost bytes mid-read_flash.
 private const val READ_QUEUE = 256
+// After an attach, how often and how many times to look again for a device
+// Android allowed without a broadcast reaching us (problem 6 of the phone
+// tests: a Pro Micro sat allowed with no port until the app came on screen).
+private const val RECHECK_MS = 1000L
+private const val RECHECKS = 30
 
 /**
  * The USB serial bridge: opens the serial devices Android lets the app
@@ -73,6 +78,8 @@ class UsbBridge(
     private val errors = mutableMapOf<String, String>()
     private val asking = mutableMapOf<String, MutableList<(String?) -> Unit>>()
     private var started = false
+    private var rechecks = 0
+    private val recheck = Runnable { refresh() }
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -81,6 +88,7 @@ class UsbBridge(
                 val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
                 if (device != null) answerAsking(device.deviceName, granted)
             } else {
+                if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) rechecks = 0
                 refresh()
             }
         }
@@ -112,6 +120,7 @@ class UsbBridge(
         if (!started) return
         started = false
         runCatching { context.unregisterReceiver(receiver) }
+        handler.removeCallbacks(recheck)
         open.keys.toList().forEach(::close)
         asking.keys.toList().forEach { answerAsking(it, false) }
     }
@@ -130,6 +139,11 @@ class UsbBridge(
             val name = driver.device.deviceName
             if (name in open || name in errors || !usb.hasPermission(driver.device)) continue
             openDevice(driver)
+        }
+        handler.removeCallbacks(recheck)
+        if (drivers.any { !usb.hasPermission(it.device) } && rechecks < RECHECKS) {
+            rechecks++
+            handler.postDelayed(recheck, RECHECK_MS)
         }
     }
 
@@ -198,6 +212,10 @@ class UsbBridge(
 
     private fun openDevice(driver: UsbSerialDriver) {
         val device = driver.device
+        if (driver.ports.isEmpty()) {
+            errors[device.deviceName] = "its driver found no serial port on it"
+            return
+        }
         val opened = OpenDevice()
         open[device.deviceName] = opened
         // Named in the error, so a device that refuses one step says which.

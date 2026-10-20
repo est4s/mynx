@@ -823,7 +823,8 @@ def usb_text(devices):
         elif device.get("error"):
             lines.append(f"{label}: {device['error']}")
         elif not device["ports"]:
-            lines.append(f"{label}: no port yet; the app is opening it")
+            lines += [f"{label}: no port yet; the app is opening it",
+                      f"  if it stays so: mynx usb allow {device['ids']}"]
     if any(device["ports"] for device in devices):
         lines.append("A serial monitor: mynx usb monitor [PORT]")
     return "\n".join(lines)

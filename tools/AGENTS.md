@@ -564,7 +564,8 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - **Allowing it:** when one is plugged in, Android asks whether to
   open mynx for it; OK lets the app use it until it's unplugged
   ("always" remembers that device). One Android didn't ask about:
-  `mynx usb allow [DEVICE]`, with the app on screen. A notification
+  `mynx usb allow [DEVICE]`, with the app on screen; it also opens
+  again one that stays at "no port yet". A notification
   says when its ports are ready, and where.
 - **Each port, two ways:**
   - `/dev/serial/ttyUSB0` (`ttyACM0` for CDC ACM devices; the next

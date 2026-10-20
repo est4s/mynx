@@ -102,8 +102,8 @@ fun usbDeviceJson(device: UsbSerialDevice): String = obj(
 /**
  * The `usb-list` and `usb-allow [DEVICE]` requests, for [MynxRequests]'s
  * `later`. [devices] gives what Android sees now; [allow] asks Android
- * for access to a device (by its id) and answers null once allowed and
- * its ports are served, else why not.
+ * for access to a device (by its id), or opens an allowed one with no
+ * port again, and answers null once its ports are served, else why not.
  */
 fun usbRequests(
     devices: () -> List<UsbSerialDevice>,
@@ -116,8 +116,10 @@ fun usbRequests(
     val allowRequest = Later(ALLOW_SECONDS) { args, reply ->
         val which = args.firstOrNull()?.trim().orEmpty()
         val all = devices()
+        // Allowed but with no port: the bridge missed it, or failed to open it; it tries again.
+        fun waits(device: UsbSerialDevice) = !device.allowed || device.ports.isEmpty()
         val device = if (which.isEmpty()) {
-            val waiting = all.filter { !it.allowed }
+            val waiting = all.filter(::waits)
             when (waiting.size) {
                 0 -> return@Later reply.refuse("no USB serial device is waiting for access")
                 1 -> waiting.single()
@@ -127,7 +129,7 @@ fun usbRequests(
             all.firstOrNull { it.id == which || usbIds(it.vendorId, it.productId) == which.lowercase() }
                 ?: return@Later reply.refuse("no USB serial device $which (mynx usb lists them)")
         }
-        if (device.allowed) return@Later reply.ok("device" to usbDeviceJson(device))
+        if (!waits(device)) return@Later reply.ok("device" to usbDeviceJson(device))
         allow(device.id) { error ->
             if (error != null) return@allow reply.refuse(error)
             val now = devices().firstOrNull { it.id == device.id } ?: device
