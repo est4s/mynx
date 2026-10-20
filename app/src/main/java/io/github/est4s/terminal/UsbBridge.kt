@@ -27,6 +27,7 @@ import io.github.est4s.terminal.core.StopBits
 import io.github.est4s.terminal.core.UsbSerialDevice
 import io.github.est4s.terminal.core.killProot
 import io.github.est4s.terminal.core.processPid
+import io.github.est4s.terminal.core.serialWaitingMark
 import io.github.est4s.terminal.core.stopProot
 import io.github.est4s.terminal.core.tcpPorts
 import io.github.est4s.terminal.core.ttyName
@@ -147,7 +148,9 @@ class UsbBridge(
                 serial = if (usb.hasPermission(device)) usbString(runCatching { device.serialNumber }.getOrNull()) else null,
                 driver = usbDriverName(driver.javaClass.simpleName),
                 allowed = usb.hasPermission(device),
-                ports = open[device.deviceName]?.ports?.map { SerialPortInfo(it.name, it.server.port, it.server.busy) }.orEmpty(),
+                ports = open[device.deviceName]?.ports?.map {
+                    SerialPortInfo(it.name, it.server.port, it.server.busy, File(serialDir, serialWaitingMark(it.name)).exists())
+                }.orEmpty(),
                 error = errors[device.deviceName],
             )
         }

@@ -585,6 +585,9 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
     `python3 -m serial.tools.miniterm rfc2217://localhost:2217 115200`.
   A port has one user at a time: while a program has its
   `/dev/serial` file open, its URL is busy, and the other way round.
+  A program that opens the file while the URL is in use gets nothing
+  until the URL's program lets go; `mynx usb` shows the path as
+  "waiting", and the helper's log says "busy".
 - **What Android doesn't allow, and the serial library:** Android
   refuses programs the modem-line calls on a terminal device
   (`TIOCMGET`, `TIOCMSET`, `TIOCMBIS`, `TIOCMBIC`, `TIOCEXCL`,
@@ -636,7 +639,7 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `PORT`'s) for scripts. `--json` gives `devices`: `id`, `ids`
   (vendor:product), `manufacturer`, `product`, `serial`, `driver`,
   `allowed`, `error` and `ports` (`name`, `path`, `url`, `tcp_port`,
-  `in_use`).
+  `in_use`, and `waiting`: its file is open but the URL has the port).
 - The tools: `apt install picocom` (or `minicom`, `screen`),
   `python3-serial` (pyserial, miniterm), `esptool`, `avrdude`;
   PlatformIO with `pip`, `arduino-cli` from Arduino. Debian's

@@ -94,13 +94,13 @@ class UsbRequestTest {
 
     @Test
     fun `lists the devices with their ports, paths and URLs`() {
-        devices = listOf(ch340.copy(ports = listOf(SerialPortInfo("ttyUSB0", 2217, inUse = true))), esp)
+        devices = listOf(ch340.copy(ports = listOf(SerialPortInfo("ttyUSB0", 2217, inUse = true, waiting = true))), esp)
         send("1-1", "usb-list")
         assertEquals(
             """{"ok":true,"devices":[""" +
                 """{"id":"/dev/bus/usb/001/002","ids":"1a86:7523","manufacturer":"QinHeng Electronics","product":"USB Serial",""" +
                 """"serial":null,"driver":"ch34x","allowed":true,"error":null,"ports":[""" +
-                """{"name":"ttyUSB0","path":"/dev/serial/ttyUSB0","url":"rfc2217://localhost:2217","tcp_port":2217,"in_use":true}]},""" +
+                """{"name":"ttyUSB0","path":"/dev/serial/ttyUSB0","url":"rfc2217://localhost:2217","tcp_port":2217,"in_use":true,"waiting":true}]},""" +
                 """{"id":"/dev/bus/usb/001/003","ids":"303a:1001","manufacturer":"Espressif","product":"USB JTAG/serial debug unit",""" +
                 """"serial":"F4:12:FA:00:11:22","driver":"cdc-acm","allowed":false,"error":null,"ports":[]}]}""",
             reply("1-1"),

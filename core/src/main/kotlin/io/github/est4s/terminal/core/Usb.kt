@@ -9,8 +9,15 @@ const val SERIAL_PORT_HELPER = "$TOOLS_MOUNT/lib/serial-port"
 // How long `mynx usb allow` waits for the user to answer Android's dialog.
 private const val ALLOW_SECONDS = 120
 
-/** A serial port served to Debian: [name] in [SERIAL_MOUNT], and RFC 2217 on localhost [tcpPort]. */
-data class SerialPortInfo(val name: String, val tcpPort: Int, val inUse: Boolean)
+/**
+ * A serial port served to Debian: [name] in [SERIAL_MOUNT], and RFC 2217 on
+ * localhost [tcpPort]. [waiting]: a program has the [SERIAL_MOUNT] path open
+ * while a URL client has the port, so it gets nothing yet.
+ */
+data class SerialPortInfo(val name: String, val tcpPort: Int, val inUse: Boolean, val waiting: Boolean = false)
+
+/** The mark `serial-port` leaves in the ports folder while its terminal waits for a busy port. */
+fun serialWaitingMark(name: String) = ".$name.waiting"
 
 /**
  * A USB device a serial driver can drive. [id] is Android's name for it
@@ -87,6 +94,7 @@ fun usbDeviceJson(device: UsbSerialDevice): String = obj(
             "url" to json(serialUrl(port)),
             "tcp_port" to port.tcpPort.toString(),
             "in_use" to port.inUse.toString(),
+            "waiting" to port.waiting.toString(),
         )
     }),
 )

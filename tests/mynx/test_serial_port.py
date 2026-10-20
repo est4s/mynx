@@ -64,7 +64,12 @@ class FakePort:
     """The app's RFC 2217 server, as far as the helper sees it: records
     what each connection sent, and can send bytes to the current one."""
 
+    # The app's server greets each client it takes (Rfc2217Session.greet)
+    # and closes on one it refuses (another client has the port).
+    GREETING = bytes([255, 251, 3, 255, 253, 0, 255, 251, 44])
+
     def __init__(self):
+        self.busy = False
         self.server = socket.socket()
         self.server.bind(("127.0.0.1", 0))
         self.server.listen(4)
@@ -80,6 +85,11 @@ class FakePort:
                 conn, _ = self.server.accept()
             except OSError:
                 return
+            if self.busy:
+                self.refused = getattr(self, "refused", 0) + 1
+                conn.close()
+                continue
+            conn.sendall(self.GREETING)
             received = bytearray()
             self.connections.append(received)
             self.current = conn
@@ -365,6 +375,59 @@ class EarlyControlTest(unittest.TestCase):
             bridge.remove_link()
             port.close()
             os.rmdir(folder)
+
+
+class BusyTest(unittest.TestCase):
+    """Another client (an rfc2217:// URL) has the port: the app refuses the helper."""
+
+    def setUp(self):
+        self.folder = tempfile.mkdtemp()
+        self.port = FakePort()
+        self.port.busy = True
+        self.logged = []
+        sp.log = lambda name, text: self.logged.append(text)
+        self.addCleanup(setattr, sp, "log", sp.log)
+        self.bridge = sp.Bridge("ttyUSB0", self.port.port, self.folder)
+        self.thread = threading.Thread(target=self.bridge.run, daemon=True)
+        self.thread.start()
+        self.link = os.path.join(self.folder, "ttyUSB0")
+        self.waiting = os.path.join(self.folder, ".ttyUSB0.waiting")
+        wait_for(lambda: os.path.islink(self.link), "the link")
+
+    def tearDown(self):
+        self.bridge.stopped = True
+        self.thread.join(5)
+        self.port.close()
+        os.rmdir(self.folder)
+
+    def test_a_refused_program_is_marked_waiting_and_logged_once(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            wait_for(lambda: os.path.exists(self.waiting), "the waiting mark")
+            wait_for(lambda: getattr(self.port, "refused", 0) >= 2, "a second try", seconds=8)
+            busy = [line for line in self.logged if "busy" in line]
+            self.assertEqual(1, len(busy), self.logged)
+            self.assertIn(f"rfc2217://localhost:{self.port.port}", busy[0])
+            self.assertFalse(any("opened" in line for line in self.logged), self.logged)
+        finally:
+            os.close(fd)
+
+    def test_the_mark_goes_once_the_port_is_free(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        try:
+            wait_for(lambda: os.path.exists(self.waiting), "the waiting mark")
+            self.port.busy = False
+            wait_for(lambda: self.port.current is not None, "a connection", seconds=8)
+            self.assertFalse(os.path.exists(self.waiting))
+            self.assertTrue(any("opened" in line for line in self.logged), self.logged)
+        finally:
+            os.close(fd)
+
+    def test_the_mark_goes_when_the_program_gives_up(self):
+        fd = os.open(self.link, os.O_RDWR | os.O_NOCTTY)
+        wait_for(lambda: os.path.exists(self.waiting), "the waiting mark")
+        os.close(fd)
+        wait_for(lambda: not os.path.exists(self.waiting), "the mark to go")
 
 
 class AppAwayTest(unittest.TestCase):
