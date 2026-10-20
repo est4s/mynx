@@ -41,7 +41,8 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
                 val socket = runCatching { server.accept() }.getOrNull() ?: break
                 synchronized(this) {
                     if (client != null || closed) runCatching { socket.close() }
-                    else client = Client(socket).also { it.start() }
+                    // Taken before it greets: a quick client could leave before an also { start() } assigned it.
+                    else Client(socket).also { client = it }.start()
                 }
             }
         }
