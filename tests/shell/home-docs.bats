@@ -145,6 +145,18 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide says how to stop Android killing big builds, per Android version" {
+    for text in "Disable child process restrictions" "settings_enable_monitor_phantom_procs" \
+        "max_phantom_processes" "Wireless debugging" "Function not implemented"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
+
+@test "the guide's PlatformIO recipe builds for the ESP32" {
+    ! grep -qF "don't install here yet" "$GUIDE"
+    grep -qF "Its ESP32 toolchains install and build" "$GUIDE"
+}
+
 @test "the guide says arduino-cli's Go tools work: board list finds ports, monitor talks" {
     grep -qF '`arduino-cli board list` (also `board list --watch`)' "$GUIDE"
     grep -qF 'arduino-cli monitor

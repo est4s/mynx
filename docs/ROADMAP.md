@@ -97,9 +97,9 @@ cable, using standard tools.
   stand-in for the kernel's USB event socket Android refuses apps, to
   which the app sends ports coming and going, for `arduino-cli board
   list`.
-- PlatformIO's ESP32 toolchains don't install: proot's `getdents` says
-  a faked hard link is a symlink while `readlink` fails on it (a proot
-  patch). arduino-cli's ESP32 core works meanwhile.
+- PlatformIO's ESP32 toolchains install and build (PR #39): proot's
+  `getdents` said a faked hard link is a symlink while `readlink`
+  failed on it; a proot extension now gives its file's type.
 - **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's
   drive. **Raw USB** (STM32 DFU, `picotool`, CMSIS-DAP probes for
   OpenOCD and probe-rs) through `libusb` (`libusb_wrap_sys_device` on

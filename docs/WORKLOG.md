@@ -68,12 +68,10 @@ USB serial parts 1-3 and Go programs (PR #33, #34, #36, #37) are on
 
 ### Then, development boards (suggested order; the maintainer picks)
 
-1. **PlatformIO's ESP32 toolchains:** the proot side is PR #39
-   (branch `proot-hardlink-dtype`, entry 131). Next: CI's build in
-   mynx dev, then the phone tests in entry 131. Only once
-   they pass: the user guide's PlatformIO recipe (`tools/AGENTS.md`,
-   "Its ESP32 toolchains don't install here yet") and the README if
-   it says so.
+1. **PlatformIO's ESP32 toolchains:** PR #39 (entry 132), tested on
+   the phone (build 206): a C3 project builds. Still to check: the
+   user guide's adb steps for Android's process limit (entry 132),
+   then merge.
 2. The small serial items under "Small open items" (a busy port's
    silence, the 4 MB `read_flash`) and entry 126's problem 6 (a Pro
    Micro allowed with no port; `git show a35033d` has a trace).
@@ -188,6 +186,37 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (132): PR #39 on the phone; Android kills big builds
+
+- **Build 206 (6dffadb), in mynx dev on the maintainer's OnePlus Nord
+  2 (Android 13):** `scandir` says `f`/`g` aren't symlinks and
+  `copytree` works; `ls`, `find`, `git status` as before; `ls -R /usr`
+  32,073 entries in 3.7 s. A service walking `~/.platformio` five
+  times (16,688 files) survived; none of its 78 listed symlinks is a
+  faked hard link. **`pio run` for `esp32-c3-devkitm-1`:** every
+  toolchain installed and the build succeeded (61 files, 117 s,
+  `firmware.bin`).
+- **First fix (6dffadb):** CI's NDK build failed on `IFTODT` (glibc
+  only); glibc's definition where libc has none, and a test building
+  `links.c` without it.
+- **Android kills big builds:** three `pio run`s ended with proot
+  killed (tracees left running, ENOSYS: "Function not implemented"),
+  once two proots at once (a tab's and a service's); the third time
+  only the tab's (Claude Code's) and the build finished. The app
+  stayed up. Taken as Android 12+'s phantom process killer (the
+  maintainer saw it on another phone and fixed it with a setting);
+  the Nord 2's Android 13 has no switch in Developer options, so the
+  user guide ("How it runs") gives each version's way, adb included
+  (wireless debugging from the app itself). **Not yet confirmed:**
+  that those adb commands stop it on this phone.
+- **Seen, not fixed (not from this PR, as far as the code says):**
+  `cp -a` and `tar` fail on a `.l2s.*` intermediate link ("Too many
+  levels of symbolic links": link2symlink's `lstat` says regular
+  file); PlatformIO's cleanup of its temporary folders says
+  "Directory not empty" (the guide calls it harmless: installs finish).
+- Guide: PlatformIO's ESP32 recipe, Android's process limit; tests in
+  `home-docs.bats`. Roadmap: the PlatformIO item.
 
 ### 2026-10-20 (131): faked hard links as regular files in listings
 

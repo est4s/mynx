@@ -717,6 +717,12 @@ Bugs that took a phone round to find; keep them from coming back.
 - **`LocalSocket` creates its socket in `connect()`**: setting
   `soTimeout` first throws "socket not created" (`UeventSender`
   failed on every send that way).
+- **Android 12+ kills big builds** (the phantom process killer): a
+  parallel compile (PlatformIO's ESP32 build) got a tab's proot, and
+  once a service's too, killed while the app stayed up, which looks
+  like a proot crash: its tracees keep running and fail with ENOSYS.
+  Rule that out before suspecting a proot change; the user guide
+  ("How it runs") says how to turn the limit off per Android version.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

@@ -27,6 +27,25 @@ and applies them. See "Changing settings" below.
   real ones: `/proc/stat`, `/proc/vmstat`, `/proc/uptime`,
   `/proc/loadavg`, `/proc/version`. CPU usage and uptime from tools like
   `htop` or `uptime` aren't real.
+- **Android 12 and later kill big builds** ("phantom process"
+  limits): with many processes or much CPU (a parallel compile),
+  Android kills proot. The tab ends, or what it ran keeps going with
+  every call failing ("Function not implemented"). Turn the limit off:
+  - Android 14 and later: Developer options →
+    **Disable child process restrictions**.
+  - Android 12L and 13 (no such switch): `adb shell settings put global
+    settings_enable_monitor_phantom_procs false`.
+  - Android 12: `adb shell device_config set_sync_disabled_for_tests
+    persistent`, then `adb shell device_config put activity_manager
+    max_phantom_processes 2147483647`.
+
+  `adb` works from here too, with no computer: on Wi-Fi, turn on
+  Developer options → **Wireless debugging**, `apt install adb`, then
+  with the app and Settings side by side, "Pair device with pairing
+  code" and `adb pair localhost:PORT CODE` (the pairing port), `adb
+  connect localhost:PORT` (the one Wireless debugging shows), and the
+  command above. The settings stay after a restart. Also set the app's
+  battery use to **Unrestricted** (Settings → Apps).
 - **Network works** (DNS: 1.1.1.1 and 8.8.8.8 in `/etc/resolv.conf`).
 - **The time zone is the phone's:** each new tab gets `TZ` set to it
   (e.g. `Europe/Istanbul`), so `date` and the clock show local time.
@@ -677,12 +696,13 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
     in `platformio.ini`, `upload_port = /dev/serial/ttyUSB0` and
     `monitor_port = /dev/serial/ttyUSB0` (or the URL), since it can't
     find ports itself; `pio run -t upload`, `pio device monitor`.
-    Its AVR toolchain installs and builds. **Its ESP32 toolchains
-    don't install here yet:** PlatformIO copies each unpacked package
-    and trips over the hard links proot fakes ("[Errno 22] Invalid
-    argument"); use arduino-cli's `esp32:esp32` core (after `mynx
-    fix-links ~/.arduino15`, it builds for the C3: about 1.5 GB, a
-    first build of about 13 minutes) or esptool with a ready firmware.
+    Its AVR toolchain installs and builds.
+    Its ESP32 toolchains install and build (`platform = espressif32`;
+    for the C3, about 6 GB in `~/.platformio` and a first build of
+    about 2 minutes); a big build needs Android's process limit off
+    (see "How it runs"). While installing, PlatformIO may say
+    "Directory not empty" and "Please manually remove" for its own
+    temporary folders: harmless.
   - **avrdude** (`apt install avrdude`): `avrdude -p atmega328p -c
     arduino -b 115200 -P /dev/serial/ttyUSB0 -U flash:w:sketch.hex`
     (57600 for old Nano bootloaders); opening the port resets the
