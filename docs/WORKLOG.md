@@ -51,6 +51,9 @@ are in git history: the full log up to entry 92 is
 - **Go programs** (proot's `mynx_serial` extension: `arduino-cli
   board list` and `monitor`): every phone test passed (entry 129);
   merged (PR #37). Not released yet.
+- **PlatformIO's ESP32 toolchains** (proot's `mynx_links`
+  extension): a C3 project builds on the phone (entry 132); merged
+  (PR #39). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -61,17 +64,19 @@ are in git history: the full log up to entry 92 is
 
 ### 0. Release v0.3.0 (the maintainer's)
 
-USB serial parts 1-3 and Go programs (PR #33, #34, #36, #37) are on
-`main`, tested on the phone, unreleased. Only the maintainer tags
+USB serial parts 1-3, Go programs and PlatformIO's ESP32 toolchains
+(PR #33, #34, #36, #37, #39) are on `main`, tested on the phone,
+unreleased. Only the maintainer tags
 (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
 ### Then, development boards (suggested order; the maintainer picks)
 
-1. **PlatformIO's ESP32 toolchains:** PR #39 (entry 132), tested on
-   the phone (build 206): a C3 project builds. Still to check: the
-   user guide's adb steps for Android's process limit (entry 132),
-   then merge.
+1. **Android's process limit** (entry 132): confirm on the Nord 2
+   that the user guide's adb steps ("How it runs") stop Android
+   killing a big build (PlatformIO's C3 build in `~/sketches/pio-c3`
+   in mynx dev), and fix the guide if they don't. Merged without it
+   at the maintainer's request (PR #39).
 2. The small serial items under "Small open items" (a busy port's
    silence, the 4 MB `read_flash`) and entry 126's problem 6 (a Pro
    Micro allowed with no port; `git show a35033d` has a trace).
@@ -186,6 +191,11 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-20 (133): PR #39 merged
+
+- At the maintainer's request, with the adb check of entry 132 still
+  open (now "Next" item 1). The docs went into the PR first.
 
 ### 2026-10-20 (132): PR #39 on the phone; Android kills big builds
 
