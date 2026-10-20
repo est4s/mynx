@@ -702,6 +702,9 @@ Bugs that took a phone round to find; keep them from coming back.
   program) left the board in download mode. Linux changes both
   lines in one request; usb-serial-for-android sets them one at a
   time, so the order matters. Raising (the helper): DTR first.
+- **`LocalSocket` creates its socket in `connect()`**: setting
+  `soTimeout` first throws "socket not created" (`UeventSender`
+  failed on every send that way).
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

@@ -38,8 +38,9 @@ class UeventSender(private val serialDir: File, private val log: File) {
     private fun send(socket: File, messages: List<ByteArray>) {
         try {
             LocalSocket(LocalSocket.SOCKET_DGRAM).use { s ->
-                s.soTimeout = 1000
                 s.connect(LocalSocketAddress(socket.path, LocalSocketAddress.Namespace.FILESYSTEM))
+                // Only after connect(): it's what creates the socket ("socket not created" before).
+                s.soTimeout = 1000
                 messages.forEach { s.outputStream.write(it) }
             }
             note("${socket.name}: sent")
