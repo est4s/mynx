@@ -86,6 +86,11 @@ unreleased. Only the maintainer tags
 ### 1. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
+- **Maybe, for Android apps built in Debian** (guide: "Making an
+  app", entry 134): a `mynx` command that opens the installer for an
+  APK in release builds too (`install-apk` answers only in debug),
+  so agents needn't serve it to the browser; and one that fetches
+  `r8.jar` and `android.jar`.
 - **Before Play (not urgent):** `release.yml` has its own
   `GITHUB_RUN_NUMBER`, so release version codes are far below debug
   ones; Play needs codes that only go up: pick a scheme (from the tag,
@@ -191,6 +196,19 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-21 (134): the guide on making apps (branch `guide-making-apps`)
+
+- At the maintainer's request, after an agent built an Android widget
+  in the app's Debian (Debian's `aapt`, `javac`, Google's `d8` and
+  `android.jar`, `apksigner`) and found the guide didn't cover it.
+  New section "Making an app": ask whether the user wants a terminal
+  app (`~/apps`) or an Android app; the toolchain, with Google's
+  download URLs (checked: the same files, by size and sha256, as the
+  ones that built the widget); signing, installing through the
+  browser, no logcat, permissions, plain `http`, widgets' limits; an
+  Android app talking to a service in Debian. The Apps bullet points
+  to it; a test in `home-docs.bats`.
 
 ### 2026-10-20 (133): PR #39 merged
 

@@ -867,7 +867,8 @@ shows the generic game bar until `my-tool.conf` exists.
   Settings they keep go in `~/.config/NAME/`. **Your own app:** put an
   executable in `~/apps` (or link one there) with a `# label: Name`
   line near the top, and give it a bar: `mynx keybar edit NAME`; the
-  menu runs it as `keybar NAME,shell FILE`.
+  menu runs it as `keybar NAME,shell FILE`. For an Android app (an
+  APK, a home-screen widget) instead, see "Making an app".
 - **Games:** `play GAME [args]` runs a game with the bar named after its
   file (`my-game.py` → `my-game`), else the generic `game` bar. `rogue`,
   `drive` and `flap` use it.
@@ -928,3 +929,95 @@ shows the generic game bar until `my-tool.conf` exists.
   tab in its folder after Android closes the app. If you change the
   prompt setup in `~/.bashrc`, keep whatever `PROMPT_COMMAND` the shell
   started with (starship keeps it on its own).
+
+## Making an app
+
+**When someone asks for an app, ask which kind**, unless they said:
+
+- **A terminal app** that lives in mynx: a program in `~/apps` with
+  its own key bar, in the menu's Apps (see "Apps" above). Quick to
+  write and change, in Python, bash or anything Debian runs, and it
+  reaches the phone through `mynx`: sensors, location, camera,
+  microphone, flashlight, vibration, notifications. It runs only
+  inside mynx.
+- **An Android app** (an APK), installed on the phone like any other:
+  its own icon, home-screen widgets, the whole Android API, and it
+  runs without mynx. Each change is a build and an install, in plain
+  Java (no Kotlin, Gradle or AndroidX libraries).
+
+Hints: "widget", "on my home screen", "give it to a friend" → an
+Android app. "Script", "tool", "uses my files or commands here",
+"quick" → a terminal app. Both at once works too: an Android widget
+can show what a terminal program serves (see below).
+
+### Building an Android app
+
+The tools, once (about 110 MB; `r8.jar` gives `d8`, `android.jar` is
+Android 14's API):
+
+```
+apt install aapt zipalign apksigner openjdk-21-jdk-headless unzip
+mkdir -p ~/androidsdk && cd ~/androidsdk
+curl -fLo r8.jar https://dl.google.com/android/maven2/com/android/tools/r8/8.13.25/r8-8.13.25.jar
+curl -fLo platform.zip https://dl.google.com/android/repository/platform-34-ext7_r03.zip
+unzip -j platform.zip android-34/android.jar -d android-34 && rm platform.zip
+```
+
+A project is `AndroidManifest.xml`, `res/` and `src/`, with a
+`build.sh` that runs, with `JAR=~/androidsdk/android-34/android.jar`:
+
+```
+aapt package -f -m -J build/gen -M AndroidManifest.xml -S res -I "$JAR"
+javac --release 11 -cp "$JAR" -d build/classes $(find src build/gen -name '*.java')
+java -cp ~/androidsdk/r8.jar com.android.tools.r8.D8 --release --min-api 24 \
+    --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
+aapt package -f -M AndroidManifest.xml -S res -I "$JAR" -F build/unsigned.apk
+(cd build/dex && aapt add ../unsigned.apk classes.dex)
+zipalign -f -p 4 build/unsigned.apk build/aligned.apk
+apksigner sign --ks release.keystore --out NAME.apk build/aligned.apk
+```
+
+(`-A assets` on the second `aapt package` adds an `assets/` folder.)
+A build takes about a minute.
+
+- **Signing:** make the keystore once per app (`keytool -genkeypair
+  -keystore release.keystore …`) and keep it: Android installs an
+  update only when it's signed with the same key. Raise
+  `versionCode` in the manifest for each update.
+- **The package name** (`package=` in the manifest) must be unique on
+  the phone, e.g. `com.NAME.app`.
+- **Installing:** serve the folder with `python3 -m http.server 8765
+  --bind 127.0.0.1` (in the background) and `mynx open
+  http://127.0.0.1:8765/NAME.apk`; the browser downloads it, and
+  **Open** starts Android's installer. mynx must be on screen: when
+  `mynx open` says it isn't, ask the user to come back to it, then
+  run it again. The first time, Android asks to allow the browser to
+  install apps.
+- **No adb or logcat here:** you can't read the app's log or see why
+  it crashed. Have it write errors where Debian can read them, e.g. a
+  `Thread.setDefaultUncaughtExceptionHandler` that writes to
+  `/storage/emulated/0/Download/NAME-crash.txt`.
+- **Hardware:** each permission goes in the manifest
+  (`<uses-permission>`); camera, location, microphone, contacts and
+  the like are also asked at run time (`requestPermissions`).
+- **Internet:** the `INTERNET` permission, then `HttpURLConnection`.
+  Android blocks plain `http://` unless the manifest's
+  `android:networkSecurityConfig` allows it, e.g. for one host in
+  `res/xml/network_security_config.xml`:
+  `<network-security-config><domain-config cleartextTrafficPermitted="true"><domain>127.0.0.1</domain></domain-config></network-security-config>`
+- **Widgets** (an `AppWidgetProvider`) show only RemoteViews: text,
+  images, buttons, lists, `TextClock`; no custom views or WebView
+  (draw a `Bitmap` for a chart). They update on their own at most
+  every 30 minutes (`updatePeriodMillis`); more often needs
+  `AlarmManager` or `JobScheduler`, or a tap
+  (`setOnClickPendingIntent`).
+- **Running in the background:** short jobs through `JobScheduler`;
+  anything that keeps running needs a foreground service with a
+  notification.
+
+**An Android app and Debian:** an app or widget can talk to a server
+running here as a background service (`mynx service add`, see
+"Background services"), at `http://127.0.0.1:PORT` with plain `http`
+allowed for `127.0.0.1` as above. So a widget can show what a script
+works out, or its buttons can run commands. It only works while mynx
+runs; tell the user so.
