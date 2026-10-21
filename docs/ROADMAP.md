@@ -41,6 +41,25 @@ The design and the parts are in the work log ("Parked: roadmap step 8").
 - Turn each phone permission on or off per profile (today: one
   `android-*` setting each).
 
+### Agent widget
+A home screen widget that starts a chat with an AI agent, even when
+the app isn't running. Widgets can't hold a text field, so like
+Claude's widget it's a set of shortcuts: a bar that looks like a
+prompt line ("Ask Claude…") with a mic button at its end.
+- **The text box** opens a new tab with the default agent (`mynx
+  agent start`, which offers to install it if it's missing). It's an
+  intent action like the Settings shortcut's, so `tabToOpen` already
+  covers a cold start and a first run that installs Debian.
+- **The mic** does the same, then listens with Android's speech
+  recognizer (a "Listening…" overlay) and types what was said into
+  the agent's prompt without pressing Enter, for every agent.
+  Claude Code's own `/voice` is hold-to-talk and Claude-only.
+- New settings: `default-agent` (`claude`, `codex`, `gemini`), and
+  perhaps `agent-model`, passed as `--model`.
+- The widget takes the theme's colours; mynx dev (`.dev`) gets its own
+  copy, like the shortcuts.
+- To check: whether each agent keeps what's typed while it starts.
+
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
 APIs like `mynx sensor` and `mynx camera`, each with `--json` and an

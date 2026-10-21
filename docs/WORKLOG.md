@@ -197,6 +197,13 @@ Ctrl+Shift).
 
 ## Log
 
+### 2026-10-21 (135): agent widget on the roadmap (branch `roadmap-agent-widget`)
+
+- At the maintainer's request: "Agent widget" in `docs/ROADMAP.md`, a
+  home screen widget like Claude's (shortcuts, not a text field) whose
+  text box opens a tab with the default agent and whose mic also
+  listens with Android's speech recognizer. Planned only; no code.
+
 ### 2026-10-21 (134): the guide on making apps (branch `guide-making-apps`)
 
 - At the maintainer's request, after an agent built an Android widget
