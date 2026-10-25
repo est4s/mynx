@@ -67,15 +67,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Release v0.3.0 (the maintainer's)
-
-USB serial parts 1-3, Go programs, PlatformIO's ESP32 toolchains
-and the small serial fixes (PR #33, #34, #36, #37, #39, #42) are
-tested on the phone, unreleased. Only the maintainer tags
-(`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
-`git show 2eaa373:docs/WORKLOG.md`.
-
-### Then, development boards (suggested order; the maintainer picks)
+### 0. Development boards (suggested order; the maintainer picks)
 
 1. **Android's process limit** (entry 132): confirm on the Nord 2
    that the user guide's adb steps ("How it runs") stop Android
@@ -84,6 +76,15 @@ tested on the phone, unreleased. Only the maintainer tags
    at the maintainer's request (PR #39).
 2. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
    milestone of their own.
+
+### Then, release v0.3.0 (the maintainer's)
+
+Moved after the development boards by the maintainer (2026-10-25),
+so the release takes them too. USB serial parts 1-3, Go programs,
+PlatformIO's ESP32 toolchains and the small serial fixes (PR #33,
+#34, #36, #37, #39, #42) are tested on the phone, unreleased. Only the maintainer tags
+(`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
+`git show 2eaa373:docs/WORKLOG.md`.
 
 ### 1. Smaller things
 
@@ -194,6 +195,12 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-25 (137): the release moves after the development boards
+
+- At the maintainer's request, "Next" now has the development boards
+  (the process limit, UF2 and raw USB) before releasing v0.3.0. Docs
+  only.
 
 ### 2026-10-25 (136): Small serial fixes (branch `serial-small`)
 
