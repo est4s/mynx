@@ -33,11 +33,15 @@ and applies them. See "Changing settings" below.
   every call failing ("Function not implemented"). Turn the limit off:
   - Android 14 and later: Developer options →
     **Disable child process restrictions**.
-  - Android 12L and 13 (no such switch): `adb shell settings put global
-    settings_enable_monitor_phantom_procs false`.
-  - Android 12: `adb shell device_config set_sync_disabled_for_tests
-    persistent`, then `adb shell device_config put activity_manager
-    max_phantom_processes 2147483647`.
+  - Android 12, 12L and 13 (no such switch): `adb shell device_config
+    set_sync_disabled_for_tests persistent`, then `adb shell
+    device_config put activity_manager max_phantom_processes
+    2147483647`. On 12L and 13, `adb shell settings put global
+    settings_enable_monitor_phantom_procs false` works too, but some
+    phones (OnePlus, Oppo, Realme, Xiaomi) refuse it ("Permission
+    denial: … WRITE_SECURE_SETTINGS") unless Developer options →
+    **Disable permission monitoring** is on; `device_config` needs
+    neither.
 
   `adb` works from here too, with no computer: on Wi-Fi, turn on
   Developer options → **Wireless debugging**, `apt install adb`, then

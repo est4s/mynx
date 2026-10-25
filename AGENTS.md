@@ -726,6 +726,11 @@ Bugs that took a phone round to find; keep them from coming back.
   like a proot crash: its tracees keep running and fail with ENOSYS.
   Rule that out before suspecting a proot change; the user guide
   ("How it runs") says how to turn the limit off per Android version.
+  On the Nord 2 (Android 13), `settings put global
+  settings_enable_monitor_phantom_procs false` is refused from adb
+  (OnePlus withholds `WRITE_SECURE_SETTINGS`), but `device_config put
+  activity_manager max_phantom_processes 2147483647` (with sync off)
+  works: two C3 builds at once then passed (entry 138).
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.
