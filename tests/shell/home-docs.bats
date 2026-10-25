@@ -152,6 +152,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide gives Android 13 the device_config way, which OnePlus phones allow" {
+    grep -qF "Android 12, 12L and 13 (no such switch)" "$GUIDE"
+    grep -qF "WRITE_SECURE_SETTINGS" "$GUIDE"
+    grep -qF "Disable permission monitoring" "$GUIDE"
+}
+
 @test "the guide's PlatformIO recipe builds for the ESP32" {
     ! grep -qF "don't install here yet" "$GUIDE"
     grep -qF "Its ESP32 toolchains install and build" "$GUIDE"

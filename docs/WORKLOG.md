@@ -59,6 +59,9 @@ are in git history: the full log up to entry 92 is
   `read_flash` on the C3, the Nano, a Pro Micro upload and the busy
   hint passed on the phone (build 214); FTDI not tried. Not released
   yet.
+- **Android's process limit:** confirmed on the Nord 2 (entry
+  138): the `device_config` commands stop the kills; the guide now
+  gives them for Android 12-13.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -69,13 +72,8 @@ are in git history: the full log up to entry 92 is
 
 ### 0. Development boards (suggested order; the maintainer picks)
 
-1. **Android's process limit** (entry 132): confirm on the Nord 2
-   that the user guide's adb steps ("How it runs") stop Android
-   killing a big build (PlatformIO's C3 build in `~/sketches/pio-c3`
-   in mynx dev), and fix the guide if they don't. Merged without it
-   at the maintainer's request (PR #39).
-2. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
-   milestone of their own.
+1. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
+   milestone of their own. Plan it with the maintainer first.
 
 ### Then, release v0.3.0 (the maintainer's)
 
@@ -88,6 +86,13 @@ PlatformIO's ESP32 toolchains and the small serial fixes (PR #33,
 
 ### 1. Smaller things
 
+- **Services don't get `~/.local/bin` on their PATH** (entry 138):
+  root's default `.bashrc` adds it after its non-interactive
+  `return`, so a service can't find `pio`, `arduino-cli` or pipx
+  tools, though the guide says the login PATH applies. Move the
+  `export` above the `return` (`rootfs/root/.bashrc`, a bats test;
+  existing Debians keep their own `.bashrc`, so maybe also add it in
+  `service-run` or `/etc/profile.d/mynx.sh`).
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (guide: "Making an
   app", entry 134): a `mynx` command that opens the installer for an
@@ -195,6 +200,30 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-25 (138): Android's process limit on the Nord 2 (branch `process-limit-guide`)
+
+In mynx dev build 214, adb over Wireless debugging from the app
+(`adb pair localhost:…`, run by the maintainer with the dialog open;
+from a screenshot the code had already expired).
+- Before: `settings_enable_monitor_phantom_procs` and
+  `max_phantom_processes` both unset (Android's defaults).
+- The guide's Android 12L/13 command, `settings put global
+  settings_enable_monitor_phantom_procs false`, failed: "Permission
+  denial: writing to settings requires
+  android.permission.WRITE_SECURE_SETTINGS" (OnePlus wants Developer
+  options → Disable permission monitoring for that). The Android 12
+  pair worked: `device_config set_sync_disabled_for_tests
+  persistent`, `device_config put activity_manager
+  max_phantom_processes 2147483647`.
+- Then a clean `pio run` of `~/sketches/pio-c3` as a service (118 s),
+  and two at once, a service's and this tab's, where both proots were
+  killed before (143 s and 113 s): all passed, nothing killed. Not
+  checked: that the setting survives a reboot.
+- Guide: Android 12, 12L and 13 use `device_config`; the `settings`
+  way is mentioned with the OnePlus refusal. Test in
+  `home-docs.bats`. AGENTS.md's lesson updated.
+- Found: services don't get `~/.local/bin` (see Next).
 
 ### 2026-10-25 (137): the release moves after the development boards
 
