@@ -6,12 +6,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbDeviceConnection
+import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbManager
+import android.hardware.usb.UsbRequest
 import android.os.Build
 import android.os.Handler
 import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
+import com.hoho.android.usbserial.driver.FtdiSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
@@ -36,17 +40,19 @@ import io.github.est4s.terminal.core.usbDriverName
 import io.github.est4s.terminal.core.usbIds
 import java.io.File
 import java.io.IOException
+import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
 private const val ACTION_USB_PERMISSION = "io.github.est4s.terminal.USB_PERMISSION"
 private const val WRITE_TIMEOUT_MS = 5000
-// Reads kept queued on each port, a packet each. Linux's cdc-acm keeps 16,
-// but it queues each again as it completes; here our thread must collect it
-// first. A short packet ends a read, and esptool's stub on an ESP32-C3's
-// USB-Serial-JTAG flushes after every byte: 256 reads held 256 bytes, ~30 ms,
-// and a longer pause made the stub drop bytes and read_flash hang at 72%.
-// 4096 hold ~0.5 s of those, in the same 256 KB as 256 reads of 1 KB did.
-private const val READ_QUEUE = 4096
+// Reads kept queued on each port, a packet each, at most. Linux's cdc-acm
+// keeps 16, but it queues each again as it completes; here our thread must
+// collect it first. A short packet ends a read, and esptool's stub on an
+// ESP32-C3's USB-Serial-JTAG flushes after every byte, so each read holds
+// one byte. Android stops queueing at some number (~256 here):
+// UsbReads keeps what it takes.
+private const val READ_QUEUE = 1024
+private const val FTDI_STATUS_BYTES = 2
 // After an attach, how often and how many times to look again for a device
 // Android allowed without a broadcast reaching us (problem 6 of the phone
 // tests: a Pro Micro sat allowed with no port until the app came on screen).
@@ -231,13 +237,20 @@ class UsbBridge(
                 val connection = usb.openDevice(device) ?: throw IOException("Android gave no connection")
                 step = "opening its port"
                 port.open(connection)
+                var queued: UsbReads? = null
                 try {
                     // Keeps the IN endpoint polled while a read is handed on. An
                     // ESP32-C3's USB-Serial-JTAG under esptool's stub dropped all but
                     // the first packet of each reply with one read at a time, as if it
                     // gives up on a packet the host doesn't collect at once.
-                    port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64))
                     val trace = PortTrace(File(logDir, "$name.trace"))
+                    step = "queueing reads"
+                    val reads = UsbReads(
+                        connection, port.readEndpoint, READ_QUEUE,
+                        header = if (driver is FtdiSerialDriver) FTDI_STATUS_BYTES else 0,
+                        refused = trace::requeueRefused,
+                    )
+                    queued = reads
                     val line = UsbLine(port, trace)
                     step = "setting 9600 8N1"
                     line.configure(LineSettings())
@@ -247,8 +260,9 @@ class UsbBridge(
                     line.setRts(false)
                     step = "serving it"
                     val server = newServer(line)
-                    opened.ports += OpenPort(name, port, server, trace).also { it.start() }
+                    opened.ports += OpenPort(name, port, reads, server, trace).also { it.start() }
                 } catch (e: Exception) {
+                    queued?.cancel()
                     // Not in opened.ports yet, so close() won't reach it.
                     runCatching { port.close() }
                     throw e
@@ -286,7 +300,13 @@ class UsbBridge(
         val ports = mutableListOf<OpenPort>()
     }
 
-    private inner class OpenPort(val name: String, val port: UsbSerialPort, val server: SerialServer, val trace: PortTrace) {
+    private inner class OpenPort(
+        val name: String,
+        val port: UsbSerialPort,
+        val reads: UsbReads,
+        val server: SerialServer,
+        val trace: PortTrace,
+    ) {
         @Volatile private var closed = false
         @Volatile private var process: Process? = null
 
@@ -295,7 +315,7 @@ class UsbBridge(
             thread(name = "usb-read-$name", isDaemon = true) { readLoop() }
             thread(name = "serial-port-$name", isDaemon = true) { runHelper() }
             thread(name = "usb-trace-$name", isDaemon = true) {
-                trace.event("open: ${port.readQueueBufferCount} reads of ${port.readQueueBufferSize} B queued")
+                trace.event("open: ${reads.count} reads of ${reads.size} B queued (asked $READ_QUEUE)")
                 while (!closed) {
                     Thread.sleep(1000)
                     trace.tick(server.busy)
@@ -305,20 +325,16 @@ class UsbBridge(
         }
 
         private fun readLoop() {
-            // With a read queue, each read must take exactly its buffers' size.
-            val buffer = ByteArray(port.readQueueBufferSize)
+            val buffer = ByteArray(reads.size)
             // A late collect leaves the device no read to fill.
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
             while (!closed) {
                 val n = try {
-                    port.read(buffer, 0)
+                    reads.read(buffer)
                 } catch (e: Exception) {
                     if (closed) break
                     trace.readError(e)
-                    // Unplugged: refresh() closes it. Or still there: the library
-                    // checks the device after an empty packet and gives up if it
-                    // doesn't answer in 200 ms, as a Pro Micro's bootloader doesn't
-                    // after a command it ignores (avrdude's ESC). Keep reading.
+                    // Unplugged: refresh() closes it. Or still there: keep reading.
                     handler.post { refresh() }
                     Thread.sleep(100)
                     continue
@@ -366,7 +382,9 @@ class UsbBridge(
             closed = true
             process?.let(::stopHelper)
             server.close()
-            // Cancels the queued reads, which ends the blocking one, and closes the connection.
+            // Ends the blocking wait.
+            reads.cancel()
+            // Closes the connection.
             runCatching { port.close() }
             // The helper is killed, so its link stays: take it away here.
             File(serialDir, name).delete()
@@ -453,6 +471,66 @@ private class UsbLine(private val port: UsbSerialPort, private val trace: PortTr
 }
 
 /**
+ * A port's reads, kept queued on its IN endpoint, one packet each. Not the
+ * library's read queue: when Android refused to queue a completed read again,
+ * its read() threw after taking the packet, so the packet was lost (esptool's
+ * replies cut short), and it turned every empty packet into a GET_STATUS of
+ * up to 200 ms. Here a read Android refuses waits to be queued again, and an
+ * empty packet is just nothing to pass on. Only the read thread calls read().
+ */
+private class UsbReads(
+    private val connection: UsbDeviceConnection,
+    endpoint: UsbEndpoint,
+    asked: Int,
+    // FTDI's status bytes at the start of each packet (its driver's read strips them).
+    private val header: Int,
+    private val refused: () -> Unit,
+) {
+    val size = endpoint.maxPacketSize.coerceAtLeast(64)
+    private val requests = mutableListOf<UsbRequest>()
+    private val unqueued = ArrayDeque<UsbRequest>()
+    val count get() = requests.size
+
+    init {
+        for (i in 0 until asked) {
+            val request = UsbRequest()
+            val buffer = ByteBuffer.allocate(size)
+            request.clientData = buffer
+            if (!request.initialize(connection, endpoint) || !request.queue(buffer)) {
+                request.close()
+                break
+            }
+            requests += request
+        }
+        if (requests.isEmpty()) throw IOException("Android queued no USB read")
+    }
+
+    fun read(dest: ByteArray): Int {
+        while (unqueued.isNotEmpty() && queue(unqueued.first())) unqueued.removeFirst()
+        // Unplugged, most likely: the caller asks the bridge to look.
+        if (unqueued.size == requests.size) throw IOException("Android queues no USB read")
+        val request = connection.requestWait() ?: throw IOException("Waiting for USB request failed")
+        val buffer = request.clientData as ByteBuffer
+        val n = (buffer.position() - header).coerceAtLeast(0)
+        if (n > 0) System.arraycopy(buffer.array(), header, dest, 0, n)
+        if (!queue(request)) {
+            unqueued.addLast(request)
+            refused()
+        }
+        return n
+    }
+
+    private fun queue(request: UsbRequest): Boolean {
+        val buffer = request.clientData as ByteBuffer
+        buffer.clear()
+        return request.queue(buffer)
+    }
+
+    // Not close(): one could still be queued. Closing the connection ends them.
+    fun cancel() = requests.forEach { runCatching { it.cancel() } }
+}
+
+/**
  * TEMPORARY (the 4 MB `read_flash` that stalls on a C3): what goes through
  * a port, a line a second while anything moves or a write is stuck. In
  * Debian: /tmp/.mynx/serial/NAME.trace.
@@ -462,6 +540,7 @@ private class PortTrace(private val file: File) {
     private val reads = java.util.concurrent.atomic.AtomicLong()
     private val emptyReads = java.util.concurrent.atomic.AtomicLong()
     private val readErrors = java.util.concurrent.atomic.AtomicLong()
+    private val refusals = java.util.concurrent.atomic.AtomicLong()
     private val outBytes = java.util.concurrent.atomic.AtomicLong()
     private val writes = java.util.concurrent.atomic.AtomicLong()
     @Volatile private var biggest = 0
@@ -479,6 +558,10 @@ private class PortTrace(private val file: File) {
 
     fun readError(e: Exception) {
         if (readErrors.incrementAndGet() <= 20) event("read failed: $e")
+    }
+
+    fun requeueRefused() {
+        if (refusals.incrementAndGet() <= 20) event("Android refused to queue a read again (${refusals.get()})")
     }
 
     fun <T> writing(size: Int, block: () -> T): T {

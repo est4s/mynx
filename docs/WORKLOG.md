@@ -78,15 +78,16 @@ unreleased. Only the maintainer tags
    in mynx dev), and fix the guide if they don't. Merged without it
    at the maintainer's request (PR #39).
 2. **Small serial fixes, PR #42, branch `serial-small` (entry 136):**
-   install its build in mynx dev, then (a) the 4 MB `read_flash` on
-   the C3 with the trace on (`esptool --chip esp32c3 --port "$(mynx
-   usb url ttyACMn)" read_flash 0 0x400000 f.bin`; it stalled at
-   ~600 KB on build 209, at 72% on 212; 4096 queued reads since), read
-   `/tmp/.mynx/serial/ttyACMn.trace` around a stall, fix, and remove
-   the trace (`PortTrace` in
-   `UsbBridge.kt`) before merging; (b) the busy hint (hold the URL,
-   open the path: `mynx usb` says "waiting"); (c) "no port yet" if
-   it shows again: `mynx usb allow` now opens the device again.
+   install its build with `UsbReads` in mynx dev, then (a) the 4 MB
+   `read_flash` on the C3 (`esptool --chip esp32c3 --port "$(mynx usb
+   url ttyACMn)" read_flash 0 0x400000 f.bin`); the trace's `open:`
+   line says how many reads Android took, and "refused to queue"
+   lines how often one waited; also an FTDI, CH340 or CP210x board
+   still reads right (the Nano: `mynx usb monitor`). If it passes,
+   remove the trace (`PortTrace` in `UsbBridge.kt`) before merging;
+   (b) the busy hint (hold the URL, open the path: `mynx usb` says
+   "waiting"); (c) "no port yet" if it shows again: `mynx usb allow`
+   now opens the device again.
 3. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
    milestone of their own.
 
@@ -247,7 +248,18 @@ On mynx dev build 209, a Nano, a C3 and an Arduino Micro on a hub.
   #1]" (it used to answer at once).
 - Boards dropped off the hub by themselves now and then (the Micro and
   Nano 4 min after the stall): the hub's power, as in entry 126.
-- Commits: busy hint, no-port fix, trace.
+- **Build 213 (4096 queued reads), worse:** `read_flash` never
+  connected ("Wrong boot mode"), and `chip_id` failed right after the
+  stub started ("Packet content transfer stopped (received 3
+  bytes)"). The trace's errors, all `Queueing USB request failed`,
+  with bursts of at most 255 reads: Android stops queueing at ~256,
+  and the library's `read()` queues the completed read again *after*
+  copying its packet and throws when that fails, so the packet is
+  lost. Now `UsbReads` in `UsbBridge` instead of the library's read
+  queue: up to 1024 reads, as many as Android takes; a refused one
+  waits to be queued again (counted in the trace); empty packets
+  pass with no GET_STATUS; FTDI's 2 status bytes stripped there.
+- Commits: busy hint, no-port fix, trace, 4096 reads, own reads.
 
 ### 2026-10-21 (135): agent widget on the roadmap (branch `roadmap-agent-widget`)
 
