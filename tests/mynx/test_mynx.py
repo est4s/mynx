@@ -1844,6 +1844,18 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         device.update(fields)
         return device
 
+    def test_usb_says_a_path_waits_while_a_url_has_the_port(self):
+        device = self.usb_device(ports=[("ttyUSB0", 2217, True)])
+        device["ports"][0]["waiting"] = True
+        self.start_app({"usb-list": {"ok": True, "devices": [device]}})
+        run = self.mynx("usb")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout,
+                         "ttyUSB0  USB Serial (1a86:7523), in use\n"
+                         "  /dev/serial/ttyUSB0 (waiting: a program has the URL)\n"
+                         "  rfc2217://localhost:2217\n"
+                         "A serial monitor: mynx usb monitor [PORT]\n")
+
     def test_usb_lists_ports_with_their_paths_and_urls(self):
         devices = [
             self.usb_device(ports=[("ttyUSB0", 2217, True)]),
@@ -1885,7 +1897,8 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.start_app({"usb-list": {"ok": True, "devices": [device]}})
         run = self.mynx("usb")
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertEqual(run.stdout, "Arduino Micro (2341:8037): no port yet; the app is opening it\n")
+        self.assertEqual(run.stdout, "Arduino Micro (2341:8037): no port yet; the app is opening it\n"
+                                     "  if it stays so: mynx usb allow 2341:8037\n")
 
     def test_usb_allow_asks_and_shows_the_ports(self):
         device = self.usb_device(ports=[("ttyUSB0", 2217, False)])

@@ -693,20 +693,23 @@ Bugs that took a phone round to find; keep them from coming back.
   `::1` (on a desktop JVM it's 127.0.0.1, so tests pass), and
   `serial-port` connects to 127.0.0.1: every `/dev/serial` pty was
   refused while `rfc2217://localhost` worked.
-- **Keep many USB reads queued** (`UsbBridge`, `setReadQueue(256, …)`):
+- **Keep many USB reads queued, our own** (`UsbBridge`'s `UsbReads`):
   with one read at a time, an ESP32-C3's USB-Serial-JTAG under
   esptool's stub sent only the first packet of each reply (`c0 01`)
   and lost the rest (the ROM loader, `--no-stub`, was fine); 16 fixed
-  that, but `read_flash` still lost bytes after 20-90 KB. Likely (until
-  256 works on the phone): the device drops what the host doesn't
-  collect in time, a short packet ends a
-  read and the stub sends 63-byte ones, so 16 reads held 1 KB. Linux
-  queues each read again in the kernel as it completes; on Android
-  our thread must collect it first (it runs at audio priority). The library's queue goes through
-  each driver's `read`, so FTDI's status bytes are still stripped.
-  Each port gets its own `UsbDeviceConnection`: `requestWait()`
-  returns any request of the connection, so ports sharing one would
-  take each other's data.
+  that, but `read_flash` still lost bytes. The stub flushes after
+  every byte, so each read holds one byte. Linux queues each read
+  again in the kernel as it completes; on Android our thread must
+  collect it first (it runs at audio priority). Android sometimes
+  refuses to queue a read again (past ~256 on the Nord 2): the
+  library's read queue then threw from `read()` after taking the
+  packet, so bytes were lost (4096 reads broke `chip_id`), and it
+  turned each empty packet into a GET_STATUS of up to 200 ms.
+  `UsbReads` queues as many as Android takes, keeps a refused one to queue again later, passes
+  empty packets by, and strips FTDI's 2 status bytes itself (the
+  library's FTDI `read` did). Each port gets its own
+  `UsbDeviceConnection`: `requestWait()` returns any request of the
+  connection, so ports sharing one would take each other's data.
 - **Drop RTS before DTR** (`SerialServer`, a client leaving): DTR
   off with RTS on resets an ESP32 through the usual auto-reset
   circuit and a C3's USB-Serial-JTAG, into the bootloader when DTR

@@ -9,8 +9,15 @@ const val SERIAL_PORT_HELPER = "$TOOLS_MOUNT/lib/serial-port"
 // How long `mynx usb allow` waits for the user to answer Android's dialog.
 private const val ALLOW_SECONDS = 120
 
-/** A serial port served to Debian: [name] in [SERIAL_MOUNT], and RFC 2217 on localhost [tcpPort]. */
-data class SerialPortInfo(val name: String, val tcpPort: Int, val inUse: Boolean)
+/**
+ * A serial port served to Debian: [name] in [SERIAL_MOUNT], and RFC 2217 on
+ * localhost [tcpPort]. [waiting]: a program has the [SERIAL_MOUNT] path open
+ * while a URL client has the port, so it gets nothing yet.
+ */
+data class SerialPortInfo(val name: String, val tcpPort: Int, val inUse: Boolean, val waiting: Boolean = false)
+
+/** The mark `serial-port` leaves in the ports folder while its terminal waits for a busy port. */
+fun serialWaitingMark(name: String) = ".$name.waiting"
 
 /**
  * A USB device a serial driver can drive. [id] is Android's name for it
@@ -87,6 +94,7 @@ fun usbDeviceJson(device: UsbSerialDevice): String = obj(
             "url" to json(serialUrl(port)),
             "tcp_port" to port.tcpPort.toString(),
             "in_use" to port.inUse.toString(),
+            "waiting" to port.waiting.toString(),
         )
     }),
 )
@@ -94,8 +102,8 @@ fun usbDeviceJson(device: UsbSerialDevice): String = obj(
 /**
  * The `usb-list` and `usb-allow [DEVICE]` requests, for [MynxRequests]'s
  * `later`. [devices] gives what Android sees now; [allow] asks Android
- * for access to a device (by its id) and answers null once allowed and
- * its ports are served, else why not.
+ * for access to a device (by its id), or opens an allowed one with no
+ * port again, and answers null once its ports are served, else why not.
  */
 fun usbRequests(
     devices: () -> List<UsbSerialDevice>,
@@ -108,8 +116,10 @@ fun usbRequests(
     val allowRequest = Later(ALLOW_SECONDS) { args, reply ->
         val which = args.firstOrNull()?.trim().orEmpty()
         val all = devices()
+        // Allowed but with no port: the bridge missed it, or failed to open it; it tries again.
+        fun waits(device: UsbSerialDevice) = !device.allowed || device.ports.isEmpty()
         val device = if (which.isEmpty()) {
-            val waiting = all.filter { !it.allowed }
+            val waiting = all.filter(::waits)
             when (waiting.size) {
                 0 -> return@Later reply.refuse("no USB serial device is waiting for access")
                 1 -> waiting.single()
@@ -119,7 +129,7 @@ fun usbRequests(
             all.firstOrNull { it.id == which || usbIds(it.vendorId, it.productId) == which.lowercase() }
                 ?: return@Later reply.refuse("no USB serial device $which (mynx usb lists them)")
         }
-        if (device.allowed) return@Later reply.ok("device" to usbDeviceJson(device))
+        if (!waits(device)) return@Later reply.ok("device" to usbDeviceJson(device))
         allow(device.id) { error ->
             if (error != null) return@allow reply.refuse(error)
             val now = devices().firstOrNull { it.id == device.id } ?: device

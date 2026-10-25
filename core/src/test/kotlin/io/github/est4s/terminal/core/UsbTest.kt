@@ -67,7 +67,7 @@ class UsbNamesTest {
 private val ch340 = UsbSerialDevice(
     id = "/dev/bus/usb/001/002", vendorId = 0x1a86, productId = 0x7523,
     manufacturer = "QinHeng Electronics", product = "USB Serial", serial = null,
-    driver = "ch34x", allowed = true, ports = emptyList(), error = null,
+    driver = "ch34x", allowed = true, ports = listOf(SerialPortInfo("ttyUSB0", 2217, inUse = false)), error = null,
 )
 
 class UsbRequestTest {
@@ -94,13 +94,13 @@ class UsbRequestTest {
 
     @Test
     fun `lists the devices with their ports, paths and URLs`() {
-        devices = listOf(ch340.copy(ports = listOf(SerialPortInfo("ttyUSB0", 2217, inUse = true))), esp)
+        devices = listOf(ch340.copy(ports = listOf(SerialPortInfo("ttyUSB0", 2217, inUse = true, waiting = true))), esp)
         send("1-1", "usb-list")
         assertEquals(
             """{"ok":true,"devices":[""" +
                 """{"id":"/dev/bus/usb/001/002","ids":"1a86:7523","manufacturer":"QinHeng Electronics","product":"USB Serial",""" +
                 """"serial":null,"driver":"ch34x","allowed":true,"error":null,"ports":[""" +
-                """{"name":"ttyUSB0","path":"/dev/serial/ttyUSB0","url":"rfc2217://localhost:2217","tcp_port":2217,"in_use":true}]},""" +
+                """{"name":"ttyUSB0","path":"/dev/serial/ttyUSB0","url":"rfc2217://localhost:2217","tcp_port":2217,"in_use":true,"waiting":true}]},""" +
                 """{"id":"/dev/bus/usb/001/003","ids":"303a:1001","manufacturer":"Espressif","product":"USB JTAG/serial debug unit",""" +
                 """"serial":"F4:12:FA:00:11:22","driver":"cdc-acm","allowed":false,"error":null,"ports":[]}]}""",
             reply("1-1"),
@@ -147,13 +147,34 @@ class UsbRequestTest {
     }
 
     @Test
-    fun `allow with nothing waiting says so, and an allowed device is answered at once`() {
+    fun `an allowed device with no port is opened again, picked like one not allowed`() {
+        // Allowed, but the bridge never opened it (problem 6: a Pro Micro sat at
+        // "no port yet" for 40 minutes, and `mynx usb allow` answered at once).
+        val served = ch340
+        val stuck = esp.copy(allowed = true)
+        devices = listOf(served, stuck)
+        send("1-1", "usb-allow")
+        assertEquals(stuck.id, asked.single().first)
+        devices = listOf(served, stuck.copy(ports = listOf(SerialPortInfo("ttyACM0", 2218, inUse = false))))
+        asked.single().second(null)
+        assertEquals(true, (parseJson(reply("1-1")) as Map<*, *>)["ok"])
+        devices = listOf(served, stuck)
+        send("1-2", "usb-allow", "303a:1001")
+        assertEquals(listOf(stuck.id, stuck.id), asked.map { it.first })
+        send("1-3", "usb-allow", "/dev/bus/usb/001/003")
+        assertEquals(3, asked.size)
+    }
+
+    @Test
+    fun `allow with nothing waiting says so, and a served device is answered at once`() {
         devices = emptyList()
         send("1-1", "usb-allow")
         assertEquals("""{"ok":false,"error":"no USB serial device is waiting for access"}""", reply("1-1"))
         devices = listOf(ch340)
-        send("1-2", "usb-allow", "1a86:7523")
-        assertEquals(true, (parseJson(reply("1-2")) as Map<*, *>)["ok"])
+        send("1-2", "usb-allow")
+        assertEquals("""{"ok":false,"error":"no USB serial device is waiting for access"}""", reply("1-2"))
+        send("1-2b", "usb-allow", "1a86:7523")
+        assertEquals(true, (parseJson(reply("1-2b")) as Map<*, *>)["ok"])
         assertEquals(emptyList(), asked)
         send("1-3", "usb-allow", "dead:beef")
         assertEquals("""{"ok":false,"error":"no USB serial device dead:beef (mynx usb lists them)"}""", reply("1-3"))

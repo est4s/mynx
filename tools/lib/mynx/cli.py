@@ -816,13 +816,15 @@ def usb_text(devices):
         label = usb_label(device)
         for port in device["ports"]:
             lines += [f"{port['name']:<8} {label}{', in use' if port['in_use'] else ''}",
-                      f"  {port['path']}", f"  {port['url']}"]
+                      f"  {port['path']}{' (waiting: a program has the URL)' if port.get('waiting') else ''}",
+                      f"  {port['url']}"]
         if not device["allowed"]:
             lines += [f"{label}: not allowed", f"  mynx usb allow {device['ids']} (app on screen)"]
         elif device.get("error"):
             lines.append(f"{label}: {device['error']}")
         elif not device["ports"]:
-            lines.append(f"{label}: no port yet; the app is opening it")
+            lines += [f"{label}: no port yet; the app is opening it",
+                      f"  if it stays so: mynx usb allow {device['ids']}"]
     if any(device["ports"] for device in devices):
         lines.append("A serial monitor: mynx usb monitor [PORT]")
     return "\n".join(lines)

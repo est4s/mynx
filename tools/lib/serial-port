@@ -40,6 +40,9 @@ IDLE = 0.1
 # touch didn't reach a Pro Micro (tried on the phone; 0.1 s did).
 QUICK_OPEN = 0.2
 RETRY = 1.0
+# The app's server greets a client it takes at once, and closes on one it
+# refuses because another client has the port (an rfc2217:// URL).
+GREETING_WAIT = 1.0
 
 SPEEDS = {getattr(termios, n): int(n[1:]) for n in dir(termios) if n[:1] == "B" and n[1:].isdigit()}
 SIZES = {termios.CS5: 5, termios.CS6: 6, termios.CS7: 7, termios.CS8: 8}
@@ -145,6 +148,8 @@ class Bridge:
         self.settings = None
         self.stopped = False
         self.retry_at = 0.0
+        self.waiting = False
+        self.waiting_path = os.path.join(os.path.dirname(self.link), f".{name}.waiting")
 
     def make_terminal(self):
         """The pseudo-terminal, raw at 9600 8N1 (as Linux leaves a fresh
@@ -178,7 +183,23 @@ class Bridge:
         except OSError:
             return False
 
+    def set_waiting(self, waiting):
+        """Marks the terminal as waiting for the port (`mynx usb` shows it), and says so once in the log."""
+        if waiting == self.waiting:
+            return
+        self.waiting = waiting
+        if waiting:
+            open(self.waiting_path, "w").close()
+            log(self.name, f"busy: another program has rfc2217://localhost:{self.address[1]}; "
+                           f"{self.link} waits for it")
+        else:
+            try:
+                os.unlink(self.waiting_path)
+            except OSError:
+                pass
+
     def remove_link(self):
+        self.set_waiting(False)
         if self.ctl:
             self.ctl.close()
             self.ctl = None
@@ -260,11 +281,18 @@ class Bridge:
         if time.monotonic() < self.retry_at:
             return False
         try:
-            self.sock = socket.create_connection(self.address, timeout=2)
+            sock = socket.create_connection(self.address, timeout=2)
         except OSError as e:
             self.retry_at = time.monotonic() + RETRY
             log(self.name, f"the app's port isn't there ({e.strerror or e}); trying again")
             return False
+        if refused(sock):
+            sock.close()
+            self.retry_at = time.monotonic() + RETRY
+            self.set_waiting(True)
+            return False
+        self.set_waiting(False)
+        self.sock = sock
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.unescaper = Unescaper()
         self.settings = line_settings(termios.tcgetattr(self.master))
@@ -328,6 +356,8 @@ class Bridge:
         """One round: connect while the terminal is open, pass bytes along, and let go once it's closed."""
         is_open, pending = self.opened()
         if self.sock is None:
+            if not is_open:
+                self.set_waiting(False)
             if is_open or pending:
                 if self.connect():
                     return
@@ -389,6 +419,16 @@ class Bridge:
         finally:
             self.disconnect("stopped")
             self.remove_link()
+
+
+def refused(sock):
+    """Whether the app closed a new connection without greeting it: the port is busy."""
+    try:
+        if not select.select([sock], [], [], GREETING_WAIT)[0]:
+            return False
+        return sock.recv(1, socket.MSG_PEEK) == b""
+    except OSError:
+        return True
 
 
 def main(argv):
