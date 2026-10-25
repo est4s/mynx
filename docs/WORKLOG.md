@@ -56,8 +56,9 @@ are in git history: the full log up to entry 92 is
   (PR #39). Not released yet.
 - **Small serial fixes** (PR #42, entry 136): the bridge's own read
   queue (`UsbReads`), the busy hint and the no-port retry; the 4 MB
-  `read_flash` on the C3 and the busy hint passed on the phone
-  (build 214). Not released yet.
+  `read_flash` on the C3, the Nano, a Pro Micro upload and the busy
+  hint passed on the phone (build 214); FTDI not tried. Not released
+  yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -261,6 +262,14 @@ On mynx dev build 209, a Nano, a C3 and an Arduino Micro on a hub.
   hint: with the URL held, `mynx usb` showed `/dev/serial/ttyUSB0
   (waiting: a program has the URL)` and the helper logged "busy".
   "No port yet" didn't show again (not confirmed). Trace removed.
+- **Pro Micro on build 214, after the merge:** `touch-flash.sh` (the
+  1200 baud touch, then avrdude to the bootloader): the Caterina
+  bootloader (2341:0036) had a port 1.5 s after the touch (still
+  allowed from "always"), avrdude wrote and verified 4238 bytes, and
+  the board came back running Tick (`tick 23`, `tick 24`, … at 9600).
+  The bootloader's empty packets no longer cost a GET_STATUS. No FTDI
+  board has been tried with `UsbReads` (its 2 status bytes are now
+  stripped in `UsbReads`).
 - Commits: busy hint, no-port fix, trace, 4096 reads, own reads,
   trace removed.
 
