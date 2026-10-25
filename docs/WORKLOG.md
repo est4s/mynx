@@ -54,6 +54,10 @@ are in git history: the full log up to entry 92 is
 - **PlatformIO's ESP32 toolchains** (proot's `mynx_links`
   extension): a C3 project builds on the phone (entry 132); merged
   (PR #39). Not released yet.
+- **Small serial fixes** (PR #42, entry 136): the bridge's own read
+  queue (`UsbReads`), the busy hint and the no-port retry; the 4 MB
+  `read_flash` on the C3 and the busy hint passed on the phone
+  (build 214). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -64,9 +68,9 @@ are in git history: the full log up to entry 92 is
 
 ### 0. Release v0.3.0 (the maintainer's)
 
-USB serial parts 1-3, Go programs and PlatformIO's ESP32 toolchains
-(PR #33, #34, #36, #37, #39) are on `main`, tested on the phone,
-unreleased. Only the maintainer tags
+USB serial parts 1-3, Go programs, PlatformIO's ESP32 toolchains
+and the small serial fixes (PR #33, #34, #36, #37, #39, #42) are
+tested on the phone, unreleased. Only the maintainer tags
 (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
@@ -77,18 +81,7 @@ unreleased. Only the maintainer tags
    killing a big build (PlatformIO's C3 build in `~/sketches/pio-c3`
    in mynx dev), and fix the guide if they don't. Merged without it
    at the maintainer's request (PR #39).
-2. **Small serial fixes, PR #42, branch `serial-small` (entry 136):**
-   install its build with `UsbReads` in mynx dev, then (a) the 4 MB
-   `read_flash` on the C3 (`esptool --chip esp32c3 --port "$(mynx usb
-   url ttyACMn)" read_flash 0 0x400000 f.bin`); the trace's `open:`
-   line says how many reads Android took, and "refused to queue"
-   lines how often one waited; also an FTDI, CH340 or CP210x board
-   still reads right (the Nano: `mynx usb monitor`). If it passes,
-   remove the trace (`PortTrace` in `UsbBridge.kt`) before merging;
-   (b) the busy hint (hold the URL, open the path: `mynx usb` says
-   "waiting"); (c) "no port yet" if it shows again: `mynx usb allow`
-   now opens the device again.
-3. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
+2. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
    milestone of their own.
 
 ### 1. Smaller things
@@ -259,7 +252,17 @@ On mynx dev build 209, a Nano, a C3 and an Arduino Micro on a hub.
   queue: up to 1024 reads, as many as Android takes; a refused one
   waits to be queued again (counted in the trace); empty packets
   pass with no GET_STATUS; FTDI's 2 status bytes stripped there.
-- Commits: busy hint, no-port fix, trace, 4096 reads, own reads.
+- **Build 214 (`UsbReads`), passed:** Android took all 1024 reads
+  at open but refused 17 re-queues 10 s later, all at once while
+  idle (the other boards being plugged in); none during the test.
+  The 4 MB `read_flash` on the C3 over the URL: 4,194,304 bytes in
+  583 s (57.6 kbit/s, esptool's MD5 check passed), 0 read errors.
+  The Nano (CH340) read its sketch's output cleanly at 9600. The busy
+  hint: with the URL held, `mynx usb` showed `/dev/serial/ttyUSB0
+  (waiting: a program has the URL)` and the helper logged "busy".
+  "No port yet" didn't show again (not confirmed). Trace removed.
+- Commits: busy hint, no-port fix, trace, 4096 reads, own reads,
+  trace removed.
 
 ### 2026-10-21 (135): agent widget on the roadmap (branch `roadmap-agent-widget`)
 

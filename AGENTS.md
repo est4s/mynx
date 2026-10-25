@@ -700,12 +700,12 @@ Bugs that took a phone round to find; keep them from coming back.
   that, but `read_flash` still lost bytes. The stub flushes after
   every byte, so each read holds one byte. Linux queues each read
   again in the kernel as it completes; on Android our thread must
-  collect it first (it runs at audio priority). Android stops
-  queueing at some number (~256 on the maintainer's phone): the library's read
-  queue then threw from `read()` after taking the packet, so bytes
-  were lost (4096 reads broke `chip_id`), and it turned each empty
-  packet into a GET_STATUS of up to 200 ms. `UsbReads` queues as many
-  as Android takes, keeps a refused one to queue again later, passes
+  collect it first (it runs at audio priority). Android sometimes
+  refuses to queue a read again (past ~256 on the Nord 2): the
+  library's read queue then threw from `read()` after taking the
+  packet, so bytes were lost (4096 reads broke `chip_id`), and it
+  turned each empty packet into a GET_STATUS of up to 200 ms.
+  `UsbReads` queues as many as Android takes, keeps a refused one to queue again later, passes
   empty packets by, and strips FTDI's 2 status bytes itself (the
   library's FTDI `read` did). Each port gets its own
   `UsbDeviceConnection`: `requestWait()` returns any request of the
