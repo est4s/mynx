@@ -40,11 +40,13 @@ import kotlin.concurrent.thread
 
 private const val ACTION_USB_PERMISSION = "io.github.est4s.terminal.USB_PERMISSION"
 private const val WRITE_TIMEOUT_MS = 5000
-// Reads kept queued on each port. Linux's cdc-acm keeps 16, but it queues
-// each again as it completes; here our thread must collect it first. A short
-// packet ends a read, and esptool's stub on an ESP32-C3's USB-Serial-JTAG
-// sends 63-byte ones, so 16 reads held 1 KB and lost bytes mid-read_flash.
-private const val READ_QUEUE = 256
+// Reads kept queued on each port, a packet each. Linux's cdc-acm keeps 16,
+// but it queues each again as it completes; here our thread must collect it
+// first. A short packet ends a read, and esptool's stub on an ESP32-C3's
+// USB-Serial-JTAG flushes after every byte: 256 reads held 256 bytes, ~30 ms,
+// and a longer pause made the stub drop bytes and read_flash hang at 72%.
+// 4096 hold ~0.5 s of those, in the same 256 KB as 256 reads of 1 KB did.
+private const val READ_QUEUE = 4096
 // After an attach, how often and how many times to look again for a device
 // Android allowed without a broadcast reaching us (problem 6 of the phone
 // tests: a Pro Micro sat allowed with no port until the app came on screen).
@@ -234,7 +236,7 @@ class UsbBridge(
                     // ESP32-C3's USB-Serial-JTAG under esptool's stub dropped all but
                     // the first packet of each reply with one read at a time, as if it
                     // gives up on a packet the host doesn't collect at once.
-                    port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64) * 16)
+                    port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64))
                     val trace = PortTrace(File(logDir, "$name.trace"))
                     val line = UsbLine(port, trace)
                     step = "setting 9600 8N1"

@@ -81,8 +81,9 @@ unreleased. Only the maintainer tags
    install its build in mynx dev, then (a) the 4 MB `read_flash` on
    the C3 with the trace on (`esptool --chip esp32c3 --port "$(mynx
    usb url ttyACMn)" read_flash 0 0x400000 f.bin`; it stalled at
-   ~600 KB on build 209), read `/tmp/.mynx/serial/ttyACMn.trace`
-   around the stall, fix, and remove the trace (`PortTrace` in
+   ~600 KB on build 209, at 72% on 212; 4096 queued reads since), read
+   `/tmp/.mynx/serial/ttyACMn.trace` around a stall, fix, and remove
+   the trace (`PortTrace` in
    `UsbBridge.kt`) before merging; (b) the busy hint (hold the URL,
    open the path: `mynx usb` says "waiting"); (c) "no port yet" if
    it shows again: `mynx usb allow` now opens the device again.
@@ -231,6 +232,19 @@ On mynx dev build 209, a Nano, a C3 and an Arduino Micro on a hub.
   moves (bytes and reads in, empty reads, biggest read, bytes and
   writes out, read errors with their text, time since the last read,
   whether a client is on, a USB write stuck), plus configure and purge.
+- **Build 212, the trace:** every packet from the C3 is 1 byte
+  (7-11 K reads a second, "biggest 1 B"): esptool 4.7's stub flushes
+  USB-Serial-JTAG after each character (`stub_tx_one_char()`). So 256
+  queued reads held 256 bytes, ~30 ms. It stalled at 72% (3.04 MB)
+  right after a second with 465 empty reads (each costs the library a
+  GET_STATUS of up to 200 ms on the read thread) and a 219 ms gap;
+  then no line at all: nothing in or out, no write stuck, no read
+  error. Lost bytes, then esptool and the stub each wait for the
+  other. Now 4096 reads of one packet each (~0.5 s of 1-byte packets,
+  the same 256 KB). If that's not enough: skip the library's
+  GET_STATUS on empty reads. Also confirmed on 212: `mynx usb allow`
+  reopened the Nano after "couldn't open it … Failed send cmd [init
+  #1]" (it used to answer at once).
 - Boards dropped off the hub by themselves now and then (the Micro and
   Nano 4 min after the stall): the hub's power, as in entry 126.
 - Commits: busy hint, no-port fix, trace.
