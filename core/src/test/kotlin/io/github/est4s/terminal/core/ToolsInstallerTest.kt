@@ -90,6 +90,21 @@ class ToolsInstallerTest {
     }
 
     @Test
+    fun `puts the user's ~,local,bin before the tools, for services too, which skip bashrc`() {
+        val rootfs = File(base, "debian").apply { mkdirs() }
+
+        writeToolsProfile(rootfs)
+
+        val script = File(rootfs, "etc/profile.d/mynx.sh")
+        val home = File(base, "root")
+        // Only once it exists, as Debian's own ~/.profile does.
+        assertEquals("/opt/mynx/bin:/usr/bin\n", sourced(script, "/usr/bin", home = home.path))
+        val bin = File(home, ".local/bin").apply { mkdirs() }.path
+        assertEquals("$bin:/opt/mynx/bin:/usr/bin\n", sourced(script, "/usr/bin", home = home.path))
+        assertEquals("/usr/bin:$bin:/opt/mynx/bin\n", sourced(script, "/usr/bin:$bin:/opt/mynx/bin", home = home.path))
+    }
+
+    @Test
     fun `loads the tools' bash setup in bash only`() {
         val rootfs = File(base, "debian").apply { mkdirs() }
 
@@ -116,9 +131,9 @@ class ToolsInstallerTest {
         assertTrue("/opt/mynx/bin" in script.readText())
     }
 
-    private fun sourced(script: File, path: String): String {
+    private fun sourced(script: File, path: String, home: String = "/nonexistent"): String {
         val process = ProcessBuilder("/bin/sh", "-c", ". \"$1\"; printf '%s\\n' \"\$PATH\"", "sh", script.path)
-            .apply { environment()["PATH"] = path }
+            .apply { environment()["PATH"] = path; environment()["HOME"] = home }
             .start()
         return process.inputStream.bufferedReader().readText().also { process.waitFor() }
     }

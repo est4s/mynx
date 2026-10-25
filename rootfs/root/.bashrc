@@ -3,7 +3,7 @@
 case $- in *i*) ;; *) return ;; esac
 
 export LANG=C.UTF-8
-export PATH="$HOME/.local/bin:$PATH"
+case ":$PATH:" in *:"$HOME/.local/bin":*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac
 export EDITOR=nano VISUAL=nano
 
 # eza: ls with Nerd Font icons.

@@ -324,7 +324,7 @@ restart = on-failure
 
 | Key | Means |
 |---|---|
-| `command` | what to run, in bash (required); the login PATH and `~/.profile` apply |
+| `command` | what to run, in bash (required); the login PATH (with `~/.local/bin`) and `~/.profile` apply |
 | `cwd` | the folder it runs in (default `~`) |
 | `autostart` | `yes`: start it when the app starts (default `no`; not at phone boot) |
 | `restart` | `on-failure` (default): restart it when it exits with a code other than 0; `always`; `no` |

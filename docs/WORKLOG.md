@@ -62,6 +62,8 @@ are in git history: the full log up to entry 92 is
 - **Android's process limit:** confirmed on the Nord 2 (entry
   138): the `device_config` commands stop the kills; the guide now
   gives them for Android 12-13.
+- **Services and `~/.local/bin`:** fixed and confirmed on the phone
+  (PR #46, entry 139). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -79,20 +81,14 @@ are in git history: the full log up to entry 92 is
 
 Moved after the development boards by the maintainer (2026-10-25),
 so the release takes them too. USB serial parts 1-3, Go programs,
-PlatformIO's ESP32 toolchains and the small serial fixes (PR #33,
-#34, #36, #37, #39, #42) are tested on the phone, unreleased. Only the maintainer tags
-(`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
+PlatformIO's ESP32 toolchains, the small serial fixes (PR #33, #34,
+#36, #37, #39, #42), the process-limit guide (#45) and services'
+`~/.local/bin` (#46) are tested on the phone, unreleased. Only the
+maintainer tags (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
 ### 1. Smaller things
 
-- **Services don't get `~/.local/bin` on their PATH** (entry 138):
-  root's default `.bashrc` adds it after its non-interactive
-  `return`, so a service can't find `pio`, `arduino-cli` or pipx
-  tools, though the guide says the login PATH applies. Move the
-  `export` above the `return` (`rootfs/root/.bashrc`, a bats test;
-  existing Debians keep their own `.bashrc`, so maybe also add it in
-  `service-run` or `/etc/profile.d/mynx.sh`).
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (guide: "Making an
   app", entry 134): a `mynx` command that opens the installer for an
@@ -201,6 +197,21 @@ Ctrl+Shift).
 
 ## Log
 
+### 2026-10-25 (139): services get `~/.local/bin` (branch `service-path`)
+
+- Found in entry 138: a service runs `bash --login -c`, whose
+  `~/.bashrc` returns before it adds `~/.local/bin`, so `pio`,
+  `arduino-cli` and pipx tools weren't found.
+- Fix: `/etc/profile.d/mynx.sh` (`writeToolsProfile()`, rewritten at
+  every app start, so existing Debians get it too) puts
+  `~/.local/bin` first when the folder exists, once. Root's default
+  `.bashrc` no longer adds it a second time (old ones still do:
+  harmless). Guide's services table says so. Tests:
+  `ToolsInstallerTest`, `bashrc.bats`, `home-docs.bats`.
+- Confirmed on the phone (mynx dev, PR #46's build): a service's
+  `command -v pio` gives `/root/.local/bin/pio`, and its PATH has
+  `~/.local/bin` once, first.
+
 ### 2026-10-25 (138): Android's process limit on the Nord 2 (branch `process-limit-guide`)
 
 In mynx dev build 214, adb over Wireless debugging from the app
@@ -223,7 +234,7 @@ from a screenshot the code had already expired).
 - Guide: Android 12, 12L and 13 use `device_config`; the `settings`
   way is mentioned with the OnePlus refusal. Test in
   `home-docs.bats`. AGENTS.md's lesson updated.
-- Found: services don't get `~/.local/bin` (see Next).
+- Found: services don't get `~/.local/bin` (fixed in entry 139).
 
 ### 2026-10-25 (137): the release moves after the development boards
 

@@ -45,6 +45,14 @@ private val TOOLS_PROFILE = """
     |    *:$TOOLS_MOUNT/bin:*) ;;
     |    *) PATH="$TOOLS_MOUNT/bin:${'$'}PATH" ;;
     |esac
+    |# Your own commands (pipx, installers) before them, in every login
+    |# shell: services too, which ~/.bashrc leaves early.
+    |if [ -d "${'$'}HOME/.local/bin" ]; then
+    |    case ":${'$'}PATH:" in
+    |        *:"${'$'}HOME/.local/bin":*) ;;
+    |        *) PATH="${'$'}HOME/.local/bin:${'$'}PATH" ;;
+    |    esac
+    |fi
     |# The tools' setup for bash (e.g. agents under their key bar).
     |if [ -n "${'$'}{BASH_VERSION-}" ] && [ -r $TOOLS_MOUNT/shell.bash ]; then
     |    . $TOOLS_MOUNT/shell.bash
