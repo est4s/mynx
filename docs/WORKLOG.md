@@ -62,8 +62,8 @@ are in git history: the full log up to entry 92 is
 - **Android's process limit:** confirmed on the Nord 2 (entry
   138): the `device_config` commands stop the kills; the guide now
   gives them for Android 12-13.
-- **Services and `~/.local/bin`:** fixed (PR pending, entry 139);
-  check on the phone.
+- **Services and `~/.local/bin`:** fixed and confirmed on the phone
+  (PR #46, entry 139). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -81,9 +81,10 @@ are in git history: the full log up to entry 92 is
 
 Moved after the development boards by the maintainer (2026-10-25),
 so the release takes them too. USB serial parts 1-3, Go programs,
-PlatformIO's ESP32 toolchains and the small serial fixes (PR #33,
-#34, #36, #37, #39, #42) are tested on the phone, unreleased. Only the maintainer tags
-(`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
+PlatformIO's ESP32 toolchains, the small serial fixes (PR #33, #34,
+#36, #37, #39, #42), the process-limit guide (#45) and services'
+`~/.local/bin` (#46) are tested on the phone, unreleased. Only the
+maintainer tags (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
 ### 1. Smaller things
@@ -207,9 +208,9 @@ Ctrl+Shift).
   `.bashrc` no longer adds it a second time (old ones still do:
   harmless). Guide's services table says so. Tests:
   `ToolsInstallerTest`, `bashrc.bats`, `home-docs.bats`.
-- To check on the phone (mynx dev, after the update):
-  `mynx service add p -- 'command -v pio'`, `mynx service start p`,
-  `mynx service log p`, then `mynx service remove p`.
+- Confirmed on the phone (mynx dev, PR #46's build): a service's
+  `command -v pio` gives `/root/.local/bin/pio`, and its PATH has
+  `~/.local/bin` once, first.
 
 ### 2026-10-25 (138): Android's process limit on the Nord 2 (branch `process-limit-guide`)
 
