@@ -77,9 +77,15 @@ unreleased. Only the maintainer tags
    killing a big build (PlatformIO's C3 build in `~/sketches/pio-c3`
    in mynx dev), and fix the guide if they don't. Merged without it
    at the maintainer's request (PR #39).
-2. The small serial items under "Small open items" (a busy port's
-   silence, the 4 MB `read_flash`) and entry 126's problem 6 (a Pro
-   Micro allowed with no port; `git show a35033d` has a trace).
+2. **Small serial fixes, PR #42, branch `serial-small` (entry 136):**
+   install its build in mynx dev, then (a) the 4 MB `read_flash` on
+   the C3 with the trace on (`esptool --chip esp32c3 --port "$(mynx
+   usb url ttyACMn)" read_flash 0 0x400000 f.bin`; it stalled at
+   ~600 KB on build 209), read `/tmp/.mynx/serial/ttyACMn.trace`
+   around the stall, fix, and remove the trace (`PortTrace` in
+   `UsbBridge.kt`) before merging; (b) the busy hint (hold the URL,
+   open the path: `mynx usb` says "waiting"); (c) "no port yet" if
+   it shows again: `mynx usb allow` now opens the device again.
 3. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
    milestone of their own.
 
@@ -186,16 +192,48 @@ Ctrl+Shift).
 - Step 1.4's interrupted-install check (swipe the app away while unpacking,
   reopen) hasn't been tried on the phone.
 - htop's CPU bars are static (fake `/proc/stat`, as in proot-distro).
-- USB serial: a program on a `/dev/serial` pty while the URL is busy
-  gets silence with no hint (the helper retries every 2 s); `mynx usb`
-  or the helper's log could say "busy".
-- USB serial: a 4 MB `read_flash` over the URL failed once after
-  4 min ("Corrupt data"), the retry was fine; lost USB reads are rarer
-  with 256 queued, maybe not gone.
+- `test_undo_list` (tests/mynx) fails in the phone's time zone (it
+  expects UTC times; CI is UTC): `TZ=UTC` passes it.
 
 ---
 
 ## Log
+
+### 2026-10-25 (136): Small serial fixes (branch `serial-small`)
+
+On mynx dev build 209, a Nano, a C3 and an Arduino Micro on a hub.
+- **A busy port's silence, fixed:** a program opening `/dev/serial/X`
+  while a URL client had the port got nothing, and the helper logged
+  "opened" / "the app closed the port" every second. The app's server
+  greets a client it takes and closes on one it refuses, so
+  `serial-port` tells them apart (`refused()`), logs "busy" once and
+  leaves `.X.waiting` in the ports folder; `mynx usb` shows "waiting:
+  a program has the URL" (`waiting` in `--json`, `SerialPortInfo`).
+  Checked by hand on the Nano with the new helper.
+- **Problem 6 ("no port yet"), likely cause fixed:** `usb-allow`
+  answered at once for any allowed device (with no DEVICE it said
+  nothing was waiting), so `mynx usb allow` never made the bridge look
+  again; and the 40 minutes ended when the app came on screen (onStart
+  refreshes), so Android probably allowed it with no broadcast reaching
+  the bridge. Now an allowed device with no port counts as waiting and
+  is opened again; the bridge looks again every second for 30 s after
+  an attach while a device isn't allowed; a driver with no port is a
+  shown error. Not reproduced, so not confirmed.
+- **The 4 MB `read_flash` stalls (open):** on the C3 over the URL,
+  with the phone idle, it ran to ~600 KB at ~8 KB/s, then nothing for
+  6 min, no error (esptool waits). After killing it, the URL refused
+  clients for some seconds (the old client still "busy"). A run under
+  load hung too. The library's queued read re-queues each request
+  before returning and turns an empty packet into a 200 ms GET_STATUS
+  that throws when unanswered; nothing there explains a stall alone.
+  So a temporary trace (`PortTrace`): each port's
+  `/tmp/.mynx/serial/NAME.trace` gets a line a second while anything
+  moves (bytes and reads in, empty reads, biggest read, bytes and
+  writes out, read errors with their text, time since the last read,
+  whether a client is on, a USB write stuck), plus configure and purge.
+- Boards dropped off the hub by themselves now and then (the Micro and
+  Nano 4 min after the stall): the hub's power, as in entry 126.
+- Commits: busy hint, no-port fix, trace.
 
 ### 2026-10-21 (135): agent widget on the roadmap (branch `roadmap-agent-widget`)
 

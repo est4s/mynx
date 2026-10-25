@@ -235,7 +235,8 @@ class UsbBridge(
                     // the first packet of each reply with one read at a time, as if it
                     // gives up on a packet the host doesn't collect at once.
                     port.setReadQueue(READ_QUEUE, port.readEndpoint.maxPacketSize.coerceAtLeast(64) * 16)
-                    val line = UsbLine(port)
+                    val trace = PortTrace(File(logDir, "$name.trace"))
+                    val line = UsbLine(port, trace)
                     step = "setting 9600 8N1"
                     line.configure(LineSettings())
                     step = "dropping DTR"
@@ -244,7 +245,7 @@ class UsbBridge(
                     line.setRts(false)
                     step = "serving it"
                     val server = newServer(line)
-                    opened.ports += OpenPort(name, port, server).also { it.start() }
+                    opened.ports += OpenPort(name, port, server, trace).also { it.start() }
                 } catch (e: Exception) {
                     // Not in opened.ports yet, so close() won't reach it.
                     runCatching { port.close() }
@@ -283,7 +284,7 @@ class UsbBridge(
         val ports = mutableListOf<OpenPort>()
     }
 
-    private inner class OpenPort(val name: String, val port: UsbSerialPort, val server: SerialServer) {
+    private inner class OpenPort(val name: String, val port: UsbSerialPort, val server: SerialServer, val trace: PortTrace) {
         @Volatile private var closed = false
         @Volatile private var process: Process? = null
 
@@ -291,6 +292,14 @@ class UsbBridge(
             server.start()
             thread(name = "usb-read-$name", isDaemon = true) { readLoop() }
             thread(name = "serial-port-$name", isDaemon = true) { runHelper() }
+            thread(name = "usb-trace-$name", isDaemon = true) {
+                trace.event("open: ${port.readQueueBufferCount} reads of ${port.readQueueBufferSize} B queued")
+                while (!closed) {
+                    Thread.sleep(1000)
+                    trace.tick(server.busy)
+                }
+                trace.event("closed")
+            }
         }
 
         private fun readLoop() {
@@ -303,6 +312,7 @@ class UsbBridge(
                     port.read(buffer, 0)
                 } catch (e: Exception) {
                     if (closed) break
+                    trace.readError(e)
                     // Unplugged: refresh() closes it. Or still there: the library
                     // checks the device after an empty packet and gives up if it
                     // doesn't answer in 200 ms, as a Pro Micro's bootloader doesn't
@@ -311,6 +321,7 @@ class UsbBridge(
                     Thread.sleep(100)
                     continue
                 }
+                trace.read(n)
                 if (n > 0) server.fromLine(buffer, n)
             }
         }
@@ -362,10 +373,11 @@ class UsbBridge(
 }
 
 /** A port of usb-serial-for-android as the RFC 2217 server drives it. */
-private class UsbLine(private val port: UsbSerialPort) : SerialLine {
-    override fun write(data: ByteArray) = port.write(data, WRITE_TIMEOUT_MS)
+private class UsbLine(private val port: UsbSerialPort, private val trace: PortTrace) : SerialLine {
+    override fun write(data: ByteArray) = trace.writing(data.size) { port.write(data, WRITE_TIMEOUT_MS) }
 
     override fun configure(settings: LineSettings) {
+        trace.event("configure $settings")
         val stopBits = when (settings.stopBits) {
             StopBits.ONE -> UsbSerialPort.STOPBITS_1
             StopBits.TWO -> UsbSerialPort.STOPBITS_2
@@ -410,7 +422,10 @@ private class UsbLine(private val port: UsbSerialPort) : SerialLine {
         }
     }
 
-    override fun purge(input: Boolean, output: Boolean) = unsupportedIsFine { port.purgeHwBuffers(output, input) }
+    override fun purge(input: Boolean, output: Boolean) {
+        trace.event("purge input=$input output=$output")
+        unsupportedIsFine { port.purgeHwBuffers(output, input) }
+    }
 
     override fun modemState(): Int = runCatching {
         val lines = port.getControlLines()
@@ -431,6 +446,74 @@ private class UsbLine(private val port: UsbSerialPort) : SerialLine {
         try {
             block()
         } catch (e: UnsupportedOperationException) {
+        }
+    }
+}
+
+/**
+ * TEMPORARY (the 4 MB `read_flash` that stalls on a C3): what goes through
+ * a port, a line a second while anything moves or a write is stuck. In
+ * Debian: /tmp/.mynx/serial/NAME.trace.
+ */
+private class PortTrace(private val file: File) {
+    private val inBytes = java.util.concurrent.atomic.AtomicLong()
+    private val reads = java.util.concurrent.atomic.AtomicLong()
+    private val emptyReads = java.util.concurrent.atomic.AtomicLong()
+    private val readErrors = java.util.concurrent.atomic.AtomicLong()
+    private val outBytes = java.util.concurrent.atomic.AtomicLong()
+    private val writes = java.util.concurrent.atomic.AtomicLong()
+    @Volatile private var biggest = 0
+    @Volatile private var writingSince = 0L
+    @Volatile private var lastRead = SystemClock.elapsedRealtime()
+    private var last = listOf<Long>()
+    private var busy = false
+
+    fun read(n: Int) {
+        lastRead = SystemClock.elapsedRealtime()
+        reads.incrementAndGet()
+        if (n == 0) emptyReads.incrementAndGet() else inBytes.addAndGet(n.toLong())
+        if (n > biggest) biggest = n
+    }
+
+    fun readError(e: Exception) {
+        if (readErrors.incrementAndGet() <= 20) event("read failed: $e")
+    }
+
+    fun <T> writing(size: Int, block: () -> T): T {
+        writingSince = SystemClock.elapsedRealtime()
+        try {
+            return block()
+        } catch (e: Exception) {
+            event("write of $size B failed after ${SystemClock.elapsedRealtime() - writingSince} ms: $e")
+            throw e
+        } finally {
+            writingSince = 0L
+            writes.incrementAndGet()
+            outBytes.addAndGet(size.toLong())
+        }
+    }
+
+    fun tick(busy: Boolean) {
+        val now = listOf(inBytes.get(), reads.get(), emptyReads.get(), readErrors.get(), outBytes.get(), writes.get())
+        val stuck = writingSince
+        if (now == last && stuck == 0L && busy == this.busy) return
+        val d = now.zip(last.ifEmpty { List(now.size) { 0L } }) { a, b -> a - b }
+        val sinceRead = SystemClock.elapsedRealtime() - lastRead
+        event(
+            "in +${d[0]} B in ${d[1]} reads (${d[2]} empty, biggest $biggest B), total ${now[0]}; " +
+                "out +${d[4]} B in ${d[5]} writes, total ${now[4]}; read errors ${now[3]}; " +
+                "last read ${sinceRead} ms ago; client ${if (busy) "yes" else "no"}" +
+                if (stuck != 0L) "; WRITE STUCK ${SystemClock.elapsedRealtime() - stuck} ms" else "",
+        )
+        biggest = 0
+        last = now
+        this.busy = busy
+    }
+
+    fun event(text: String) {
+        runCatching {
+            val at = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.ROOT).format(java.util.Date())
+            file.appendText("$at $text\n")
         }
     }
 }
