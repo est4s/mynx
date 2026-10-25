@@ -214,7 +214,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   first on the PATH (so it beats older copies left in a rootfs) through `/etc/profile.d/mynx.sh`, which the app
   rewrites at start (`writeToolsProfile()`): Debian's `/etc/profile`
   resets root's PATH, so the PATH the app passes in doesn't survive a
-  login shell. So fixes to them reach installed Debians without a
+  login shell. It also puts `~/.local/bin` before them (the
+  user's own commands win), since services' login shells skip what
+  `~/.bashrc` sets. So fixes to them reach installed Debians without a
   migration. Put new app-owned commands there, not in the rootfs.
 - **Title art and icon:** the boot splash (`menu --boot`) plays
   `tools/lib/mynx-art` ("mynx" in quadrant-block pixels, cyan with a

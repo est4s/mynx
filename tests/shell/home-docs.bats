@@ -185,3 +185,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }
+
+@test "the guide says services find commands in ~/.local/bin" {
+    grep -qF 'the login PATH (with `~/.local/bin`)' "$GUIDE"
+}

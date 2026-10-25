@@ -78,6 +78,11 @@ stub() {
     [ "${output%%:*}" = "$HOME/.local/bin" ]
 }
 
+@test "home's local bin isn't added twice when the login profile has it" {
+    PATH="$HOME/.local/bin:$STUBS" run bash --norc --noprofile -i -c "source '$BASHRC'"$'\n''echo "$PATH"'
+    [ "${lines[-1]}" = "$HOME/.local/bin:$STUBS" ]
+}
+
 @test "opens the menu with the splash when the app asks, once" {
     stub keybar 'shift; exec "$@"'
     stub menu 'echo "menu $*"; echo "MYNX_MENU=$MYNX_MENU"'
