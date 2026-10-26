@@ -11,18 +11,24 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
+import io.github.est4s.terminal.core.BleHost
+import io.github.est4s.terminal.core.BleUartLine
 import io.github.est4s.terminal.core.BluetoothHost
+import io.github.est4s.terminal.core.BtBinding
 import io.github.est4s.terminal.core.BtDevice
 import io.github.est4s.terminal.core.BtPortState
 import io.github.est4s.terminal.core.BtType
 import io.github.est4s.terminal.core.FIRST_BLUETOOTH_TCP_PORT
+import io.github.est4s.terminal.core.FIRST_NUS_TCP_PORT
+import io.github.est4s.terminal.core.isNusName
 import io.github.est4s.terminal.core.loadBluetooth
 import java.io.File
 
 /**
  * The Bluetooth serial bridge: serves each port `bluetooth.conf` binds
- * ([conf]) as [ServedPort]s over a [BtLine], which links to its device
- * only while a client uses the port. Ports are served while the setting
+ * ([conf]) as [ServedPort]s, `rfcommN` over a [BtLine] and `nusN` over
+ * core's [BleUartLine] through [ble], each linking to its device only
+ * while a client uses the port. Ports are served while the setting
  * ([settingOn]), the permission and Bluetooth itself allow; [changed] gets
  * the served ports' names whenever they change. Call from [helpers]'
  * handler's (the main) thread.
@@ -31,6 +37,7 @@ class BtBridge(
     private val context: Context,
     private val helpers: PortHelpers,
     private val conf: File,
+    private val ble: BleHost,
     private val settingOn: () -> Boolean,
     private val askPermissions: (Array<String>, (Boolean) -> Unit) -> Boolean,
     private val showSettings: () -> String?,
@@ -40,7 +47,12 @@ class BtBridge(
     private val served = linkedMapOf<String, Port>()
     private var started = false
 
-    private class Port(val address: String, val line: BtLine, val served: ServedPort)
+    private class Port(
+        val binding: BtBinding,
+        val served: ServedPort,
+        val linked: () -> Boolean,
+        val error: () -> String?,
+    )
 
     // Bluetooth turned on or off: serve or stop the ports.
     private val receiver = object : BroadcastReceiver() {
@@ -71,26 +83,39 @@ class BtBridge(
     fun refresh() {
         if (!started) return
         val wanted = if (settingOn() && available && allowed && enabled) {
-            loadBluetooth(conf).bindings.associate { it.port to it.address }
+            loadBluetooth(conf).bindings.associateBy { it.port }
         } else {
             emptyMap()
         }
         val before = served.keys.toSet()
-        served.filter { (name, port) -> wanted[name] != port.address }.keys.forEach(::close)
-        for ((name, address) in wanted) {
+        served.filter { (name, port) -> wanted[name] != port.binding }.keys.forEach(::close)
+        for ((name, binding) in wanted) {
             if (name in served) continue
-            runCatching { serve(name, address) }
+            runCatching { if (isNusName(name)) serveNus(binding) else serve(binding) }
         }
         if (served.keys != before) changed(served.keys.toList())
     }
 
-    private fun serve(name: String, address: String) {
+    private fun takenTcpPorts() = served.values.map { it.served.server.port }.toSet()
+
+    private fun serve(binding: BtBinding) {
         val adapter = adapter ?: return
-        val line = BtLine(adapter, address, name)
-        val server = newSerialServer(line, served.values.map { it.served.server.port }.toSet(), FIRST_BLUETOOTH_TCP_PORT)
+        val line = BtLine(adapter, binding.address, binding.port)
+        val server = newSerialServer(line, takenTcpPorts(), FIRST_BLUETOOTH_TCP_PORT)
         line.server = server
-        val port = ServedPort(name, server, helpers)
-        served[name] = Port(address, line, port)
+        val port = ServedPort(binding.port, server, helpers)
+        served[binding.port] = Port(binding, port, { line.linked }, { line.error })
+        port.start()
+    }
+
+    // A BLE UART: Android shares the device's connection with mynx ble's requests, but this link is the port's own.
+    private fun serveNus(binding: BtBinding) {
+        val line = BleUartLine(ble, binding.address, binding.random)
+        val server = newSerialServer(line, takenTcpPorts(), FIRST_NUS_TCP_PORT)
+        line.received = { server.fromLine(it, it.size) }
+        line.dropped = { server.endClient() }
+        val port = ServedPort(binding.port, server, helpers)
+        served[binding.port] = Port(binding, port, { line.linked }, { line.error })
         port.start()
     }
 
@@ -112,10 +137,10 @@ class BtBridge(
         val info = port.served.info()
         BtPortState(
             tcpPort = info.tcpPort,
-            linked = port.line.linked,
+            linked = port.linked(),
             inUse = info.inUse,
             waiting = info.waiting,
-            error = port.line.error,
+            error = port.error(),
         )
     }
 

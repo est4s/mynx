@@ -37,6 +37,7 @@ import io.github.est4s.terminal.core.batteryRequests
 import io.github.est4s.terminal.core.BLUETOOTH_CONF
 import io.github.est4s.terminal.core.bleRequests
 import io.github.est4s.terminal.core.bluetoothRequests
+import io.github.est4s.terminal.core.isNusName
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
@@ -192,7 +193,7 @@ class TerminalService : Service() {
                 serviceRequests(serviceManager) +
                 usbRequests(usb::devices, ::allowUsb) +
                 bluetoothRequests(File(rootfs, "root"), bluetooth) +
-                bleRequests(File(rootfs, "root"), ble),
+                bleRequests(File(rootfs, "root"), ble, bluetooth),
         )
     }
     // The USB serial ports' links, bound at /dev/serial in every proot.
@@ -222,16 +223,17 @@ class TerminalService : Service() {
             },
         )
     }
-    // Bluetooth serial ports (mynx bt), served beside the USB ones.
+    // Bluetooth serial ports (mynx bt, and mynx ble's UART ports), served beside the USB ones.
     private val bluetooth by lazy {
         BtBridge(
             this, PortHelpers(mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir, launchPortHelper),
             File(rootfs, "root/$CONFIG_DIR/$BLUETOOTH_CONF"),
+            ble,
             settingOn = { currentSettings()?.androidBluetooth ?: true },
             askPermissions = ::askPermissions,
             showSettings = ::openBluetoothSettings,
             changed = { names ->
-                rfcommPorts = names
+                btPorts = names
                 serialPortsChanged()
             },
         )
@@ -241,12 +243,13 @@ class TerminalService : Service() {
         BleCentral(this, mainHandler, onScreen = { activity?.onScreen == true }, askPermissions = ::askPermissions)
     }
     private var usbPorts = emptyList<UsbSerialDevice>()
-    private var rfcommPorts = emptyList<String>()
+    // rfcommN and nusN.
+    private var btPorts = emptyList<String>()
 
     private fun serialPortsChanged() {
-        runCatching { writeSerialNames(devDir, sysTtyDir, usbPorts, rfcomm = rfcommPorts) }
-        // After the names: a tool told of a port looks for it there.
-        uevents.changed(usbPorts.flatMap { d -> d.ports.map { it.name } }.toSet() + rfcommPorts)
+        runCatching { writeSerialNames(devDir, sysTtyDir, usbPorts, bluetooth = btPorts) }
+        // After the names: a tool told of a port looks for it there. No uevents for nusN: Linux has no such tty.
+        uevents.changed(usbPorts.flatMap { d -> d.ports.map { it.name } }.toSet() + btPorts.filterNot(::isNusName))
     }
     // Background services: hidden sessions (see ServiceSessions), kept running without a tab.
     private val serviceHost by lazy {
