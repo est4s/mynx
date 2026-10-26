@@ -46,5 +46,8 @@ fun checkConfig(home: File): List<ConfigProblems> {
 
     val services = File(config, SERVICES_CONF)
     if (services.isFile) report(services, parseServices(services.readText()).problems)
+
+    val bluetooth = File(config, BLUETOOTH_CONF)
+    if (bluetooth.isFile) report(bluetooth, parseBluetooth(bluetooth.readText()).problems)
     return found
 }
