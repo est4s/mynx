@@ -15,6 +15,7 @@ import io.github.est4s.terminal.core.BluetoothHost
 import io.github.est4s.terminal.core.BtDevice
 import io.github.est4s.terminal.core.BtPortState
 import io.github.est4s.terminal.core.BtType
+import io.github.est4s.terminal.core.FIRST_BLUETOOTH_TCP_PORT
 import io.github.est4s.terminal.core.loadBluetooth
 import java.io.File
 
@@ -86,7 +87,7 @@ class BtBridge(
     private fun serve(name: String, address: String) {
         val adapter = adapter ?: return
         val line = BtLine(adapter, address, name)
-        val server = newSerialServer(line, served.values.map { it.served.server.port }.toSet())
+        val server = newSerialServer(line, served.values.map { it.served.server.port }.toSet(), FIRST_BLUETOOTH_TCP_PORT)
         line.server = server
         val port = ServedPort(name, server, helpers)
         served[name] = Port(address, line, port)

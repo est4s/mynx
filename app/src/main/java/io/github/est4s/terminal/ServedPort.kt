@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
+import io.github.est4s.terminal.core.FIRST_SERIAL_TCP_PORT
 import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.SerialLine
 import io.github.est4s.terminal.core.SerialPortInfo
@@ -19,16 +20,16 @@ import java.io.IOException
 import kotlin.concurrent.thread
 
 /**
- * A server for [line] on the lowest free TCP port from 2217 past [taken]
- * (this bridge's own ports). A port held by another bridge or app is
- * skipped, so the USB and Bluetooth bridges need not know each other's.
+ * A server for [line] on the lowest free TCP port from [first] past
+ * [taken] (this bridge's own ports). A port held by another app is
+ * skipped.
  */
-fun newSerialServer(line: SerialLine, taken: Set<Int>): SerialServer {
-    for (port in tcpPorts(taken).take(100)) {
+fun newSerialServer(line: SerialLine, taken: Set<Int>, first: Int = FIRST_SERIAL_TCP_PORT): SerialServer {
+    for (port in tcpPorts(taken, first).take(100)) {
         val server = runCatching { SerialServer(line, port) }.getOrNull()
         if (server != null) return server
     }
-    throw IOException("no free TCP port from 2217")
+    throw IOException("no free TCP port from $first")
 }
 
 /**

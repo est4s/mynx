@@ -490,8 +490,10 @@ See `docs/ROADMAP.md` "How it works". The details:
   `BtLine.kt`, `ServedPort.kt`; maintainer's
   decisions, 2026-10-26, entry 147: Classic SPP, Linux's `rfcomm
   bind`, pairing in Android's settings): a bound device is a port
-  like a USB one (`/dev/serial/rfcommN`, RFC 2217 from the same
-  range) that costs nothing until used. The link opens when a client
+  like a USB one (`/dev/serial/rfcommN`, RFC 2217 from 2317,
+  `FIRST_BLUETOOTH_TCP_PORT`: bound ports are served from the start,
+  and in USB's range would move the first USB port off the 2217
+  recipes name) that costs nothing until used. The link opens when a client
   arrives and closes when it leaves (`SerialLine.clientArrived()`/
   `clientLeft()`): after the greeting and on the client's thread, as
   `serial-port` takes a close before the greeting for "busy" and the
@@ -509,10 +511,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   usb`: `bt-list --no-ask`) and Bluetooth itself allow, re-read on
   Bluetooth's state broadcasts, reloading requests and coming on
   screen. Each port is a `ServedPort` (server, helper, link; shared
-  with `UsbBridge`); servers take the lowest TCP port they can bind,
-  so the two bridges need no shared list. `BtLine` tries an
-  authenticated link, then an unauthenticated one (old HC-05s), and
-  closes a link still opening when its client leaves.
+  with `UsbBridge`; the service, not a bridge, empties the shared
+  ports folder at start). `BtLine` tries an authenticated link, then
+  an unauthenticated one (old HC-05s), and closes a link still
+  opening when its client leaves. After a failed link it refuses new
+  ones at once for 2 s, doubling to 30 s: `serial-port` connects
+  again every second while its program holds the pty, which would
+  page a board that's off without pause. No `cancelDiscovery()`: it
+  needs the scan permission.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

@@ -362,6 +362,8 @@ class TerminalService : Service() {
         requests.start()
         watchRequests()
         applySoundSetting()
+        // Links from an earlier run point at terminals that are gone; both bridges link here.
+        serialDir.deleteRecursively()
         serialDir.mkdirs()
         runCatching { usb.start() }
         runCatching { usbFds.start() }

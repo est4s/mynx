@@ -832,16 +832,19 @@ becomes a serial port in Debian, like a USB one.
   rfcomm0` (or the device) removes it.
 - **The port** works like a USB one (see "USB serial devices"):
   `/dev/serial/rfcomm0`, also `/dev/rfcomm0` for tools that look for
-  ports (pyserial's `list_ports`), and `rfc2217://localhost:2218` (a
-  number from the USB ports' range). `picocom -b 115200
-  /dev/serial/rfcomm0`, `python3 -m serial.tools.miniterm
-  rfc2217://localhost:2218`, pyserial, `mynx usb monitor rfcomm0`;
+  ports (pyserial's `list_ports`), and `rfc2217://localhost:2317`
+  (2318 for the next, …; USB ports keep 2217 and up). `picocom -b
+  115200 /dev/serial/rfcomm0`, `python3 -m serial.tools.miniterm
+  rfc2217://localhost:2317`, pyserial, `mynx usb monitor rfcomm0`;
   `mynx usb url rfcomm0` and `mynx usb path rfcomm0` print them.
 - **The link** opens when a program opens the port, and closes when
   the last one leaves, as Linux's `rfcomm bind`: the phone and the
   board aren't connected while nothing uses it, and nothing
-  reconnects in the background. A link that fails or drops ends that
-  program's use; `mynx bt` says why. It shows each port as `linked`,
+  reconnects in the background. When a link fails or drops, a program
+  on the URL sees the port close; one with the path open gets nothing
+  until the link opens again, which is tried again while it keeps the
+  port open, waiting longer after each failure (up to 30 s). `mynx bt`
+  says why. It shows each port as `linked`,
   `not linked` or the last error, and `in use` and `waiting` as `mynx
   usb` does.
 - **No baud rate, DTR or RTS over Bluetooth:** SPP has none, so what

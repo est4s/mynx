@@ -54,9 +54,9 @@ fun ttyName(driver: String, taken: Set<String>): String {
     return generateSequence(0) { it + 1 }.map { "$prefix$it" }.first { it !in taken }
 }
 
-/** The TCP ports to try for the next serial port, lowest first. */
-fun tcpPorts(taken: Set<Int>): Sequence<Int> =
-    generateSequence(FIRST_SERIAL_TCP_PORT) { it + 1 }.filter { it !in taken }.takeWhile { it <= 65535 }
+/** The TCP ports to try for the next serial port, lowest first from [first]. */
+fun tcpPorts(taken: Set<Int>, first: Int = FIRST_SERIAL_TCP_PORT): Sequence<Int> =
+    generateSequence(first) { it + 1 }.filter { it !in taken }.takeWhile { it <= 65535 }
 
 /** A device's string (maker, product, serial) without the NULs some boards end it with; null if nothing's left. */
 fun usbString(text: String?): String? = text?.replace("\u0000", "")?.trim()?.takeIf { it.isNotEmpty() }

@@ -4,6 +4,12 @@ import java.io.File
 
 /** The Bluetooth ports file, in [CONFIG_DIR]: which paired device each `rfcommN` port links to. */
 const val BLUETOOTH_CONF = "bluetooth.conf"
+/**
+ * Bluetooth ports' first TCP port (`rfc2217://localhost:2317`): bound
+ * ports are served from the app's start, so in USB's range they would
+ * move the first USB port off 2217, which recipes name.
+ */
+const val FIRST_BLUETOOTH_TCP_PORT = 2317
 // Linux's RFCOMM_MAX_DEV.
 private const val MAX_RFCOMM = 255
 

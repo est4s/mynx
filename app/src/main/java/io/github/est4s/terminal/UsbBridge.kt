@@ -97,9 +97,6 @@ class UsbBridge(
     fun start() {
         if (started) return
         started = true
-        // Links from an earlier run point at terminals that are gone.
-        serialDir.deleteRecursively()
-        serialDir.mkdirs()
         changed(emptyList())
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)

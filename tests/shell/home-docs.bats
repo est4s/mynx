@@ -202,7 +202,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     for text in "### Bluetooth serial devices" "mynx bt settings" "mynx bt bind DEVICE" \
         "~/.config/mynx/bluetooth.conf" "/dev/serial/rfcomm0" "/dev/rfcomm0" "mynx usb monitor rfcomm0" \
         "as Linux's \`rfcomm bind\`" "No baud rate, DTR or RTS over Bluetooth" "\`android-bluetooth\`" \
-        "app must be on screen" "Bluetooth Low Energy"; do
+        "app must be on screen" "Bluetooth Low Energy" "rfc2217://localhost:2317" \
+        "USB ports keep 2217" "waiting longer after each failure"; do
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }
