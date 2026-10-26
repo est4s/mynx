@@ -802,8 +802,8 @@ class TerminalService : Service() {
         return runCatching {
             // stat, as proot checks a bind: Android lets apps see that /dev/full and
             // /dev/fuse exist (File.exists) but not stat them, and proot drops those.
-            prepareOwnDev(devDir, sysTtyDir) { name ->
-                val mode = runCatching { Os.stat("/dev/$name").st_mode }.getOrNull()
+            prepareOwnDev(devDir, sysTtyDir) { path ->
+                val mode = runCatching { Os.stat(path).st_mode }.getOrNull()
                 when {
                     mode == null -> null
                     OsConstants.S_ISDIR(mode) -> HostEntry.DIR

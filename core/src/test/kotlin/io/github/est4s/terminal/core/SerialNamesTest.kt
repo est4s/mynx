@@ -13,9 +13,15 @@ class SerialNamesTest {
     private val dev = File(base, "dev")
     private val sysTty = File(base, "sys-tty")
 
-    private val hostDev = mapOf("null" to HostEntry.FILE, "tty" to HostEntry.FILE, "pts" to HostEntry.DIR, "ttyS0" to HostEntry.FILE)
+    private val sysBus = File(base, "sys-bus")
 
-    private fun prepare() = prepareOwnDev(dev, sysTty) { hostDev[it] }
+    // What the phone has, by host path.
+    private val host = mapOf(
+        "/dev/null" to HostEntry.FILE, "/dev/tty" to HostEntry.FILE, "/dev/pts" to HostEntry.DIR, "/dev/ttyS0" to HostEntry.FILE,
+        "/sys/bus/platform" to HostEntry.DIR, "/sys/bus/iio" to HostEntry.DIR, "/sys/bus/usb" to HostEntry.DIR,
+    )
+
+    private fun prepare() = prepareOwnDev(dev, sysTty) { host[it] }
 
     private fun link(file: File) = Files.readSymbolicLink(file.toPath()).toString()
 
@@ -37,6 +43,37 @@ class SerialNamesTest {
         assertEquals(dev.absolutePath, own.dir)
         assertEquals(sysTty.absolutePath, own.sysTty)
         assertEquals(listOf("null", "tty", "pts"), own.devices)
+    }
+
+    @Test
+    fun `with a folder for sys bus, has USB devices' stand-in and binds the phone's other buses`() {
+        val own = prepareOwnDev(dev, sysTty, sysBus) { host[it] }
+
+        assertEquals(sysBus.absolutePath, own.sysBus)
+        assertTrue(File(sysBus, "usb/devices").isDirectory)
+        assertTrue(File(dev, "bus/usb").isDirectory)
+        // Placeholders, so listing /sys/bus shows them (libudev lists it);
+        // usb is the app's stand-in, never the phone's.
+        assertEquals(listOf("platform", "iio"), own.buses)
+        assertTrue(File(sysBus, "platform").isDirectory)
+        assertFalse(File(sysBus, "pci").exists())
+    }
+
+    @Test
+    fun `a bus the phone no longer gives loses its placeholder`() {
+        prepareOwnDev(dev, sysTty, sysBus) { if (it == "/sys/bus/pci") HostEntry.DIR else host[it] }
+        prepareOwnDev(dev, sysTty, sysBus) { host[it] }
+
+        assertFalse(File(sysBus, "pci").exists())
+        assertTrue(File(sysBus, "usb/devices").isDirectory)
+    }
+
+    @Test
+    fun `without a folder for sys bus, no buses`() {
+        val own = prepare()
+
+        assertEquals(null, own.sysBus)
+        assertEquals(emptyList(), own.buses)
     }
 
     @Test
@@ -70,7 +107,7 @@ class SerialNamesTest {
 
     @Test
     fun `a device the phone no longer gives loses its placeholder`() {
-        prepareOwnDev(dev, sysTty) { if (it == "full") HostEntry.FILE else hostDev[it] }
+        prepareOwnDev(dev, sysTty) { if (it == "/dev/full") HostEntry.FILE else host[it] }
         prepare()
 
         assertFalse(File(dev, "full").exists())
