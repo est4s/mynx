@@ -151,9 +151,9 @@ always connected); pairing stays in Android's Settings.
 5. Test sketch in `~/sketches/esp32-spp` (not in the repo): echo
    what it gets, print a counter every second, name `mynx-spp`.
 
-**Status:** parts 1-5 built (entry 148), not yet pushed; `app/`
-untested by a compiler until CI builds it. Next: push, open the PR,
-fix what CI finds, then the phone tests. The sketch is flashed: it
+**Status:** PR #52; build 241 passed phone tests 1-5 and 9, and 7
+and 8 in part (entry 149). Next: the maintainer's tests 6, 7 and 8,
+then docs and the merge. The sketch is flashed: it
 advertises as `mynx-spp`, BT address `D4:E9:F4:A2:4A:02`, and logs
 connects, disconnects and what it gets on USB serial (`ttyUSB0`,
 115200, DTR and RTS low). **Watch for:** pyserial's RFC 2217 client
@@ -370,6 +370,34 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (149): Bluetooth serial on the phone (build 241)
+
+PR #52's build 241 (run 40356576455) in mynx dev, with the ESP32-CAM
+running the `mynx-spp` sketch, paired by the maintainer. Run by the
+agent from mynx dev:
+- **1** `mynx bt` lists `mynx-spp` (the permission was granted). Pass.
+- **2** `mynx bt bind mynx-spp` → `rfcomm0`, port 2317, the config
+  line, `/dev/rfcomm0`, `/sys/class/tty/rfcomm0` (`216:0`). Pass.
+- **3** pyserial on `/dev/serial/rfcomm0`: opened in 0.1 s, ticks,
+  `echo: hello from mynx`, unlinked after close. Pass.
+- **4** pyserial on `rfc2217://localhost:2317`: opened in 1.3 s
+  (under pyserial's 3 s negotiation limit, so the worry in "Next"
+  didn't show), same data; `list_ports` shows `/dev/rfcomm0`. Pass.
+- **5** `mynx usb monitor rfcomm0`: ticks; Ctrl+T r says it does
+  nothing over Bluetooth. Pass. (Typed lines got no echo: the
+  sketch ends lines on LF, the monitor sends CR; Ctrl+T n.)
+- **9** `ttyUSB0` and `rfcomm0` at once: the board's USB log shows
+  `BT connected`, `BT rx: both at once`, `BT disconnected`. Pass.
+- **7, 8 (in part)** `android-bluetooth off` refuses and unserves the
+  port, `on` brings it back; `unbind` removes port, names and line;
+  `mynx undo` restores them. Pass.
+
+Left, needing the maintainer's hands: **6** (board powered off
+while a port is open, then on), **7** (an app restart keeps the
+binding), **8** (Bluetooth turned off; the permission refused).
+Also the CI fix: the preload library is now built in Debian's image
+(the runner's Ubuntu mirror hung three builds); the build passed.
 
 ### 2026-10-26 (148): Bluetooth serial built (branch `bt-serial`)
 
