@@ -66,8 +66,8 @@ are in git history: the full log up to entry 92 is
   (PR #46, entry 139). Not released yet.
 - **Raw USB:** the spike worked on the phone with an RP2040 Zero
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
-  rebuilt test-first in PR #47 (draft, entry 142), its phone test
-  next.
+  rebuilt test-first in PR #47 (entry 142); every phone test
+  passed, ready to merge.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -159,8 +159,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    6. `./gradlew :core:test` and `python3 -m unittest
       tests/mynx/test_proot_usb.py` pass in mynx dev (the spike's
       proot broke the former).
-   **1-4 and 6 passed on build 40295886564 (entry 142); 5 is left.**
-   Then merge (the docs are in the PR). Later parts: hotplug
+   **All six passed on build 40295886564 (entry 142).** Then merge (the docs are in the PR). Later parts: hotplug
    (libudev's monitor: libudev-format messages, sender uid 0, a
    netlink address), and the recipes as hardware allows
    (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
@@ -329,8 +328,10 @@ results (entry 141, below). Branch `raw-usb` from `main`, draft PR
   load -x` flashed MicroPython back and it returned as `ttyACM0`,
   allowed without a dialog ("always"); a program's own
   `…/dev/bus/usb/001/005` file is left alone; core's and
-  `test_proot_usb.py`'s tests pass in mynx dev. Test 5 (a device
-  outside the filter) still to do.
+  `test_proot_usb.py`'s tests pass in mynx dev. Test 5 too: a
+  Kingston DataTraveler stick (`0951:1666`, outside the filter) was
+  "not allowed", `mynx usb allow 0951:1666` asked, and `lsusb -v`
+  then opened it and read its strings.
 - Hotplug left for later (see "Next", 0).
 - A timing test (`test_audio_record_until_ctrl_c_says_what_it_saved`)
   failed once in the full suite on the phone and passed alone.
