@@ -40,6 +40,9 @@ IDLE = 0.1
 # touch didn't reach a Pro Micro (tried on the phone; 0.1 s did).
 QUICK_OPEN = 0.2
 RETRY = 1.0
+# The longest wait after the app closed connections before answering:
+# a Bluetooth port's link that fails (its device off or away).
+RETRY_MAX = 30.0
 # The app's server greets a client it takes at once, and closes on one it
 # refuses because another client has the port (an rfc2217:// URL).
 GREETING_WAIT = 1.0
@@ -96,10 +99,12 @@ def escape(data):
 class Unescaper:
     """Telnet's stream back to data: commands and subnegotiations are
     dropped (the answers to our requests), doubled IACs undone, also
-    across reads."""
+    across reads. [answered]: a subnegotiation came, so the app opened the
+    port (it answers our setup only once its line is up)."""
 
     def __init__(self):
         self.mode = "data"
+        self.answered = False
 
     def feed(self, data):
         out = bytearray()
@@ -125,7 +130,11 @@ class Unescaper:
                 if b == IAC:
                     self.mode = "sub-iac"
             elif self.mode == "sub-iac":
-                self.mode = "data" if b == SE else "sub"
+                if b == SE:
+                    self.mode = "data"
+                    self.answered = True
+                else:
+                    self.mode = "sub"
         return bytes(out)
 
 
@@ -148,6 +157,7 @@ class Bridge:
         self.settings = None
         self.stopped = False
         self.retry_at = 0.0
+        self.failures = 0
         self.waiting = False
         self.waiting_path = os.path.join(os.path.dirname(self.link), f".{name}.waiting")
 
@@ -388,13 +398,26 @@ class Bridge:
             elif fd == self.master and events & select.POLLIN:
                 self.from_terminal()
             elif fd == self.sock.fileno() and not self.to_terminal():
-                self.disconnect("the app closed the port")
-                self.retry_at = time.monotonic() + RETRY
+                self.closed_by_app()
                 return
         if self.sock and is_open:
             self.follow_settings()
         if not is_open and self.sock:
             self.closed()
+
+    def closed_by_app(self):
+        """The app closed the connection. Before answering our setup, the
+        port never opened (a Bluetooth link failed): each time that
+        happens in a row, wait twice as long before trying again."""
+        if self.unescaper.answered:
+            self.failures = 0
+            delay = RETRY
+            self.disconnect("the app closed the port")
+        else:
+            self.failures += 1
+            delay = min(RETRY * 2 ** (self.failures - 1), RETRY_MAX)
+            self.disconnect(f"the app closed the port before opening it; trying again in {delay:g} s")
+        self.retry_at = time.monotonic() + delay
 
     def closed(self):
         self.disconnect("closed")

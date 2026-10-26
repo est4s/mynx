@@ -452,6 +452,43 @@ class AppAwayTest(unittest.TestCase):
         os.rmdir(folder)
 
 
+class LinkFailureTest(unittest.TestCase):
+    """A Bluetooth port's app side closes the connection before answering
+    the setup when its link fails: the helper waits longer each time."""
+
+    ANSWER = bytes([255, 250, 44, 101, 0, 0, 0x25, 0x80, 255, 240])  # SET-BAUDRATE's answer
+
+    def test_the_unescaper_notes_an_answer(self):
+        unescaper = sp.Unescaper()
+        unescaper.feed(FakePort.GREETING)
+        self.assertFalse(unescaper.answered)
+        unescaper.feed(self.ANSWER[:4])
+        self.assertFalse(unescaper.answered)
+        unescaper.feed(self.ANSWER[4:])
+        self.assertTrue(unescaper.answered)
+
+    def close_unanswered(self, bridge):
+        bridge.unescaper = sp.Unescaper()
+        bridge.closed_by_app()
+        return bridge.retry_at - time.monotonic()
+
+    def test_closes_before_an_answer_wait_longer_each_time_up_to_a_limit(self):
+        bridge = sp.Bridge("rfcomm0", 1, tempfile.gettempdir())
+        waits = [self.close_unanswered(bridge) for _ in range(7)]
+        for got, want in zip(waits, [1, 2, 4, 8, 16, 30, 30]):
+            self.assertAlmostEqual(want * sp.RETRY, got, delta=0.2)
+
+    def test_an_answered_connection_starts_again_from_the_short_wait(self):
+        bridge = sp.Bridge("rfcomm0", 1, tempfile.gettempdir())
+        for _ in range(3):
+            self.close_unanswered(bridge)
+        bridge.unescaper = sp.Unescaper()
+        bridge.unescaper.feed(self.ANSWER)
+        bridge.closed_by_app()
+        self.assertAlmostEqual(sp.RETRY, bridge.retry_at - time.monotonic(), delta=0.2)
+        self.assertAlmostEqual(sp.RETRY, self.close_unanswered(bridge), delta=0.2)
+
+
 class CommandTest(unittest.TestCase):
     def test_usage(self):
         result = subprocess.run([sys.executable, HELPER, "ttyUSB0"], capture_output=True, text=True)

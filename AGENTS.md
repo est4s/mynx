@@ -516,9 +516,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   ports folder at start). `BtLine` tries an authenticated link, then
   an unauthenticated one (old HC-05s), and closes a link still
   opening when its client leaves. After a failed link it refuses new
-  ones at once for 2 s, doubling to 30 s: `serial-port` connects
-  again every second while its program holds the pty, which would
-  page a board that's off without pause. No `cancelDiscovery()`: it
+  ones at once for 2 s, doubling to 30 s, so a board that's off isn't
+  paged without pause; `serial-port` backs off the same way (1 s,
+  doubling to 30 s) when the app closes a connection before answering
+  its setup (`Unescaper.answered`: the server answers only once the
+  line is up), so its log isn't a line a second either. No `cancelDiscovery()`: it
   needs the scan permission.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
