@@ -217,6 +217,17 @@ report (commits, what's untested, questions). Only A runs Gradle, so
 two daemons don't fight over the phone's memory (and Android's
 process limit: see "How it runs").
 
+**Status:** parts 0-5 done on branch `ble` (entry 152): core, app,
+CLI and guide merged, every suite green here; the app compiles only
+in CI. The C3 runs the test peripheral (`~/sketches/ble-peripheral`,
+MicroPython 1.29, `mynx-ble`). Next: the PR's build, then the phone
+tests below with the maintainer. **Later, small:** cancelling a
+connect (`BleHost.connect` has no cancel: a cancelled request leaves
+Android trying up to 30 s; core closes the late link); scans don't
+say when Bluetooth turns off; background scans on Android 10-11
+likely need background location; `write` VALUE can't hold a line
+break (percent-encode it, as `clipboard-set` does).
+
 **Phone tests (mynx dev, with the C3 as `mynx-ble`):**
 1. First `mynx ble scan` asks for the permissions; `mynx-ble`
    shows with its RSSI and services; `--name`, `--service`,
@@ -226,8 +237,9 @@ process limit: see "How it runs").
 3. `read … battery-level` gives a number; `read` of the custom
    characteristic as `text` and `hex`.
 4. `write` text and hex; the C3's log shows them; `--no-response`.
-5. `notify` prints the counter every second; Ctrl+C unsubscribes
-   (the log says so).
+5. `notify` prints the counter every second; after Ctrl+C a second
+   `notify` starts fresh (MicroPython on the C3 gets no subscribe
+   event, so its log can't show it).
 6. `mynx ble connect` in one tab, `read` in another: no new
    connect in the C3's log.
 7. Six scans in 30 s: the sixth is refused with the reason.
@@ -425,6 +437,22 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (152): BLE built by subagents (branch `ble`)
+
+Part 0, the contract (`Ble.kt`: `BleHost`, `BleLink`, the requests'
+JSON in KDoc, fakes in `BleTest.kt`), then four subagents at once in
+worktrees: A core (`BleRequests.kt`, `BleValues.kt`, 6 commits, 29
+tests), B app (`BleCentral.kt`, manifest, wiring; its commit waited
+for A's Gradle, since the hook runs core's tests), C `mynx ble` and
+the guide (17 tests), D the C3's MicroPython peripheral (flashed;
+MicroPython on the ESP32 gets no subscribe event, so phone test 5
+changed). Each worktree came up on `main`, not `ble`: they reset to
+the contract themselves. Merged into `ble`; core, Python (493) and
+bats (177) green. Decisions A made where the contract was open are
+in `BleRequests.kt`'s KDoc (refusal order, unfiltered background
+scans refused, names from every scan since start). Docs: README,
+roadmap, AGENTS.md, the guide's examples renamed to `mynx-ble`.
 
 ### 2026-10-26 (151): BLE planned for subagents
 

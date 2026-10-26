@@ -912,15 +912,15 @@ sensors.
   own (`battery-level` is `u8`); other formats come with the bytes in
   hex too. A write takes `hex` unless given; `0a1b` and `0a 1b` both
   work.
-  - `mynx ble read mynx-c3 battery-level` prints `87 (hex 57)`.
+  - `mynx ble read mynx-ble battery-level` prints `87 (hex 57)`.
     `--json` gives `device`, `char`, `name`, `as`, `value` (a number
     for the number formats) and `hex`.
-  - `mynx ble write mynx-c3 nus-rx 'hello' --as text` writes it
+  - `mynx ble write mynx-ble nus-rx 'hello' --as text` writes it
     and says how many bytes; `--no-response` writes without waiting
     for the device's answer, for characteristics with
     `write-no-response`. A value longer than the link's MTU less 3
     is refused with the limit.
-  - `mynx ble notify mynx-c3 nus-tx --as text` subscribes (notify,
+  - `mynx ble notify mynx-ble nus-tx --as text` subscribes (notify,
     else indicate) and prints each value with its time, until Ctrl+C;
     when the link drops, it ends with the reason. `--json`: one
     object per line (`char`, `name`, `as`, `value`, `hex`, `time`).
