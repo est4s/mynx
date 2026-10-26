@@ -8,8 +8,8 @@ import java.io.File
  * answer; null makes it a stream, which runs until `mynx` cancels it.
  * [start] begins the work and must not block: it answers through the
  * [PendingReply], now or later. A request that changes the config files
- * names the change with [change] (for `mynx undo`); [start] must have
- * written them by the time it returns.
+ * names the change with [change] (for `mynx undo`); it must have written
+ * them by the time it answers.
  */
 class Later(
     val seconds: Int?,
@@ -31,6 +31,9 @@ class PendingReply internal constructor(
     private val closed: (PendingReply) -> Unit,
 ) {
     private var done = false
+
+    /** Whether it has been answered (or cancelled). */
+    internal val answered: Boolean @Synchronized get() = done
     private var stopping = false
     private var cancelled: (() -> Unit)? = null
 

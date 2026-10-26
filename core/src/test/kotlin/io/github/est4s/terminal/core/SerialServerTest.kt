@@ -100,6 +100,98 @@ class SerialServerTest {
         }
     }
 
+    // A Bluetooth port links when a client arrives and unlinks when it leaves, as `rfcomm bind` does.
+    @Test
+    fun `a client arriving opens the line first, and leaving closes it after the lines are down`() {
+        val hooked = FakeLine()
+        val hookedLine = object : SerialLine by hooked {
+            override fun clientArrived() { hooked.calls += "arrived" }
+            override fun clientLeft() { hooked.calls += "left" }
+        }
+        val server = SerialServer(hookedLine, port = 0).also { it.start() }
+        try {
+            Socket("127.0.0.1", server.port).use { it.soTimeout = 3000; it.readBytes(9) }
+            waitFor("the drop") { !server.busy }
+            assertEquals(listOf("arrived", "rts false", "dtr false", "left"), hooked.callList())
+        } finally {
+            server.close()
+        }
+    }
+
+    // serial-port takes a close with no greeting for "busy"; one after it is the app closing the port, so it tries again.
+    @Test
+    fun `a line that can't open greets, then closes the client the usual way, keeping why`() {
+        var fail = true
+        val failing = object : SerialLine by line {
+            override fun clientArrived() { if (fail) throw java.io.IOException("no link") }
+            override fun clientLeft() { line.calls += "left" }
+        }
+        val server = SerialServer(failing, port = 0).also { it.start() }
+        try {
+            Socket("127.0.0.1", server.port).use { s ->
+                s.soTimeout = 3000
+                assertEquals(9, s.readBytes(9).size, "the greeting")
+                assertEquals(-1, s.getInputStream().read(), "then closed")
+            }
+            waitFor("the port free") { !server.busy }
+            assertEquals(listOf("rts false", "dtr false", "left"), line.callList())
+            assertEquals("no link", server.lastError)
+            fail = false
+            Socket("127.0.0.1", server.port).use { s -> s.soTimeout = 3000; s.readBytes(9) }
+            waitFor("the error cleared") { server.lastError == null }
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun `nothing from the client reaches the line before it's open`() {
+        val opened = java.util.concurrent.CountDownLatch(1)
+        val slow = object : SerialLine by line {
+            override fun clientArrived() { opened.await(3, TimeUnit.SECONDS) }
+        }
+        val server = SerialServer(slow, port = 0).also { it.start() }
+        try {
+            Socket("127.0.0.1", server.port).use { s ->
+                s.soTimeout = 3000
+                s.readBytes(9)
+                s.getOutputStream().write(byteArrayOf(1, 2))
+                Thread.sleep(100)
+                assertEquals(0, line.writtenBytes().size)
+                // Others are still refused while it opens: the accept thread isn't waiting on it.
+                Socket("127.0.0.1", server.port).use { assertEquals(-1, it.apply { soTimeout = 3000 }.getInputStream().read()) }
+                opened.countDown()
+                waitFor("the data") { line.writtenBytes().size == 2 }
+            }
+        } finally {
+            server.close()
+        }
+    }
+
+    // A Bluetooth link that drops ends its client, so the program sees the port close.
+    @Test
+    fun `ending the client closes it the usual way and lets the next one in`() {
+        connect().use { s ->
+            s.readBytes(9)
+            waitFor("the client") { server.busy }
+            server.endClient()
+            assertEquals(-1, s.getInputStream().read())
+        }
+        waitFor("the drop") { !server.busy }
+        assertEquals(listOf("rts false", "dtr false"), line.callList())
+        server.endClient()
+        connect().use { assertEquals(9, it.readBytes(9).size) }
+    }
+
+    @Test
+    fun `a USB line's hooks do nothing`() {
+        connect().use { it.readBytes(9) }
+        waitFor("the drop") { !server.busy }
+        line.clientArrived()
+        line.clientLeft()
+        assertEquals(listOf("rts false", "dtr false"), line.callList())
+    }
+
     @Test
     fun `settings outlast a client`() {
         connect().use { s ->

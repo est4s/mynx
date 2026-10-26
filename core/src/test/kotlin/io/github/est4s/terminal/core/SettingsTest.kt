@@ -62,7 +62,7 @@ class SettingsTest {
         assertEquals(
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
-                "android-microphone", "sound-device", "share-folder", "tab-swipe", "wakelock",
+                "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
                 "update-check", "serial-preload", "serial-names"),
             SETTINGS.map { it.key },
         )
@@ -79,12 +79,13 @@ class SettingsTest {
                 "agent-notify" to "off", "agent-notify-after" to "45", "undo-keep" to "3",
                 "android-clipboard" to "off", "android-share" to "off", "android-location" to "off",
                 "android-sensors" to "off", "android-camera" to "off", "android-microphone" to "off",
+                "android-bluetooth" to "off",
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
-                androidCamera = false, androidMicrophone = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
+                androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
                 wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false).values(),
         )
     }
@@ -189,6 +190,14 @@ class SettingsTest {
         val parsed = parseSettings("android-camera = off\nandroid-camera = maybe\n")
         assertFalse(parsed.settings.androidCamera)
         assertEquals(listOf("line 2: android-camera must be one of: on, off"), parsed.problems)
+    }
+
+    @Test
+    fun `Bluetooth is on by default and can be turned off`() {
+        assertTrue(Settings().androidBluetooth)
+        val parsed = parseSettings("android-bluetooth = off\nandroid-bluetooth = maybe\n")
+        assertFalse(parsed.settings.androidBluetooth)
+        assertEquals(listOf("line 2: android-bluetooth must be one of: on, off"), parsed.problems)
     }
 
     @Test

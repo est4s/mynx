@@ -20,6 +20,8 @@ class ConfigHistory(private val config: File, private val state: File, private v
     private val last = File(state, "last")
     private val stepsDir = File(state, "steps")
 
+    // Requests answered later observe from their own threads.
+    @Synchronized
     fun observe(reason: String, keep: Int) {
         val current = read(config)
         if (!last.isDirectory) {
@@ -38,12 +40,14 @@ class ConfigHistory(private val config: File, private val state: File, private v
     }
 
     /** Newest first. */
+    @Synchronized
     fun steps(): List<UndoStep> = stepDirs().reversed().mapNotNull { dir ->
         val about = runCatching { File(dir, "about").readLines() }.getOrNull() ?: return@mapNotNull null
         UndoStep(about.getOrElse(0) { "" }, about.getOrNull(1)?.toLongOrNull() ?: 0)
     }
 
     /** Takes back the newest change (edits not seen yet count as one); returns its name, or null. */
+    @Synchronized
     fun undo(keep: Int): String? {
         observe("edits by hand", keep)
         val dir = stepDirs().lastOrNull() ?: return null

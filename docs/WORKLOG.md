@@ -70,6 +70,10 @@ are in git history: the full log up to entry 92 is
   test passed. Released in v0.3.0.
 - **UF2** (`mynx uf2 flash`): every phone test passed with the
   RP2040 Zero; merged (PR #49, entry 144). Released in v0.3.0.
+- **Bluetooth serial** (SPP, `mynx bt`): every phone test passed with
+  the ESP32-CAM (entry 149); merged (PR #52). The plan and its tests:
+  `git show 0280cfa:docs/WORKLOG.md`. Next for Bluetooth, when the
+  maintainer picks it: BLE (`mynx ble`, roadmap).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -78,7 +82,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Development boards (suggested order; the maintainer picks)
+### 0. Development boards (leftovers; the maintainer picks)
 
 The roadmap's last items, planned with the maintainer 2026-10-25
 (entry 140). **Maintainer's decisions:** raw USB first, then UF2;
@@ -266,6 +270,97 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (150): helper back-off; PR #52 merged
+
+The maintainer asked to fix phone test 6's log noise before the
+merge: `serial-port` now waits 1 s, doubling to 30 s, when the app
+closes a connection before answering its setup (a Bluetooth link that
+failed); `Unescaper.answered` tells, since the server answers only
+once the line is up (tests in `test_serial_port.py`). Docs for the
+merge: status, the plan out of "Next", roadmap. Merged as PR #52.
+
+### 2026-10-26 (149): Bluetooth serial on the phone (build 241)
+
+PR #52's build 241 (run 40356576455) in mynx dev, with the ESP32-CAM
+running the `mynx-spp` sketch, paired by the maintainer. Run by the
+agent from mynx dev:
+- **1** `mynx bt` lists `mynx-spp` (the permission was granted). Pass.
+- **2** `mynx bt bind mynx-spp` → `rfcomm0`, port 2317, the config
+  line, `/dev/rfcomm0`, `/sys/class/tty/rfcomm0` (`216:0`). Pass.
+- **3** pyserial on `/dev/serial/rfcomm0`: opened in 0.1 s, ticks,
+  `echo: hello from mynx`, unlinked after close. Pass.
+- **4** pyserial on `rfc2217://localhost:2317`: opened in 1.3 s
+  (under pyserial's 3 s negotiation limit, so the worry in "Next"
+  didn't show), same data; `list_ports` shows `/dev/rfcomm0`. Pass.
+- **5** `mynx usb monitor rfcomm0`: ticks; Ctrl+T r says it does
+  nothing over Bluetooth. Pass. (Typed lines got no echo: the
+  sketch ends lines on LF, the monitor sends CR; Ctrl+T n.)
+- **9** `ttyUSB0` and `rfcomm0` at once: the board's USB log shows
+  `BT connected`, `BT rx: both at once`, `BT disconnected`. Pass.
+- **7, 8 (in part)** `android-bluetooth off` refuses and unserves the
+  port, `on` brings it back; `unbind` removes port, names and line;
+  `mynx undo` restores them. Pass.
+
+With the maintainer:
+- **6** picocom on `rfcomm0`, board unplugged: `mynx bt` shows "the
+  link dropped"; plugged back in, `linked, in use` again on its own.
+  Pass. While it was off, `serial-port` reconnected every second and
+  logged "the app closed the port" each time: the app refuses at once
+  during its back-off (no radio), so only log noise.
+- **7** Exit and reopen mynx dev: `rfcomm0` bound and served again.
+  Pass.
+- **8** Bluetooth off: "Bluetooth is off: turn it on in Android.",
+  `rfcomm0` listed with no URL and no `/dev/serial` link. Pass.
+  Refusing the permission wasn't tried (it was granted already).
+Also the CI fix: the preload library is now built in Debian's image
+(the runner's Ubuntu mirror hung three builds); the build passed.
+
+### 2026-10-26 (148): Bluetooth serial built (branch `bt-serial`)
+
+The maintainer asked for the work to be split among subagents; it
+was, in worktrees merged back into `bt-serial`:
+- **Core** (agent): `Bluetooth.kt` (`bluetooth.conf` parsed, checked
+  by `mynx check`, edited by bind/unbind; `bt-list`, `bt-bind`,
+  `bt-unbind`, `bt-settings` through `BluetoothHost`;
+  `android-bluetooth`), `SerialLine.clientArrived()`/`clientLeft()`
+  and `SerialServer.endClient()`, rfcomm names and uevents. Also a
+  fix outside Bluetooth: a [Later] request's config change is now
+  recorded for undo when it answers late (a bind that waited for the
+  permission dialog), so `ConfigHistory` is synchronized.
+- **Tools** (agent): `mynx bt`, `tools/lib/mynx/ports.py` (USB and
+  served Bluetooth ports for `mynx usb url|path|monitor`), the
+  monitor's resets refused over Bluetooth, the guide's "Bluetooth
+  serial devices", README. Then (me) `bt-list --no-ask` there, so a
+  USB command never opens the Bluetooth permission dialog.
+- **App** (me): `ServedPort` out of `UsbBridge` (refactor), `BtLine`,
+  `BtBridge`, the wiring in `TerminalService`, the manifest
+  (`BLUETOOTH_CONNECT`; `BLUETOOTH` up to API 30). Reviewed by an
+  agent reading it as the compiler would, since only CI builds it:
+  no compile errors found; fixed what it found: a link left open
+  when its client left just as it linked, a board that's off paged
+  every second (now a back-off, 2 s doubling to 30 s), Bluetooth
+  ports taking 2217 from USB at start (now from 2317), a
+  `cancelDiscovery()` that always failed (scan permission; dropped),
+  a socket leaked on `SecurityException`, and the shared ports
+  folder emptied by `UsbBridge` (now the service).
+- **Test sketch** (agent): `~/sketches/esp32-spp` (PlatformIO,
+  espressif32 8.0.0, Arduino-ESP32 3.3.12, which warns BluetoothSerial
+  leaves in 4.0), built in 3m19s on the phone and flashed.
+
+Tests: core, `tests/mynx` (335), bats (176) pass. Known, not ours:
+`test_undo_list` fails in a tab whose `TZ` isn't UTC (the test's
+`mynx` runs without it; passes with `TZ=UTC`), and a `shell-setup.bats`
+test failed once and passed again.
+
+### 2026-10-26 (147): Bluetooth serial planned (branch `bt-serial`)
+
+The maintainer asked for the next step and picked Bluetooth, SPP
+first, tested with the ESP32-CAM (`esptool chip_id` on `ttyUSB0`:
+ESP32-D0WD-V3, features WiFi and BT). The plan is "Next" section 0:
+`rfcomm bind`-style ports through the existing bridge
+(`SerialLine`), bindings in `bluetooth.conf`, `mynx bt`. Nothing
+built yet.
 
 ### 2026-10-26 (146): ESP32-C3's built-in JTAG (branch `c3-jtag`)
 

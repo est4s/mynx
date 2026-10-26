@@ -375,8 +375,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   `LD_PRELOAD` inside `env -i` only (never proot's own environment:
   Android's linker), and only when the tools have the file and
   `serial-preload` is on (`serialPreload()`). Built for Debian's glibc,
-  not with the NDK: CI cross-compiles with `gcc-aarch64-linux-gnu` and
-  `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
+  not with the NDK: CI builds it in Debian's arm64 image with its gcc
+  (QEMU, as the rootfs; the runner's Ubuntu mirror hung the old cross
+  compiler's install) and `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
   `-DMYNX_SERIAL_TEST`, which refuses those calls itself on a port
   (a desktop allows them) and reads `MYNX_SERIAL_DIR`.
 - **Serial port names** (`core/.../SerialNames.kt`; agent's design,
@@ -486,6 +487,41 @@ See `docs/ROADMAP.md` "How it works". The details:
   status after the last block is success: the board restarts first.
   Tested natively against a fake drive (`tests/mynx/test_uf2.py`);
   the usbfs ioctls only on the phone.
+- **Bluetooth serial** (`core/.../Bluetooth.kt`, `app/.../BtBridge.kt`,
+  `BtLine.kt`, `ServedPort.kt`; maintainer's
+  decisions, 2026-10-26, entry 147: Classic SPP, Linux's `rfcomm
+  bind`, pairing in Android's settings): a bound device is a port
+  like a USB one (`/dev/serial/rfcommN`, RFC 2217 from 2317,
+  `FIRST_BLUETOOTH_TCP_PORT`: bound ports are served from the start,
+  and in USB's range would move the first USB port off the 2217
+  recipes name) that costs nothing until used. The link opens when a client
+  arrives and closes when it leaves (`SerialLine.clientArrived()`/
+  `clientLeft()`): after the greeting and on the client's thread, as
+  `serial-port` takes a close before the greeting for "busy" and the
+  link takes seconds; a link that drops ends its client
+  (`SerialServer.endClient()`). Bindings are config
+  (`bluetooth.conf`, `rfcomm0 = ADDRESS`, as Linux's old
+  `rfcomm.conf`), so restarts keep them and `mynx check` and undo
+  cover them. `bluetoothRequests()` answers `bt-*` through a
+  `BluetoothHost`; a bind may wait for the permission dialog before
+  it writes, so a [Later]'s change is observed when it answers.
+  `/dev/rfcommN`, a virtual tty in `/sys/class/tty` (no `device`) and
+  uevents (major 216), as Linux makes them: pyserial globs
+  `/dev/rfcomm*`. The app serves a port while the setting, the
+  permission (`BLUETOOTH_CONNECT`, asked by `mynx bt`, never by `mynx
+  usb`: `bt-list --no-ask`) and Bluetooth itself allow, re-read on
+  Bluetooth's state broadcasts, reloading requests and coming on
+  screen. Each port is a `ServedPort` (server, helper, link; shared
+  with `UsbBridge`; the service, not a bridge, empties the shared
+  ports folder at start). `BtLine` tries an authenticated link, then
+  an unauthenticated one (old HC-05s), and closes a link still
+  opening when its client leaves. After a failed link it refuses new
+  ones at once for 2 s, doubling to 30 s, so a board that's off isn't
+  paged without pause; `serial-port` backs off the same way (1 s,
+  doubling to 30 s) when the app closes a connection before answering
+  its setup (`Unescaper.answered`: the server answers only once the
+  line is up), so its log isn't a line a second either. No `cancelDiscovery()`: it
+  needs the scan permission.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

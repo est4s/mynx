@@ -34,6 +34,8 @@ import io.github.est4s.terminal.core.BatteryQuery
 import io.github.est4s.terminal.core.BatteryReading
 import io.github.est4s.terminal.core.BatteryReport
 import io.github.est4s.terminal.core.batteryRequests
+import io.github.est4s.terminal.core.BLUETOOTH_CONF
+import io.github.est4s.terminal.core.bluetoothRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
@@ -187,7 +189,8 @@ class TerminalService : Service() {
                 vibrations.requests() +
                 updater.requests { apk -> onMain { openInstaller(apk) } } +
                 serviceRequests(serviceManager) +
-                usbRequests(usb::devices, ::allowUsb),
+                usbRequests(usb::devices, ::allowUsb) +
+                bluetoothRequests(File(rootfs, "root"), bluetooth),
         )
     }
     // The USB serial ports' links, bound at /dev/serial in every proot.
@@ -199,23 +202,45 @@ class TerminalService : Service() {
     private val sysBusDir by lazy { File(filesDir, "sys-bus") }
     private val usbFds by lazy { UsbFds(this, File(devDir, USB_SOCKET_NAME), sysBusDir, devDir, File(rootfs, "$SERIAL_LOG_DIR/usb.log")) }
     private val uevents by lazy { UeventSender(serialDir, File(rootfs, "$SERIAL_LOG_DIR/uevents.log")) }
+    private val launchPortHelper = { name: String, port: Int ->
+        prootLaunch(
+            prootPaths(), toolsDir = tools.tools.absolutePath, serialDir = serialDir.absolutePath,
+            command = listOf("/usr/bin/python3", SERIAL_PORT_HELPER, name, port.toString()),
+        )
+    }
     private val usb by lazy {
         UsbBridge(
             this, mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir,
-            launchHelper = { name, port ->
-                prootLaunch(
-                    prootPaths(), toolsDir = tools.tools.absolutePath, serialDir = serialDir.absolutePath,
-                    command = listOf("/usr/bin/python3", SERIAL_PORT_HELPER, name, port.toString()),
-                )
-            },
+            launchHelper = launchPortHelper,
             ready = ::showUsbReady,
             gone = ::clearUsbReady,
             changed = { devices ->
-                runCatching { writeSerialNames(devDir, sysTtyDir, devices) }
-                // After the names: a tool told of a port looks for it there.
-                uevents.changed(devices.flatMap { d -> d.ports.map { it.name } }.toSet())
+                usbPorts = devices
+                serialPortsChanged()
             },
         )
+    }
+    // Bluetooth serial ports (mynx bt), served beside the USB ones.
+    private val bluetooth by lazy {
+        BtBridge(
+            this, PortHelpers(mainHandler, serialDir, File(rootfs, SERIAL_LOG_DIR), filesDir, launchPortHelper),
+            File(rootfs, "root/$CONFIG_DIR/$BLUETOOTH_CONF"),
+            settingOn = { currentSettings()?.androidBluetooth ?: true },
+            askPermissions = ::askPermissions,
+            showSettings = ::openBluetoothSettings,
+            changed = { names ->
+                rfcommPorts = names
+                serialPortsChanged()
+            },
+        )
+    }
+    private var usbPorts = emptyList<UsbSerialDevice>()
+    private var rfcommPorts = emptyList<String>()
+
+    private fun serialPortsChanged() {
+        runCatching { writeSerialNames(devDir, sysTtyDir, usbPorts, rfcomm = rfcommPorts) }
+        // After the names: a tool told of a port looks for it there.
+        uevents.changed(usbPorts.flatMap { d -> d.ports.map { it.name } }.toSet() + rfcommPorts)
     }
     // Background services: hidden sessions (see ServiceSessions), kept running without a tab.
     private val serviceHost by lazy {
@@ -337,9 +362,12 @@ class TerminalService : Service() {
         requests.start()
         watchRequests()
         applySoundSetting()
+        // Links from an earlier run point at terminals that are gone; both bridges link here.
+        serialDir.deleteRecursively()
         serialDir.mkdirs()
         runCatching { usb.start() }
         runCatching { usbFds.start() }
+        runCatching { bluetooth.start() }
         launchServices()
         applyWakelockSetting()
         keepPowerSupply()
@@ -412,6 +440,8 @@ class TerminalService : Service() {
         // A device allowed through Android's "open mynx?" dialog, which opened the app.
         runCatching { usb.refresh() }
         runCatching { usbFds.refresh() }
+        // The permission granted, or bluetooth.conf edited, meanwhile.
+        runCatching { bluetooth.refresh() }
         applyWakelockSetting() // the settings file may have been edited by hand
     }
 
@@ -461,6 +491,8 @@ class TerminalService : Service() {
                     runCatching { serviceManager.reload() }
                     applySoundSetting()
                     applyWakelockSetting()
+                    // android-bluetooth, or bluetooth.conf by hand (mynx check).
+                    runCatching { bluetooth.refresh() }
                 }
             }
         }
@@ -530,6 +562,7 @@ class TerminalService : Service() {
         sound.stop()
         runCatching { usb.stop() }
         runCatching { usbFds.stop() }
+        runCatching { bluetooth.stop() }
         killAll()
         stopServices()
         releaseWakeLock()
@@ -856,6 +889,18 @@ class TerminalService : Service() {
         if (activity?.onScreen != true) return
         val id = tabs.selected?.session?.let { shellIds[it] } ?: return
         getSystemService(NotificationManager::class.java).cancel(NOTICE_ID_BASE + id)
+    }
+
+    /** Opens Android's Bluetooth settings (mynx bt settings): null if it did, else why not. */
+    private fun openBluetoothSettings(): String? {
+        val shown = activity?.takeIf { it.onScreen }
+            ?: return "the app must be on screen to open Bluetooth settings"
+        return try {
+            shown.startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+            null
+        } catch (e: ActivityNotFoundException) {
+            "this phone has no Bluetooth settings to open"
+        }
     }
 
     /** Opens a web link in the phone's browser: null if it did, else why not. */

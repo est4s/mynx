@@ -23,13 +23,18 @@
     <!-- mynx audio record; a recording started on screen keeps going in the background. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Bluetooth serial ports (mynx bt) link to paired devices: asked on first use on
+         Android 12+, granted with the app before. No scanning: pairing is in Android's Settings. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- mynx update opens Android's installer for the APK it downloaded from GitHub
          (and debug builds' mynx install-apk for a CI build). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- The camera and microphone permissions would otherwise hide the app from phones without one. -->
+    <!-- The camera, microphone and Bluetooth permissions would otherwise hide the app from phones without one. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <!-- The USB serial bridge; phones without USB host still install the app. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 

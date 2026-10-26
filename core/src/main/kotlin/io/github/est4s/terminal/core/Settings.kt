@@ -25,6 +25,8 @@ data class Settings(
     val androidCamera: Boolean = true,
     /** Whether programs in Debian may record from the microphone. */
     val androidMicrophone: Boolean = true,
+    /** Whether programs in Debian may use Bluetooth serial ports. */
+    val androidBluetooth: Boolean = true,
     /** Whether the app runs PulseAudio in Debian, so programs play through the phone. */
     val soundDevice: Boolean = true,
     /** Where files shared to the app from other apps go, in Debian. */
@@ -54,6 +56,7 @@ data class Settings(
         "android-sensors" to if (androidSensors) "on" else "off",
         "android-camera" to if (androidCamera) "on" else "off",
         "android-microphone" to if (androidMicrophone) "on" else "off",
+        "android-bluetooth" to if (androidBluetooth) "on" else "off",
         "sound-device" to if (soundDevice) "on" else "off",
         "share-folder" to shareFolder,
         "tab-swipe" to if (tabSwipe) "on" else "off",
@@ -175,6 +178,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("android-microphone", listOf("on", "off")),
         { copy(androidMicrophone = it == "on") },
+    ),
+    SettingDef(
+        "android-bluetooth", "Whether programs in Debian can use Bluetooth serial ports (mynx bt).",
+        "on", listOf("on", "off"),
+        oneOf("android-bluetooth", listOf("on", "off")),
+        { copy(androidBluetooth = it == "on") },
     ),
     SettingDef(
         "sound-device", "Whether the app runs a sound server (PulseAudio) in Debian, so programs play through the phone's speaker.",

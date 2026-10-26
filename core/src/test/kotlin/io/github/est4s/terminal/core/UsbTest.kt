@@ -35,6 +35,8 @@ class UsbNamesTest {
     fun `TCP ports start at 2217 and skip those taken`() {
         assertEquals(listOf(2217, 2218, 2219), tcpPorts(emptySet()).take(3).toList())
         assertEquals(listOf(2218, 2220), tcpPorts(setOf(2217, 2219)).take(2).toList())
+        // Bluetooth's range of its own, so the first USB port stays 2217 with devices bound.
+        assertEquals(listOf(2317, 2319), tcpPorts(setOf(2318), first = FIRST_BLUETOOTH_TCP_PORT).take(2).toList())
     }
 
     @Test

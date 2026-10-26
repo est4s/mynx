@@ -31,6 +31,15 @@ interface SerialLine {
     fun purge(input: Boolean, output: Boolean)
     /** CTS, DSR, RI and CD as RFC 2217's modem-state bits (0x10, 0x20, 0x40, 0x80); 0 when it can't tell. */
     fun modemState(): Int
+    /**
+     * A client has the port ([SerialServer], after its greeting, before
+     * any of its data): a line that links on demand (Bluetooth) opens
+     * the link here, and throws an IOException when it can't, which
+     * closes that client. USB ports are always open.
+     */
+    fun clientArrived() {}
+    /** The client has gone, after its RTS and DTR were dropped: an on-demand link closes. */
+    fun clientLeft() {}
 }
 
 private const val IAC = 255

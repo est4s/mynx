@@ -47,7 +47,7 @@ class PortChoiceTest(unittest.TestCase):
     def test_says_what_is_wrong(self):
         with self.assertRaisesRegex(sm.Problem, "no port ttyUSB1.*ttyACM0, ttyUSB0"):
             sm.choose_port("ttyUSB1", PORTS)
-        with self.assertRaisesRegex(sm.Problem, "No USB serial port"):
+        with self.assertRaisesRegex(sm.Problem, r"No serial port\. Connect a board \(mynx usb\) or bind a Bluetooth one \(mynx bt\)"):
             sm.choose_port(None, [])
         with self.assertRaisesRegex(sm.Problem, "2 ports: say which"):
             sm.choose_port(None, PORTS)
@@ -59,6 +59,16 @@ class PortChoiceTest(unittest.TestCase):
         self.assertIn("1 ttyACM0", asked[0])
         with self.assertRaisesRegex(sm.Problem, "no port 5"):
             sm.pick(PORTS, lambda prompt: "5")
+
+    def test_bluetooth_ports_come_with_the_usb_ones(self):
+        # mynx's serial_ports() merges bt-list's served ports with usb-list's.
+        bt = {"name": "rfcomm0", "path": "/dev/serial/rfcomm0", "ids": None, "product": "mynx-spp"}
+        old = sm.serial_ports
+        sm.serial_ports = lambda: PORTS + [bt]
+        try:
+            self.assertEqual(PORTS + [bt], sm.ask_ports())
+        finally:
+            sm.serial_ports = old
 
     def test_the_reset_follows_the_device(self):
         self.assertEqual("usb-jtag", sm.boot_kind(PORTS[0]))
@@ -188,7 +198,7 @@ class MonitorTest(unittest.TestCase):
             os.execv(sys.executable, [sys.executable, APP, *args])
         self.pid, self.fd = pid, fd
         self.addCleanup(self.stop)
-        self.expect(b"Ctrl+T h")
+        self.opening = self.expect(b"Ctrl+T h")
         return fd
 
     def stop(self):
@@ -255,6 +265,15 @@ class MonitorTest(unittest.TestCase):
         self.expect(b"back")
         os.write(self.port_master, b"again\r\n")
         self.expect(b"again")
+
+    def test_over_bluetooth_the_lines_and_resets_do_nothing_and_say_so(self):
+        link = os.path.join(self.tmp(), "rfcomm0")
+        os.symlink(self.port_path, link)
+        fd = self.start(link, "--lower")
+        self.assertNotIn(b"DTR", self.opening)
+        for key in b"rbDR":
+            os.write(fd, b"\x14" + bytes([key]))
+            self.expect(b"nothing over Bluetooth")
 
     def tmp(self):
         import tempfile

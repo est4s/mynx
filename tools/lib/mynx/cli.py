@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.parse
 
-from . import agents, links, notes, uf2
+from . import agents, links, notes, ports, uf2
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
@@ -46,6 +46,7 @@ Commands:
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
   usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
+  bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
   uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
@@ -790,16 +791,16 @@ def cmd_usb(args, as_json):
     if sub == "monitor" and not as_json:
         os.execv(SERIAL_MONITOR, [SERIAL_MONITOR, *rest])
     if sub in ("url", "path") and len(rest) <= 1:
-        ports = [port for device in request("usb-list")["devices"] for port in device["ports"]]
+        found = ports.serial_ports()
         if rest:
-            ports = [port for port in ports if port["name"] == rest[0]]
-            if not ports:
-                raise Failure(f"no port {rest[0]} (mynx usb lists them)")
-        if not ports:
-            raise Failure("no USB serial port (mynx usb lists devices)")
-        if len(ports) > 1:
-            raise Failure(f"{len(ports)} ports: say which ({', '.join(p['name'] for p in ports)})")
-        port = ports[0]
+            found = [port for port in found if port["name"] == rest[0]]
+            if not found:
+                raise Failure(f"no port {rest[0]} (mynx usb and mynx bt list them)")
+        if not found:
+            raise Failure("no serial port (mynx usb and mynx bt list them)")
+        if len(found) > 1:
+            raise Failure(f"{len(found)} ports: say which ({', '.join(p['name'] for p in found)})")
+        port = found[0]
         out(as_json, {"ok": True, "url": port["url"], "path": port["path"], "name": port["name"]}, port[sub])
         return 0
     raise Usage(USB_USAGE)
@@ -837,7 +838,74 @@ def usb_text(devices):
     return "\n".join(lines)
 
 
-UF2_USAGE = "usage: mynx uf2 [list] | flash FILE [DEVICE]"
+BT_USAGE = "usage: mynx bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings"
+
+
+def cmd_bt(args, as_json):
+    sub, rest = (args[0], args[1:]) if args else ("list", [])
+    if sub == "list" and not rest:
+        answer = request("bt-list")
+        out(as_json, answer, bt_text(answer))
+        return 0
+    if sub == "bind" and 1 <= len(rest) <= 2:
+        answer = request("bt-bind", *rest)
+        port = answer["port"]
+        lines = [f"{port['name']:<8} {bt_label(port.get('device'), port['address'])}", f"  {port['path']}"]
+        if port.get("url"):
+            lines.append(f"  {port['url']}")
+        lines.append("The link opens when a program opens the port.")
+        out(as_json, answer, "\n".join(lines))
+        return 0
+    if sub == "unbind" and len(rest) == 1:
+        answer = request("bt-unbind", rest[0])
+        out(as_json, answer, "Removed " + ", ".join(answer["removed"]))
+        return 0
+    if sub == "settings" and not rest:
+        out(as_json, request("bt-settings"), None)
+        return 0
+    raise Usage(BT_USAGE)
+
+
+def bt_label(name, address):
+    return f"{name} ({address})" if name else address
+
+
+def bt_text(answer):
+    """The paired devices, then each bound port with its path, URL and
+    whether it's linked."""
+    lines = [] if answer["enabled"] else ["Bluetooth is off: turn it on in Android."]
+    devices, bound = answer["devices"], answer["ports"]
+    if devices:
+        lines.append("Paired devices:")
+    for device in devices:
+        label = bt_label(device.get("name"), device["address"])
+        if device.get("port"):
+            label += f": {device['port']}"
+        elif device["type"] == "le":
+            label += ": Bluetooth LE only, no serial"
+        lines.append(f"  {label}")
+    if answer["enabled"] and not devices:
+        lines += ["No paired device. Pair a device in Android's", "Bluetooth settings: mynx bt settings"]
+    for port in bound:
+        if port["linked"]:
+            state = ", linked"
+        elif port.get("error"):
+            state = f": {port['error']}"
+        else:
+            state = ", not linked"
+        lines += [f"{port['name']:<8} {port.get('device') or port['address']}{state}"
+                  f"{', in use' if port['in_use'] else ''}",
+                  f"  {port['path']}{' (waiting: a program has the URL)' if port.get('waiting') else ''}"]
+        if port.get("url"):
+            lines.append(f"  {port['url']}")
+    if any(port.get("url") for port in bound):
+        lines.append("A serial monitor: mynx usb monitor [PORT]")
+    elif devices and not bound:
+        lines.append("A port for one: mynx bt bind DEVICE")
+    return "\n".join(lines)
+
+
+UF2_USAGE ="usage: mynx uf2 [list] | flash FILE [DEVICE]"
 
 
 def cmd_uf2(args, as_json):
@@ -2004,7 +2072,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
-    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb,
+    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }

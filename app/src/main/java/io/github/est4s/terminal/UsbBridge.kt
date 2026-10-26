@@ -12,9 +12,6 @@ import android.hardware.usb.UsbManager
 import android.hardware.usb.UsbRequest
 import android.os.Build
 import android.os.Handler
-import android.os.SystemClock
-import android.system.Os
-import android.system.OsConstants
 import com.hoho.android.usbserial.driver.FtdiSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
@@ -24,16 +21,9 @@ import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.LineSettings
 import io.github.est4s.terminal.core.Parity
 import io.github.est4s.terminal.core.SerialLine
-import io.github.est4s.terminal.core.SerialPortInfo
 import io.github.est4s.terminal.core.SerialServer
-import io.github.est4s.terminal.core.ServerRestarts
 import io.github.est4s.terminal.core.StopBits
 import io.github.est4s.terminal.core.UsbSerialDevice
-import io.github.est4s.terminal.core.killProot
-import io.github.est4s.terminal.core.processPid
-import io.github.est4s.terminal.core.serialWaitingMark
-import io.github.est4s.terminal.core.stopProot
-import io.github.est4s.terminal.core.tcpPorts
 import io.github.est4s.terminal.core.ttyName
 import io.github.est4s.terminal.core.usbString
 import io.github.est4s.terminal.core.usbDriverName
@@ -81,6 +71,7 @@ class UsbBridge(
     private val gone: (String) -> Unit,
     private val changed: (List<UsbSerialDevice>) -> Unit,
 ) {
+    private val helpers = PortHelpers(handler, serialDir, logDir, workDir, launchHelper)
     private val usb = context.getSystemService(UsbManager::class.java)
     private val prober = UsbSerialProber.getDefaultProber()
     private val open = linkedMapOf<String, OpenDevice>()
@@ -106,9 +97,6 @@ class UsbBridge(
     fun start() {
         if (started) return
         started = true
-        // Links from an earlier run point at terminals that are gone.
-        serialDir.deleteRecursively()
-        serialDir.mkdirs()
         changed(emptyList())
         val filter = IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
@@ -171,9 +159,7 @@ class UsbBridge(
                 serial = if (usb.hasPermission(device)) usbString(runCatching { device.serialNumber }.getOrNull()) else null,
                 driver = driver?.let { usbDriverName(it.javaClass.simpleName) },
                 allowed = usb.hasPermission(device),
-                ports = open[device.deviceName]?.ports?.map {
-                    SerialPortInfo(it.name, it.server.port, it.server.busy, File(serialDir, serialWaitingMark(it.name)).exists())
-                }.orEmpty(),
+                ports = open[device.deviceName]?.ports?.map { it.served.info() }.orEmpty(),
                 error = errors[device.deviceName],
             )
         }
@@ -258,8 +244,8 @@ class UsbBridge(
                     step = "dropping RTS"
                     line.setRts(false)
                     step = "serving it"
-                    val server = newServer(line)
-                    opened.ports += OpenPort(name, port, reads, server).also { it.start() }
+                    val server = newSerialServer(line, open.values.flatMap { d -> d.ports.map { it.served.server.port } }.toSet())
+                    opened.ports += OpenPort(port, reads, ServedPort(name, server, helpers)).also { it.start() }
                 } catch (e: Exception) {
                     queued?.cancel()
                     // Not in opened.ports yet, so close() won't reach it.
@@ -279,16 +265,6 @@ class UsbBridge(
 
     private fun takenNames(): Set<String> = open.values.flatMap { d -> d.ports.map { it.name } }.toSet()
 
-    // The lowest free port from 2217; one another app holds is skipped.
-    private fun newServer(line: SerialLine): SerialServer {
-        val taken = open.values.flatMap { d -> d.ports.map { it.server.port } }.toSet()
-        for (port in tcpPorts(taken).take(100)) {
-            val server = runCatching { SerialServer(line, port) }.getOrNull()
-            if (server != null) return server
-        }
-        throw IOException("no free TCP port from 2217")
-    }
-
     private fun close(name: String) {
         val device = open.remove(name) ?: return
         device.ports.forEach { it.close() }
@@ -300,82 +276,41 @@ class UsbBridge(
     }
 
     private inner class OpenPort(
-        val name: String,
         val port: UsbSerialPort,
         val reads: UsbReads,
-        val server: SerialServer,
+        val served: ServedPort,
     ) {
-        @Volatile private var closed = false
-        @Volatile private var process: Process? = null
+        val name: String get() = served.name
 
         fun start() {
-            server.start()
+            served.start()
             thread(name = "usb-read-$name", isDaemon = true) { readLoop() }
-            thread(name = "serial-port-$name", isDaemon = true) { runHelper() }
         }
 
         private fun readLoop() {
             val buffer = ByteArray(reads.size)
             // A late collect leaves the device no read to fill.
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
-            while (!closed) {
+            while (!served.closed) {
                 val n = try {
                     reads.read(buffer)
                 } catch (e: Exception) {
-                    if (closed) break
+                    if (served.closed) break
                     // Unplugged: refresh() closes it. Or still there: keep reading.
                     handler.post { refresh() }
                     Thread.sleep(100)
                     continue
                 }
-                if (n > 0) server.fromLine(buffer, n)
+                if (n > 0) served.server.fromLine(buffer, n)
             }
-        }
-
-        // The pseudo-terminal's helper, started again if it ends while the port is open.
-        private fun runHelper() {
-            val restarts = ServerRestarts()
-            while (!closed) {
-                val started = SystemClock.elapsedRealtime()
-                val code = runCatching {
-                    logDir.mkdirs()
-                    val launch = launchHelper(name, server.port)
-                    val builder = ProcessBuilder(launch.argv).directory(workDir)
-                        .redirectErrorStream(true)
-                        .redirectOutput(ProcessBuilder.Redirect.appendTo(File(logDir, "$name.log")))
-                    builder.environment().putAll(launch.env)
-                    val p = builder.start()
-                    process = p
-                    if (closed) stopHelper(p)
-                    p.waitFor()
-                }.getOrDefault(-1)
-                if (closed) break
-                val delay = restarts.after(code, SystemClock.elapsedRealtime() - started) ?: break
-                Thread.sleep(delay)
-            }
-        }
-
-        // destroyForcibly() only sends TERM, which proot ignores.
-        private fun stopHelper(p: Process) {
-            val pid = processPid(p.toString())
-            stopProot(
-                pid,
-                signal = Os::kill,
-                later = { ms, action -> handler.postDelayed(action, ms) },
-                force = { if (p.isAlive && pid != null) killProot(pid) { Os.kill(it, OsConstants.SIGKILL) } },
-            )
         }
 
         fun close() {
-            closed = true
-            process?.let(::stopHelper)
-            server.close()
+            served.close()
             // Ends the blocking wait.
             reads.cancel()
             // Closes the connection.
             runCatching { port.close() }
-            // The helper is killed, so its link stays: take it away here.
-            File(serialDir, name).delete()
         }
     }
 }
