@@ -93,6 +93,27 @@ class UndoRequestTest {
         assertEquals("""{"ok":true,"undone":"edits by hand"}""", ask("undo"))
     }
 
+    // `mynx bt bind` may wait for Android's permission dialog before it writes.
+    @Test
+    fun `a later request that writes only when it answers still names its step`() {
+        val conf = File(home, "$CONFIG_DIR/bluetooth.conf")
+        val waiting = mutableListOf<PendingReply>()
+        val requests = MynxRequests(
+            dir, home, now = { 60_000L },
+            later = mapOf("bind" to Later(120, change = { "bind ${it[0]}" }) { _, reply -> waiting += reply }),
+        )
+        requests.start()
+        settings.apply { parentFile.mkdirs() }.writeText("undo-keep = 3\n")
+        File(dir, "b.req").writeText("bind\nrfcomm0\n")
+        requests.processPending()
+        conf.writeText("rfcomm0 = AA:BB:CC:DD:EE:FF\n")
+        waiting.single().ok()
+
+        assertEquals("""{"ok":true,"undone":"bind rfcomm0"}""", ask("undo"))
+        assertEquals(false, conf.exists())
+        assertEquals("""{"ok":true,"undone":"edits by hand"}""", ask("undo"))
+    }
+
     private fun ask(vararg lines: String): String {
         File(dir, "q.req").writeText(lines.joinToString("\n", postfix = "\n"))
         requests.processPending()

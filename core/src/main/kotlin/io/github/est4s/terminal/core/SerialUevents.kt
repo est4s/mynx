@@ -2,8 +2,12 @@ package io.github.est4s.terminal.core
 
 import java.io.File
 
+/** The rfcomm ttys' major number on Linux. */
+internal const val RFCOMM_MAJOR = 216
+
 /**
- * The kernel's uevent messages for USB serial ports coming and going.
+ * The kernel's uevent messages for serial ports (USB, and Bluetooth's
+ * `rfcomm` ones) coming and going.
  * Android refuses apps the uevent socket (NETLINK_KOBJECT_UEVENT), which
  * tools such as arduino-cli's `board list` watch; proot's mynx_serial
  * extension gives programs a Unix datagram socket in [ueventSockets]
@@ -21,10 +25,16 @@ class SerialUevents {
     }
 
     private fun message(action: String, name: String): ByteArray {
-        val devpath = "/devices/mynx/tty/$name"
+        val rfcomm = name.startsWith("rfcomm")
+        // Bluetooth's are virtual ttys on Linux, with no device behind them.
+        val devpath = if (rfcomm) "/devices/virtual/tty/$name" else "/devices/mynx/tty/$name"
         val number = name.takeLastWhile(Char::isDigit)
-        // ttyACM's major is 166, ttyUSB's 188, as on Linux.
-        val major = if (name.startsWith("ttyACM")) 166 else 188
+        // ttyACM's major is 166, ttyUSB's 188, rfcomm's 216, as on Linux.
+        val major = when {
+            rfcomm -> RFCOMM_MAJOR
+            name.startsWith("ttyACM") -> 166
+            else -> 188
+        }
         val lines = listOf(
             "$action@$devpath", "ACTION=$action", "DEVPATH=$devpath", "SUBSYSTEM=tty",
             "MAJOR=$major", "MINOR=$number", "DEVNAME=$name", "SEQNUM=${++seqnum}",

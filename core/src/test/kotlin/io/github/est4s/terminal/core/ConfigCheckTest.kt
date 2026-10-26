@@ -106,6 +106,16 @@ class ConfigCheckTest {
         )
     }
 
+    @Test
+    fun `reports the Bluetooth ports file's problems`() {
+        write("bluetooth.conf", "rfcomm0 = AA:BB:CC:DD:EE:FF\nrfcomm0 = D4:E9:F4:A2:4A:02\n")
+
+        assertEquals(
+            listOf(ConfigProblems("~/.config/mynx/bluetooth.conf", listOf("line 2: rfcomm0 is already bound on line 1"))),
+            checkConfig(home),
+        )
+    }
+
     private fun write(path: String, text: String) =
         File(config, path).apply { parentFile.mkdirs() }.writeText(text)
 }

@@ -486,6 +486,24 @@ See `docs/ROADMAP.md` "How it works". The details:
   status after the last block is success: the board restarts first.
   Tested natively against a fake drive (`tests/mynx/test_uf2.py`);
   the usbfs ioctls only on the phone.
+- **Bluetooth serial** (`core/.../Bluetooth.kt`; maintainer's
+  decisions, 2026-10-26, entry 147: Classic SPP, Linux's `rfcomm
+  bind`, pairing in Android's settings): a bound device is a port
+  like a USB one (`/dev/serial/rfcommN`, RFC 2217 from the same
+  range) that costs nothing until used. The link opens when a client
+  arrives and closes when it leaves (`SerialLine.clientArrived()`/
+  `clientLeft()`): after the greeting and on the client's thread, as
+  `serial-port` takes a close before the greeting for "busy" and the
+  link takes seconds; a link that drops ends its client
+  (`SerialServer.endClient()`). Bindings are config
+  (`bluetooth.conf`, `rfcomm0 = ADDRESS`, as Linux's old
+  `rfcomm.conf`), so restarts keep them and `mynx check` and undo
+  cover them. `bluetoothRequests()` answers `bt-*` through a
+  `BluetoothHost`; a bind may wait for the permission dialog before
+  it writes, so a [Later]'s change is observed when it answers.
+  `/dev/rfcommN`, a virtual tty in `/sys/class/tty` (no `device`) and
+  uevents (major 216), as Linux makes them: pyserial globs
+  `/dev/rfcomm*`.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

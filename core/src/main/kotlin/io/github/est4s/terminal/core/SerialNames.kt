@@ -37,7 +37,7 @@ private val DEV_LINKS = mapOf(
     "stderr" to "/proc/self/fd/2",
 )
 
-private val PORT_NAME = Regex("""tty(USB|ACM)\d+""")
+private val PORT_NAME = Regex("""tty(USB|ACM)\d+|rfcomm\d+""")
 
 /** What a host path is, for [prepareOwnDev]'s probe. */
 enum class HostEntry { FILE, DIR }
@@ -93,11 +93,14 @@ private fun placeholders(dir: File, names: List<String>, probe: (String) -> Host
  * `/dev/NAME` to its `/dev/serial` link, and a sysfs entry with its USB
  * details (`/sys/class/tty/NAME/device`, laid out as pyserial's
  * list_ports and go.bug.st/serial read it). Names of ports that are gone
- * go. [devDir] and [sysTtyDir] are an [OwnDev]'s.
+ * go. [devDir] and [sysTtyDir] are an [OwnDev]'s. [rfcomm] are the
+ * Bluetooth ports' names (`rfcomm0`, the bound ones): each gets its
+ * `/dev` link too, and a virtual tty's sysfs entry, with no `device`, as
+ * Linux's `rfcomm bind` makes.
  */
-fun writeSerialNames(devDir: File, sysTtyDir: File, devices: List<UsbSerialDevice>) {
+fun writeSerialNames(devDir: File, sysTtyDir: File, devices: List<UsbSerialDevice>, rfcomm: List<String> = emptyList()) {
     val withPorts = devices.filter { it.ports.isNotEmpty() }
-    val names = withPorts.flatMap { d -> d.ports.map { it.name } }.toSet()
+    val names = withPorts.flatMap { d -> d.ports.map { it.name } }.toSet() + rfcomm
     devDir.mkdirs()
     devDir.listFiles().orEmpty()
         .filter { PORT_NAME.matches(it.name) && it.name !in names }
@@ -134,6 +137,14 @@ fun writeSerialNames(devDir: File, sysTtyDir: File, devices: List<UsbSerialDevic
             File(sysTtyDir, port.name).mkdirs()
             setLink(File(sysTtyDir, "${port.name}/device"), "../$target")
         }
+    }
+    if (rfcomm.isNotEmpty()) File(sysTtyDir, ".class/tty").mkdirs()
+    rfcomm.forEach { name ->
+        val tty = File(sysTtyDir, name).apply { mkdirs() }
+        val minor = name.removePrefix("rfcomm")
+        tty.attr("dev", "$RFCOMM_MAJOR:$minor")
+        tty.attr("uevent", "MAJOR=$RFCOMM_MAJOR\nMINOR=$minor\nDEVNAME=$name")
+        setLink(File(tty, "subsystem"), "../.class/tty")
     }
 }
 

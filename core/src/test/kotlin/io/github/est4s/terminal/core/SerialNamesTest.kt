@@ -226,4 +226,37 @@ class SerialNamesTest {
         assertEquals(a.parentFile, b.parentFile)
         assertEquals("2", read(a.parentFile, "bNumInterfaces"))
     }
+
+    // Bluetooth ports, as Linux's `rfcomm bind` makes them: pyserial globs /dev/rfcomm*.
+    @Test
+    fun `an rfcomm port gets its name in dev beside USB ones`() {
+        prepare()
+        writeSerialNames(dev, sysTty, listOf(nano), rfcomm = listOf("rfcomm0"))
+
+        assertEquals("serial/rfcomm0", link(File(dev, "rfcomm0")))
+        assertEquals("serial/ttyUSB0", link(File(dev, "ttyUSB0")))
+    }
+
+    @Test
+    fun `an rfcomm port's sysfs entry is a virtual tty's, with no device`() {
+        prepare()
+        writeSerialNames(dev, sysTty, emptyList(), rfcomm = listOf("rfcomm1"))
+
+        val tty = File(sysTty, "rfcomm1")
+        assertFalse(File(tty, "device").exists())
+        assertEquals("tty", subsystem(tty))
+        assertEquals("216:1", read(tty, "dev"))
+        assertEquals("MAJOR=216\nMINOR=1\nDEVNAME=rfcomm1", read(tty, "uevent"))
+    }
+
+    @Test
+    fun `an rfcomm port that's unbound loses its names`() {
+        prepare()
+        writeSerialNames(dev, sysTty, emptyList(), rfcomm = listOf("rfcomm0", "rfcomm1"))
+        writeSerialNames(dev, sysTty, emptyList(), rfcomm = listOf("rfcomm1"))
+
+        assertFalse(Files.exists(File(dev, "rfcomm0").toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS))
+        assertFalse(File(sysTty, "rfcomm0").exists())
+        assertTrue(File(sysTty, "rfcomm1").isDirectory)
+    }
 }
