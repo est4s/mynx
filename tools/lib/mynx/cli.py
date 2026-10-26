@@ -47,6 +47,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
+  ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE: Bluetooth LE devices
   uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
@@ -903,6 +904,164 @@ def bt_text(answer):
     elif devices and not bound:
         lines.append("A port for one: mynx bt bind DEVICE")
     return "\n".join(lines)
+
+
+BLE_USAGE = ("usage: mynx ble scan [--seconds N] [--name TEXT] [--service UUID] [--all] [--stream]"
+             " | services DEVICE | read DEVICE CHAR [--as FORMAT]"
+             " | write DEVICE CHAR VALUE [--as FORMAT] [--no-response]"
+             " | notify DEVICE CHAR [--as FORMAT] | connect DEVICE")
+
+# What each subcommand takes: positional arguments, options with a value, bare options.
+BLE_ARGS = {
+    "scan": (0, ("seconds", "name", "service"), ("all", "stream")),
+    "services": (1, (), ()),
+    "read": (2, ("as",), ()),
+    "write": (3, ("as",), ("no-response",)),
+    "notify": (2, ("as",), ()),
+    "connect": (1, (), ()),
+}
+
+
+def cmd_ble(args, as_json):
+    sub = args[0] if args else None
+    if sub not in BLE_ARGS:
+        raise Usage(BLE_USAGE)
+    count, valued, bare = BLE_ARGS[sub]
+    positional, options, stream = [], [], sub in ("notify", "connect")
+    rest = list(args[1:])
+    while rest:
+        arg = rest.pop(0)
+        # Only --words are options: a value may be a negative number.
+        if not arg.startswith("--"):
+            positional.append(arg)
+        elif arg[2:] in valued and rest:
+            options.append(f"{arg[2:]}={rest.pop(0)}")
+        elif arg == "--stream" and sub == "scan":
+            stream = True
+        elif arg[2:] in bare:
+            options.append(arg[2:])
+        else:
+            raise Usage(BLE_USAGE)
+    if len(positional) != count:
+        raise Usage(BLE_USAGE)
+    name = f"ble-{sub}"
+    if sub == "scan" and stream:
+        # A stream runs until Ctrl+C.
+        if any(o.startswith("seconds=") for o in options):
+            raise Usage(BLE_USAGE)
+        name = "ble-scan-stream"
+    if not stream:
+        answer = request(name, *positional, *options)
+        out(as_json, answer, BLE_TEXT[sub](answer, "all" in options))
+        return 0
+
+    def show(line):
+        if as_json:
+            print(json.dumps(line), flush=True)
+        else:
+            text = BLE_LINE[sub](line)
+            if text:
+                print(text, flush=True)
+
+    try:
+        request(name, *positional, *options, on_line=show)
+    except KeyboardInterrupt:
+        pass
+    except BrokenPipeError:
+        sys.stdout = open(os.devnull, "w")
+    return 0
+
+
+SIG_UUID = re.compile(r"0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb")
+
+
+def short_uuid(uuid):
+    """A 16-bit UUID where the SIG's base applies, else the full one."""
+    match = SIG_UUID.fullmatch(uuid)
+    return match.group(1) if match else uuid
+
+
+def ble_device(device):
+    return bt_label(device.get("name"), device["address"])
+
+
+def stamp(ms):
+    return f"{time.strftime('%H:%M:%S', time.localtime(ms / 1000))}.{ms % 1000:03d}"
+
+
+def advert_head(advert):
+    return f"{advert['address']}  {advert['rssi']:>4} dBm  {advert.get('name') or '(no name)'}"
+
+
+def scan_text(answer, everything):
+    if not answer["devices"]:
+        if everything:
+            return "No device found."
+        return "No device found. Devices with no name and no\nservices too: mynx ble scan --all"
+    lines = []
+    for advert in answer["devices"]:
+        lines.append(advert_head(advert) + ("" if advert["connectable"] else ", not connectable"))
+        if advert["services"]:
+            lines.append(hanging(f"  services {', '.join(short_uuid(u) for u in advert['services'])}"))
+        for data in advert["manufacturer"]:
+            lines.append(hanging(f"  maker 0x{data['company']:04x}: {data['hex']}"))
+    return "\n".join(lines)
+
+
+def hanging(text, width=56):
+    """[text] wrapped, its later lines indented 2 more than its first."""
+    import textwrap
+    indent = " " * (len(text) - len(text.lstrip()) + 2)
+    return textwrap.fill(text, width=width, subsequent_indent=indent, break_long_words=False,
+                         break_on_hyphens=False)
+
+
+def services_text(answer, _):
+    lines = [f"{ble_device(answer['device'])}, MTU {answer['mtu']}"]
+    for service in answer["services"]:
+        lines.append(" ".join(filter(None, [short_uuid(service["uuid"]), service.get("name")])))
+        for char in service["characteristics"]:
+            head = "  " + " ".join(filter(None, [short_uuid(char["uuid"]), char.get("name")]))
+            props = ", ".join(char["properties"])
+            if len(f"{head}: {props}") <= 56:
+                lines.append(f"{head}: {props}")
+            else:
+                lines += [head, f"    {props}"]
+    return "\n".join(lines)
+
+
+def ble_value(answer):
+    """The value as asked, with its bytes when they aren't what's shown."""
+    if answer["as"] == "hex":
+        return answer["value"]
+    return f"{answer['value']} (hex {answer['hex']})"
+
+
+def write_text(answer, _):
+    count = answer["bytes"]
+    return f"Wrote {count} byte{'' if count == 1 else 's'} to {answer.get('name') or short_uuid(answer['char'])}"
+
+
+def connect_line(line):
+    if line["state"] == "connected":
+        return (f"Connected to {ble_device(line['device'])}, MTU {line['mtu']}\n"
+                "Other mynx ble commands use this link until Ctrl+C.")
+    # The refusal that follows says why.
+    return "Disconnected" if line["state"] == "disconnected" else None
+
+
+BLE_TEXT = {
+    "scan": scan_text,
+    "services": services_text,
+    "read": lambda answer, _: ble_value(answer),
+    "write": write_text,
+}
+
+BLE_LINE = {
+    "scan": lambda advert: f"{stamp(advert['time'])} {advert_head(advert)}",
+    "notify": lambda value: f"{stamp(value['time'])} {ble_value(value)}",
+    "connect": connect_line,
+}
 
 
 UF2_USAGE ="usage: mynx uf2 [list] | flash FILE [DEVICE]"
@@ -2072,7 +2231,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
-    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt,
+    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
