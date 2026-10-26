@@ -68,8 +68,8 @@ are in git history: the full log up to entry 92 is
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
   rebuilt test-first and merged (PR #47, entry 142); every phone
   test passed. Not released yet.
-- **UF2** (`mynx uf2 flash`): PR #49 (entry 144); every phone test
-  passed with the RP2040 Zero, ready to merge after #48.
+- **UF2** (`mynx uf2 flash`): every phone test passed with the
+  RP2040 Zero; merged (PR #49, entry 144). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -142,7 +142,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    netlink address), and the recipes as hardware allows
    (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
    the C3, `probe-rs`).
-3. **UF2: PR #49** (branch `uf2`, entry 144; maintainer's decision: in
+3. **UF2: merged (PR #49**, entry 144; maintainer's decision: in
    Debian over raw USB, not in the app). `mynx uf2 [list]` and
    `mynx uf2 flash FILE [DEVICE]` (`tools/lib/mynx/uf2.py`). Done on
    the phone with the RP2040 Zero: list, the refusals (not UF2, an
@@ -150,7 +150,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    1302 blocks in 3.7 s, back as `ttyACM0`). On PR #49's build
    (run 40304818170) in mynx dev: `mynx uf2` from `/opt/mynx`, and
    the maintainer's flash in a tab showed `writing... 1302/1302`.
-   **All passed: merge #48, then #49.** Not tried: an RP2350, TinyUF2 or Adafruit
+   All passed. Not tried: an RP2350, TinyUF2 or Adafruit
    bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
 ### Then, release v0.3.0 (the maintainer's)
@@ -159,7 +159,7 @@ Moved after the development boards by the maintainer (2026-10-25),
 so the release takes them too. USB serial parts 1-3, Go programs,
 PlatformIO's ESP32 toolchains, the small serial fixes (PR #33, #34,
 #36, #37, #39, #42), the process-limit guide (#45) and services'
-`~/.local/bin` (#46) and raw USB (#47) are tested on the phone, unreleased. Only the
+`~/.local/bin` (#46) raw USB (#47) and UF2 (#49) are tested on the phone, unreleased. Only the
 maintainer tags (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
