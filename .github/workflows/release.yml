@@ -118,9 +118,13 @@ jobs:
             --tag "$GITHUB_REF_NAME" --notes-out build/release-notes.md
 
       # Debian's programs load it, so it's built for Debian's glibc, not with the NDK.
+      # Bounded and visible: the runner's apt has hung here, silently, for good
+      # (its lock or a mirror), where the step takes seconds.
       - name: Build the serial preload library
+        timeout-minutes: 10
         run: |
-          sudo apt-get install -y -qq gcc-aarch64-linux-gnu >/dev/null
+          sudo apt-get install -y -qq -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 \
+            -o Acquire::http::Timeout=30 gcc-aarch64-linux-gnu
           mkdir -p build
           scripts/build-preload.sh build/libmynx-serial.so
 
