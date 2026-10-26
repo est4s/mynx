@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # label: Serial monitor
-"""serial: a serial monitor for a USB board (also `mynx usb monitor`).
+"""serial: a serial monitor for a USB or Bluetooth board (also `mynx usb monitor`).
 
 usage: serial [PORT] [--baud N] [--lower]
 
-PORT is a name from `mynx usb` (ttyACM0), a path, or nothing for the
-only port. --baud sets the speed (115200 unless given). Opening the
-port raises DTR and RTS, as on Linux; --lower drops them (DTR first),
-for boards those hold in reset (the ESP32-CAM-MB).
+PORT is a name from `mynx usb` or `mynx bt` (ttyACM0, rfcomm0), a
+path, or nothing for the only port. --baud sets the speed (115200
+unless given). Opening the port raises DTR and RTS, as on Linux;
+--lower drops them (DTR first), for boards those hold in reset (the
+ESP32-CAM-MB). Over Bluetooth there are no DTR and RTS: r, b, D and
+R do nothing.
 
 What you type goes to the board. Ctrl+T then a key is a command:
   q quit (Ctrl+] too)    r reset the board   b into its bootloader
@@ -31,7 +33,8 @@ import tty
 
 # the app's own library, next to the apps folder (/opt/mynx/lib)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
-from mynx.client import Failure, request  # noqa: E402
+from mynx.client import Failure  # noqa: E402
+from mynx.ports import is_bluetooth, serial_ports  # noqa: E402
 
 BAUDS = [300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
 CTRL_T, CTRL_BRACKET = 0x14, 0x1D
@@ -52,7 +55,7 @@ def choose_port(wanted, ports):
     names = ", ".join(p["name"] for p in ports)
     if wanted is None:
         if not ports:
-            raise Problem("No USB serial port. Connect a board (mynx usb lists them).")
+            raise Problem("No serial port. Connect a board (mynx usb) or bind a Bluetooth one (mynx bt).")
         if len(ports) > 1:
             raise Problem(f"{len(ports)} ports: say which ({names})")
         return ports[0]
@@ -272,7 +275,7 @@ class Monitor:
 
     def open(self):
         self.port.open()
-        if self.lower:
+        if self.lower and not is_bluetooth(self.info):
             self.try_lines(dtr=False)
             self.try_lines(rts=False)
 
@@ -309,6 +312,9 @@ class Monitor:
             order = list(EOLS)
             self.keys.eol = order[(order.index(self.keys.eol) + 1) % len(order)]
             self.note("Enter sends " + {"cr": "CR", "lf": "LF", "crlf": "CR LF"}[self.keys.eol])
+        elif key in "rbDR" and is_bluetooth(self.info):
+            # SPP has no modem lines: the board never sees DTR or RTS.
+            self.note(f"Ctrl+T {key} does nothing over Bluetooth (no DTR or RTS)")
         elif key in "DR":
             name = "dtr" if key == "D" else "rts"
             value = not getattr(port.lines, name)
@@ -383,9 +389,7 @@ class Monitor:
 
 def ask_ports():
     try:
-        return [port for device in request("usb-list")["devices"]
-                for port in device["ports"]
-                for port in [{**port, "ids": device.get("ids"), "product": device.get("product")}]]
+        return serial_ports()
     except Failure as e:
         raise Problem(str(e))
 
