@@ -68,8 +68,8 @@ are in git history: the full log up to entry 92 is
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
   rebuilt test-first and merged (PR #47, entry 142); every phone
   test passed. Not released yet.
-- **UF2** (`mynx uf2 flash`): branch `uf2` (entry 144); flashed the
-  RP2040 Zero from this phone's Debian. PR next.
+- **UF2** (`mynx uf2 flash`): PR #49 (entry 144); every phone test
+  passed with the RP2040 Zero, ready to merge after #48.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -142,15 +142,15 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    netlink address), and the recipes as hardware allows
    (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
    the C3, `probe-rs`).
-3. **UF2: branch `uf2`** (entry 144; maintainer's decision: in
+3. **UF2: PR #49** (branch `uf2`, entry 144; maintainer's decision: in
    Debian over raw USB, not in the app). `mynx uf2 [list]` and
    `mynx uf2 flash FILE [DEVICE]` (`tools/lib/mynx/uf2.py`). Done on
    the phone with the RP2040 Zero: list, the refusals (not UF2, an
    RP2350 file, an unknown device) and a real flash (MicroPython,
-   1302 blocks in 3.7 s, back as `ttyACM0`). **Left:** the PR and
-   CI; the maintainer seeing the progress line in a tab (`writing...
-   N/M`, only on a terminal); once installed, `mynx uf2` from
-   `/opt/mynx`. Not tried: an RP2350, TinyUF2 or Adafruit
+   1302 blocks in 3.7 s, back as `ttyACM0`). On PR #49's build
+   (run 40304818170) in mynx dev: `mynx uf2` from `/opt/mynx`, and
+   the maintainer's flash in a tab showed `writing... 1302/1302`.
+   **All passed: merge #48, then #49.** Not tried: an RP2350, TinyUF2 or Adafruit
    bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
 ### Then, release v0.3.0 (the maintainer's)
