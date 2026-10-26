@@ -544,6 +544,22 @@ See `docs/ROADMAP.md` "How it works". The details:
   test passed with an ESP32-C3 (entry 153, PR #53). A peripheral
   that vanishes (unplugged) may come back as status 0, not the
   supervision timeout's 8, so `linkStatus()` words 0 for both.
+- **BLE UART ports** (`core/.../BleUart.kt`, `app/.../BtBridge.kt`;
+  maintainer's decisions, 2026-10-26, entry 154: `mynx ble bind`,
+  Nordic UART and HM-10): a `nusN = ADDRESS [random]` line in
+  `bluetooth.conf` is served as `rfcommN` is (`ServedPort`,
+  `/dev/serial/nusN`, RFC 2217 from 2417, `FIRST_NUS_TCP_PORT`;
+  `/dev/nusN` and a virtual tty, no uevents: Linux has no such tty).
+  Its line is core's `BleUartLine` over `BleHost`, so it's tested
+  against fakes: it links when a client arrives (connect, `bleUart()`
+  picks Nordic's service, then HM-10's `ffe0`/`ffe1`, subscribe),
+  writes in MTU-3 chunks one at a time (no-response when it can),
+  ends the client on a drop and backs off 2 s doubling to 30 s. The
+  port's link is its own `BleCentral` connection beside any `mynx
+  ble` request's; Android shares the device's notify setting between
+  them, so ending a `notify` leaves it on while a port listens.
+  `ble-bind` connects once to check for a UART. Built by four
+  subagents against the contract (entry 155).
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

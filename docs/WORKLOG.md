@@ -79,6 +79,9 @@ are in git history: the full log up to entry 92 is
   (revoking it kills the app, and the session ran in it; core's tests
   cover it). PR #53. The plan and its tests:
   `git show 49b137b:docs/WORKLOG.md`.
+- **BLE UART ports** (`mynx ble bind`, `nus0`): built overnight on
+  branch `nus` (entry 155), every suite green here; phone tests next
+  ("Next", 0).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -142,6 +145,18 @@ a `mynx ble` request's).
 read AGENTS.md and this plan; test-first, hooks on; only the part's
 files; don't edit this log, push or open PRs; commit on their branch,
 end with a report. Only A runs Gradle; B commits after A is done.
+
+**Status:** parts 1-5 done on branch `nus` (entry 155). Morning:
+the maintainer installs the PR's build and plugs in the C3; flash
+the peripheral first (`cd ~/sketches/ble-peripheral && mpremote
+connect /dev/serial/ttyACM0 cp echo.py :echo.py + cp main.py
+:main.py + reset`; for test 7 `cp hm10.py :main.py` instead), then
+the tests below, then `mynx reset wakelock`. Watch: a second
+connection to a device may not get MTU 517 (the port then writes
+20-byte chunks: slow, still right); an already-bound `ble-bind`
+answers `kind: null` (no connect). `test_vibrate_chain_stops_on_ctrl_c`
+failed twice under load in the full Python run and passes alone:
+timing, untouched by this branch.
 
 **Phone tests (mynx dev, the C3):**
 1. `mynx ble bind mynx-ble` → `nus0`, with path and URL; `mynx bt`
@@ -346,6 +361,28 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-27 (155): BLE UART ports built by subagents (branch `nus`)
+
+Four subagents against the contract (4b5ea76). A, core (6 commits):
+`bleUart()`, `BleUartLine` (fakes; 45 s connect and 20 s op limits
+past the host's; a drop backs off too; a client leaving mid-link
+records nothing), `nusN [random]` lines, `ble-bind`/`ble-unbind`
+(`bleRequests` takes the `BluetoothHost`; a device bound as the
+other kind is refused by both binds; `ble-unbind` works with
+Bluetooth off), `bt-bind` refusing `nusN`, `writeSerialNames(…,
+bluetooth =)` and `SerialUevents` skipping nus names. B, app
+(committed by the main agent, `rfcomm =` renamed `bluetooth =`):
+`BtBridge` serves nus ports through the `BleCentral`; `BleCentral`
+keeps a device's notifications on while another link listens. C,
+CLI and guide (2 commits): `mynx ble bind`/`unbind`, `mynx bt`
+marks nus ports "(BLE UART)", the monitor's reset keys, the guide's
+"Serial port" bullet; LE-only paired devices now say "Bluetooth LE
+only (mynx ble)". D, `~/sketches/ble-peripheral`: `echo.py` (queued,
+MTU-sized echo; no more `echo: ` prefix), `main.py`, `hm10.py`
+(`mynx-hm10`); not flashed (the C3 was unplugged). Suites: core,
+bats 178, Python 500 (one flaky vibrate test, see Status). README,
+roadmap, AGENTS.md updated.
 
 ### 2026-10-26 (154): BLE UART ports planned (branch `nus`)
 

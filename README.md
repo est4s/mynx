@@ -60,7 +60,8 @@ sensors, microphone, speaker and flashlight.
   drive, which Android won't mount. Bluetooth serial (SPP): a paired
   ESP32 or HC-05 becomes a port too (`mynx bt bind`, `/dev/rfcomm0`).
   Bluetooth LE: `mynx ble` scans, reads, writes and subscribes to
-  a device's characteristics.
+  a device's characteristics, and a Nordic UART or HM-10 device
+  becomes a serial port too (`mynx ble bind`, `/dev/serial/nus0`).
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
   and packages survive app updates.
 - **Tabs** that keep running in the background and come back when you
