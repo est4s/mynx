@@ -187,7 +187,7 @@ class TerminalService : Service() {
                 vibrations.requests() +
                 updater.requests { apk -> onMain { openInstaller(apk) } } +
                 serviceRequests(serviceManager) +
-                usbRequests(usb::devices, usb::allow),
+                usbRequests(usb::devices, ::allowUsb),
         )
     }
     // The USB serial ports' links, bound at /dev/serial in every proot.
@@ -413,6 +413,11 @@ class TerminalService : Service() {
         runCatching { usb.refresh() }
         runCatching { usbFds.refresh() }
         applyWakelockSetting() // the settings file may have been edited by hand
+    }
+
+    // Answered once Debian sees the device, so a tool run right after finds it.
+    private fun allowUsb(id: String, answer: (String?) -> Unit) {
+        usb.allow(id) { error -> usbFds.refresh { answer(error) } }
     }
 
     /** A USB device may have been allowed: serve its ports. */

@@ -156,11 +156,11 @@ class UsbBridge(
         }
     }
 
-    /** What Android sees now, for `mynx usb`. */
+    /** What Android sees now, for `mynx usb`: every device, those no serial driver drives with none (raw USB). */
     fun devices(): List<UsbSerialDevice> {
-        val drivers = runCatching { prober.findAllDrivers(usb) }.getOrDefault(emptyList())
-        return drivers.map { driver ->
-            val device = driver.device
+        val drivers = runCatching { prober.findAllDrivers(usb) }.getOrDefault(emptyList()).associateBy { it.device.deviceName }
+        return usb.deviceList.values.sortedBy { it.deviceName }.map { device ->
+            val driver = drivers[device.deviceName]
             UsbSerialDevice(
                 id = device.deviceName,
                 vendorId = device.vendorId,
@@ -169,7 +169,7 @@ class UsbBridge(
                 product = usbString(runCatching { device.productName }.getOrNull()),
                 // Android only gives the serial number to an app allowed to use the device.
                 serial = if (usb.hasPermission(device)) usbString(runCatching { device.serialNumber }.getOrNull()) else null,
-                driver = usbDriverName(driver.javaClass.simpleName),
+                driver = driver?.let { usbDriverName(it.javaClass.simpleName) },
                 allowed = usb.hasPermission(device),
                 ports = open[device.deviceName]?.ports?.map {
                     SerialPortInfo(it.name, it.server.port, it.server.busy, File(serialDir, serialWaitingMark(it.name)).exists())

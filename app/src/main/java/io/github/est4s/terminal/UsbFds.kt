@@ -87,9 +87,16 @@ class UsbFds(
         worker.quitSafely()
     }
 
-    /** Describes the devices again if what Android shows changed. Cheap: call it whenever a device may have been allowed. */
-    fun refresh() {
-        handler.post { runCatching { describe() }.onFailure { note("describing devices: $it") } }
+    /**
+     * Describes the devices again if what Android shows changed, then runs
+     * [then] (on its own thread). Cheap: call it whenever a device may have
+     * been allowed.
+     */
+    fun refresh(then: () -> Unit = {}) {
+        handler.post {
+            runCatching { describe() }.onFailure { note("describing devices: $it") }
+            then()
+        }
     }
 
     private fun serve() {

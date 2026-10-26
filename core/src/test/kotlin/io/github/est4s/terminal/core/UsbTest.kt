@@ -169,15 +169,50 @@ class UsbRequestTest {
     fun `allow with nothing waiting says so, and a served device is answered at once`() {
         devices = emptyList()
         send("1-1", "usb-allow")
-        assertEquals("""{"ok":false,"error":"no USB serial device is waiting for access"}""", reply("1-1"))
+        assertEquals("""{"ok":false,"error":"no USB device is waiting for access"}""", reply("1-1"))
         devices = listOf(ch340)
         send("1-2", "usb-allow")
-        assertEquals("""{"ok":false,"error":"no USB serial device is waiting for access"}""", reply("1-2"))
+        assertEquals("""{"ok":false,"error":"no USB device is waiting for access"}""", reply("1-2"))
         send("1-2b", "usb-allow", "1a86:7523")
         assertEquals(true, (parseJson(reply("1-2b")) as Map<*, *>)["ok"])
         assertEquals(emptyList(), asked)
         send("1-3", "usb-allow", "dead:beef")
-        assertEquals("""{"ok":false,"error":"no USB serial device dead:beef (mynx usb lists them)"}""", reply("1-3"))
+        assertEquals("""{"ok":false,"error":"no USB device dead:beef (mynx usb lists them)"}""", reply("1-3"))
+    }
+
+    // An RP2040 in BOOTSEL: no serial driver, for Debian's tools over raw USB.
+    private val boot = UsbSerialDevice(
+        id = "/dev/bus/usb/001/004", vendorId = 0x2e8a, productId = 0x0003,
+        manufacturer = "Raspberry Pi", product = "RP2 Boot", serial = null,
+        driver = null, allowed = false, ports = emptyList(), error = null,
+    )
+
+    @Test
+    fun `lists devices no serial driver drives, with no driver`() {
+        devices = listOf(boot)
+        send("1-1", "usb-list")
+        assertEquals(
+            """{"ok":true,"devices":[""" +
+                """{"id":"/dev/bus/usb/001/004","ids":"2e8a:0003","manufacturer":"Raspberry Pi","product":"RP2 Boot",""" +
+                """"serial":null,"driver":null,"allowed":false,"error":null,"ports":[]}]}""",
+            reply("1-1"),
+        )
+    }
+
+    @Test
+    fun `allow takes a device with no serial driver, which waits only until it's allowed`() {
+        devices = listOf(ch340, boot)
+        send("1-1", "usb-allow")
+        assertEquals(boot.id, asked.single().first)
+        devices = listOf(ch340, boot.copy(allowed = true))
+        asked.single().second(null)
+        assertEquals(true, (parseJson(reply("1-1")) as Map<*, *>)["ok"])
+        // Allowed, it has no port to wait for.
+        send("1-2", "usb-allow")
+        assertEquals("""{"ok":false,"error":"no USB device is waiting for access"}""", reply("1-2"))
+        send("1-3", "usb-allow", "2e8a:0003")
+        assertEquals(true, (parseJson(reply("1-3")) as Map<*, *>)["ok"])
+        assertEquals(1, asked.size)
     }
 
     @Test

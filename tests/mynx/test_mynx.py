@@ -1888,7 +1888,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.start_app({"usb-list": {"ok": True, "devices": []}})
         run = self.mynx("usb")
         self.assertEqual(run.returncode, 0)
-        self.assertIn("No USB serial device", run.stdout)
+        self.assertIn("No USB device", run.stdout)
         self.assertIn("OTG", run.stdout)
 
     def test_usb_an_allowed_device_without_ports_yet_says_so(self):
@@ -1899,6 +1899,27 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(run.stdout, "Arduino Micro (2341:8037): no port yet; the app is opening it\n"
                                      "  if it stays so: mynx usb allow 2341:8037\n")
+
+    def test_usb_lists_a_device_with_no_serial_driver_by_its_raw_path(self):
+        devices = [
+            self.usb_device(id="/dev/bus/usb/001/004", ids="2e8a:0003", product="RP2 Boot", driver=None),
+            self.usb_device(id="/dev/bus/usb/001/005", ids="0483:df11", product="DFU in FS Mode", driver=None, allowed=False),
+        ]
+        self.start_app({"usb-list": {"ok": True, "devices": devices}})
+        run = self.mynx("usb")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "RP2 Boot (2e8a:0003): raw USB\n"
+                                     "  /dev/bus/usb/001/004\n"
+                                     "DFU in FS Mode (0483:df11): not allowed\n"
+                                     "  mynx usb allow 0483:df11 (app on screen)\n")
+
+    def test_usb_allow_a_device_with_no_serial_driver_shows_its_raw_path(self):
+        device = self.usb_device(id="/dev/bus/usb/001/004", ids="2e8a:0003", product="RP2 Boot", driver=None)
+        self.start_app({"usb-allow": {"ok": True, "device": device}})
+        run = self.mynx("usb", "allow", "2e8a:0003")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Allowed: RP2 Boot (2e8a:0003)\n"
+                                     "raw USB  /dev/bus/usb/001/004\n")
 
     def test_usb_allow_asks_and_shows_the_ports(self):
         device = self.usb_device(ports=[("ttyUSB0", 2217, False)])
