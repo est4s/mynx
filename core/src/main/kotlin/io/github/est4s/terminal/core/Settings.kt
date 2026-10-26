@@ -25,7 +25,7 @@ data class Settings(
     val androidCamera: Boolean = true,
     /** Whether programs in Debian may record from the microphone. */
     val androidMicrophone: Boolean = true,
-    /** Whether programs in Debian may use Bluetooth serial ports. */
+    /** Whether programs in Debian may use Bluetooth: serial ports and Bluetooth LE devices. */
     val androidBluetooth: Boolean = true,
     /** Whether the app runs PulseAudio in Debian, so programs play through the phone. */
     val soundDevice: Boolean = true,
@@ -180,7 +180,7 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(androidMicrophone = it == "on") },
     ),
     SettingDef(
-        "android-bluetooth", "Whether programs in Debian can use Bluetooth serial ports (mynx bt).",
+        "android-bluetooth", "Whether programs in Debian can use Bluetooth: serial ports (mynx bt) and Bluetooth LE devices (mynx ble).",
         "on", listOf("on", "off"),
         oneOf("android-bluetooth", listOf("on", "off")),
         { copy(androidBluetooth = it == "on") },
