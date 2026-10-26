@@ -2006,6 +2006,24 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx usb", run.stderr, args)
 
+    # --- uf2 ----------------------------------------------------------------
+
+    def test_uf2_usage(self):
+        for args in [("uf2", "list", "x"), ("uf2", "flash"), ("uf2", "flash", "a", "b", "c"), ("uf2", "burn")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx uf2", run.stderr, args)
+
+    def test_uf2_flash_checks_the_file_before_looking_for_a_drive(self):
+        run = self.mynx("uf2", "flash", os.path.join(self.home, "nope.uf2"))
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("nope.uf2: No such file", run.stderr)
+        notes = os.path.join(self.home, "notes.txt")
+        with open(notes, "w") as f:
+            f.write("hello\n")
+        run = self.mynx("uf2", "flash", notes, "--json")
+        self.assertEqual(json.loads(run.stdout), {"ok": False, "error": f"{notes}: not a UF2 file"})
+
     # --- service ------------------------------------------------------------
 
     @staticmethod

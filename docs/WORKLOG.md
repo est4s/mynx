@@ -66,8 +66,10 @@ are in git history: the full log up to entry 92 is
   (PR #46, entry 139). Not released yet.
 - **Raw USB:** the spike worked on the phone with an RP2040 Zero
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
-  rebuilt test-first in PR #47 (entry 142); every phone test
-  passed, ready to merge.
+  rebuilt test-first and merged (PR #47, entry 142); every phone
+  test passed. Not released yet.
+- **UF2** (`mynx uf2 flash`): every phone test passed with the
+  RP2040 Zero; merged (PR #49, entry 144). Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -130,41 +132,26 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   `picotool` once raw USB works.
 
 **Order:**
-1. **Spikes** (branch `spike-raw-usb`, thrown away): (a) proot
-   passes a received fd into a tracee through chained calls, and
-   libusb's `lsusb`/`picotool info` list from the stand-ins and talk
-   to the RP2040 Zero: **done, it works on the phone (entry 141)**;
-   (b) Android sees the BOOTSEL drive but calls it damaged and
-   doesn't mount it, so UF2 is the app's own writer (or `picotool`).
-   The spike branch stays until PR #47 is merged, then goes.
-2. **Raw USB, test-first: PR #47** (branch `raw-usb`, draft; entry
-   142): the stand-ins, the fd socket, `mynx_usb`, the own
-   `/sys/bus` with the phone's buses, `mynx usb` listing every
-   device, the guide's "Raw USB devices". **Phone test next** (the
-   agent runs most of it from mynx dev's Debian; the maintainer
-   plugs and taps), with PR #47's build installed:
-   1. The RP2040 Zero in BOOTSEL (hold BOOT while plugging; it runs
-      MicroPython now), OK on "open mynx dev": `mynx usb` shows `RP2
-      Boot (2e8a:0003): raw USB` and its node.
-   2. `picotool info -a`, `lsusb -v -d 2e8a:0003`, pyusb reading a
-      string; reading the node gives the descriptors from byte 0
-      (the seek fix).
-   3. `picotool load -x` MicroPython's UF2: it comes back as
-      `ttyACM0` (Android asks again: tick "always").
-   4. `ls /sys/bus` shows the phone's buses (`platform`, `cpu`, …)
-      beside `usb`, and `ls /sys/bus/platform/devices` lists.
-   5. A device not in the filter (any USB stick, mouse, keyboard):
-      `mynx usb` says "not allowed", `mynx usb allow IDS` asks, and
-      then `lsusb` lists it at once.
-   6. `./gradlew :core:test` and `python3 -m unittest
-      tests/mynx/test_proot_usb.py` pass in mynx dev (the spike's
-      proot broke the former).
-   **All six passed on build 40295886564 (entry 142).** Then merge (the docs are in the PR). Later parts: hotplug
+1. **Spikes:** done (entry 141); the spike branch is deleted.
+   Raw USB works through chained calls in proot; Android sees the
+   BOOTSEL drive but calls it damaged and doesn't mount it, so UF2
+   is the app's own writer (or `picotool`).
+2. **Raw USB:** merged (PR #47, entry 142). Its phone tests:
+   `git show 9a4718c:docs/WORKLOG.md`. Later parts: hotplug
    (libudev's monitor: libudev-format messages, sender uid 0, a
    netlink address), and the recipes as hardware allows
    (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
    the C3, `probe-rs`).
-3. **UF2**, as the spike decides.
+3. **UF2: merged (PR #49**, entry 144; maintainer's decision: in
+   Debian over raw USB, not in the app). `mynx uf2 [list]` and
+   `mynx uf2 flash FILE [DEVICE]` (`tools/lib/mynx/uf2.py`). Done on
+   the phone with the RP2040 Zero: list, the refusals (not UF2, an
+   RP2350 file, an unknown device) and a real flash (MicroPython,
+   1302 blocks in 3.7 s, back as `ttyACM0`). On PR #49's build
+   (run 40304818170) in mynx dev: `mynx uf2` from `/opt/mynx`, and
+   the maintainer's flash in a tab showed `writing... 1302/1302`.
+   All passed. Not tried: an RP2350, TinyUF2 or Adafruit
+   bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
 ### Then, release v0.3.0 (the maintainer's)
 
@@ -172,7 +159,7 @@ Moved after the development boards by the maintainer (2026-10-25),
 so the release takes them too. USB serial parts 1-3, Go programs,
 PlatformIO's ESP32 toolchains, the small serial fixes (PR #33, #34,
 #36, #37, #39, #42), the process-limit guide (#45) and services'
-`~/.local/bin` (#46) are tested on the phone, unreleased. Only the
+`~/.local/bin` (#46) raw USB (#47) and UF2 (#49) are tested on the phone, unreleased. Only the
 maintainer tags (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
@@ -285,6 +272,36 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (144): UF2 flashing (branch `uf2`)
+
+- **Spike, from Debian over raw USB** (scratchpad scripts, not kept):
+  the RP2040 Zero put into BOOTSEL from MicroPython's REPL
+  (`machine.bootloader()` over the URL). The drive's interface had
+  the kernel's `usb-storage` bound (`USBDEVFS_GETDRIVER`); the claim
+  gave EBUSY, `USBDEVFS_DISCONNECT` let it go, and INQUIRY (`RPI
+  RP2`), READ CAPACITY (262144 sectors) and READ(10) answered.
+  Sector 0 is an MBR: FAT16 from sector 1, data from 292,
+  `INFO_UF2.TXT` in cluster 3. MicroPython's UF2 written from sector
+  292, 32 sectors a WRITE(10): 1302 blocks in 3.7 s, every status
+  came back, and the board restarted into MicroPython.
+- **Decision (maintainer):** the writer lives in Debian (`mynx`, in
+  Python), not in the app as entry 140 planned: no app change, tested
+  natively, and the raw USB node already gives everything.
+- **Code:** `tools/lib/mynx/uf2.py` (UF2 checks, bulk-only SCSI, the
+  FAT with or without an MBR, finding drives in `/sys/bus/usb`, the
+  usbfs pipe) and `mynx uf2` in `cli.py`; 20 tests against a fake
+  drive (`tests/mynx/test_uf2.py`), 2 in `test_mynx.py`. Docs: the
+  guide (commands, Raw USB's recipes), AGENTS.md, README, ROADMAP.
+- **Phone:** see "Next", 0, step 3. The whole suite passes with
+  `TZ=UTC`; `test_undo_list` fails under the tab's
+  `Europe/Istanbul` (it expects UTC times), on `main` too.
+
+### 2026-10-26 (143): PR #47 merged
+
+The maintainer merged raw USB (PR #47); this docs-only PR marks it
+merged in "Current status" and "Next" and adds it to the release's
+list. Next: UF2 (see "Next", 0, step 3).
 
 ### 2026-10-26 (142): raw USB rebuilt test-first (PR #47)
 
