@@ -33,6 +33,17 @@ class SerialUeventsTest {
     }
 
     @Test
+    fun `an rfcomm port is a virtual tty, major 216`() {
+        assertEquals(
+            listOf(
+                "add@/devices/virtual/tty/rfcomm0", "ACTION=add", "DEVPATH=/devices/virtual/tty/rfcomm0",
+                "SUBSYSTEM=tty", "MAJOR=216", "MINOR=0", "DEVNAME=rfcomm0", "SEQNUM=1",
+            ),
+            text(SerialUevents().changed(setOf("rfcomm0")).single()),
+        )
+    }
+
+    @Test
     fun `the sockets are the files in the ports' folder's uevent folder`() {
         val serial = createTempDirectory("serial").toFile()
         assertEquals(emptyList(), ueventSockets(serial))
