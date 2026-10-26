@@ -151,9 +151,9 @@ always connected); pairing stays in Android's Settings.
 5. Test sketch in `~/sketches/esp32-spp` (not in the repo): echo
    what it gets, print a counter every second, name `mynx-spp`.
 
-**Status:** PR #52; build 241 passed phone tests 1-5 and 9, and 7
-and 8 in part (entry 149). Next: the maintainer's tests 6, 7 and 8,
-then docs and the merge. The sketch is flashed: it
+**Status:** PR #52; build 241 passed every phone test (entry 149;
+a refused permission not tried). Next: the merge, once the
+maintainer agrees, with the docs it makes stale. The sketch is flashed: it
 advertises as `mynx-spp`, BT address `D4:E9:F4:A2:4A:02`, and logs
 connects, disconnects and what it gets on USB serial (`ttyUSB0`,
 115200, DTR and RTS low). **Watch for:** pyserial's RFC 2217 client
@@ -393,9 +393,17 @@ agent from mynx dev:
   port, `on` brings it back; `unbind` removes port, names and line;
   `mynx undo` restores them. Pass.
 
-Left, needing the maintainer's hands: **6** (board powered off
-while a port is open, then on), **7** (an app restart keeps the
-binding), **8** (Bluetooth turned off; the permission refused).
+With the maintainer:
+- **6** picocom on `rfcomm0`, board unplugged: `mynx bt` shows "the
+  link dropped"; plugged back in, `linked, in use` again on its own.
+  Pass. While it was off, `serial-port` reconnected every second and
+  logged "the app closed the port" each time: the app refuses at once
+  during its back-off (no radio), so only log noise.
+- **7** Exit and reopen mynx dev: `rfcomm0` bound and served again.
+  Pass.
+- **8** Bluetooth off: "Bluetooth is off: turn it on in Android.",
+  `rfcomm0` listed with no URL and no `/dev/serial` link. Pass.
+  Refusing the permission wasn't tried (it was granted already).
 Also the CI fix: the preload library is now built in Debian's image
 (the runner's Ubuntu mirror hung three builds); the build passed.
 
