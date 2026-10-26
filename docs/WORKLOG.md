@@ -87,19 +87,76 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Bluetooth LE: what's left
+### 0. BLE UART ports (`nus0`), planned for subagents
 
-- **Nordic UART as a serial port** (`/dev/serial/nus0`, the
-  maintainer's decision of 2026-10-26: the PR after `mynx ble`): a
-  NUS device bound like `rfcomm0`, its `nus-tx` notifications in and
-  writes to `nus-rx` out, through `ServedPort`. The C3's test
-  peripheral (`~/sketches/ble-peripheral`) already echoes on NUS.
-- **Small:** cancelling a connect (`BleHost.connect` has no cancel:
-  a cancelled request leaves Android trying up to 30 s; core closes
-  the late link); scans don't say when Bluetooth turns off;
-  background scans on Android 10-11 likely need background location;
-  `write` VALUE can't hold a line break (percent-encode it, as
-  `clipboard-set` does).
+Picked by the maintainer 2026-10-26 (entry 154): a BLE device with a
+UART service as a serial port, like `rfcomm0`, built by subagents
+overnight.
+
+**Maintainer's decisions (2026-10-26):** `mynx ble bind DEVICE
+[nusN]` and `mynx ble unbind PORT|DEVICE`, bindings in the same
+`bluetooth.conf` (`nus0 = ADDRESS`), listed by `mynx bt`; Nordic
+UART **and** HM-10-style modules (service `ffe0`, characteristic
+`ffe1`); overnight the agent may push branch `nus` and open a draft
+PR (no merge); mynx dev's `wakelock` is `on` for the night (`mynx
+reset wakelock` in the morning).
+
+**Design (agent's, in the contract `core/.../BleUart.kt`, commit
+4b5ea76):** a `nusN` port is served like `rfcommN`
+(`/dev/serial/nusN`, RFC 2217 from 2417, `/dev/nusN`, a virtual tty
+in `/sys/class/tty`, no uevents) and linked only while a client has
+it. Its line, `BleUartLine`, is core's, over `BleHost`/`BleLink`:
+connect, find the UART (`bleUart()`: Nordic first, then HM-10),
+subscribe to tx; writes split into MTU-3 chunks one at a time
+(no-response when rx has it); a drop ends the client; backoff 2 s
+doubling to 30 s. `ble-bind` connects once to check the device has a
+UART. The port's link is its own (Android shares the connection with
+a `mynx ble` request's).
+
+**Parts:**
+1. **A, core** (`BleUart.kt`, `BleRequests.kt`, `Bluetooth.kt`,
+   `SerialNames.kt`, tests): `bleUart()`, `BleUartLine` (tested with
+   `FakeBleHost`/`FakeBleLink`), `nusN` lines in `parseBluetooth`
+   (` random`), `ble-bind`/`ble-unbind` (`bleRequests` gains the
+   `BluetoothHost`), `bt-bind` refusing `nusN`, `bt-unbind` and
+   `bt-list` covering them, `writeSerialNames` making `nusN` names.
+2. **B, app** (`BtBridge.kt`, `TerminalService.kt`): serve `nusN`
+   bindings with a `BleUartLine` over the `BleCentral`, wiring
+   `received`/`dropped` to the server, `ports()` states, names;
+   pass the `BluetoothHost` to `bleRequests`. Compiles only in CI.
+3. **C, CLI and guide** (`tools/`, `tests/`): `mynx ble bind` and
+   `unbind` (text and `--json`), `mynx bt` listing `nus` ports,
+   `mynx usb url|path|monitor nus0`, the monitor's reset keys saying
+   they do nothing; the guide's "Bluetooth LE devices" gets a
+   "Serial port" part, the command table its rows.
+4. **D, test peripheral** (`~/sketches/ble-peripheral`): long NUS
+   echoes split into the link's MTU, and `hm10.py`, a second script
+   advertising `mynx-hm10` with only `ffe0`/`ffe1` (notify, write,
+   write-no-response) echoing. Flashed in the morning (the C3 isn't
+   plugged in overnight).
+5. **Integration** (main agent): merge into `nus`, every suite,
+   docs, push, draft PR, CI green. Morning: deliver, flash, phone
+   tests with the maintainer.
+
+**Rules for the subagents:** as BLE's (`git show 49b137b:docs/WORKLOG.md`):
+read AGENTS.md and this plan; test-first, hooks on; only the part's
+files; don't edit this log, push or open PRs; commit on their branch,
+end with a report. Only A runs Gradle; B commits after A is done.
+
+**Phone tests (mynx dev, the C3):**
+1. `mynx ble bind mynx-ble` → `nus0`, with path and URL; `mynx bt`
+   lists it; `mynx check` clean; a device with no UART is refused.
+2. `mynx usb monitor nus0`: typed lines come back (the C3 echoes).
+3. `picocom /dev/serial/nus0` and pyserial on the URL.
+4. 4 KB of base64 through the port comes back the same (`cmp`).
+5. Linked only while used: `mynx bt` says not linked after closing.
+6. The C3 unplugged while open: the URL client sees the port close;
+   with the path open, it links again after it's plugged back.
+7. `hm10.py` on the C3: `mynx ble bind mynx-hm10` and the echo.
+8. `mynx ble unbind nus0`, then `mynx undo` brings it back.
+9. Bluetooth off, `android-bluetooth off`: not served, `mynx bt`
+   says why.
+10. The app restarted: the binding is served again.
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -289,6 +346,15 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (154): BLE UART ports planned (branch `nus`)
+
+The maintainer asked for Nordic UART planned for subagents, to be
+built overnight, and answered four questions (`mynx ble bind`;
+Nordic UART and HM-10; push and a draft PR allowed; wakelock on).
+Plan in "Next", 0; the contract is commit 4b5ea76 (`BleUart.kt`,
+`BtBinding.random`). Earlier, PR #53 (BLE) was merged after the
+drop-reason fix passed on build 247.
 
 ### 2026-10-26 (153): BLE on the phone (build 246)
 
