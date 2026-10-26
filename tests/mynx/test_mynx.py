@@ -2150,6 +2150,9 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertIn("2 ports: say which (ttyUSB0, rfcomm0)", run.stderr)
         self.app.replies["usb-list"] = {"ok": True, "devices": []}
         self.assertEqual(self.mynx("usb", "url").stdout, "rfc2217://localhost:2218\n")
+        # A USB command never brings up Bluetooth's permission dialog.
+        self.assertIn(["bt-list", "--no-ask"], self.app.requests)
+        self.assertNotIn(["bt-list"], self.app.requests)
 
     def test_usb_url_ignores_bluetooth_when_it_is_refused(self):
         usb = [self.usb_device(ports=[("ttyUSB0", 2217, False)])]
