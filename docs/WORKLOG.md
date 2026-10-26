@@ -72,8 +72,8 @@ are in git history: the full log up to entry 92 is
   RP2040 Zero; merged (PR #49, entry 144). Released in v0.3.0.
 - **Bluetooth serial** (SPP, `mynx bt`): every phone test passed with
   the ESP32-CAM (entry 149); merged (PR #52). The plan and its tests:
-  `git show 0280cfa:docs/WORKLOG.md`. Next for Bluetooth, when the
-  maintainer picks it: BLE (`mynx ble`, roadmap).
+  `git show 0280cfa:docs/WORKLOG.md`. Next for Bluetooth: BLE
+  (`mynx ble`), planned in "Next", 0.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -82,7 +82,162 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Development boards (leftovers; the maintainer picks)
+### 0. BLE (`mynx ble`), planned for subagents
+
+Picked by the maintainer 2026-10-26 (entry 151): plan BLE so that
+subagents build its parts in parallel. Roadmap: "`mynx ble` scans,
+connects, reads, writes and subscribes, with `--json` and streams
+like `mynx sensor`. Nordic UART devices can also be a serial port."
+Test hardware: the **ESP32-C3** (BLE 5; runs MicroPython, whose
+`bluetooth` module makes a GATT peripheral with no build), and the
+ESP32-CAM's ESP32 (BLE too, if a second device helps).
+
+**Maintainer's decisions (2026-10-26):** connections per command,
+plus `mynx ble connect` holding one (nothing in the background);
+Nordic UART as a serial port in a second PR after `mynx ble`; DEVICE
+is an address or a name (paired devices and the last scan).
+
+**Design (agent's proposal, change it if the maintainer objects):**
+- **No BlueZ:** Android keeps the controller, so `bleak`, `gatttool`
+  and `bluetoothctl` can't work (they speak BlueZ's D-Bus). `mynx
+  ble` is the interface, as `mynx sensor` is for sensors; a fake
+  BlueZ on D-Bus is out of scope.
+- **Commands** (`--json` on all; DEVICE an address or a name):
+  - `mynx ble scan [--seconds N] [--name TEXT] [--service UUID]
+    [--all]`: devices seen in N s (5 by default): address, name,
+    RSSI, service UUIDs, manufacturer data (company ID + hex),
+    connectable. `--stream` prints each advertisement as it comes
+    (throttled per device to 1 s), until Ctrl+C. Without `--all`,
+    unnamed devices with no services are left out.
+  - `mynx ble services DEVICE`: the GATT table: services,
+    characteristics (UUID, known name, properties: read, write,
+    write-no-response, notify, indicate) and descriptors.
+  - `mynx ble read DEVICE CHAR [--as FORMAT]`.
+  - `mynx ble write DEVICE CHAR VALUE [--as FORMAT] [--no-response]`.
+  - `mynx ble notify DEVICE CHAR [--as FORMAT]`: subscribes
+    (notify, else indicate) and prints each value with its time,
+    until Ctrl+C; a dropped link ends it with the reason.
+  - `mynx ble connect DEVICE`: holds the link until Ctrl+C (owned by
+    that `mynx`, like `mynx rotation lock`), printing state changes;
+    while it holds one, other commands on DEVICE reuse it. Without
+    it each command connects, does its job and disconnects (as
+    `rfcomm bind`: nothing runs in the background).
+  - `mynx bt` already lists paired LE devices; pairing stays in
+    Android's settings (a device that needs bonding: Android asks
+    itself when an encrypted characteristic is read).
+- **Names:** CHAR is a full UUID, a 16-bit one (`2a19`), a known
+  name (`battery-level`, `device-name`, `nus-rx`, `nus-tx`) or
+  `SERVICE/CHAR` when a UUID is in two services. Known names: a small
+  table in core of the SIG's common services and characteristics
+  plus Nordic UART (`6e400001-…`), shown in `services`.
+- **Values:** FORMAT is `hex` (default for read and notify, `0a 1b`),
+  `text` (UTF-8), `u8`/`u16`/`u32`/`i8`/`i16`/`i32` (little-endian,
+  as GATT), `float32`. `write`'s VALUE is parsed the same way; `hex`
+  takes `0a1b` or `0a 1b`. `--json` always gives `hex` too.
+  Known characteristics get a default (`battery-level` → `u8`).
+- **One GATT operation at a time** per device (Android drops a
+  second one while the first runs): the app's `BleCentral` queues
+  them with a timeout each (10 s; connect 30 s), so `mynx` calls from
+  several tabs are safe. MTU: ask 517 on connect; a write longer
+  than MTU-3 is refused with the limit (no long writes at first).
+- **Requests:** `ble-scan`, `ble-scan-stream`, `ble-services`,
+  `ble-read`, `ble-write`, `ble-notify` (stream), `ble-connect`
+  (stream) as [Later]s, answered by core's `bleRequests(home,
+  host: BleHost)` (`Ble.kt`). All logic (arguments, UUIDs, names,
+  formats, filtering and throttling scans, JSON, the refusals) in
+  core, tested against a fake host; `BleHost` only scans, connects
+  and runs one GATT operation, with callbacks.
+- **Permission:** Android 12+: `BLUETOOTH_SCAN` (with
+  `usesPermissionFlags="neverForLocation"`) and `BLUETOOTH_CONNECT`;
+  Android 8-11: `BLUETOOTH_ADMIN` (maxSdk 30) and location (granted,
+  and location turned on, else scans find nothing: say so). Asked
+  through the activity on first use, like `mynx bt`. Setting:
+  `android-bluetooth` covers BLE too (its description grows).
+- **Android's limits, refused with the reason:** at most 5 scan
+  starts per 30 s per app (Android then scans silently returning
+  nothing: core counts them and refuses the 6th); scans with the
+  screen off find only filtered devices (`--name`/`--service`
+  become `ScanFilter`s; an unfiltered scan in the background says
+  so); unbonded devices with random addresses: `getRemoteLeDevice
+  (address, type)` on Android 13+, below only devices just scanned.
+- **Second PR, Nordic UART as a serial port** (maintainer's
+  decision): `bluetooth.conf` takes `nus0 = ADDRESS`
+  (`/dev/serial/nus0`, RFC 2217 from 2417, `/dev/nus0` not made:
+  Linux has none, so tools name the path); a `BleUartLine :
+  SerialLine` over `BleCentral`, linked while a client uses it, as
+  `BtLine`; writes split to MTU-3.
+
+**Parts, and who does them.** The main agent writes part 0, then
+starts parts 1-4 as subagents at once (`isolation: worktree`, each
+on its own branch from `ble`), reviews and merges each into `ble`,
+and does part 5. One PR (`ble`), CI builds it, phone tests, merge.
+0. **Contract** (main agent, branch `ble`, one commit before any
+   subagent starts): in core, `BleHost` and its data classes
+   (`BleAdvert`, `BleService`, `BleChar`, `BleProps`) with KDoc, an
+   empty `bleRequests()` returning no requests, and a test of the
+   names it will answer; the request names, arguments and JSON
+   shapes written in `Ble.kt`'s KDoc (the source of truth the parts
+   share). The subagents may not change it; a change goes through
+   the main agent.
+1. **Core** (subagent A, `ble-core`): `Ble.kt`'s logic test-first
+   against a `FakeBleHost`: arguments, UUIDs and known names, value
+   formats both ways, scan filtering, per-device throttle and the
+   5-in-30-s count, operation timeouts, refusals (setting, no
+   Bluetooth, permission asked as `bt-*`), the setting's
+   description. `./gradlew :core:test` green.
+2. **App** (subagent B, `ble-app`): `BleCentral.kt` implementing
+   `BleHost` (`BluetoothLeScanner`, `BluetoothGatt`, the queue,
+   MTU, CCCD writes for notify, `connect` holds), the manifest's
+   permissions, wiring into `TerminalService` beside `BtBridge`. Can't
+   compile here: keep logic out, read it for what the compiler
+   catches (AGENTS.md "Lessons"); CI compiles it.
+3. **CLI and guide** (subagent C, `ble-cli`): `mynx ble` in
+   `tools/lib/mynx/cli.py` (usage, options, text output like `mynx
+   sensor`'s, `--json`, streams), tests in `tests/mynx/` against the
+   fake app's answers in the contract's shapes; the guide
+   (`tools/AGENTS.md`: a "Bluetooth LE devices" section, the `mynx
+   ble` rows) and `tests/shell/home-docs.bats` green.
+4. **Test peripheral** (subagent D, outside the repo,
+   `~/sketches/ble-peripheral/main.py`): MicroPython for the C3,
+   name `mynx-ble`: the battery service (level counting down), a
+   custom service with a read/write characteristic and one that
+   notifies a counter every second, and Nordic UART echoing what it
+   gets; it logs connects and writes on USB serial. Flashed with
+   `mpremote cp main.py :` when the maintainer plugs the C3 in.
+5. **Integration** (main agent): merge 1-4 into `ble`, run every
+   suite, README, roadmap, AGENTS.md's architecture, open the PR,
+   `scripts/deliver.sh`, phone tests with the maintainer.
+
+**Rules for the subagents** (put in each prompt): read AGENTS.md
+and this plan; test-first, the hooks on (never `--no-verify`, never
+weaken a test); touch only the part's files (A: core; B: `app/`; C:
+`tools/`, `tests/`; D: `~/sketches`); don't edit this work log,
+don't push or open PRs; commit on their branch and end with a short
+report (commits, what's untested, questions). Only A runs Gradle, so
+two daemons don't fight over the phone's memory (and Android's
+process limit: see "How it runs").
+
+**Phone tests (mynx dev, with the C3 as `mynx-ble`):**
+1. First `mynx ble scan` asks for the permissions; `mynx-ble`
+   shows with its RSSI and services; `--name`, `--service`,
+   `--stream`.
+2. `mynx ble services mynx-ble`: the battery, custom and UART
+   services with known names.
+3. `read … battery-level` gives a number; `read` of the custom
+   characteristic as `text` and `hex`.
+4. `write` text and hex; the C3's log shows them; `--no-response`.
+5. `notify` prints the counter every second; Ctrl+C unsubscribes
+   (the log says so).
+6. `mynx ble connect` in one tab, `read` in another: no new
+   connect in the C3's log.
+7. Six scans in 30 s: the sixth is refused with the reason.
+8. The C3 unplugged during `notify`: it ends with the reason.
+9. Bluetooth off, permission refused, `android-bluetooth off`: each
+   refused with its reason.
+10. A scan with the screen off (`--name mynx-ble` finds it; an
+    unfiltered one says why it found nothing).
+
+### 1. Development boards (leftovers; the maintainer picks)
 
 The roadmap's last items, planned with the maintainer 2026-10-25
 (entry 140). **Maintainer's decisions:** raw USB first, then UF2;
@@ -161,7 +316,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    All passed. Not tried: an RP2350, TinyUF2 or Adafruit
    bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
-### 1. Smaller things
+### 2. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (guide: "Making an
@@ -270,6 +425,19 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (151): BLE planned for subagents
+
+The maintainer asked for a BLE plan that subagents can build ("plan
+ble to work with subagents"). Read Bluetooth serial's plan and code
+(`Bluetooth.kt`'s `BluetoothHost`, `BtBridge`) and wrote "Next", 0:
+`mynx ble scan/services/read/write/notify/connect`, logic in core's
+`Ble.kt` behind a `BleHost`, a contract commit first, then four
+subagents in worktrees (core, app, CLI and guide, a MicroPython test
+peripheral for the C3), integration and phone tests by the main
+agent. The maintainer answered its three questions (per-command
+connections plus `connect`, Nordic UART in a second PR, names
+allowed). Nothing built yet.
 
 ### 2026-10-26 (150): helper back-off; PR #52 merged
 
