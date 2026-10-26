@@ -112,6 +112,8 @@ fun removeBluetoothBindings(text: String, matches: (BtBinding) -> Boolean): Unbo
 // How long `mynx bt` waits for the permission dialog, as `mynx usb allow` does.
 private const val BT_ASK_SECONDS = 120
 private const val BT_QUICK_SECONDS = 10
+// bt-list's option: refuse rather than ask for the permission (USB commands list rfcomm ports too).
+private const val NO_ASK = "--no-ask"
 
 /** What Android says a paired device is: Classic (SPP works), LE only, both, or it doesn't know. */
 enum class BtType(val word: String) { CLASSIC("classic"), LE("le"), DUAL("dual"), UNKNOWN("unknown") }
@@ -164,7 +166,8 @@ private class BtRefused(message: String) : Exception(message)
  * `bt-settings` requests, for [MynxRequests]'s `later`. All are refused
  * while `android-bluetooth` is off or the phone has no Bluetooth; all
  * but `bt-settings` ask for the permission first when the app hasn't
- * got it (so they wait up to two minutes).
+ * got it (so they wait up to two minutes); `bt-list --no-ask` is refused
+ * at once instead.
  *
  * Answers: `bt-list` gives `enabled`, `devices` (`name`, `address`,
  * `type`, `port`: the one bound to it or null) and `ports` ([btPortJson]);
@@ -196,6 +199,7 @@ fun bluetoothRequests(home: File, host: BluetoothHost): Map<String, Later> {
             }
             refusedFirst()?.let { return@Later reply.refuse(it) }
             if (!permission || host.allowed) return@Later run()
+            if (NO_ASK in args) return@Later reply.refuse("Bluetooth isn't allowed yet (mynx bt asks)")
             host.askPermission { why -> if (why == null) run() else reply.refuse("Bluetooth isn't allowed: $why") }
         }
 
@@ -282,7 +286,10 @@ fun bluetoothRequests(home: File, host: BluetoothHost): Map<String, Later> {
 
     fun first(args: List<String>) = args.firstOrNull()?.trim().orEmpty()
     return mapOf(
-        "bt-list" to later(BT_ASK_SECONDS, null, permission = true) { list() },
+        "bt-list" to later(BT_ASK_SECONDS, null, permission = true) { args ->
+            if (args.any { it != NO_ASK }) throw BtRefused("bt-list takes no options but $NO_ASK")
+            list()
+        },
         "bt-bind" to later(BT_ASK_SECONDS, { "bt bind ${first(it)}" }, permission = true, ::bind),
         "bt-unbind" to later(BT_ASK_SECONDS, { "bt unbind ${first(it)}" }, permission = true, ::unbind),
         "bt-settings" to later(BT_QUICK_SECONDS, null, permission = false) {

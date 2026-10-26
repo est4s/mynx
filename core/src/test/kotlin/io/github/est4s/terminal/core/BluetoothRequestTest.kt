@@ -243,6 +243,26 @@ class BluetoothRequestTest {
         assertTrue(reply("3-1").startsWith("""{"ok":true,"enabled":true,"devices":[{"name":"mynx-spp""""))
     }
 
+    // `mynx usb url|path|monitor` merge the rfcomm ports: a USB command mustn't open a Bluetooth dialog.
+    @Test
+    fun `listing with --no-ask never asks, and without the permission it's refused at once`() {
+        host.allowed = false
+        assertEquals(refusal("Bluetooth isn't allowed yet (mynx bt asks)"), ask("bt-list", "--no-ask"))
+        assertTrue(host.asks.isEmpty())
+        host.allowed = true
+        host.devices = listOf(cam)
+        assertTrue(ask("bt-list", "--no-ask").startsWith("""{"ok":true,"enabled":true"""))
+        assertEquals(refusal("bt-list takes no options but --no-ask"), ask("bt-list", "--yes"))
+    }
+
+    @Test
+    fun `unbinding a device removes every port it has, even lines the parser skips`() {
+        host.devices = listOf(cam)
+        conf.apply { parentFile.mkdirs() }.writeText("rfcomm0 = D4:E9:F4:A2:4A:02\nrfcomm1 = D4:E9:F4:A2:4A:02\n")
+        assertEquals("""{"ok":true,"removed":["rfcomm0","rfcomm1"]}""", ask("bt-unbind", "mynx-spp"))
+        assertEquals("", conf.readText())
+    }
+
     @Test
     fun `a bind that waited for the permission still names its undo step`() {
         host.allowed = false
