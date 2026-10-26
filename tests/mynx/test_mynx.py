@@ -2139,6 +2139,231 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx bt", run.stderr, args)
 
+    # --- ble -----------------------------------------------------------------
+
+    C3 = {"address": "D4:E9:F4:A2:4A:06", "address_type": "public", "name": "mynx-c3", "rssi": -48,
+          "services": ["0000180f-0000-1000-8000-00805f9b34fb", "6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
+          "manufacturer": [{"company": 741, "hex": "0a 1b"}], "connectable": True, "time": 1791177403145}
+    TAG = {"address": "C0:FF:EE:00:00:01", "address_type": "random", "name": None, "rssi": -80, "services": [],
+           "manufacturer": [{"company": 76, "hex": "02 15 fd a5 06 93 a4 e2 4f b1 af cf c6 eb 07 64 78 25 27 11 "
+                                                   "4b c8 00 01 c5"}],
+           "connectable": False, "time": 1791177403245}
+    C3_DEV = {"address": "D4:E9:F4:A2:4A:06", "name": "mynx-c3"}
+    NUS = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    NUS_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+    NUS_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+    LEVEL = "00002a19-0000-1000-8000-00805f9b34fb"
+    CCCD = "00002902-0000-1000-8000-00805f9b34fb"
+
+    def test_ble_scan_lists_the_devices(self):
+        answer = {"ok": True, "devices": [self.C3, self.TAG]}
+        self.start_app({"ble-scan": answer})
+        run = self.mynx("ble", "scan")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        # 16-bit UUIDs short where the SIG's base applies; long data wraps.
+        self.assertEqual(run.stdout, "D4:E9:F4:A2:4A:06   -48 dBm  mynx-c3\n"
+                                     "  services 180f, 6e400001-b5a3-f393-e0a9-e50e24dcca9e\n"
+                                     "  maker 0x02e5: 0a 1b\n"
+                                     "C0:FF:EE:00:00:01   -80 dBm  (no name), not connectable\n"
+                                     "  maker 0x004c: 02 15 fd a5 06 93 a4 e2 4f b1 af cf c6\n"
+                                     "    eb 07 64 78 25 27 11 4b c8 00 01 c5\n")
+        self.assertTrue(all(len(line) <= 56 for line in run.stdout.splitlines()))
+        self.assertEqual(json.loads(self.mynx("ble", "scan", "--json").stdout), answer)
+        self.assertEqual(self.app.requests, [["ble-scan"], ["ble-scan"]])
+
+    def test_ble_scan_options(self):
+        self.start_app({"ble-scan": {"ok": True, "devices": []}, "ble-scan-stream": {"ok": True, "_lines": []}})
+        run = self.mynx("ble", "scan", "--seconds", "10", "--name", "c3", "--service", "180f", "--all")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        run = self.mynx("ble", "scan", "--stream", "--name", "mynx c3", "--all")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.app.requests, [["ble-scan", "seconds=10", "name=c3", "service=180f", "all"],
+                                             ["ble-scan-stream", "name=mynx c3", "all"]])
+
+    def test_ble_scan_with_nothing_found_says_what_to_try(self):
+        self.start_app({"ble-scan": {"ok": True, "devices": []}})
+        run = self.mynx("ble", "scan")
+        self.assertEqual((run.returncode, run.stdout),
+                         (0, "No device found. Devices with no name and no\n"
+                             "services too: mynx ble scan --all\n"), run.stderr)
+        run = self.mynx("ble", "scan", "--all")
+        self.assertEqual(run.stdout, "No device found.\n")
+
+    def test_ble_scan_stream_prints_a_line_per_advertisement(self):
+        self.start_app({"ble-scan-stream": {"ok": True, "_lines": [self.C3, self.TAG]}})
+        run = self.mynx("ble", "scan", "--stream", env={"TZ": "UTC"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "05:16:43.145 D4:E9:F4:A2:4A:06   -48 dBm  mynx-c3\n"
+                                     "05:16:43.245 C0:FF:EE:00:00:01   -80 dBm  (no name)\n")
+        run = self.mynx("ble", "scan", "--stream", "--json")
+        self.assertEqual([json.loads(line) for line in run.stdout.splitlines()], [self.C3, self.TAG])
+
+    def test_ble_scan_stream_stops_quietly_on_ctrl_c(self):
+        self.start_app({"ble-scan-stream": {"ok": True, "_lines": [self.C3], "_hold": True}})
+        proc = self.popen("ble", "scan", "--stream")
+        self.assertIn("mynx-c3", proc.stdout.readline())
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, err), (0, ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_ble_scan_refused_says_why(self):
+        self.start_app({"ble-scan": {"ok": False, "error": "6 scans within 30 s: Android would find nothing; "
+                                                           "wait 12 s"}})
+        run = self.mynx("ble", "scan")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "mynx: 6 scans within 30 s: Android would find nothing; wait 12 s\n")
+
+    def test_ble_services_shows_the_table_as_a_tree(self):
+        answer = {"ok": True, "device": self.C3_DEV, "mtu": 247, "services": [
+            {"uuid": "0000180f-0000-1000-8000-00805f9b34fb", "name": "battery", "characteristics": [
+                {"uuid": self.LEVEL, "name": "battery-level", "properties": ["read", "notify"],
+                 "descriptors": [self.CCCD]}]},
+            {"uuid": self.NUS, "name": "nordic-uart", "characteristics": [
+                {"uuid": self.NUS_RX, "name": "nus-rx", "properties": ["write", "write-no-response"],
+                 "descriptors": []},
+                {"uuid": self.NUS_TX, "name": "nus-tx", "properties": ["notify"], "descriptors": [self.CCCD]}]},
+            {"uuid": "12345678-1234-5678-1234-56789abcdef0", "name": None, "characteristics": [
+                {"uuid": "12345678-1234-5678-1234-56789abcdef1", "name": None, "properties": ["read", "write"],
+                 "descriptors": []}]}]}
+        self.start_app({"ble-services": answer})
+        run = self.mynx("ble", "services", "mynx-c3")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        # Properties go on a line of their own when they don't fit.
+        self.assertEqual(run.stdout, "mynx-c3 (D4:E9:F4:A2:4A:06), MTU 247\n"
+                                     "180f battery\n"
+                                     "  2a19 battery-level: read, notify\n"
+                                     "6e400001-b5a3-f393-e0a9-e50e24dcca9e nordic-uart\n"
+                                     "  6e400002-b5a3-f393-e0a9-e50e24dcca9e nus-rx\n"
+                                     "    write, write-no-response\n"
+                                     "  6e400003-b5a3-f393-e0a9-e50e24dcca9e nus-tx: notify\n"
+                                     "12345678-1234-5678-1234-56789abcdef0\n"
+                                     "  12345678-1234-5678-1234-56789abcdef1: read, write\n")
+        self.assertEqual(json.loads(self.mynx("ble", "services", "D4:E9:F4:A2:4A:06", "--json").stdout), answer)
+        self.assertEqual(self.app.requests, [["ble-services", "mynx-c3"], ["ble-services", "D4:E9:F4:A2:4A:06"]])
+
+    def test_ble_read_prints_the_value(self):
+        def read(device, char, *options):
+            if options == ("as=hex",) or char == "nus-tx":
+                return {"ok": True, "device": self.C3_DEV, "char": self.NUS_TX, "name": "nus-tx", "as": "hex",
+                        "value": "0a 1b", "hex": "0a 1b"}
+            if options == ("as=text",):
+                return {"ok": True, "device": self.C3_DEV, "char": self.LEVEL, "name": "battery-level",
+                        "as": "text", "value": "W", "hex": "57"}
+            return {"ok": True, "device": self.C3_DEV, "char": self.LEVEL, "name": "battery-level", "as": "u8",
+                    "value": 87, "hex": "57"}
+
+        self.start_app({"ble-read": read})
+        run = self.mynx("ble", "read", "mynx-c3", "battery-level")
+        self.assertEqual((run.returncode, run.stdout), (0, "87 (hex 57)\n"), run.stderr)
+        self.assertEqual(self.mynx("ble", "read", "mynx-c3", "nus-tx").stdout, "0a 1b\n")
+        self.assertEqual(self.mynx("ble", "read", "mynx-c3", "2a19", "--as", "hex").stdout, "0a 1b\n")
+        self.assertEqual(self.mynx("ble", "read", "mynx-c3", "2a19", "--as", "text").stdout, "W (hex 57)\n")
+        self.assertEqual(json.loads(self.mynx("ble", "read", "mynx-c3", "battery-level", "--json").stdout),
+                         read("mynx-c3", "battery-level"))
+        self.assertEqual(self.app.requests, [["ble-read", "mynx-c3", "battery-level"],
+                                             ["ble-read", "mynx-c3", "nus-tx"],
+                                             ["ble-read", "mynx-c3", "2a19", "as=hex"],
+                                             ["ble-read", "mynx-c3", "2a19", "as=text"],
+                                             ["ble-read", "mynx-c3", "battery-level"]])
+
+    def test_ble_write_says_how_much_it_wrote(self):
+        def write(device, char, value, *options):
+            return {"ok": True, "device": self.C3_DEV, "char": self.NUS_RX if char == "nus-rx" else
+                    "12345678-1234-5678-1234-56789abcdef1", "name": "nus-rx" if char == "nus-rx" else None,
+                    "bytes": 1 if value == "-5" else 6}
+
+        self.start_app({"ble-write": write})
+        run = self.mynx("ble", "write", "mynx-c3", "nus-rx", "hello!", "--as", "text", "--no-response")
+        self.assertEqual((run.returncode, run.stdout), (0, "Wrote 6 bytes to nus-rx\n"), run.stderr)
+        # A negative number is a value, not an option.
+        run = self.mynx("ble", "write", "mynx-c3", "12345678-1234-5678-1234-56789abcdef1", "-5", "--as", "i8")
+        self.assertEqual((run.returncode, run.stdout),
+                         (0, "Wrote 1 byte to 12345678-1234-5678-1234-56789abcdef1\n"), run.stderr)
+        self.mynx("ble", "write", "mynx-c3", "nus-rx", "0a 1b")
+        self.assertEqual(json.loads(self.mynx("ble", "write", "mynx-c3", "nus-rx", "0a1b", "--json").stdout),
+                         write("mynx-c3", "nus-rx", "0a1b"))
+        self.assertEqual(self.app.requests, [
+            ["ble-write", "mynx-c3", "nus-rx", "hello!", "as=text", "no-response"],
+            ["ble-write", "mynx-c3", "12345678-1234-5678-1234-56789abcdef1", "-5", "as=i8"],
+            ["ble-write", "mynx-c3", "nus-rx", "0a 1b"],
+            ["ble-write", "mynx-c3", "nus-rx", "0a1b"]])
+
+    def test_ble_write_refused_says_why(self):
+        self.start_app({"ble-write": {"ok": False, "error": "nus-tx can't be written (notify)"}})
+        run = self.mynx("ble", "write", "mynx-c3", "nus-tx", "00")
+        self.assertEqual((run.returncode, run.stderr), (2, "mynx: nus-tx can't be written (notify)\n"))
+
+    def notification(self, value, hex_, ms):
+        return {"char": self.LEVEL, "name": "battery-level", "as": "u8", "value": value, "hex": hex_,
+                "time": 1791177403000 + ms}
+
+    def test_ble_notify_prints_each_value_with_its_time(self):
+        lines = [self.notification(87, "57", 145), self.notification(86, "56", 1145)]
+        self.start_app({"ble-notify": {"ok": True, "_lines": lines}})
+        run = self.mynx("ble", "notify", "mynx-c3", "battery-level", env={"TZ": "UTC"})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "05:16:43.145 87 (hex 57)\n"
+                                     "05:16:44.145 86 (hex 56)\n")
+        run = self.mynx("ble", "notify", "mynx-c3", "2a19", "--as", "hex", "--json")
+        self.assertEqual([json.loads(line) for line in run.stdout.splitlines()], lines)
+        self.assertEqual(self.app.requests, [["ble-notify", "mynx-c3", "battery-level"],
+                                             ["ble-notify", "mynx-c3", "2a19", "as=hex"]])
+
+    def test_ble_notify_stops_quietly_on_ctrl_c(self):
+        self.start_app({"ble-notify": {"ok": True, "_lines": [self.notification(87, "57", 0)], "_hold": True}})
+        proc = self.popen("ble", "notify", "mynx-c3", "battery-level")
+        self.assertIn("87 (hex 57)", proc.stdout.readline())
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, err), (0, ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_ble_notify_ends_with_the_reason_when_the_link_drops(self):
+        self.start_app({"ble-notify": {"ok": False, "error": "link lost",
+                                       "_lines": [self.notification(87, "57", 145)]}})
+        run = self.mynx("ble", "notify", "mynx-c3", "battery-level", env={"TZ": "UTC"})
+        self.assertEqual((run.returncode, run.stdout, run.stderr), (2, "05:16:43.145 87 (hex 57)\n",
+                                                                    "mynx: link lost\n"))
+
+    def test_ble_connect_prints_the_link_state(self):
+        connected = {"state": "connected", "device": self.C3_DEV, "mtu": 247}
+        dropped = {"state": "disconnected", "device": self.C3_DEV, "error": "link lost"}
+        self.start_app({"ble-connect": {"ok": False, "error": "link lost", "_lines": [connected, dropped]}})
+        run = self.mynx("ble", "connect", "mynx-c3")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stdout, "Connected to mynx-c3 (D4:E9:F4:A2:4A:06), MTU 247\n"
+                                     "Other mynx ble commands use this link until Ctrl+C.\n"
+                                     "Disconnected\n")
+        self.assertEqual(run.stderr, "mynx: link lost\n")
+        run = self.mynx("ble", "connect", "mynx-c3", "--json")
+        self.assertEqual([json.loads(line) for line in run.stdout.splitlines()],
+                         [connected, dropped, {"ok": False, "error": "link lost"}])
+        self.assertEqual(self.app.requests, [["ble-connect", "mynx-c3"], ["ble-connect", "mynx-c3"]])
+
+    def test_ble_connect_lets_go_on_ctrl_c(self):
+        connected = {"state": "connected", "device": {"address": "C0:FF:EE:00:00:01", "name": None}, "mtu": 23}
+        self.start_app({"ble-connect": {"ok": True, "_lines": [connected], "_hold": True}})
+        proc = self.popen("ble", "connect", "C0:FF:EE:00:00:01")
+        self.assertEqual(proc.stdout.readline(), "Connected to C0:FF:EE:00:00:01, MTU 23\n")
+        proc.send_signal(signal.SIGINT)
+        out, err = proc.communicate(timeout=10)
+        self.assertEqual((proc.returncode, err), (0, ""))
+        self.assertTrue(self.app.cancelled)
+
+    def test_ble_usage(self):
+        for args in [(), ("pair",), ("scan", "x"), ("scan", "--seconds"), ("scan", "--stream", "--seconds", "5"),
+                     ("scan", "--fast"), ("services",), ("services", "a", "b"), ("read", "a"),
+                     ("read", "a", "b", "c"), ("read", "a", "b", "--as"), ("read", "a", "b", "--no-response"),
+                     ("write", "a", "b"), ("write", "a", "b", "c", "d"), ("write", "a", "b", "c", "--fast"),
+                     ("notify", "a"), ("notify", "a", "b", "--all"), ("connect",), ("connect", "a", "b")]:
+            run = self.mynx("ble", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx ble", run.stderr, args)
+
+    def test_help_lists_ble(self):
+        self.assertIn("\n  ble        ", self.mynx("help").stdout)
+
     def test_usb_url_and_path_take_served_bluetooth_ports_too(self):
         usb = [self.usb_device(ports=[("ttyUSB0", 2217, False)])]
         bt = {"ok": True, "enabled": True, "devices": [self.SPP],
