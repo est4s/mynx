@@ -79,9 +79,13 @@ data class BleUart(val kind: BleUartKind, val rx: BleChar, val tx: BleChar, val 
 /**
  * The first UART in [services], by [BleUartKind]'s order, whose [rx]
  * can be written and whose [tx] notifies or indicates; null if none.
- * Part A.
  */
-fun bleUart(services: List<BleService>): BleUart? = TODO("part A")
+fun bleUart(services: List<BleService>): BleUart? = BleUartKind.entries.firstNotNullOfOrNull { kind ->
+    val chars = services.filter { it.uuid == kind.service }.flatMap { it.characteristics }
+    val rx = chars.firstOrNull { it.uuid == kind.rx && (BleProp.WRITE in it.properties || BleProp.WRITE_NO_RESPONSE in it.properties) }
+    val tx = chars.firstOrNull { it.uuid == kind.tx && (BleProp.NOTIFY in it.properties || BleProp.INDICATE in it.properties) }
+    if (rx == null || tx == null) null else BleUart(kind, rx, tx, withResponse = BleProp.WRITE_NO_RESPONSE !in rx.properties)
+}
 
 /**
  * A BLE UART port to [address], as the RFC 2217 server drives it, like
