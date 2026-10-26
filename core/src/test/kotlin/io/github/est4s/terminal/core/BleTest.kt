@@ -5,6 +5,7 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /** A [BleHost] the tests drive by hand: they see what was asked and answer it. */
@@ -54,6 +55,19 @@ class FakeBleLink(override val address: String, override val services: List<BleS
         return BleStop { pending += "unsubscribe ${char.uuid}" to Unit }
     }
     override fun close() { closed = true }
+
+    /** Answers the waiting operation [op] (as [pending] names it) with [result]. */
+    @Suppress("UNCHECKED_CAST")
+    fun answer(op: String, result: Result<Any>) {
+        val i = pending.indexOfFirst { it.first == op }
+        check(i >= 0) { "no $op waiting, only ${pending.map { it.first }}" }
+        (pending.removeAt(i).second as (Result<Any>) -> Unit)(result)
+    }
+
+    /** The waiting subscription to [uuid]: where its values go, and its done. */
+    @Suppress("UNCHECKED_CAST")
+    fun subscription(uuid: String): Pair<(ByteArray, Long) -> Unit, (Result<Unit>) -> Unit> =
+        pending.last { it.first == "subscribe $uuid" }.second as Pair<(ByteArray, Long) -> Unit, (Result<Unit>) -> Unit>
 }
 
 class BleTest {
@@ -284,5 +298,232 @@ class BleTest {
         )
         send("1-2", "ble-scan-stream", "service=2a19")
         assertEquals(1, host.scans.size)
+    }
+
+    @Test
+    fun `bad device arguments are refused before anything is asked`() {
+        host.allowed = false
+        val bad = mapOf(
+            listOf("ble-services") to "which device? (an address, or a name: mynx ble scan finds them)",
+            listOf("ble-services", c3, "all") to "unknown option 'all' for ble-services",
+            listOf("ble-read", c3) to "which characteristic? (a UUID or a name: mynx ble services $c3 lists them)",
+            listOf("ble-read", c3, "2a19", "as=u64") to "'u64' isn't a format: hex, text, u8, u16, u32, i8, i16, i32 or float32",
+            listOf("ble-read", c3, "nope") to "'nope' isn't a UUID or a known name",
+            listOf("ble-read", c3, "nope/2a19") to "'nope' isn't a UUID or a known name",
+            listOf("ble-read", c3, "2a19", "no-response") to "unknown option 'no-response' for ble-read",
+            listOf("ble-write", c3, "2a19") to "what to write? (a value: hex unless as= says)",
+            listOf("ble-write", c3, "2a19", "0g") to "'0g' isn't hex: two digits a byte, like 0a1b or 0a 1b",
+            listOf("ble-write", c3, "2a19", "300", "as=u8") to "u8 is 0 to 255, not '300'",
+        )
+        bad.entries.forEachIndexed { i, (lines, error) ->
+            send("2-$i", *lines.toTypedArray())
+            assertEquals(refusal(error), reply("2-$i"), lines.toString())
+        }
+        assertTrue(host.asks.isEmpty())
+    }
+
+    private val custom = "12345678-1234-5678-1234-56789abcdef0"
+    private val box = "12345678-1234-5678-1234-56789abcdef1"
+    private val counter = "12345678-1234-5678-1234-56789abcdef2"
+    private val nus = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    private val rx = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+    private val tx = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+    private val cccd = "00002902-0000-1000-8000-00805f9b34fb"
+
+    private fun c3Link(mtu: Int = 23) = FakeBleLink(
+        c3,
+        listOf(
+            BleService(battery, listOf(BleChar(battery, level, 1, setOf(BleProp.READ, BleProp.NOTIFY), listOf(cccd)))),
+            BleService(
+                custom,
+                listOf(
+                    BleChar(custom, box, 2, setOf(BleProp.READ, BleProp.WRITE), emptyList()),
+                    BleChar(custom, counter, 3, setOf(BleProp.INDICATE), listOf(cccd)),
+                ),
+            ),
+            BleService(
+                nus,
+                listOf(
+                    BleChar(nus, rx, 4, setOf(BleProp.WRITE, BleProp.WRITE_NO_RESPONSE), emptyList()),
+                    BleChar(nus, tx, 5, setOf(BleProp.NOTIFY), listOf(cccd)),
+                ),
+            ),
+        ),
+        mtu,
+    )
+
+    // Hands [link] to the request waiting for a connection.
+    private fun connected(link: FakeBleLink = c3Link()) = link.also { host.connects.last().ready(Result.success(it)) }
+
+    @Test
+    fun `lists the services of a device, connecting for it and disconnecting after`() {
+        send("1-1", "ble-services", c3.lowercase())
+        val connect = host.connects.single()
+        assertEquals(c3, connect.address)
+        assertFalse(connect.randomAddress)
+        val link = connected(c3Link(mtu = 247))
+        assertEquals(
+            """{"ok":true,"device":{"address":"$c3","name":null},"mtu":247,"services":[""" +
+                """{"uuid":"$battery","name":"battery-service","characteristics":[""" +
+                """{"uuid":"$level","name":"battery-level","properties":["read","notify"],"descriptors":["$cccd"]}]},""" +
+                """{"uuid":"$custom","name":null,"characteristics":[""" +
+                """{"uuid":"$box","name":null,"properties":["read","write"],"descriptors":[]},""" +
+                """{"uuid":"$counter","name":null,"properties":["indicate"],"descriptors":["$cccd"]}]},""" +
+                """{"uuid":"$nus","name":"nordic-uart","characteristics":[""" +
+                """{"uuid":"$rx","name":"nus-rx","properties":["write","write-no-response"],"descriptors":[]},""" +
+                """{"uuid":"$tx","name":"nus-tx","properties":["notify"],"descriptors":["$cccd"]}]}]}""",
+            reply("1-1"),
+        )
+        assertTrue(link.closed)
+    }
+
+    @Test
+    fun `reads a value in its known format, or the one asked`() {
+        send("1-1", "ble-read", c3, "battery-level")
+        val link = connected()
+        link.answer("read $level", Result.success(byteArrayOf(42)))
+        assertEquals(
+            """{"ok":true,"device":{"address":"$c3","name":null},"char":"$level","name":"battery-level",""" +
+                """"as":"u8","value":42,"hex":"2a"}""",
+            reply("1-1"),
+        )
+        assertTrue(link.closed)
+        send("1-2", "ble-read", c3, box.uppercase(), "as=text")
+        connected().answer("read $box", Result.success("hi".toByteArray()))
+        assertEquals(
+            """{"ok":true,"device":{"address":"$c3","name":null},"char":"$box","name":null,""" +
+                """"as":"text","value":"hi","hex":"68 69"}""",
+            reply("1-2"),
+        )
+        send("1-3", "ble-read", c3, box)
+        connected().answer("read $box", Result.success("hi".toByteArray()))
+        assertEquals("68 69", (parseJson(reply("1-3")!!) as Map<*, *>)["value"])
+    }
+
+    @Test
+    fun `a failed read or connection is refused with why, and the link closed`() {
+        send("1-1", "ble-read", c3, "2a19")
+        val link = connected()
+        link.answer("read $level", Result.failure(Exception("not permitted")))
+        assertEquals(refusal("couldn't read battery-level: not permitted"), reply("1-1"))
+        assertTrue(link.closed)
+        send("1-2", "ble-read", c3, "2a19")
+        host.connects.last().ready(Result.failure(Exception("timed out")))
+        assertEquals(refusal("couldn't connect to $c3: timed out"), reply("1-2"))
+    }
+
+    @Test
+    fun `a link that drops during a request refuses it with why`() {
+        send("1-1", "ble-read", c3, "2a19")
+        connected()
+        host.connects.single().dropped("link lost")
+        assertEquals(refusal("the link to $c3 dropped: link lost"), reply("1-1"))
+    }
+
+    @Test
+    fun `a request cancelled while it connects closes the link it gets`() {
+        send("1-1", "ble-services", c3)
+        cancel("1-1")
+        val link = connected()
+        assertTrue(link.closed)
+    }
+
+    @Test
+    fun `a device by name, paired, or seen by a scan, exact, else in any case`() {
+        host.devices = listOf(BtDevice("Buds", "AA:BB:CC:DD:EE:01", BtType.DUAL), BtDevice("buds", "AA:BB:CC:DD:EE:02", BtType.LE))
+        send("1-1", "ble-scan")
+        host.scans.single().found(advert(random = true))
+        runTimers()
+        send("1-2", "ble-read", c3, "2a19")
+        assertTrue(host.connects.last().randomAddress)
+        send("1-3", "ble-services", "MYNX-BLE")
+        assertEquals(c3, host.connects.last().address)
+        assertTrue(host.connects.last().randomAddress)
+        connected()
+        assertEquals("mynx-ble", ((parseJson(reply("1-3")!!) as Map<*, *>)["device"] as Map<*, *>)["name"])
+        send("1-4", "ble-services", "buds")
+        assertEquals("AA:BB:CC:DD:EE:02", host.connects.last().address)
+        assertFalse(host.connects.last().randomAddress)
+        send("1-5", "ble-services", "BUDS")
+        assertEquals(
+            refusal("2 devices are called BUDS: give its address (AA:BB:CC:DD:EE:01 Buds, AA:BB:CC:DD:EE:02 buds)"),
+            reply("1-5"),
+        )
+        send("1-6", "ble-services", "watch")
+        assertEquals(refusal("no device called watch: scan for it (mynx ble scan), or give its address"), reply("1-6"))
+    }
+
+    @Test
+    fun `unknown, missing and ambiguous characteristics are refused`() {
+        send("1-1", "ble-read", c3, "ffe1")
+        var link = connected()
+        assertEquals(refusal("$c3 has no characteristic ffe1 (mynx ble services $c3 lists them)"), reply("1-1"))
+        assertTrue(link.closed)
+        val twice = FakeBleLink(
+            c3,
+            listOf(
+                BleService(battery, listOf(BleChar(battery, level, 1, setOf(BleProp.READ), emptyList()))),
+                BleService(custom, listOf(BleChar(custom, level, 2, setOf(BleProp.READ), emptyList()))),
+            ),
+        )
+        send("1-2", "ble-read", c3, "2a19")
+        connected(twice)
+        assertEquals(
+            refusal("2a19 is in 2 services (battery-service, $custom): name one as SERVICE/CHAR"),
+            reply("1-2"),
+        )
+        send("1-3", "ble-read", c3, "$custom/battery-level")
+        link = connected(twice)
+        assertEquals(listOf("read $level"), link.pending.map { it.first })
+        link.answer("read $level", Result.success(byteArrayOf(7)))
+        assertEquals(7L, (parseJson(reply("1-3")!!) as Map<*, *>)["value"])
+    }
+
+    @Test
+    fun `writes, with a response unless asked not to`() {
+        send("1-1", "ble-write", c3, "nus-rx", "hi there", "as=text")
+        var link = connected()
+        link.answer("write $rx 68 69 20 74 68 65 72 65 true", Result.success(Unit))
+        assertEquals(
+            """{"ok":true,"device":{"address":"$c3","name":null},"char":"$rx","name":"nus-rx","bytes":8}""",
+            reply("1-1"),
+        )
+        assertTrue(link.closed)
+        send("1-2", "ble-write", c3, "nus-rx", "0a 1B", "no-response")
+        link = connected()
+        link.answer("write $rx 0a 1b false", Result.success(Unit))
+        assertEquals(2L, (parseJson(reply("1-2")!!) as Map<*, *>)["bytes"])
+        send("1-3", "ble-write", c3, box, "01")
+        connected().answer("write $box 01 true", Result.failure(Exception("not permitted")))
+        assertEquals(refusal("couldn't write $box: not permitted"), reply("1-3"))
+    }
+
+    @Test
+    fun `a write longer than the MTU less 3 is refused with the limit`() {
+        send("1-1", "ble-write", c3, "nus-rx", "x".repeat(21), "as=text")
+        val link = connected()
+        assertEquals(refusal("21 bytes is too long: a write takes at most 20 here (the MTU is 23, less 3)"), reply("1-1"))
+        assertTrue(link.pending.isEmpty() && link.closed)
+        send("1-2", "ble-write", c3, "nus-rx", "x".repeat(20), "as=text")
+        assertEquals(1, connected().pending.size)
+    }
+
+    @Test
+    fun `a property the characteristic hasn't got is refused`() {
+        val refused = mapOf(
+            listOf("ble-read", c3, "nus-rx") to "nus-rx can't be read (it has: write, write-no-response)",
+            listOf("ble-write", c3, "battery-level", "01") to "battery-level can't be written (it has: read, notify)",
+            listOf("ble-write", c3, box, "01", "no-response") to "$box doesn't take writes without a response: leave out no-response",
+        )
+        refused.entries.forEachIndexed { i, (lines, error) ->
+            send("3-$i", *lines.toTypedArray())
+            val link = connected()
+            assertEquals(refusal(error), reply("3-$i"), lines.toString())
+            assertTrue(link.pending.isEmpty() && link.closed)
+        }
+        val writeOnly = FakeBleLink(c3, listOf(BleService(nus, listOf(BleChar(nus, rx, 1, setOf(BleProp.WRITE_NO_RESPONSE), emptyList())))))
+        send("3-9", "ble-write", c3, "nus-rx", "01")
+        connected(writeOnly)
+        assertEquals(refusal("nus-rx only takes writes without a response: add no-response"), reply("3-9"))
     }
 }

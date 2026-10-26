@@ -129,6 +129,83 @@ private fun parseScan(request: String, raw: List<String>, timed: Boolean): ScanQ
     )
 }
 
+/** CHAR as given: [text], the [service] it names (`SERVICE/CHAR`) and the characteristic's [uuid]. */
+private class CharRef(val text: String, val service: String?, val uuid: String)
+
+private class DeviceQuery(
+    val device: String,
+    val char: CharRef? = null,
+    val format: BleFormat? = null,
+    val value: ByteArray? = null,
+    val noResponse: Boolean = false,
+)
+
+private val FORMAT_WORDS = BleFormat.entries.map { it.word }.let { it.dropLast(1).joinToString(", ") + " or " + it.last() }
+
+// DEVICE, then CHAR when [chars], then VALUE when [writes]; the options each takes.
+private fun parseDevice(request: String, raw: List<String>, chars: Boolean = false, writes: Boolean = false): DeviceQuery {
+    val count = 1 + (if (chars) 1 else 0) + (if (writes) 1 else 0)
+    val args = Args(request, raw, count, if (chars) setOf("as") else emptySet(), if (writes) setOf("no-response") else emptySet())
+    val device = args.at(0) { "which device? (an address, or a name: mynx ble scan finds them)" }.trim()
+    if (!chars) return DeviceQuery(device)
+    val text = args.at(1) { "which characteristic? (a UUID or a name: mynx ble services $device lists them)" }.trim()
+    val char = if ('/' in text) {
+        CharRef(text, uuidOf(text.substringBefore('/')), uuidOf(text.substringAfter('/')))
+    } else {
+        CharRef(text, null, uuidOf(text))
+    }
+    val format = args.options["as"]?.let { word -> bleFormat(word) ?: throw BleRefused("'$word' isn't a format: $FORMAT_WORDS") }
+    if (!writes) return DeviceQuery(device, char, format)
+    val written = args.at(2) { "what to write? (a value: hex unless as= says)" }
+    val value = try {
+        (format ?: BleFormat.HEX).parse(written)
+    } catch (e: IllegalArgumentException) {
+        throw BleRefused(e.message!!)
+    }
+    return DeviceQuery(device, char, format, value, "no-response" in args.options)
+}
+
+/** A device a request names: [random] as a scan saw its address. */
+private class Dev(val address: String, val name: String?, val random: Boolean) {
+    val who get() = if (name != null) "$name ($address)" else address
+    val json get() = obj("address" to json(address), "name" to (name?.let(::json) ?: "null"))
+}
+
+private fun label(uuid: String) = bleName(uuid) ?: uuid
+
+private fun why(e: Throwable) = e.message ?: e.javaClass.simpleName
+
+private fun propsText(char: BleChar) =
+    BleProp.entries.filter { it in char.properties }.joinToString(", ") { it.word }.ifEmpty { "none" }
+
+private fun servicesJson(link: BleLink) = array(link.services.map { service ->
+    obj(
+        "uuid" to json(service.uuid),
+        "name" to (bleName(service.uuid)?.let(::json) ?: "null"),
+        "characteristics" to array(service.characteristics.map { char ->
+            obj(
+                "uuid" to json(char.uuid),
+                "name" to (bleName(char.uuid)?.let(::json) ?: "null"),
+                "properties" to array(BleProp.entries.filter { it in char.properties }.map { json(it.word) }),
+                "descriptors" to array(char.descriptors.map(::json)),
+            )
+        }),
+    )
+})
+
+private fun findChar(link: BleLink, dev: Dev, ref: CharRef): BleChar {
+    val found = link.services.flatMap { it.characteristics }
+        .filter { it.uuid == ref.uuid && (ref.service == null || it.service == ref.service) }
+    if (found.isEmpty()) throw BleRefused("${dev.who} has no characteristic ${ref.text} (mynx ble services ${dev.address} lists them)")
+    val services = found.map { it.service }.distinct()
+    if (services.size > 1) {
+        throw BleRefused(
+            "${ref.text} is in ${services.size} services (${services.joinToString(", ", transform = ::label)}): name one as SERVICE/CHAR",
+        )
+    }
+    return found.first()
+}
+
 private fun advertJson(advert: BleAdvert) = obj(
     "address" to json(advert.address),
     "address_type" to json(if (advert.randomAddress) "random" else "public"),
@@ -216,8 +293,106 @@ internal fun bleRequests(
         }
     }
 
+    fun device(text: String): Dev {
+        val bonded = host.bonded()
+        val scanned = synchronized(lock) { seen.values.toList() }
+        fun random(address: String) = scanned.firstOrNull { it.address == address }?.randomAddress == true
+        btAddress(text)?.let { address ->
+            val name = bonded.firstOrNull { it.address == address }?.name ?: scanned.firstOrNull { it.address == address }?.name
+            return Dev(address, name, random(address))
+        }
+        val named = (bonded.mapNotNull { d -> d.name?.let { Dev(d.address, it, random(d.address)) } } +
+            scanned.mapNotNull { a -> a.name?.let { Dev(a.address, it, a.randomAddress) } }).distinctBy { it.address }
+        val matches = named.filter { it.name == text }.ifEmpty { named.filter { it.name.equals(text, ignoreCase = true) } }
+        return when (matches.size) {
+            0 -> throw BleRefused("no device called $text: scan for it (mynx ble scan), or give its address")
+            1 -> matches.single()
+            else -> throw BleRefused(
+                "${matches.size} devices are called $text: give its address (" +
+                    matches.joinToString(", ") { "${it.address} ${it.name}" } + ")",
+            )
+        }
+    }
+
+    // Connects for [op] and runs [job] on the link, which closes when op ends.
+    fun useLink(op: Op, dev: Dev, dropped: (String) -> Unit, job: (BleLink) -> Unit) {
+        host.connect(
+            dev.address,
+            dev.random,
+            ready = { result ->
+                op.guard {
+                    val link = result.getOrElse { throw BleRefused("couldn't connect to ${dev.who}: ${why(it)}") }
+                    if (op.onEnd(link::close)) job(link)
+                }
+            },
+            dropped = dropped,
+        )
+    }
+
+    fun deviceOp(query: DeviceQuery, op: Op, job: (Dev, BleLink, BleChar?) -> Unit) {
+        val dev = device(query.device)
+        useLink(op, dev, { why -> op.refuse("the link to ${dev.who} dropped: $why") }) { link ->
+            job(dev, link, query.char?.let { findChar(link, dev, it) })
+        }
+    }
+
+    fun services(query: DeviceQuery, op: Op) = deviceOp(query, op) { dev, link, _ ->
+        op.ok("device" to dev.json, "mtu" to link.mtu.toString(), "services" to servicesJson(link))
+    }
+
+    fun read(query: DeviceQuery, op: Op) = deviceOp(query, op) { dev, link, char ->
+        char!!
+        if (BleProp.READ !in char.properties) throw BleRefused("${label(char.uuid)} can't be read (it has: ${propsText(char)})")
+        val format = query.format ?: defaultFormat(char.uuid)
+        link.read(char) { result ->
+            op.guard {
+                val bytes = result.getOrElse { throw BleRefused("couldn't read ${label(char.uuid)}: ${why(it)}") }
+                op.ok(
+                    "device" to dev.json,
+                    "char" to json(char.uuid),
+                    "name" to (bleName(char.uuid)?.let(::json) ?: "null"),
+                    "as" to json(format.word),
+                    "value" to format.json(bytes),
+                    "hex" to json(bleHex(bytes)),
+                )
+            }
+        }
+    }
+
+    fun write(query: DeviceQuery, op: Op) = deviceOp(query, op) { dev, link, char ->
+        char!!
+        val value = query.value!!
+        val name = label(char.uuid)
+        val withResponse = BleProp.WRITE in char.properties
+        val withoutResponse = BleProp.WRITE_NO_RESPONSE in char.properties
+        when {
+            !withResponse && !withoutResponse -> throw BleRefused("$name can't be written (it has: ${propsText(char)})")
+            query.noResponse && !withoutResponse ->
+                throw BleRefused("$name doesn't take writes without a response: leave out no-response")
+            !query.noResponse && !withResponse -> throw BleRefused("$name only takes writes without a response: add no-response")
+        }
+        val limit = link.mtu - 3
+        if (value.size > limit) {
+            throw BleRefused("${value.size} bytes is too long: a write takes at most $limit here (the MTU is ${link.mtu}, less 3)")
+        }
+        link.write(char, value, !query.noResponse) { result ->
+            op.guard {
+                result.getOrElse { throw BleRefused("couldn't write $name: ${why(it)}") }
+                op.ok(
+                    "device" to dev.json,
+                    "char" to json(char.uuid),
+                    "name" to (bleName(char.uuid)?.let(::json) ?: "null"),
+                    "bytes" to value.size.toString(),
+                )
+            }
+        }
+    }
+
     return mapOf(
         "ble-scan" to later(SCAN_SECONDS, { parseScan("ble-scan", it, timed = true) }, ::scan),
         "ble-scan-stream" to later(null, { parseScan("ble-scan-stream", it, timed = false) }, ::scanStream),
+        "ble-services" to later(DEVICE_SECONDS, { parseDevice("ble-services", it) }, ::services),
+        "ble-read" to later(DEVICE_SECONDS, { parseDevice("ble-read", it, chars = true) }, ::read),
+        "ble-write" to later(DEVICE_SECONDS, { parseDevice("ble-write", it, chars = true, writes = true) }, ::write),
     )
 }
