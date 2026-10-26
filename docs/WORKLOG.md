@@ -95,7 +95,7 @@ always connected); pairing stays in Android's Settings.
 **Design (agent's proposal, change it if the maintainer objects):**
 - **Linux's `rfcomm bind`:** a bound device is a port
   (`/dev/serial/rfcomm0`, `rfcomm1`, … and `rfc2217://localhost:N`
-  from the same 2217+ range) that costs nothing until used; the
+  from 2317, so USB keeps 2217) that costs nothing until used; the
   RFCOMM link opens when a client arrives (a program opens the pty,
   so `serial-port` connects; or a URL client) and closes when it
   leaves. The phone and the board aren't linked while nothing uses
@@ -150,6 +150,17 @@ always connected); pairing stays in Android's Settings.
    monitor taking rfcomm ports, guide and `home-docs.bats`.
 5. Test sketch in `~/sketches/esp32-spp` (not in the repo): echo
    what it gets, print a counter every second, name `mynx-spp`.
+
+**Status:** parts 1-5 built (entry 148), not yet pushed; `app/`
+untested by a compiler until CI builds it. Next: push, open the PR,
+fix what CI finds, then the phone tests. The sketch is flashed: it
+advertises as `mynx-spp`, BT address `D4:E9:F4:A2:4A:02`, and logs
+connects, disconnects and what it gets on USB serial (`ttyUSB0`,
+115200, DTR and RTS low). **Watch for:** pyserial's RFC 2217 client
+gives up negotiating after ~3 s, and the server holds the client's
+data until the link opens, so miniterm on the URL may time out on a
+slow link (the pty path is fine); if it does, let the session
+negotiate while only the line's data waits.
 
 **Phone tests (mynx dev, with the ESP32-CAM):**
 1. Pair `mynx-spp` in Settings; `mynx bt` lists it; the first use
@@ -359,6 +370,43 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (148): Bluetooth serial built (branch `bt-serial`)
+
+The maintainer asked for the work to be split among subagents; it
+was, in worktrees merged back into `bt-serial`:
+- **Core** (agent): `Bluetooth.kt` (`bluetooth.conf` parsed, checked
+  by `mynx check`, edited by bind/unbind; `bt-list`, `bt-bind`,
+  `bt-unbind`, `bt-settings` through `BluetoothHost`;
+  `android-bluetooth`), `SerialLine.clientArrived()`/`clientLeft()`
+  and `SerialServer.endClient()`, rfcomm names and uevents. Also a
+  fix outside Bluetooth: a [Later] request's config change is now
+  recorded for undo when it answers late (a bind that waited for the
+  permission dialog), so `ConfigHistory` is synchronized.
+- **Tools** (agent): `mynx bt`, `tools/lib/mynx/ports.py` (USB and
+  served Bluetooth ports for `mynx usb url|path|monitor`), the
+  monitor's resets refused over Bluetooth, the guide's "Bluetooth
+  serial devices", README. Then (me) `bt-list --no-ask` there, so a
+  USB command never opens the Bluetooth permission dialog.
+- **App** (me): `ServedPort` out of `UsbBridge` (refactor), `BtLine`,
+  `BtBridge`, the wiring in `TerminalService`, the manifest
+  (`BLUETOOTH_CONNECT`; `BLUETOOTH` up to API 30). Reviewed by an
+  agent reading it as the compiler would, since only CI builds it:
+  no compile errors found; fixed what it found: a link left open
+  when its client left just as it linked, a board that's off paged
+  every second (now a back-off, 2 s doubling to 30 s), Bluetooth
+  ports taking 2217 from USB at start (now from 2317), a
+  `cancelDiscovery()` that always failed (scan permission; dropped),
+  a socket leaked on `SecurityException`, and the shared ports
+  folder emptied by `UsbBridge` (now the service).
+- **Test sketch** (agent): `~/sketches/esp32-spp` (PlatformIO,
+  espressif32 8.0.0, Arduino-ESP32 3.3.12, which warns BluetoothSerial
+  leaves in 4.0), built in 3m19s on the phone and flashed.
+
+Tests: core, `tests/mynx` (335), bats (176) pass. Known, not ours:
+`test_undo_list` fails in a tab whose `TZ` isn't UTC (the test's
+`mynx` runs without it; passes with `TZ=UTC`), and a `shell-setup.bats`
+test failed once and passed again.
 
 ### 2026-10-26 (147): Bluetooth serial planned (branch `bt-serial`)
 
