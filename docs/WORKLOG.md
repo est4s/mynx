@@ -159,6 +159,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    6. `./gradlew :core:test` and `python3 -m unittest
       tests/mynx/test_proot_usb.py` pass in mynx dev (the spike's
       proot broke the former).
+   **1-4 and 6 passed on build 40295886564 (entry 142); 5 is left.**
    Then merge (the docs are in the PR). Later parts: hotplug
    (libudev's monitor: libudev-format messages, sender uid 0, a
    netlink address), and the recipes as hardware allows
@@ -311,6 +312,25 @@ results (entry 141, below). Branch `raw-usb` from `main`, draft PR
 - **Docs:** the guide's "Raw USB devices" (DFU, OpenOCD and sharing
   with a served serial port marked "not tried yet"), AGENTS.md
   (Raw USB, two lessons), ROADMAP, README.
+- **Phone, first build (run 40292999091):** every open of a node
+  missed the extension and opened the placeholder file: proot gives
+  binds' host paths their real spelling (`/data/data/…`, as
+  `/proc/PROOT/cwd` showed), `MYNX_USB_SOCKET` says `/data/user/0/…`.
+  Fixed (d101439): the extension resolves its socket's folder at
+  start. Also seen: Android lets Debian stat the phone's buses
+  (`/sys/bus/platform`) but not list inside them; the binds keep them
+  where they were before the own `/sys/bus`.
+- **Phone, second build (run 40295886564), tests 1-4 and 6 of
+  "Next", 0 passed:** the board put into BOOTSEL from MicroPython's
+  REPL (`machine.bootloader()` over the URL); `mynx usb allow
+  2e8a:0003` asked, answered `raw USB  /dev/bus/usb/001/004`, and
+  `lsusb` listed it at once; the spike's `usb-check.py` all passed,
+  now with the descriptors from byte 0 (the seek fix); `picotool
+  load -x` flashed MicroPython back and it returned as `ttyACM0`,
+  allowed without a dialog ("always"); a program's own
+  `…/dev/bus/usb/001/005` file is left alone; core's and
+  `test_proot_usb.py`'s tests pass in mynx dev. Test 5 (a device
+  outside the filter) still to do.
 - Hotplug left for later (see "Next", 0).
 - A timing test (`test_audio_record_until_ctrl_c_says_what_it_saved`)
   failed once in the full suite on the phone and passed alone.
