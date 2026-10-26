@@ -53,4 +53,13 @@ class SerialUeventsTest {
 
         assertEquals(listOf("12-1", "34-2"), ueventSockets(serial).map { it.name })
     }
+
+    // Linux has no such tty, so nothing listens for one.
+    @Test
+    fun `BLE UART ports send no uevents`() {
+        val uevents = SerialUevents()
+        assertEquals(listOf("DEVNAME=rfcomm0"), uevents.changed(setOf("rfcomm0", "nus0")).map { text(it)[6] })
+        assertEquals(emptyList(), uevents.changed(setOf("rfcomm0", "nus0", "nus1")))
+        assertEquals(emptyList(), uevents.changed(setOf("rfcomm0")))
+    }
 }
