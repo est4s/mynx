@@ -66,8 +66,8 @@ are in git history: the full log up to entry 92 is
   (PR #46, entry 139). Not released yet.
 - **Raw USB:** the spike worked on the phone with an RP2040 Zero
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
-  rebuilt test-first in PR #47 (entry 142); every phone test
-  passed, ready to merge.
+  rebuilt test-first and merged (PR #47, entry 142); every phone
+  test passed. Not released yet.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -130,36 +130,12 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   `picotool` once raw USB works.
 
 **Order:**
-1. **Spikes** (branch `spike-raw-usb`, thrown away): (a) proot
-   passes a received fd into a tracee through chained calls, and
-   libusb's `lsusb`/`picotool info` list from the stand-ins and talk
-   to the RP2040 Zero: **done, it works on the phone (entry 141)**;
-   (b) Android sees the BOOTSEL drive but calls it damaged and
-   doesn't mount it, so UF2 is the app's own writer (or `picotool`).
-   The spike branch stays until PR #47 is merged, then goes.
-2. **Raw USB, test-first: PR #47** (branch `raw-usb`, draft; entry
-   142): the stand-ins, the fd socket, `mynx_usb`, the own
-   `/sys/bus` with the phone's buses, `mynx usb` listing every
-   device, the guide's "Raw USB devices". **Phone test next** (the
-   agent runs most of it from mynx dev's Debian; the maintainer
-   plugs and taps), with PR #47's build installed:
-   1. The RP2040 Zero in BOOTSEL (hold BOOT while plugging; it runs
-      MicroPython now), OK on "open mynx dev": `mynx usb` shows `RP2
-      Boot (2e8a:0003): raw USB` and its node.
-   2. `picotool info -a`, `lsusb -v -d 2e8a:0003`, pyusb reading a
-      string; reading the node gives the descriptors from byte 0
-      (the seek fix).
-   3. `picotool load -x` MicroPython's UF2: it comes back as
-      `ttyACM0` (Android asks again: tick "always").
-   4. `ls /sys/bus` shows the phone's buses (`platform`, `cpu`, …)
-      beside `usb`, and `ls /sys/bus/platform/devices` lists.
-   5. A device not in the filter (any USB stick, mouse, keyboard):
-      `mynx usb` says "not allowed", `mynx usb allow IDS` asks, and
-      then `lsusb` lists it at once.
-   6. `./gradlew :core:test` and `python3 -m unittest
-      tests/mynx/test_proot_usb.py` pass in mynx dev (the spike's
-      proot broke the former).
-   **All six passed on build 40295886564 (entry 142).** Then merge (the docs are in the PR). Later parts: hotplug
+1. **Spikes:** done (entry 141); the spike branch is deleted.
+   Raw USB works through chained calls in proot; Android sees the
+   BOOTSEL drive but calls it damaged and doesn't mount it, so UF2
+   is the app's own writer (or `picotool`).
+2. **Raw USB:** merged (PR #47, entry 142). Its phone tests:
+   `git show 9a4718c:docs/WORKLOG.md`. Later parts: hotplug
    (libudev's monitor: libudev-format messages, sender uid 0, a
    netlink address), and the recipes as hardware allows
    (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
@@ -172,7 +148,7 @@ Moved after the development boards by the maintainer (2026-10-25),
 so the release takes them too. USB serial parts 1-3, Go programs,
 PlatformIO's ESP32 toolchains, the small serial fixes (PR #33, #34,
 #36, #37, #39, #42), the process-limit guide (#45) and services'
-`~/.local/bin` (#46) are tested on the phone, unreleased. Only the
+`~/.local/bin` (#46) and raw USB (#47) are tested on the phone, unreleased. Only the
 maintainer tags (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
 `git show 2eaa373:docs/WORKLOG.md`.
 
@@ -285,6 +261,12 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (143): PR #47 merged
+
+The maintainer merged raw USB (PR #47); this docs-only PR marks it
+merged in "Current status" and "Next" and adds it to the release's
+list. Next: UF2 (see "Next", 0, step 3).
 
 ### 2026-10-26 (142): raw USB rebuilt test-first (PR #47)
 
