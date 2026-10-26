@@ -47,7 +47,7 @@ Commands:
   sound      sound [status] | start | install: the sound device
   usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
-  ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE: Bluetooth LE devices
+  ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
   uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
@@ -850,12 +850,7 @@ def cmd_bt(args, as_json):
         return 0
     if sub == "bind" and 1 <= len(rest) <= 2:
         answer = request("bt-bind", *rest)
-        port = answer["port"]
-        lines = [f"{port['name']:<8} {bt_label(port.get('device'), port['address'])}", f"  {port['path']}"]
-        if port.get("url"):
-            lines.append(f"  {port['url']}")
-        lines.append("The link opens when a program opens the port.")
-        out(as_json, answer, "\n".join(lines))
+        out(as_json, answer, bound_text(answer["port"]))
         return 0
     if sub == "unbind" and len(rest) == 1:
         answer = request("bt-unbind", rest[0])
@@ -865,6 +860,16 @@ def cmd_bt(args, as_json):
         out(as_json, request("bt-settings"), None)
         return 0
     raise Usage(BT_USAGE)
+
+
+def bound_text(port, kind=None):
+    """A port `bt bind` or `ble bind` made: its path and URL."""
+    head = f"{port['name']:<8} {bt_label(port.get('device'), port['address'])}"
+    lines = [f"{head}, {kind}" if kind else head, f"  {port['path']}"]
+    if port.get("url"):
+        lines.append(f"  {port['url']}")
+    lines.append("The link opens when a program opens the port.")
+    return "\n".join(lines)
 
 
 def bt_label(name, address):
@@ -883,7 +888,7 @@ def bt_text(answer):
         if device.get("port"):
             label += f": {device['port']}"
         elif device["type"] == "le":
-            label += ": Bluetooth LE only, no serial"
+            label += ": Bluetooth LE only (mynx ble)"
         lines.append(f"  {label}")
     if answer["enabled"] and not devices:
         lines += ["No paired device. Pair a device in Android's", "Bluetooth settings: mynx bt settings"]
@@ -894,7 +899,8 @@ def bt_text(answer):
             state = f": {port['error']}"
         else:
             state = ", not linked"
-        lines += [f"{port['name']:<8} {port.get('device') or port['address']}{state}"
+        kind = " (BLE UART)" if port["name"].startswith("nus") else ""
+        lines += [f"{port['name']:<8} {port.get('device') or port['address']}{kind}{state}"
                   f"{', in use' if port['in_use'] else ''}",
                   f"  {port['path']}{' (waiting: a program has the URL)' if port.get('waiting') else ''}"]
         if port.get("url"):
@@ -909,7 +915,11 @@ def bt_text(answer):
 BLE_USAGE = ("usage: mynx ble scan [--seconds N] [--name TEXT] [--service UUID] [--all] [--stream]"
              " | services DEVICE | read DEVICE CHAR [--as FORMAT]"
              " | write DEVICE CHAR VALUE [--as FORMAT] [--no-response]"
-             " | notify DEVICE CHAR [--as FORMAT] | connect DEVICE")
+             " | notify DEVICE CHAR [--as FORMAT] | connect DEVICE"
+             " | bind DEVICE [nusN] | unbind PORT|DEVICE")
+
+# The UART services `ble bind` finds, as people know them.
+BLE_UART_KINDS = {"nordic-uart": "Nordic UART", "hm-10": "HM-10"}
 
 # What each subcommand takes: positional arguments, options with a value, bare options.
 BLE_ARGS = {
@@ -924,6 +934,15 @@ BLE_ARGS = {
 
 def cmd_ble(args, as_json):
     sub = args[0] if args else None
+    rest = args[1:]
+    if sub == "bind" and 1 <= len(rest) <= 2 and not any(a.startswith("--") for a in rest):
+        answer = request("ble-bind", *rest)
+        out(as_json, answer, bound_text(answer["port"], BLE_UART_KINDS.get(answer.get("kind"), answer.get("kind"))))
+        return 0
+    if sub == "unbind" and len(rest) == 1 and not rest[0].startswith("--"):
+        answer = request("ble-unbind", rest[0])
+        out(as_json, answer, "Removed " + ", ".join(answer["removed"]))
+        return 0
     if sub not in BLE_ARGS:
         raise Usage(BLE_USAGE)
     count, valued, bare = BLE_ARGS[sub]

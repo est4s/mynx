@@ -2038,7 +2038,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
                              "Paired devices:\n"
                              "  mynx-spp (D4:E9:F4:A2:4A:02): rfcomm0\n"
                              "  HC-05 (98:D3:31:F5:12:34)\n"
-                             "  C0:FF:EE:00:00:01: Bluetooth LE only, no serial\n"
+                             "  C0:FF:EE:00:00:01: Bluetooth LE only (mynx ble)\n"
                              "rfcomm0  mynx-spp, linked, in use\n"
                              "  /dev/serial/rfcomm0\n"
                              "  rfc2217://localhost:2218\n"
@@ -2051,6 +2051,23 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
                              "A serial monitor: mynx usb monitor [PORT]\n")
         self.assertEqual(self.app.requests, [["bt-list"], ["bt-list"]])
         self.assertEqual(json.loads(self.mynx("bt", "--json").stdout), answer)
+
+    def test_bt_lists_ble_uart_ports_with_the_rfcomm_ones(self):
+        ports = [self.bt_port(),
+                 self.bt_port(name="nus0", address="1C:DB:D4:C5:CF:36", device="mynx-ble", tcp=2417, linked=True,
+                              in_use=True)]
+        self.start_app({"bt-list": {"ok": True, "enabled": True, "devices": [self.SPP], "ports": ports}})
+        run = self.mynx("bt")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Paired devices:\n"
+                                     "  mynx-spp (D4:E9:F4:A2:4A:02): rfcomm0\n"
+                                     "rfcomm0  mynx-spp, not linked\n"
+                                     "  /dev/serial/rfcomm0\n"
+                                     "  rfc2217://localhost:2218\n"
+                                     "nus0     mynx-ble (BLE UART), linked, in use\n"
+                                     "  /dev/serial/nus0\n"
+                                     "  rfc2217://localhost:2417\n"
+                                     "A serial monitor: mynx usb monitor [PORT]\n")
 
     def test_bt_with_paired_devices_and_no_port_says_how_to_bind(self):
         self.start_app({"bt-list": {"ok": True, "enabled": True, "devices": [{**self.SPP, "port": None}],
@@ -2351,12 +2368,61 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual((proc.returncode, err), (0, ""))
         self.assertTrue(self.app.cancelled)
 
+    def nus_port(self, **kw):
+        return self.bt_port(**{"name": "nus0", "address": "1C:DB:D4:C5:CF:36", "device": "mynx-ble",
+                               "tcp": 2417, **kw})
+
+    def test_ble_bind_shows_the_port_and_its_kind(self):
+        port = self.nus_port()
+        self.start_app({"ble-bind": {"ok": True, "port": port, "kind": "nordic-uart"}})
+        run = self.mynx("ble", "bind", "mynx-ble")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "nus0     mynx-ble (1C:DB:D4:C5:CF:36), Nordic UART\n"
+                                     "  /dev/serial/nus0\n"
+                                     "  rfc2217://localhost:2417\n"
+                                     "The link opens when a program opens the port.\n")
+        self.app.replies["ble-bind"] = {"ok": True, "port": self.nus_port(name="nus3", device=None, tcp=None),
+                                        "kind": "hm-10"}
+        run = self.mynx("ble", "bind", "1C:DB:D4:C5:CF:36", "nus3")
+        self.assertEqual(run.stdout, "nus3     1C:DB:D4:C5:CF:36, HM-10\n"
+                                     "  /dev/serial/nus3\n"
+                                     "The link opens when a program opens the port.\n")
+        self.assertEqual(self.app.requests, [["ble-bind", "mynx-ble"], ["ble-bind", "1C:DB:D4:C5:CF:36", "nus3"]])
+        self.app.replies["ble-bind"] = {"ok": True, "port": port, "kind": "nordic-uart"}
+        self.assertEqual(json.loads(self.mynx("ble", "bind", "mynx-ble", "--json").stdout),
+                         {"ok": True, "port": port, "kind": "nordic-uart"})
+
+    def test_ble_bind_refused_says_why(self):
+        self.start_app({"ble-bind": {"ok": False, "error": "mynx-c3 has no Nordic UART or HM-10 service"}})
+        run = self.mynx("ble", "bind", "mynx-c3")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("mynx: mynx-c3 has no Nordic UART or HM-10 service", run.stderr)
+
+    def test_ble_unbind_says_what_it_removed(self):
+        self.start_app({"ble-unbind": {"ok": True, "removed": ["nus0"]}})
+        run = self.mynx("ble", "unbind", "mynx-ble")
+        self.assertEqual((run.returncode, run.stdout), (0, "Removed nus0\n"), run.stderr)
+        self.assertEqual(json.loads(self.mynx("ble", "unbind", "nus0", "--json").stdout),
+                         {"ok": True, "removed": ["nus0"]})
+        self.assertEqual(self.app.requests, [["ble-unbind", "mynx-ble"], ["ble-unbind", "nus0"]])
+
+    def test_usb_url_path_and_monitor_take_ble_uart_ports(self):
+        bt = {"ok": True, "enabled": True, "devices": [], "ports": [self.nus_port()]}
+        self.start_app({"usb-list": {"ok": True, "devices": []}, "bt-list": bt})
+        self.assertEqual(self.mynx("usb", "url", "nus0").stdout, "rfc2217://localhost:2417\n")
+        self.assertEqual(self.mynx("usb", "path", "nus0").stdout, "/dev/serial/nus0\n")
+        self.assertEqual(self.mynx("usb", "url").stdout, "rfc2217://localhost:2417\n")
+
+    def test_help_lists_ble_bind(self):
+        self.assertIn("bind DEVICE [nusN] | unbind PORT|DEVICE", self.mynx("help").stdout)
+
     def test_ble_usage(self):
         for args in [(), ("pair",), ("scan", "x"), ("scan", "--seconds"), ("scan", "--stream", "--seconds", "5"),
                      ("scan", "--fast"), ("services",), ("services", "a", "b"), ("read", "a"),
                      ("read", "a", "b", "c"), ("read", "a", "b", "--as"), ("read", "a", "b", "--no-response"),
                      ("write", "a", "b"), ("write", "a", "b", "c", "d"), ("write", "a", "b", "c", "--fast"),
-                     ("notify", "a"), ("notify", "a", "b", "--all"), ("connect",), ("connect", "a", "b")]:
+                     ("notify", "a"), ("notify", "a", "b", "--all"), ("connect",), ("connect", "a", "b"),
+                     ("bind",), ("bind", "a", "b", "c"), ("bind", "a", "--all"), ("unbind",), ("unbind", "a", "b")]:
             run = self.mynx("ble", *args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx ble", run.stderr, args)

@@ -275,6 +275,15 @@ class MonitorTest(unittest.TestCase):
             os.write(fd, b"\x14" + bytes([key]))
             self.expect(b"nothing over Bluetooth")
 
+    def test_over_bluetooth_le_the_lines_and_resets_do_nothing_and_say_so(self):
+        link = os.path.join(self.tmp(), "nus0")
+        os.symlink(self.port_path, link)
+        fd = self.start(link, "--lower")
+        self.assertNotIn(b"DTR", self.opening)
+        for key in b"rbDR":
+            os.write(fd, b"\x14" + bytes([key]))
+            self.expect(b"nothing over Bluetooth")
+
     def tmp(self):
         import tempfile
         d = tempfile.TemporaryDirectory()
