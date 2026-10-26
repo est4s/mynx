@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Debian runs inside the app's process, so its networking (apt, curl, …) needs this. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -27,6 +28,12 @@
          Android 12+, granted with the app before. No scanning: pairing is in Android's Settings. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- mynx ble scans for Bluetooth LE devices; never to find where the phone is. Android 8-11
+         need BLUETOOTH_ADMIN and location (granted and turned on) to scan instead. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="31" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- mynx update opens Android's installer for the APK it downloaded from GitHub
          (and debug builds' mynx install-apk for a CI build). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -35,6 +42,7 @@
     <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
     <!-- The USB serial bridge; phones without USB host still install the app. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
