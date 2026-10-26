@@ -553,8 +553,9 @@ private fun scanFailure(code: Int): String = when (code) {
 }
 
 // The reason a link closed or didn't open: HCI codes, and Android's catch-all 133.
+// A C3 unplugged mid-notify came back as 0, not 8, on the Pixel 10.
 private fun linkStatus(status: Int): String = when (status) {
-    BluetoothGatt.GATT_SUCCESS -> "disconnected"
+    BluetoothGatt.GATT_SUCCESS -> "the device went away or closed the link"
     0x08 -> "the device went out of range (no answer)"
     0x13 -> "the device disconnected"
     0x16 -> "Android closed the link"

@@ -540,7 +540,10 @@ See `docs/ROADMAP.md` "How it works". The details:
   only in the background; in front core matches part of it.
   Permissions: `BLUETOOTH_SCAN` (`neverForLocation`) and `_CONNECT`
   on 31+, location (and it on) below. Built by four subagents in
-  parallel against that contract (work log, entry 151).
+  parallel against that contract (work log, entry 151); every phone
+  test passed with an ESP32-C3 (entry 153, PR #53). A peripheral
+  that vanishes (unplugged) may come back as status 0, not the
+  supervision timeout's 8, so `linkStatus()` words 0 for both.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

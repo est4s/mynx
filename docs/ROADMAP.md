@@ -143,7 +143,7 @@ first.
   (`/dev/serial/rfcomm0`, RFC 2217), through the same bridge. Paired
   in Android's settings, bound with `mynx bt bind`; the link opens
   while a program uses the port, as Linux's `rfcomm bind`.
-- **BLE** *(branch `ble`)*: `mynx ble` scans, connects, reads, writes
+- **BLE** *(PR #53; tested with an ESP32-C3)*: `mynx ble` scans, connects, reads, writes
   and subscribes, with `--json` and streams like `mynx sensor`.
 - **Nordic UART** devices as a serial port (`/dev/serial/nus0`): the
   next PR after BLE.
