@@ -116,15 +116,17 @@ jobs:
             echo "::warning::No release notes: GitHub's API failed"
 
       # Debian's programs load it, so it's built for Debian's glibc, not with the NDK.
-      # Bounded and visible: the runner's apt has hung here, silently, for good
-      # (its lock or a mirror), where the step takes seconds.
+      # Built in Debian's own image (arm64, through QEMU, as the rootfs) with its
+      # gcc, so against trixie's glibc, and from Debian's mirrors: the runner's
+      # Ubuntu mirror hung this step for good (2026-10-26, PR #52).
       - name: Build the serial preload library
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
-          sudo apt-get install -y -qq -o DPkg::Lock::Timeout=120 -o Acquire::Retries=3 \
-            -o Acquire::http::Timeout=30 gcc-aarch64-linux-gnu
           mkdir -p build
-          scripts/build-preload.sh build/libmynx-serial.so
+          docker run --rm --platform linux/arm64 -v "$PWD:/src" -w /src debian:trixie sh -ec '
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends gcc libc6-dev >/dev/null
+            CC=gcc scripts/build-preload.sh build/libmynx-serial.so'
 
       - name: Add the app's tools (mynx, editors, themes, release notes)
         run: |

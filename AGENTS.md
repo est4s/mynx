@@ -375,8 +375,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   `LD_PRELOAD` inside `env -i` only (never proot's own environment:
   Android's linker), and only when the tools have the file and
   `serial-preload` is on (`serialPreload()`). Built for Debian's glibc,
-  not with the NDK: CI cross-compiles with `gcc-aarch64-linux-gnu` and
-  `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
+  not with the NDK: CI builds it in Debian's arm64 image with its gcc
+  (QEMU, as the rootfs; the runner's Ubuntu mirror hung the old cross
+  compiler's install) and `pack-tools.sh` takes it as `PRELOAD`. Tests build it with
   `-DMYNX_SERIAL_TEST`, which refuses those calls itself on a port
   (a desktop allows them) and reads `MYNX_SERIAL_DIR`.
 - **Serial port names** (`core/.../SerialNames.kt`; agent's design,
