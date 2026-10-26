@@ -640,7 +640,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`prootLaunch(cwdFile = …)`).
 - App data paths come in two spellings (`/data/user/0/<app>` from
   `filesDir`, `/data/data/<app>` from the kernel). Don't compare paths by
-  prefix across the two.
+  prefix across the two. proot gives a bind's host path its real
+  spelling, so the paths an extension sees are `/data/data/…` while
+  the variables the app passes say `/data/user/0/…`: mynx_usb
+  resolves its socket's folder (`realpath`) before comparing (its
+  first phone run missed every open).
 - **Don't `mv` a git repo (or anything with hard links) in proot.**
   proot fakes hard links with symlinks to `.l2s.*` files holding the
   absolute path, so a moved repo's loose objects all break ("bad object

@@ -33,6 +33,7 @@ class DevicesTest(unittest.TestCase):
         cls.lib = ctypes.CDLL(library)
         cls.lib.mynx_usb_device.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
         cls.lib.mynx_usb_result.argtypes = [ctypes.c_char_p, ctypes.c_long, ctypes.c_int]
+        cls.lib.mynx_usb_real_socket.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
 
     @classmethod
     def tearDownClass(cls):
@@ -72,6 +73,32 @@ class DevicesTest(unittest.TestCase):
 
     def test_too_small_a_buffer(self):
         self.assertIsNone(self.device(OWN + "/bus/usb/001/002", size=7))
+
+    def real_socket(self, socket, size=4096):
+        out = ctypes.create_string_buffer(size)
+        if self.lib.mynx_usb_real_socket(socket.encode(), out, size) != 0:
+            return None
+        return out.value.decode()
+
+    def test_the_socket_is_named_by_its_folders_real_path(self):
+        # proot gives a bind's host path its real spelling (Android's
+        # /data/user/0 is a link to /data/data), and the app names the
+        # socket the other way: the extension compares real paths.
+        real = os.path.realpath(tempfile.mkdtemp())
+        link = real + "-link"
+        os.symlink(real, link)
+        try:
+            self.assertEqual(self.real_socket(link + "/.ctl"), real + "/.ctl")
+            self.assertEqual(self.real_socket(real + "/.ctl"), real + "/.ctl")
+        finally:
+            os.unlink(link)
+            os.rmdir(real)
+
+    def test_a_socket_whose_folder_is_missing_keeps_its_name(self):
+        self.assertEqual(self.real_socket("/nonexistent/x/.ctl"), "/nonexistent/x/.ctl")
+
+    def test_a_socket_too_long_for_the_buffer(self):
+        self.assertIsNone(self.real_socket("/nonexistent/x/.ctl", size=8))
 
     def test_ok_with_an_fd_gives_the_fd(self):
         self.assertEqual(self.result(b"ok\n", 7), 7)

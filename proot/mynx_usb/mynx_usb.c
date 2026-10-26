@@ -193,7 +193,10 @@ int mynx_usb_callback(Extension *extension, ExtensionEvent event, intptr_t data1
 		Config *config = talloc_zero(extension, Config);
 		if (config == NULL || data1 == 0)
 			return -1;
-		config->socket = talloc_strdup(config, (const char *) data1);
+		char socket[PATH_MAX];
+		if (mynx_usb_real_socket((const char *) data1, socket, sizeof socket) != 0)
+			return -1;
+		config->socket = talloc_strdup(config, socket);
 		extension->config = config;
 		extension->filtered_sysnums = filtered_sysnums;
 		return 0;

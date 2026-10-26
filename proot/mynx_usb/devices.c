@@ -2,6 +2,8 @@
  * (tests/mynx/test_proot_usb.py). */
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -50,4 +52,24 @@ int mynx_usb_result(const char *reply, long length, int fd)
 	if (error <= 0 || error > 4095 || strcmp(rest, "\n") != 0)
 		return -EIO;
 	return (int) -error;
+}
+
+int mynx_usb_real_socket(const char *socket, char *out, size_t size)
+{
+	/* The folder's real path, so it matches proot's translated paths;
+	 * as given when it can't be resolved.  */
+	const char *slash = strrchr(socket, '/');
+	char folder[PATH_MAX], real[PATH_MAX];
+	int written;
+	if (slash != NULL && (size_t) (slash - socket) < sizeof folder) {
+		memcpy(folder, socket, slash - socket);
+		folder[slash - socket] = 0;
+		if (realpath(folder, real) != NULL)
+			written = snprintf(out, size, "%s%s", real, slash);
+		else
+			written = snprintf(out, size, "%s", socket);
+	} else {
+		written = snprintf(out, size, "%s", socket);
+	}
+	return written < 0 || (size_t) written >= size ? -1 : 0;
 }
