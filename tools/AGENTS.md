@@ -82,6 +82,7 @@ and applies them. See "Changing settings" below.
 | Built-in key bars and themes, to read or copy | `/opt/mynx/keybars`, `/opt/mynx/themes` |
 | Licence texts of what the app bundles (`mynx about`) | `/opt/mynx/licenses` |
 | USB serial ports (boards, adapters) | `/dev/serial/ttyUSB0`, `rfc2217://localhost:2217` (see "USB serial devices") |
+| Other USB devices, for libusb tools | `/dev/bus/usb/BBB/DDD`, `/sys/bus/usb/devices` (see "Raw USB devices") |
 
 `/opt/mynx` belongs to the app and is replaced on every app
 update; don't change it. Its `bin` comes first on the PATH. Your changes
@@ -146,8 +147,8 @@ their own.
 | `mynx service remove NAME` | stop a service and remove it from `services.conf` |
 | `mynx service autostart NAME on\|off` | whether a service starts when the app starts (its `autostart` line in `services.conf`); it doesn't start or stop it now |
 | `mynx service adopt NAME` | turn this tab into the unsaved service NAME, as it runs; `mynx service save NAME [--command CMD]` saves it to `services.conf` |
-| `mynx usb [list]` | USB serial devices: their ports' `/dev/serial` paths and `rfc2217://` URLs, or why they have none (see "USB serial devices") |
-| `mynx usb allow [DEVICE]` | ask Android to let the app use a USB serial device (the app must be on screen) |
+| `mynx usb [list]` | USB devices: serial ones' `/dev/serial` paths and `rfc2217://` URLs, or why they have none (see "USB serial devices"); others' `/dev/bus/usb` node (see "Raw USB devices") |
+| `mynx usb allow [DEVICE]` | ask Android to let the app use a USB device (the app must be on screen) |
 | `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …` |
 | `mynx usb monitor [PORT] [--baud N] [--lower]` | a serial monitor on a port, in this tab (the `serial` app): Ctrl+T then a key resets the board, changes the baud, … (see "USB serial devices") |
 | `mynx fix-links DIR…` | repair the hard links an installer broke by moving the folder it unpacked (arduino-cli's toolchains: see "USB serial devices") |
@@ -642,7 +643,8 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - `mynx usb` lists the devices with their ports, paths and URLs;
   `mynx usb url` and `mynx usb path` print the only port's (or
   `PORT`'s) for scripts. `--json` gives `devices`: `id`, `ids`
-  (vendor:product), `manufacturer`, `product`, `serial`, `driver`,
+  (vendor:product), `manufacturer`, `product`, `serial`, `driver`
+  (null for a device no serial driver drives: see "Raw USB devices"),
   `allowed`, `error` and `ports` (`name`, `path`, `url`, `tcp_port`,
   `in_use`, and `waiting`: its file is open but the URL has the port).
 - The tools: `apt install picocom` (or `minicom`, `screen`),
@@ -723,6 +725,50 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   can't even be listed ("Operation not permitted"). `mynx fix-links
   ~/.arduino15` makes each broken name a copy of its file. `--json`
   gives `fixed` (how many, by folder).
+
+### Raw USB devices
+
+Tools that drive a USB device themselves, through libusb or usbfs,
+work too: `picotool` for a Raspberry Pi Pico (RP2040, RP2350) in
+BOOTSEL, `dfu-util` for STM32's DFU bootloader, OpenOCD and probe-rs
+with a debug probe, `lsusb`, pyusb, your own libusb programs. Android
+doesn't let apps open `/dev/bus/usb`, so the app opens the device
+through Android and hands it to the program that opens its node.
+
+- **Allowing it:** as for serial devices: OK on Android's "open mynx?"
+  (it asks for Raspberry Pi's boards and STM32's DFU bootloader), or
+  `mynx usb allow DEVICE` (`vendor:product`, as `mynx usb` shows)
+  with the app on screen, for any other. `mynx usb` lists it as `raw
+  USB` with its node; `--json` gives it `driver: null`.
+- **Finding it:** each allowed device is in `/sys/bus/usb/devices`
+  (laid out as Linux's sysfs: IDs, strings, descriptors, a folder per
+  interface) with its node `/dev/bus/usb/BBB/DDD`, so tools find it
+  by themselves: `lsusb`, `lsusb -v -d 2e8a:0003`, libusb's device
+  list. A serial device is there too, so a tool can use its other
+  interfaces (an ESP32-C3's JTAG) while its port is served (not tried
+  yet). It's part
+  of `serial-names` (on): Debian then has a `/sys/bus` of its own,
+  with the phone's other buses (`platform`, `cpu`, …) in it.
+- **A board that restarts is a new device:** after flashing,
+  `picotool load -x` and `dfu-util` boards come back with a new
+  address, and Android asks again; tick "always" once per board so it
+  doesn't. A program that's running doesn't see devices come and go:
+  run it again.
+- **Recipes:**
+  - **Pico** (`apt install picotool`): hold BOOTSEL while plugging it
+    in, then `picotool info -a`; `picotool load -x firmware.uf2`
+    flashes it, checks it and starts it (MicroPython's UF2 then gives
+    a serial port, `ttyACM0`). Android sees the Pico's drive but says
+    it's damaged and doesn't mount it: flash with `picotool`.
+  - **STM32 DFU** (not tried yet; `apt install dfu-util`): `dfu-util -l`, then
+    `dfu-util -a 0 -s 0x08000000:leave -D firmware.bin`.
+  - **Debug probes** (not tried yet): Debian's OpenOCD (`apt install openocd`) with a
+    CMSIS-DAP probe (a Pico running Raspberry Pi's debugprobe):
+    `openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg`. The
+    ESP32-C3's built-in JTAG needs Espressif's `openocd-esp32`
+    (arm64 builds on its GitHub releases): Debian's has no
+    `esp_usb_jtag`.
+- The app's log for it: `/tmp/.mynx/serial/usb.log`.
 
 ### Themes and colours
 

@@ -64,6 +64,10 @@ are in git history: the full log up to entry 92 is
   gives them for Android 12-13.
 - **Services and `~/.local/bin`:** fixed and confirmed on the phone
   (PR #46, entry 139). Not released yet.
+- **Raw USB:** the spike worked on the phone with an RP2040 Zero
+  (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
+  rebuilt test-first in PR #47 (draft, entry 142), its phone test
+  next.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -74,8 +78,93 @@ are in git history: the full log up to entry 92 is
 
 ### 0. Development boards (suggested order; the maintainer picks)
 
-1. UF2 boards and raw USB (`libusb`): the roadmap's last items, a
-   milestone of their own. Plan it with the maintainer first.
+The roadmap's last items, planned with the maintainer 2026-10-25
+(entry 140). **Maintainer's decisions:** raw USB first, then UF2;
+drives only for flashing UF2 (no general read/write of USB drives,
+e.g. CircuitPython's CIRCUITPY). Test hardware: an **RP2040 Zero**
+(BOOTSEL: a UF2 drive and the PICOBOOT interface `picotool` uses)
+and the **ESP32-C3** (its USB-Serial-JTAG: OpenOCD over raw USB,
+beside its serial port on the same device).
+
+**Design (agent's proposal, change it if the maintainer objects):**
+Android won't let apps open `/dev/bus/usb/*` (SELinux: no `open` on
+`usb_device`), but the fd from `UsbManager.openDevice()` takes the
+usbfs ioctls libusb sends (Termux's `termux-usb` +
+`libusb_wrap_sys_device`). Aim: unpatched tools work.
+- **The app hands out fds:** a Unix socket (under the ports folder,
+  e.g. `/dev/bus/usb/.ctl`); per request `BBB/DDD` it opens the
+  device again and sends a fresh fd with `SCM_RIGHTS`, so each
+  program has its own (usbfs claims are per fd, so the serial
+  bridge's CDC interface and OpenOCD's JTAG interface coexist).
+- **Debian sees devices:** placeholder `/dev/bus/usb/BBB/DDD` in the
+  own `/dev`, and `/sys/bus/usb/devices/B-P` with `descriptors`
+  (`getRawDescriptors()`), `busnum`, `devnum`, `speed`, `idVendor`,
+  `idProduct`, strings, so libusb, pyusb and `nusb` enumerate
+  without opening (as `/sys/class/tty`, `SerialNames.kt`). Logic in
+  core.
+- **proot's `mynx_usb` extension:** `open`/`openat` of
+  `/dev/bus/usb/BBB/DDD` becomes chained `socket` + `connect` +
+  `recvmsg` (as mynx_serial's chained `bind`), returning the
+  received fd. proot, not the preload, because probe-rs's `nusb`
+  (rustix) and Go make raw system calls. Decisions natively tested
+  (`tests/mynx/test_proot_usb.py`), register moving on the phone.
+- **Hotplug:** the uevent stand-in also sends the kernel's `usb`
+  device `add`/`remove` messages (`SerialUevents` grows).
+- **Permission and listing:** `mynx usb` lists every allowed USB
+  device, not just serial ones; `mynx usb allow` takes any; the
+  device filter adds known boards (RP2040 BOOTSEL `2e8a:0003`, STM32
+  DFU `0483:df11`, ESP USB-JTAG `303a:1001` is there already).
+- **Risks:** a device that resets or reboots (picotool, DFU) comes
+  back as a new one and needs Android's permission again ("always"
+  once); a phone whose kernel binds a driver to an interface (tools
+  must detach it, `USBDEVFS_DISCONNECT`); 4.19 kernels have no
+  `pidfd_getfd`/seccomp `addfd`, hence the chained calls.
+- **UF2, after raw USB:** first find out whether the phone mounts
+  the BOOTSEL drive itself (Android's OTG storage) and the app can
+  write it; if so, show it in Debian as `/media/LABEL`, so `cp
+  fw.uf2 /media/RPI-RP2/` and tools that look for `INFO_UF2.TXT`
+  work. Else (or as well) `mynx uf2 flash FILE`: the app writes the
+  file's 512-byte blocks with SCSI `WRITE(10)` past the FAT area
+  over bulk-only transport (UF2 bootloaders take blocks at any
+  sector), so no FAT library. A Pico also flashes through
+  `picotool` once raw USB works.
+
+**Order:**
+1. **Spikes** (branch `spike-raw-usb`, thrown away): (a) proot
+   passes a received fd into a tracee through chained calls, and
+   libusb's `lsusb`/`picotool info` list from the stand-ins and talk
+   to the RP2040 Zero: **done, it works on the phone (entry 141)**;
+   (b) Android sees the BOOTSEL drive but calls it damaged and
+   doesn't mount it, so UF2 is the app's own writer (or `picotool`).
+   The spike branch stays until PR #47 is merged, then goes.
+2. **Raw USB, test-first: PR #47** (branch `raw-usb`, draft; entry
+   142): the stand-ins, the fd socket, `mynx_usb`, the own
+   `/sys/bus` with the phone's buses, `mynx usb` listing every
+   device, the guide's "Raw USB devices". **Phone test next** (the
+   agent runs most of it from mynx dev's Debian; the maintainer
+   plugs and taps), with PR #47's build installed:
+   1. The RP2040 Zero in BOOTSEL (hold BOOT while plugging; it runs
+      MicroPython now), OK on "open mynx dev": `mynx usb` shows `RP2
+      Boot (2e8a:0003): raw USB` and its node.
+   2. `picotool info -a`, `lsusb -v -d 2e8a:0003`, pyusb reading a
+      string; reading the node gives the descriptors from byte 0
+      (the seek fix).
+   3. `picotool load -x` MicroPython's UF2: it comes back as
+      `ttyACM0` (Android asks again: tick "always").
+   4. `ls /sys/bus` shows the phone's buses (`platform`, `cpu`, …)
+      beside `usb`, and `ls /sys/bus/platform/devices` lists.
+   5. A device not in the filter (any USB stick, mouse, keyboard):
+      `mynx usb` says "not allowed", `mynx usb allow IDS` asks, and
+      then `lsusb` lists it at once.
+   6. `./gradlew :core:test` and `python3 -m unittest
+      tests/mynx/test_proot_usb.py` pass in mynx dev (the spike's
+      proot broke the former).
+   Then merge (the docs are in the PR). Later parts: hotplug
+   (libudev's monitor: libudev-format messages, sender uid 0, a
+   netlink address), and the recipes as hardware allows
+   (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
+   the C3, `probe-rs`).
+3. **UF2**, as the spike decides.
 
 ### Then, release v0.3.0 (the maintainer's)
 
@@ -196,6 +285,135 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (142): raw USB rebuilt test-first (PR #47)
+
+The maintainer said "start the rebuild" after the spike's phone
+results (entry 141, below). Branch `raw-usb` from `main`, draft PR
+#47; CI builds it. Commits, each test-first:
+- **proot's `mynx_usb`** (203f7fb), then **only nodes beside the
+  app's socket** (7dacdf2): core's tests, run in mynx dev under the
+  spike's proot, failed with ENODEV, since their temp
+  `…/dev/bus/usb/001/004` ended like a device node. The test now
+  uses `own-dev`, so it also passes under the spike's build.
+- **core's stand-in** (67080a3, `writeUsbDevices`, as the spike's).
+- **An own `/sys/bus` with the phone's buses** (2dfcc1c):
+  `HOST_BUSES` the phone has, placeholders and binds as the own
+  `/dev`'s; the probe now takes host paths for both.
+- **The app** (68bebf3): `UsbFds` seeks the fd to 0 (entry 141's
+  finding) and follows Android's attach, detach and permission
+  broadcasts and the app's USB refresh, instead of the spike's
+  polling every second. Device filter: Raspberry Pi (all of
+  `2e8a`), STM32 DFU (`0483:df11`).
+- **`mynx usb`** (f460984): every device; one with no serial driver
+  has `driver: null` and shows its node ("raw USB"); `mynx usb
+  allow` takes any; its answer waits for the stand-in.
+- **Docs:** the guide's "Raw USB devices" (DFU, OpenOCD and sharing
+  with a served serial port marked "not tried yet"), AGENTS.md
+  (Raw USB, two lessons), ROADMAP, README.
+- Hotplug left for later (see "Next", 0).
+- A timing test (`test_audio_record_until_ctrl_c_says_what_it_saved`)
+  failed once in the full suite on the phone and passed alone.
+
+### 2026-10-25 (141): raw USB spike (branch `spike-raw-usb`)
+
+Overnight, the maintainer asleep. Spike 1(a) of "Next", 0, built;
+CI's harness passes. **On the phone (2026-10-26, Pixel 10, run
+40239371346): it works.** An RP2040 Zero in BOOTSEL: `picotool info
+-a` reads it (`RP2040`, `B2`); libusb lists it; `lsusb -v` and pyusb
+open it and read its strings (control transfers); the usbfs ioctl
+(`CONNECTINFO`) works on the passed fd. The fd keeps `O_CLOEXEC`, a
+missing device gives ENODEV (from the app) or ENOENT (no bus
+folder: proot's own lookup fails first, the extension never sees it).
+- **Phone finding:** the fd came at offset 73, the end:
+  `openDevice()` reads the descriptors through it, and the copy sent
+  shares the offset, so a program reading the node as on Linux got 0
+  bytes. The app now seeks the copy back to 0 before sending (not yet
+  on the phone; libusb, lsusb and picotool read sysfs and didn't
+  mind).
+- **`picotool load -x`** (MicroPython v1.24.1's `RPI_PICO` UF2,
+  666 KB): flashed, verified and rebooted in 6 s. The board came back
+  as a new device (`001/003`, `2e8a:0005`); Android's permission
+  went from no to yes 3 s later (asked again), and the serial bridge
+  gave it `ttyACM0`: the REPL over `rfc2217://` answered "Raspberry
+  Pi Pico with RP2040", and `lsusb` lists it.
+- **Spike 1(b) answer, in part:** with the board plugged in, Android
+  says "damaged USB storage": it sees the BOOTSEL drive but won't
+  mount it (the RP2040's FAT). So UF2 needs the app's own writer
+  (`mynx uf2 flash`) or `picotool load`, not Android's mount.
+- **proot's `mynx_usb`** (`proot/mynx_usb/`, `MYNX_USB_SOCKET`):
+  an open of `…/dev/bus/usb/BBB/DDD` becomes chained `socket`,
+  `connect`, `write`, `recvmsg`, `close` made by the program, so the
+  app's fd lands in it; the program gets the fd, or the app's errno
+  (EACCES not allowed, ENODEV gone), or EIO with no app. Memory below
+  the stack pointer, as mynx_serial. Only a device's open asks for the
+  exit stop (`sysexit_pending`, as link2symlink): with
+  `FILTER_SYSEXIT` every open in Debian would stop twice. Decisions in
+  `devices.c`, tested natively (`test_proot_usb.py`).
+- **The app** (`UsbFds.kt`, spike): serves fds on
+  `filesDir/dev/bus/usb/.ctl` (Debian's `/dev/bus/usb/.ctl`), peer uid
+  checked, a fresh `openDevice()` per request, ours closed once sent;
+  polls the devices once a second and writes the stand-in (core's
+  `writeUsbDevices`, tested) for those it may use. Raspberry Pi's
+  vendor ID added to the device filter.
+- **Found while building it:**
+  - Debian's libusb is built with udev: it lists devices through
+    libudev, which reads `/sys/bus/usb/devices/*/uevent` (DEVTYPE,
+    DEVNAME) and the `subsystem` link. No MAJOR/MINOR in `uevent`:
+    libudev's enumerator skips a device with a device number and no
+    udev database entry (`match_initialized`, compat mode).
+  - libudev **refuses device folders not on a real sysfs**
+    (`fd_is_fs_type(SYSFS_MAGIC)`) unless
+    `SYSTEMD_DEVICE_VERIFY_SYSFS=0`: `prootLaunch` sets it with the
+    stand-in. Later maybe: proot answering `fstatfs` there instead.
+  - libudev finds `usb` by **listing `/sys/bus`**, which Android
+    refuses (the folders can be stat'ed, not listed), so Debian gets
+    a `/sys/bus` of its own (`filesDir/sys-bus`, with only `usb` in
+    the spike). The real version should bind the phone's bus folders
+    into it (as `HOST_DEVICES` in the own `/dev`): `platform`, `cpu`,
+    `iio`, `event_source`, … exist here.
+  - `libusb_init` already works under mynx (the uevent stand-in),
+    and `lsusb` works without udev's hwdb ("unable to initialize usb
+    spec" is only about names; strings come from sysfs).
+  - probe-rs lists with Rust's nusb, which reads sysfs itself: the
+    device's attributes and **a folder per interface** (`1-4:1.0`,
+    `bInterfaceNumber`, class, and the `interface` string it finds
+    CMSIS-DAP by), so the stand-in has them (first configuration,
+    first settings; names from `UsbInterface.getName()`). nusb opens
+    with raw system calls (rustix), which only proot can catch.
+  - Not yet: hotplug. libusb with udev keeps its device list from
+    udev monitor messages (libudev's format, sender uid 0, a netlink
+    sender address), so a device that comes back in the same process
+    isn't seen; a new process lists afresh. Fine for picotool,
+    dfu-util and OpenOCD runs; later for `--watch` tools.
+  - Debian's OpenOCD 0.12 has no `esp_usb_jtag` (the C3's built-in
+    JTAG): that needs Espressif's `openocd-esp32` (arm64 builds on
+    its GitHub releases).
+- **CI harness** (`tests/spike/`, `.github/workflows/spike-usb.yml`,
+  `ubuntu-24.04-arm`): builds proot natively (no 32-bit loader:
+  `HAS_LOADER_32BIT=`), runs it as the app does with a stand-in app
+  (`fake-app.py`) and checks from inside Debian (`usb-check.py`). The
+  runner's kernel has no `dummy_hcd`, so a file with an RP2040's
+  descriptors stands in for the device: all passes (open through the
+  extension, descriptors, `O_CLOEXEC`, errors, libusb's list, `lsusb`,
+  `lsusb -v` and pyusb opening it) but the usbfs ioctls, which only
+  the phone can answer.
+- **Phone test** (APK: `Download/mynx-dev-40239371346.apk`, run
+  40239371346 of `gh workflow run build.yml --ref spike-raw-usb`;
+  installs as mynx dev). In mynx dev's Debian: `apt
+  install usbutils python3-usb picotool curl`, then `curl -fsSLO
+  https://raw.githubusercontent.com/est4s/mynx/spike-raw-usb/tests/spike/usb-check.py`.
+  Plug the RP2040 Zero in holding BOOT (OK on "open mynx dev"), open
+  a new tab: `python3 usb-check.py 2e8a:0003` (also runs `picotool
+  info -a` and shows the app's log, `/tmp/.mynx/serial/usb-fds.log`),
+  then `lsusb -v -d 2e8a:0003`. Note too whether Android shows the
+  drive (spike 1(b)).
+- Commits on `spike-raw-usb` (66160cf … this one).
+
+### 2026-10-25 (140): UF2 and raw USB planned
+
+- Planned the development boards milestone with the maintainer;
+  the plan and decisions are in "Next", 0. Nothing built yet.
 
 ### 2026-10-25 (139): services get `~/.local/bin` (branch `service-path`)
 

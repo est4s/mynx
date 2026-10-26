@@ -119,10 +119,17 @@ cable, using standard tools.
 - PlatformIO's ESP32 toolchains install and build (PR #39): proot's
   `getdents` said a faked hard link is a symlink while `readlink`
   failed on it; a proot extension now gives its file's type.
+- **Raw USB** *(PR #47; the spike tested with an RP2040 Zero)*:
+  tools that drive a device themselves (`picotool`, `lsusb`, pyusb,
+  `dfu-util`, OpenOCD, probe-rs) open `/dev/bus/usb/BBB/DDD` and find
+  devices in `/sys/bus/usb` as on Linux. The app opens the device
+  through Android and hands the fd to the program (a proot extension
+  of ours), so unpatched tools work, Rust and Go ones too. `picotool
+  load` flashes a Pico. Later: devices coming and going while a tool
+  runs.
 - **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's
-  drive. **Raw USB** (STM32 DFU, `picotool`, CMSIS-DAP probes for
-  OpenOCD and probe-rs) through `libusb` (`libusb_wrap_sys_device` on
-  the fd Android hands the app).
+  drive. Android sees the drive but won't mount it (an RP2040's shows
+  as damaged), so the app writes the UF2 itself (`mynx uf2 flash`).
 
 ### Bluetooth
 Android doesn't let apps reach the Bluetooth hardware, so BlueZ can't
