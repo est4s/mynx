@@ -56,7 +56,8 @@ sensors, microphone, speaker and flashlight.
   CP210x, FTDI, PL2303 and native USB (CDC ACM). Tools that drive a
   device themselves over USB work too: `picotool` flashes a Raspberry
   Pi Pico, and `lsusb`, pyusb and other libusb tools find and open
-  devices.
+  devices. `mynx uf2 flash` puts a UF2 file on a board's bootloader
+  drive, which Android won't mount.
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
   and packages survive app updates.
 - **Tabs** that keep running in the background and come back when you

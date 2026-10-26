@@ -127,9 +127,10 @@ cable, using standard tools.
   of ours), so unpatched tools work, Rust and Go ones too. `picotool
   load` flashes a Pico. Later: devices coming and going while a tool
   runs.
-- **UF2 boards** (Raspberry Pi Pico, …): copy firmware to the board's
-  drive. Android sees the drive but won't mount it (an RP2040's shows
-  as damaged), so the app writes the UF2 itself (`mynx uf2 flash`).
+- **UF2 boards** *(branch `uf2`; tested with an RP2040 Zero)*: copy
+  firmware to the board's drive. Android sees the drive but won't
+  mount it (an RP2040's shows as damaged), so `mynx uf2 flash` writes
+  the UF2 itself, over raw USB.
 
 ### Bluetooth
 Android doesn't let apps reach the Bluetooth hardware, so BlueZ can't

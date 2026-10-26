@@ -151,6 +151,8 @@ their own.
 | `mynx usb allow [DEVICE]` | ask Android to let the app use a USB device (the app must be on screen) |
 | `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …` |
 | `mynx usb monitor [PORT] [--baud N] [--lower]` | a serial monitor on a port, in this tab (the `serial` app): Ctrl+T then a key resets the board, changes the baud, … (see "USB serial devices") |
+| `mynx uf2 [list]` | the UF2 bootloader drives plugged in (a Pico in BOOTSEL, …), with the board each says it is (see "Raw USB devices") |
+| `mynx uf2 flash FILE [DEVICE]` | flash a UF2 file onto a board's bootloader drive, which Android won't mount; DEVICE is `vendor:product` or its node |
 | `mynx fix-links DIR…` | repair the hard links an installer broke by moving the folder it unpacked (arduino-cli's toolchains: see "USB serial devices") |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
@@ -755,11 +757,21 @@ through Android and hands it to the program that opens its node.
   doesn't. A program that's running doesn't see devices come and go:
   run it again.
 - **Recipes:**
+  - **UF2 boards** (a Pico in BOOTSEL, boards with TinyUF2 or
+    Adafruit's UF2 bootloader): Android sees the bootloader's drive
+    but says it's damaged and doesn't mount it, so copying the file
+    to it isn't possible; `mynx uf2 flash firmware.uf2` writes it to
+    the drive itself, and the board starts it (MicroPython's UF2 then
+    gives a serial port, `ttyACM0`). `mynx uf2` lists the drives and
+    the board each says it is (its `INFO_UF2.TXT`). It only writes to
+    a drive with that file, so a USB stick is never touched, and it
+    refuses a file for another chip (an RP2350's on an RP2040) before
+    writing. `--json` gives `label`, `board`, `model`, `blocks`,
+    `bytes` and `seconds`. Boards other than Raspberry Pi's need
+    `mynx usb allow vendor:product` first.
   - **Pico** (`apt install picotool`): hold BOOTSEL while plugging it
     in, then `picotool info -a`; `picotool load -x firmware.uf2`
-    flashes it, checks it and starts it (MicroPython's UF2 then gives
-    a serial port, `ttyACM0`). Android sees the Pico's drive but says
-    it's damaged and doesn't mount it: flash with `picotool`.
+    flashes it, checks it and starts it, as `mynx uf2 flash` does.
   - **STM32 DFU** (not tried yet; `apt install dfu-util`): `dfu-util -l`, then
     `dfu-util -a 0 -s 0x08000000:leave -D firmware.bin`.
   - **Debug probes** (not tried yet): Debian's OpenOCD (`apt install openocd`) with a

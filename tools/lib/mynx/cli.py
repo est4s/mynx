@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.parse
 
-from . import agents, links, notes
+from . import agents, links, notes, uf2
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
@@ -46,6 +46,7 @@ Commands:
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
   usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
+  uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
@@ -834,6 +835,90 @@ def usb_text(devices):
     if any(device["ports"] for device in devices):
         lines.append("A serial monitor: mynx usb monitor [PORT]")
     return "\n".join(lines)
+
+
+UF2_USAGE = "usage: mynx uf2 [list] | flash FILE [DEVICE]"
+
+
+def cmd_uf2(args, as_json):
+    sub, rest = (args[0], args[1:]) if args else ("list", [])
+    try:
+        if sub == "list" and not rest:
+            found = [uf2_board(drive) for drive in uf2.find_drives()]
+            lines = [f"{d['label'] or d['ids']}  {d['product'] or 'USB drive'} ({d['ids']})"
+                     + (f": {d['model']}" if d["model"] else "") + (f"\n  {d['error']}" if d["error"] else "")
+                     for d in found]
+            out(as_json, {"ok": True, "drives": found},
+                "\n".join(lines) or "No UF2 drive. Put the board in its bootloader (on a Pico,\n"
+                                    "hold BOOTSEL while plugging it in).")
+            return 0
+        if sub == "flash" and len(rest) in (1, 2):
+            return uf2_flash(rest[0], rest[1] if len(rest) > 1 else None, as_json)
+    except uf2.Uf2Error as e:
+        raise Failure(str(e))
+    raise Usage(UF2_USAGE)
+
+
+def uf2_open(drive):
+    try:
+        return uf2.UsbfsPipe(drive.node, drive.interface)
+    except OSError as e:
+        raise uf2.Uf2Error(f"can't open {drive.node}: {e.strerror}; is it allowed? (mynx usb)")
+
+
+def uf2_board(drive):
+    """A drive with what its INFO_UF2.TXT says, or why it couldn't be read."""
+    found = {"ids": drive.ids, "product": drive.product, "node": drive.node,
+             "label": None, "board": None, "model": None, "error": None}
+    try:
+        pipe = uf2_open(drive)
+        try:
+            info = uf2.read_drive(pipe)
+            found.update(label=info.label, board=info.board, model=info.model)
+        finally:
+            pipe.close()
+    except (uf2.Uf2Error, OSError) as e:
+        found["error"] = str(e)
+    return found
+
+
+def uf2_flash(path, which, as_json):
+    try:
+        with open(path, "rb") as f:
+            image = uf2.read_uf2(f.read())
+    except OSError as e:
+        raise Failure(f"{path}: {e.strerror}")
+    except uf2.Uf2Error as e:
+        raise Failure(f"{path}: {e}")
+    drive = uf2.pick_drive(uf2.find_drives(), which)
+    pipe = uf2_open(drive)
+    started = time.monotonic()
+    shown = sys.stderr.isatty() and not as_json
+    try:
+        info = uf2.read_drive(pipe)
+        name = info.label or drive.ids
+        if not as_json:
+            print(f"{name} ({drive.product or 'USB drive'}, {drive.ids})" + (f": {info.model}" if info.model else ""))
+            families = ", ".join(uf2.family_names(image.families)) or "no family"
+            print(f"{families}, {image.blocks} blocks ({size_text(len(image.data))})")
+
+        def progress(done):
+            if shown:
+                print(f"\rwriting... {done}/{image.blocks}", end="", file=sys.stderr, flush=True)
+
+        try:
+            uf2.flash(pipe, info, image, progress)
+        finally:
+            if shown:
+                print(file=sys.stderr)
+    finally:
+        pipe.close()
+    seconds = round(time.monotonic() - started, 1)
+    out(as_json, {"ok": True, "file": os.path.abspath(path), "node": drive.node, "ids": drive.ids,
+                  "label": info.label, "board": info.board, "model": info.model,
+                  "blocks": image.blocks, "bytes": len(image.data), "seconds": seconds},
+        f"Flashed in {seconds} s; the board restarts.")
+    return 0
 
 
 def cmd_fix_links(args, as_json):
@@ -1920,7 +2005,7 @@ COMMANDS = {
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
     "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb,
-    "fix-links": cmd_fix_links,
+    "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 

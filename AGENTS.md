@@ -471,6 +471,21 @@ See `docs/ROADMAP.md` "How it works". The details:
   attach, detach and permission broadcasts and the app's USB refresh;
   `usb-allow` answers after it. **Not yet:** hotplug while a program
   runs (libudev's monitor wants libudev-format messages from uid 0).
+- **UF2** (`tools/lib/mynx/uf2.py`, `mynx uf2`; maintainer's decision,
+  2026-10-26: in Debian over raw USB, not in the app): Android binds
+  `usb-storage` to a bootloader's drive and won't mount it, so `mynx`
+  opens the device's node, lets the kernel's driver go
+  (`USBDEVFS_DISCONNECT` through `USBDEVFS_IOCTL`, on `EBUSY` from the
+  claim), and speaks bulk-only transport itself: TEST UNIT READY, READ
+  CAPACITY, the FAT (an MBR first on the RP2040's), then each UF2
+  block in its own sector from the data area with WRITE(10), 32
+  sectors a command (UF2 bootloaders check every written sector for
+  the magic). Safety: only a drive with `INFO_UF2.TXT` in its root
+  folder is written; a known board (`BOARD_FAMILIES`) refuses other
+  chips' families, which its bootloader would skip silently. A failed
+  status after the last block is success: the board restarts first.
+  Tested natively against a fake drive (`tests/mynx/test_uf2.py`);
+  the usbfs ioctls only on the phone.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

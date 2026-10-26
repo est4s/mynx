@@ -68,6 +68,8 @@ are in git history: the full log up to entry 92 is
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
   rebuilt test-first and merged (PR #47, entry 142); every phone
   test passed. Not released yet.
+- **UF2** (`mynx uf2 flash`): branch `uf2` (entry 144); flashed the
+  RP2040 Zero from this phone's Debian. PR next.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -140,7 +142,16 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    netlink address), and the recipes as hardware allows
    (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
    the C3, `probe-rs`).
-3. **UF2**, as the spike decides.
+3. **UF2: branch `uf2`** (entry 144; maintainer's decision: in
+   Debian over raw USB, not in the app). `mynx uf2 [list]` and
+   `mynx uf2 flash FILE [DEVICE]` (`tools/lib/mynx/uf2.py`). Done on
+   the phone with the RP2040 Zero: list, the refusals (not UF2, an
+   RP2350 file, an unknown device) and a real flash (MicroPython,
+   1302 blocks in 3.7 s, back as `ttyACM0`). **Left:** the PR and
+   CI; the maintainer seeing the progress line in a tab (`writing...
+   N/M`, only on a terminal); once installed, `mynx uf2` from
+   `/opt/mynx`. Not tried: an RP2350, TinyUF2 or Adafruit
+   bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
 ### Then, release v0.3.0 (the maintainer's)
 
@@ -261,6 +272,30 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (144): UF2 flashing (branch `uf2`)
+
+- **Spike, from Debian over raw USB** (scratchpad scripts, not kept):
+  the RP2040 Zero put into BOOTSEL from MicroPython's REPL
+  (`machine.bootloader()` over the URL). The drive's interface had
+  the kernel's `usb-storage` bound (`USBDEVFS_GETDRIVER`); the claim
+  gave EBUSY, `USBDEVFS_DISCONNECT` let it go, and INQUIRY (`RPI
+  RP2`), READ CAPACITY (262144 sectors) and READ(10) answered.
+  Sector 0 is an MBR: FAT16 from sector 1, data from 292,
+  `INFO_UF2.TXT` in cluster 3. MicroPython's UF2 written from sector
+  292, 32 sectors a WRITE(10): 1302 blocks in 3.7 s, every status
+  came back, and the board restarted into MicroPython.
+- **Decision (maintainer):** the writer lives in Debian (`mynx`, in
+  Python), not in the app as entry 140 planned: no app change, tested
+  natively, and the raw USB node already gives everything.
+- **Code:** `tools/lib/mynx/uf2.py` (UF2 checks, bulk-only SCSI, the
+  FAT with or without an MBR, finding drives in `/sys/bus/usb`, the
+  usbfs pipe) and `mynx uf2` in `cli.py`; 20 tests against a fake
+  drive (`tests/mynx/test_uf2.py`), 2 in `test_mynx.py`. Docs: the
+  guide (commands, Raw USB's recipes), AGENTS.md, README, ROADMAP.
+- **Phone:** see "Next", 0, step 3. The whole suite passes with
+  `TZ=UTC`; `test_undo_list` fails under the tab's
+  `Europe/Istanbul` (it expects UTC times), on `main` too.
 
 ### 2026-10-26 (143): PR #47 merged
 
