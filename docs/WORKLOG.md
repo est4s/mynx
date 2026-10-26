@@ -139,9 +139,13 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
 2. **Raw USB:** merged (PR #47, entry 142). Its phone tests:
    `git show 9a4718c:docs/WORKLOG.md`. Later parts: hotplug
    (libudev's monitor: libudev-format messages, sender uid 0, a
-   netlink address), and the recipes as hardware allows
-   (`dfu-util`, OpenOCD with a CMSIS-DAP probe, `openocd-esp32` on
-   the C3, `probe-rs`).
+   netlink address), and the recipes as hardware allows. The C3's
+   built-in JTAG passed with no code change (entry 146, branch
+   `c3-jtag`). Left: `dfu-util` (needs a board with a ROM DFU
+   bootloader, e.g. a WeAct Black Pill STM32F411) and a CMSIS-DAP
+   probe (the RP2040 Zero with `debugprobe`, plus an SWD target);
+   `probe-rs run` flashing the C3 (needs an esp-hal ELF, replaces
+   MicroPython).
 3. **UF2: merged (PR #49**, entry 144; maintainer's decision: in
    Debian over raw USB, not in the app). `mynx uf2 [list]` and
    `mynx uf2 flash FILE [DEVICE]` (`tools/lib/mynx/uf2.py`). Done on
@@ -262,6 +266,30 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (146): ESP32-C3's built-in JTAG (branch `c3-jtag`)
+
+The maintainer picked the C3 recipes from the loose ends. Tried in
+the release mynx (v0.3.0) with the C3 running MicroPython; nothing in
+mynx needed changing:
+- **openocd-esp32** v0.12.0-esp32-20260831, `linux-arm64` (sha256
+  checked): `-f board/esp32c3-builtin.cfg` found the probe and the
+  chip (rev v0.4), `reset halt`, flash auto-detect (4 MB), halt/`reg
+  pc`/resume over telnet.
+- **Serial beside JTAG:** with OpenOCD attached, the REPL on
+  `/dev/serial/ttyACM0` answered (`print(6*7)`), then OpenOCD halted
+  and resumed the core. Opening the port with DTR and RTS low still
+  resets the C3 (the open raises them first, as on Linux); lowering
+  DTR before RTS left it in download mode (known, see AGENTS.md).
+- **GDB** (Debian's `gdb-multiarch` 16.3): `target extended-remote
+  :3333`, registers, `x/4xw`, `stepi`, detach.
+- **probe-rs** 0.32.0 aarch64 (sha256 checked): `list` shows `ESP
+  JTAG`, `info` detects esp32c3, `reset`, `read` from ROM and flash;
+  also with the serial port open. A second debugger while one runs
+  gets "interface is busy (errno 16)" (usbfs claim), as on Linux.
+- Docs: the guide's raw USB recipes (C3 JTAG: OpenOCD, GDB,
+  probe-rs; the C6/S3/H2 and `probe-rs run` marked not tried), the
+  roadmap.
 
 ### 2026-10-26 (145): v0.3.0 released
 

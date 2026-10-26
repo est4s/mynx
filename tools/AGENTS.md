@@ -747,8 +747,7 @@ through Android and hands it to the program that opens its node.
   interface) with its node `/dev/bus/usb/BBB/DDD`, so tools find it
   by themselves: `lsusb`, `lsusb -v -d 2e8a:0003`, libusb's device
   list. A serial device is there too, so a tool can use its other
-  interfaces (an ESP32-C3's JTAG) while its port is served (not tried
-  yet). It's part
+  interfaces (an ESP32-C3's JTAG) while its port is served. It's part
   of `serial-names` (on): Debian then has a `/sys/bus` of its own,
   with the phone's other buses (`platform`, `cpu`, …) in it.
 - **A board that restarts is a new device:** after flashing,
@@ -774,12 +773,35 @@ through Android and hands it to the program that opens its node.
     flashes it, checks it and starts it, as `mynx uf2 flash` does.
   - **STM32 DFU** (not tried yet; `apt install dfu-util`): `dfu-util -l`, then
     `dfu-util -a 0 -s 0x08000000:leave -D firmware.bin`.
-  - **Debug probes** (not tried yet): Debian's OpenOCD (`apt install openocd`) with a
-    CMSIS-DAP probe (a Pico running Raspberry Pi's debugprobe):
-    `openocd -f interface/cmsis-dap.cfg -f target/rp2040.cfg`. The
-    ESP32-C3's built-in JTAG needs Espressif's `openocd-esp32`
-    (arm64 builds on its GitHub releases): Debian's has no
-    `esp_usb_jtag`.
+  - **ESP32-C3's built-in JTAG** (`303a:1001`, the same device as
+    its `ttyACM0`; the C6's, S3's and H2's are the same part, not
+    tried yet, with their own `board/…-builtin.cfg`): debug the chip
+    over its own USB, with no probe. The serial port keeps working beside it (a
+    MicroPython REPL answered while the chip was halted and resumed);
+    one debugger at a time ("interface is busy (errno 16)" means
+    another has it). Debian's OpenOCD has no `esp_usb_jtag`, so use
+    Espressif's:
+    - **openocd-esp32:** the `linux-arm64` build from
+      `github.com/espressif/openocd-esp32/releases` (check it against
+      the release's `checksum.sha256`), unpacked anywhere:
+      `openocd-esp32/bin/openocd -f board/esp32c3-builtin.cfg`
+      serves GDB on port 3333 and its commands on 4444 (`halt`,
+      `reg pc`, `resume`, `reset run`, `flash probe 0`).
+    - **GDB** (`apt install gdb-multiarch`), with OpenOCD running:
+      `gdb-multiarch -ex 'set architecture riscv:rv32' -ex 'target
+      extended-remote :3333' firmware.elf` (the ESP-IDF build's ELF,
+      for symbols). `monitor reset halt` from GDB.
+    - **probe-rs:** the `probe-rs-tools-aarch64-unknown-linux-gnu`
+      build from `github.com/probe-rs/probe-rs/releases`:
+      `probe-rs list` shows `ESP JTAG`, `probe-rs info` detects the
+      chip; `probe-rs reset --chip esp32c3`, `probe-rs read --chip
+      esp32c3 b32 0x42000000 4`; `probe-rs run --chip esp32c3
+      firmware.elf` should flash and run an esp-hal program (not
+      tried yet; it replaces what's on the board).
+  - **Debug probes** (not tried yet): Debian's OpenOCD (`apt install
+    openocd`) with a CMSIS-DAP probe (a Pico running Raspberry Pi's
+    debugprobe): `openocd -f interface/cmsis-dap.cfg -f
+    target/rp2040.cfg`.
 - The app's log for it: `/tmp/.mynx/serial/usb.log`.
 
 ### Themes and colours
