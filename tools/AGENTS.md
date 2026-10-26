@@ -83,6 +83,7 @@ and applies them. See "Changing settings" below.
 | Licence texts of what the app bundles (`mynx about`) | `/opt/mynx/licenses` |
 | USB serial ports (boards, adapters) | `/dev/serial/ttyUSB0`, `rfc2217://localhost:2217` (see "USB serial devices") |
 | Other USB devices, for libusb tools | `/dev/bus/usb/BBB/DDD`, `/sys/bus/usb/devices` (see "Raw USB devices") |
+| Bluetooth serial ports: which device is which port | `~/.config/mynx/bluetooth.conf`; the ports are `/dev/serial/rfcomm0`, … (see "Bluetooth serial devices") |
 
 `/opt/mynx` belongs to the app and is replaced on every app
 update; don't change it. Its `bin` comes first on the PATH. Your changes
@@ -149,8 +150,12 @@ their own.
 | `mynx service adopt NAME` | turn this tab into the unsaved service NAME, as it runs; `mynx service save NAME [--command CMD]` saves it to `services.conf` |
 | `mynx usb [list]` | USB devices: serial ones' `/dev/serial` paths and `rfc2217://` URLs, or why they have none (see "USB serial devices"); others' `/dev/bus/usb` node (see "Raw USB devices") |
 | `mynx usb allow [DEVICE]` | ask Android to let the app use a USB device (the app must be on screen) |
-| `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …` |
-| `mynx usb monitor [PORT] [--baud N] [--lower]` | a serial monitor on a port, in this tab (the `serial` app): Ctrl+T then a key resets the board, changes the baud, … (see "USB serial devices") |
+| `mynx usb url\|path [PORT]` | one port's `rfc2217://` URL or `/dev/serial` path, for scripts: `esptool --port "$(mynx usb url)" …`; Bluetooth ports (`rfcomm0`) too |
+| `mynx usb monitor [PORT] [--baud N] [--lower]` | a serial monitor on a port (a Bluetooth one too), in this tab (the `serial` app): Ctrl+T then a key resets the board, changes the baud, … (see "USB serial devices") |
+| `mynx bt [list]` | Bluetooth: the paired devices, and each bound port's `/dev/serial` path, `rfc2217://` URL and whether it's linked (see "Bluetooth serial devices") |
+| `mynx bt bind DEVICE [PORT]` | make a paired device (its name or address) a serial port, `rfcomm0` unless PORT names another; saved in `bluetooth.conf` |
+| `mynx bt unbind PORT\|DEVICE` | remove a port (or a device's ports) and its line in `bluetooth.conf` |
+| `mynx bt settings` | open Android's Bluetooth settings, to pair a device |
 | `mynx uf2 [list]` | the UF2 bootloader drives plugged in (a Pico in BOOTSEL, …), with the board each says it is (see "Raw USB devices") |
 | `mynx uf2 flash FILE [DEVICE]` | flash a UF2 file onto a board's bootloader drive, which Android won't mount; DEVICE is `vendor:product` or its node |
 | `mynx fix-links DIR…` | repair the hard links an installer broke by moving the folder it unpacked (arduino-cli's toolchains: see "USB serial devices") |
@@ -211,6 +216,9 @@ One `key = value` per line; `mynx settings` describes each.
 - `android-microphone`: `on` (default) or `off`: whether programs
   here can record from the microphone (`mynx audio record`, and
   the sound device: they get silence while it's off).
+- `android-bluetooth`: `on` (default) or `off`: whether programs
+  here can use Bluetooth serial ports (`mynx bt`; see "Bluetooth
+  serial devices").
 - `sound-device`: `on` (default) or `off`: whether the app runs the
   sound device, so programs here play through the phone's speaker.
 - `share-folder`: where files other apps share to this app are saved,
@@ -804,6 +812,52 @@ through Android and hands it to the program that opens its node.
     target/rp2040.cfg`.
 - The app's log for it: `/tmp/.mynx/serial/usb.log`.
 
+### Bluetooth serial devices
+
+Boards and modules with Classic Bluetooth's serial port profile
+(SPP): an original ESP32 running `BluetoothSerial`, an HC-05 or
+HC-06 module, a GPS or OBD-II adapter. Each paired device you bind
+becomes a serial port in Debian, like a USB one.
+
+- **Pairing** stays in Android's settings: `mynx bt settings` opens
+  them (Settings → Connected devices). `mynx bt` lists the paired
+  devices, each with its port once it's bound.
+- **Binding:** `mynx bt bind DEVICE`, with the device's name or
+  address (`mynx bt bind mynx-spp`, `mynx bt bind
+  D4:E9:F4:A2:4A:02`), makes it `rfcomm0` (the next one `rfcomm1`;
+  `mynx bt bind DEVICE rfcomm3` picks the name). It prints the port's
+  path and URL. The binding is a line in `~/.config/mynx/bluetooth.conf`
+  (`rfcomm0 = D4:E9:F4:A2:4A:02`), so it stays after a restart, `mynx
+  check` checks it and `mynx undo` takes it back. `mynx bt unbind
+  rfcomm0` (or the device) removes it.
+- **The port** works like a USB one (see "USB serial devices"):
+  `/dev/serial/rfcomm0`, also `/dev/rfcomm0` for tools that look for
+  ports (pyserial's `list_ports`), and `rfc2217://localhost:2218` (a
+  number from the USB ports' range). `picocom -b 115200
+  /dev/serial/rfcomm0`, `python3 -m serial.tools.miniterm
+  rfc2217://localhost:2218`, pyserial, `mynx usb monitor rfcomm0`;
+  `mynx usb url rfcomm0` and `mynx usb path rfcomm0` print them.
+- **The link** opens when a program opens the port, and closes when
+  the last one leaves, as Linux's `rfcomm bind`: the phone and the
+  board aren't connected while nothing uses it, and nothing
+  reconnects in the background. A link that fails or drops ends that
+  program's use; `mynx bt` says why. It shows each port as `linked`,
+  `not linked` or the last error, and `in use` and `waiting` as `mynx
+  usb` does.
+- **No baud rate, DTR or RTS over Bluetooth:** SPP has none, so what
+  programs set is accepted and changes nothing (the board's own baud
+  rate is its business). So no resets: esptool can't put a board into
+  its bootloader this way. Flash over USB; the monitor's reset and
+  bootloader keys say they do nothing here.
+- **Permission:** the first use asks for Android's Bluetooth
+  permission ("Nearby devices"), so the app must be on screen.
+  Bluetooth turned off, the permission refused, or `android-bluetooth
+  off` each refuse with the reason; turn Bluetooth on in Android
+  (the app can't).
+- Bluetooth Low Energy devices (most watches, sensors, BLE UART
+  modules like the HM-10) have no SPP and aren't covered yet: `mynx
+  bt` marks them "Bluetooth LE only".
+
 ### Themes and colours
 
 Built-in themes: `neon` (the default), `amber`, `phosphor`, `dracula`,
@@ -947,7 +1001,7 @@ shows the generic game bar until `my-tool.conf` exists.
   | `dbmeter` | a sound level meter | the microphone |
   | `tuner` | a guitar tuner (`--demo`) | the microphone, the speaker, numpy |
   | `metronome` | a metronome with tap and clap tempo | the speaker, the flashlight, vibration, numpy |
-  | `serial` | a serial monitor for a USB board (`mynx usb monitor`) | a `/dev/serial` port |
+  | `serial` | a serial monitor for a USB or Bluetooth board (`mynx usb monitor`) | a `/dev/serial` port |
 
   The microphone apps read it through the sound device with `parec`
   (`/opt/mynx/apps/mic.py`). `tuner` and `metronome` need numpy and

@@ -57,7 +57,8 @@ sensors, microphone, speaker and flashlight.
   device themselves over USB work too: `picotool` flashes a Raspberry
   Pi Pico, and `lsusb`, pyusb and other libusb tools find and open
   devices. `mynx uf2 flash` puts a UF2 file on a board's bootloader
-  drive, which Android won't mount.
+  drive, which Android won't mount. Bluetooth serial (SPP): a paired
+  ESP32 or HC-05 becomes a port too (`mynx bt bind`, `/dev/rfcomm0`).
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
   and packages survive app updates.
 - **Tabs** that keep running in the background and come back when you
