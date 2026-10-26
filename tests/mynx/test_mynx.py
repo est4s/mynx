@@ -42,7 +42,8 @@ class FakeApp:
                 request = lines[0]
                 self.seen.append(request)
                 self.requests.append(lines)
-                answer = self.replies[request]
+                # As the app: a request it doesn't know is refused.
+                answer = self.replies.get(request, {"ok": False, "error": f"unknown request '{request}'"})
                 if callable(answer):
                     answer = answer(*lines[1:])
                 reply = os.path.join(self.folder, name[:-4] + ".reply")
@@ -179,6 +180,9 @@ class MynxTest(unittest.TestCase):
             self.assertEqual(run.returncode, 0)
             self.assertIn("check", run.stdout)
             self.assertIn("--json", run.stdout)
+
+    def test_help_lists_bluetooth(self):
+        self.assertIn("\n  bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings", self.mynx("help").stdout)
 
     def test_unknown_command_fails_with_help(self):
         run = self.mynx("frobnicate")
@@ -1946,7 +1950,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(self.mynx("usb", "url", "ttyUSB0").stdout, "rfc2217://localhost:2217\n")
         run = self.mynx("usb", "url", "ttyACM0")
         self.assertEqual(run.returncode, 2)
-        self.assertIn("no port ttyACM0 (mynx usb lists them)", run.stderr)
+        self.assertIn("no port ttyACM0 (mynx usb and mynx bt list them)", run.stderr)
         self.assertEqual(json.loads(self.mynx("usb", "url", "--json").stdout),
                          {"ok": True, "url": "rfc2217://localhost:2217", "path": "/dev/serial/ttyUSB0", "name": "ttyUSB0"})
 
@@ -1959,7 +1963,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.app.replies["usb-list"] = {"ok": True, "devices": []}
         run = self.mynx("usb", "path")
         self.assertEqual(run.returncode, 2)
-        self.assertIn("no USB serial port", run.stderr)
+        self.assertIn("no serial port", run.stderr)
 
     def monitor_env(self):
         # As in the app, where the tools' bin (keybar) comes first on the PATH.
@@ -2005,6 +2009,158 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             run = self.mynx(*args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx usb", run.stderr, args)
+
+    # --- bt -----------------------------------------------------------------
+
+    SPP = {"name": "mynx-spp", "address": "D4:E9:F4:A2:4A:02", "type": "classic", "port": "rfcomm0"}
+
+    @staticmethod
+    def bt_port(name="rfcomm0", address="D4:E9:F4:A2:4A:02", device="mynx-spp", tcp=2218, linked=False,
+                in_use=False, waiting=False, error=None):
+        return {"name": name, "address": address, "device": device, "path": f"/dev/serial/{name}",
+                "url": f"rfc2217://localhost:{tcp}" if tcp else None, "tcp_port": tcp, "linked": linked,
+                "in_use": in_use, "waiting": waiting, "error": error}
+
+    def test_bt_lists_paired_devices_and_bound_ports(self):
+        devices = [self.SPP,
+                   {"name": "HC-05", "address": "98:D3:31:F5:12:34", "type": "dual", "port": None},
+                   {"name": None, "address": "C0:FF:EE:00:00:01", "type": "le", "port": None}]
+        ports = [self.bt_port(linked=True, in_use=True),
+                 self.bt_port(name="rfcomm1", address="00:11:22:33:44:55", device=None, tcp=2219,
+                              error="couldn't link: the device didn't answer"),
+                 self.bt_port(name="rfcomm2", address="98:D3:31:F5:12:34", device="HC-05", tcp=2220, waiting=True)]
+        answer = {"ok": True, "enabled": True, "devices": devices, "ports": ports}
+        self.start_app({"bt-list": answer})
+        for args in [("bt",), ("bt", "list")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout,
+                             "Paired devices:\n"
+                             "  mynx-spp (D4:E9:F4:A2:4A:02): rfcomm0\n"
+                             "  HC-05 (98:D3:31:F5:12:34)\n"
+                             "  C0:FF:EE:00:00:01: Bluetooth LE only, no serial\n"
+                             "rfcomm0  mynx-spp, linked, in use\n"
+                             "  /dev/serial/rfcomm0\n"
+                             "  rfc2217://localhost:2218\n"
+                             "rfcomm1  00:11:22:33:44:55: couldn't link: the device didn't answer\n"
+                             "  /dev/serial/rfcomm1\n"
+                             "  rfc2217://localhost:2219\n"
+                             "rfcomm2  HC-05, not linked\n"
+                             "  /dev/serial/rfcomm2 (waiting: a program has the URL)\n"
+                             "  rfc2217://localhost:2220\n"
+                             "A serial monitor: mynx usb monitor [PORT]\n")
+        self.assertEqual(self.app.requests, [["bt-list"], ["bt-list"]])
+        self.assertEqual(json.loads(self.mynx("bt", "--json").stdout), answer)
+
+    def test_bt_with_paired_devices_and_no_port_says_how_to_bind(self):
+        self.start_app({"bt-list": {"ok": True, "enabled": True, "devices": [{**self.SPP, "port": None}],
+                                    "ports": []}})
+        run = self.mynx("bt")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Paired devices:\n"
+                                     "  mynx-spp (D4:E9:F4:A2:4A:02)\n"
+                                     "A port for one: mynx bt bind DEVICE\n")
+
+    def test_bt_with_nothing_paired_says_how_to_pair(self):
+        self.start_app({"bt-list": {"ok": True, "enabled": True, "devices": [], "ports": []}})
+        run = self.mynx("bt")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "No paired device. Pair a device in Android's\n"
+                                     "Bluetooth settings: mynx bt settings\n")
+
+    def test_bt_off_says_so_and_shows_the_bound_ports(self):
+        self.start_app({"bt-list": {"ok": True, "enabled": False, "devices": [],
+                                    "ports": [self.bt_port(tcp=None)]}})
+        run = self.mynx("bt")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Bluetooth is off: turn it on in Android.\n"
+                                     "rfcomm0  mynx-spp, not linked\n"
+                                     "  /dev/serial/rfcomm0\n")
+
+    def test_bt_refused_says_why(self):
+        self.start_app({"bt-list": {"ok": False, "error": "android-bluetooth is off (mynx set android-bluetooth on)"}})
+        run = self.mynx("bt")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("mynx: android-bluetooth is off (mynx set android-bluetooth on)", run.stderr)
+
+    def test_bt_bind_shows_the_port(self):
+        port = self.bt_port()
+        self.start_app({"bt-bind": {"ok": True, "port": port}})
+        run = self.mynx("bt", "bind", "mynx-spp")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "rfcomm0  mynx-spp (D4:E9:F4:A2:4A:02)\n"
+                                     "  /dev/serial/rfcomm0\n"
+                                     "  rfc2217://localhost:2218\n"
+                                     "The link opens when a program opens the port.\n")
+        self.mynx("bt", "bind", "D4:E9:F4:A2:4A:02", "rfcomm3")
+        self.assertEqual(self.app.requests, [["bt-bind", "mynx-spp"], ["bt-bind", "D4:E9:F4:A2:4A:02", "rfcomm3"]])
+        self.assertEqual(json.loads(self.mynx("bt", "bind", "mynx-spp", "--json").stdout),
+                         {"ok": True, "port": port})
+
+    def test_bt_bind_waits_as_long_as_the_app_says(self):
+        # The first use asks for Android's Bluetooth permission.
+        folder = self.requests
+
+        def bind(*args):
+            for entry in os.listdir(folder):
+                if entry.endswith(".req"):
+                    with open(os.path.join(folder, entry[:-4] + ".wait"), "w") as f:
+                        f.write("120")
+            time.sleep(1.5)  # longer than MYNX_TIMEOUT
+            return {"ok": True, "port": self.bt_port(tcp=None)}
+
+        self.start_app({"bt-bind": bind})
+        run = self.mynx("bt", "bind", "mynx-spp")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "rfcomm0  mynx-spp (D4:E9:F4:A2:4A:02)\n"
+                                     "  /dev/serial/rfcomm0\n"
+                                     "The link opens when a program opens the port.\n")
+
+    def test_bt_bind_refused(self):
+        self.start_app({"bt-bind": {"ok": False, "error": "Bluetooth isn't allowed: mynx bt bind again"}})
+        run = self.mynx("bt", "bind", "mynx-spp")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("mynx: Bluetooth isn't allowed", run.stderr)
+
+    def test_bt_unbind_and_settings(self):
+        self.start_app({"bt-unbind": {"ok": True, "removed": ["rfcomm0", "rfcomm1"]}, "bt-settings": {"ok": True}})
+        run = self.mynx("bt", "unbind", "mynx-spp")
+        self.assertEqual((run.returncode, run.stdout), (0, "Removed rfcomm0, rfcomm1\n"), run.stderr)
+        self.assertEqual(json.loads(self.mynx("bt", "unbind", "rfcomm0", "--json").stdout),
+                         {"ok": True, "removed": ["rfcomm0", "rfcomm1"]})
+        run = self.mynx("bt", "settings")
+        self.assertEqual((run.returncode, run.stdout), (0, ""), run.stderr)
+        self.assertEqual(self.app.requests, [["bt-unbind", "mynx-spp"], ["bt-unbind", "rfcomm0"], ["bt-settings"]])
+
+    def test_bt_usage(self):
+        for args in [("bt", "list", "x"), ("bt", "bind"), ("bt", "bind", "a", "b", "c"), ("bt", "unbind"),
+                     ("bt", "settings", "x"), ("bt", "pair")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx bt", run.stderr, args)
+
+    def test_usb_url_and_path_take_served_bluetooth_ports_too(self):
+        usb = [self.usb_device(ports=[("ttyUSB0", 2217, False)])]
+        bt = {"ok": True, "enabled": True, "devices": [self.SPP],
+              "ports": [self.bt_port(), self.bt_port(name="rfcomm1", tcp=None)]}
+        self.start_app({"usb-list": {"ok": True, "devices": usb}, "bt-list": bt})
+        self.assertEqual(self.mynx("usb", "url", "rfcomm0").stdout, "rfc2217://localhost:2218\n")
+        self.assertEqual(self.mynx("usb", "path", "rfcomm0").stdout, "/dev/serial/rfcomm0\n")
+        run = self.mynx("usb", "url")
+        self.assertIn("2 ports: say which (ttyUSB0, rfcomm0)", run.stderr)
+        self.app.replies["usb-list"] = {"ok": True, "devices": []}
+        self.assertEqual(self.mynx("usb", "url").stdout, "rfc2217://localhost:2218\n")
+
+    def test_usb_url_ignores_bluetooth_when_it_is_refused(self):
+        usb = [self.usb_device(ports=[("ttyUSB0", 2217, False)])]
+        self.start_app({"usb-list": {"ok": True, "devices": usb},
+                        "bt-list": {"ok": False, "error": "android-bluetooth is off (mynx set android-bluetooth on)"}})
+        run = self.mynx("usb", "url")
+        self.assertEqual((run.returncode, run.stdout, run.stderr), (0, "rfc2217://localhost:2217\n", ""))
+        self.app.replies["usb-list"] = {"ok": True, "devices": []}
+        run = self.mynx("usb", "path")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no serial port (mynx usb and mynx bt list them)", run.stderr)
 
     # --- uf2 ----------------------------------------------------------------
 

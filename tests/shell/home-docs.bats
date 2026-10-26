@@ -198,6 +198,15 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide says how to use Bluetooth serial devices" {
+    for text in "### Bluetooth serial devices" "mynx bt settings" "mynx bt bind DEVICE" \
+        "~/.config/mynx/bluetooth.conf" "/dev/serial/rfcomm0" "/dev/rfcomm0" "mynx usb monitor rfcomm0" \
+        "as Linux's \`rfcomm bind\`" "No baud rate, DTR or RTS over Bluetooth" "\`android-bluetooth\`" \
+        "app must be on screen" "Bluetooth Low Energy"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
+
 @test "the guide says how to debug an ESP32-C3 over its built-in JTAG" {
     for text in "board/esp32c3-builtin.cfg" "openocd-esp32/releases" "gdb-multiarch" \
         "riscv:rv32" "probe-rs-tools-aarch64-unknown-linux-gnu" "ESP JTAG" \
