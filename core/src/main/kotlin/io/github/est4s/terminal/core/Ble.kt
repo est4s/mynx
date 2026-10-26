@@ -28,6 +28,8 @@ package io.github.est4s.terminal.core
  *   "name","as","value","hex","time"}` lines (notify, else indicate),
  *   until cancelled (it unsubscribes) or the link drops (answered as a
  *   refusal with the reason).
+ * - `ble-bind DEVICE [nusN]` and `ble-unbind PORT|DEVICE`: BLE UART
+ *   ports, see `BleUart.kt`.
  * - `ble-connect DEVICE`: holds a link while the stream runs; lines
  *   `{"state":"connected","device":DEV,"mtu":N}` (and
  *   `"disconnected"` with `"error"` before a drop's refusal). While it
@@ -61,6 +63,7 @@ package io.github.est4s.terminal.core
 /** Every request [bleRequests] answers once it's built. */
 val BLE_REQUEST_NAMES = listOf(
     "ble-scan", "ble-scan-stream", "ble-services", "ble-read", "ble-write", "ble-notify", "ble-connect",
+    "ble-bind", "ble-unbind",
 )
 
 /** A characteristic's properties, as GATT has them; [word] is how JSON and `mynx` write each. */
@@ -163,6 +166,10 @@ interface BleHost {
     fun connect(address: String, randomAddress: Boolean, ready: (Result<BleLink>) -> Unit, dropped: (String) -> Unit)
 }
 
-/** The `ble-*` requests ([BLE_REQUEST_NAMES]), for [MynxRequests]'s `later`. */
-fun bleRequests(home: java.io.File, host: BleHost): Map<String, Later> =
-    bleRequests(home, host, System::currentTimeMillis, ::bleSchedule)
+/**
+ * The `ble-*` requests ([BLE_REQUEST_NAMES]), for [MynxRequests]'s
+ * `later`. [bluetooth] is the `bt-*` requests' host: `ble-bind` and
+ * `ble-unbind` read its `ports()` and call its `bindingsChanged()`.
+ */
+fun bleRequests(home: java.io.File, host: BleHost, bluetooth: BluetoothHost): Map<String, Later> =
+    bleRequests(home, host, bluetooth, System::currentTimeMillis, ::bleSchedule)

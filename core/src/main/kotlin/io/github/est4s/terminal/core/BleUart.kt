@@ -24,10 +24,13 @@ import java.io.IOException
  *     Nordic UART or HM-10 service"); then writes the line (the lowest
  *     free `nusN` unless given), calls `bindingsChanged()` and answers
  *     `{"ok":true,"port":PORT,"kind":"nordic-uart"|"hm-10"}`, PORT as
- *     [btPortJson]. Already bound: answers its port (refused if a
- *     different name was asked). Undo's change text: `ble bind DEVICE`.
+ *     [btPortJson]. Already bound: answers its port, with `kind` null
+ *     and without connecting (refused if a different name was asked,
+ *     or it's bound to an `rfcomm` port). Undo's change text: `ble bind DEVICE`.
  *   - `ble-unbind PORT|DEVICE`: removes `nus` lines as `bt-unbind`
- *     removes `rfcomm` ones; `{"ok":true,"removed":[NAME…]}`.
+ *     removes `rfcomm` ones; `{"ok":true,"removed":[NAME…]}`. DEVICE
+ *     is an address or a paired or scanned name; it works with
+ *     Bluetooth off.
  *   - `bt-list` lists `nus` ports in `ports` too; `bt-bind` refuses a
  *     `nusN` name ("use mynx ble bind"); `bt-unbind` removes either
  *     kind.
