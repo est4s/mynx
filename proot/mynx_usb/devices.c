@@ -7,8 +7,6 @@
 
 #include "devices.h"
 
-#define NODE "/dev/bus/usb/"
-
 static int digits(const char *s, size_t n)
 {
 	for (size_t i = 0; i < n; i++)
@@ -17,15 +15,19 @@ static int digits(const char *s, size_t n)
 	return 1;
 }
 
-int mynx_usb_device(const char *path, char *dev, size_t size)
+int mynx_usb_device(const char *path, const char *socket, char *dev, size_t size)
 {
-	size_t length = strlen(path);
-	/* "BBB/DDD" at the very end, right after NODE.  */
-	if (length < strlen(NODE) + 7 || size < 8)
+	/* The node is next to the app's socket, in Debian's own /dev (a
+	 * program's own folder named dev/bus/usb is left alone): "BBB/DDD"
+	 * right after the socket's folder.  */
+	const char *slash = strrchr(socket, '/');
+	if (slash == NULL || size < 8)
 		return -1;
-	const char *end = path + length - 7;
-	if (strncmp(end - strlen(NODE), NODE, strlen(NODE)) != 0
-	    || !digits(end, 3) || end[3] != '/' || !digits(end + 4, 3))
+	size_t folder = slash - socket + 1;
+	if (strlen(path) != folder + 7 || strncmp(path, socket, folder) != 0)
+		return -1;
+	const char *end = path + folder;
+	if (!digits(end, 3) || end[3] != '/' || !digits(end + 4, 3))
 		return -1;
 	memcpy(dev, end, 7);
 	dev[7] = 0;

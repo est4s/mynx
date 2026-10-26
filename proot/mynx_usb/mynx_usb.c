@@ -81,7 +81,7 @@ static int enter(Tracee *tracee, Config *config)
 	}
 	char path[PATH_MAX], dev[8];
 	if (read_string(tracee, path, peek_reg(tracee, CURRENT, path_reg), sizeof path) <= 0
-	    || mynx_usb_device(path, dev, sizeof dev) != 0)
+	    || mynx_usb_device(path, config->socket, dev, sizeof dev) != 0)
 		return 0;
 
 	int flags = (int) peek_reg(tracee, CURRENT, flags_reg);
