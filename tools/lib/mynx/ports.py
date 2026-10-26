@@ -19,4 +19,5 @@ def serial_ports():
 
 
 def is_bluetooth(port):
-    return port["name"].startswith("rfcomm")
+    """A Classic port (`rfcomm0`) or a BLE UART one (`nus0`): no DTR or RTS."""
+    return port["name"].startswith(("rfcomm", "nus"))

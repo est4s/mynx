@@ -83,7 +83,7 @@ and applies them. See "Changing settings" below.
 | Licence texts of what the app bundles (`mynx about`) | `/opt/mynx/licenses` |
 | USB serial ports (boards, adapters) | `/dev/serial/ttyUSB0`, `rfc2217://localhost:2217` (see "USB serial devices") |
 | Other USB devices, for libusb tools | `/dev/bus/usb/BBB/DDD`, `/sys/bus/usb/devices` (see "Raw USB devices") |
-| Bluetooth serial ports: which device is which port | `~/.config/mynx/bluetooth.conf`; the ports are `/dev/serial/rfcomm0`, … (see "Bluetooth serial devices") |
+| Bluetooth serial ports: which device is which port | `~/.config/mynx/bluetooth.conf`; the ports are `/dev/serial/rfcomm0`, `/dev/serial/nus0`, … (see "Bluetooth serial devices" and "Bluetooth LE devices") |
 
 `/opt/mynx` belongs to the app and is replaced on every app
 update; don't change it. Its `bin` comes first on the PATH. Your changes
@@ -162,6 +162,8 @@ their own.
 | `mynx ble write DEVICE CHAR VALUE [--as FORMAT] [--no-response]` | write a characteristic |
 | `mynx ble notify DEVICE CHAR [--as FORMAT]` | print each value a characteristic sends, until Ctrl+C |
 | `mynx ble connect DEVICE` | hold a link to a device until Ctrl+C; other `mynx ble` commands on it use it |
+| `mynx ble bind DEVICE [nusN]` | make a Nordic UART or HM-10 device a serial port, `nus0` unless nusN names another; saved in `bluetooth.conf` |
+| `mynx ble unbind PORT\|DEVICE` | remove a `nus` port (or a device's) and its line in `bluetooth.conf` |
 | `mynx uf2 [list]` | the UF2 bootloader drives plugged in (a Pico in BOOTSEL, …), with the board each says it is (see "Raw USB devices") |
 | `mynx uf2 flash FILE [DEVICE]` | flash a UF2 file onto a board's bootloader drive, which Android won't mount; DEVICE is `vendor:product` or its node |
 | `mynx fix-links DIR…` | repair the hard links an installer broke by moving the folder it unpacked (arduino-cli's toolchains: see "USB serial devices") |
@@ -867,7 +869,9 @@ becomes a serial port in Debian, like a USB one.
 - Bluetooth Low Energy devices (most watches, sensors, BLE UART
   modules like the HM-10) have no SPP: `mynx bt` marks them
   "Bluetooth LE only", and `mynx ble` talks to them (see "Bluetooth
-  LE devices").
+  LE devices"). A BLE UART module like the HM-10
+  can be a port with `mynx ble bind`: `nus0`, listed by `mynx bt`
+  with the `rfcomm` ones.
 
 ### Bluetooth LE devices
 
@@ -941,8 +945,29 @@ sensors.
     in the phone's settings, or scans find nothing. Bluetooth turned
     off, the permission refused, or `android-bluetooth off` each
     refuse with the reason.
-- Nordic UART devices (`nus-rx`, `nus-tx`) work through `write` and
-  `notify`; making them a serial port like `rfcomm0` comes later.
+- **Serial port:** a device with a UART service, Nordic UART
+  (`nus-rx`, `nus-tx`) or an HM-10 module's (`ffe0`, `ffe1`), can be
+  a serial port, as a Classic one is `rfcomm0` (see "Bluetooth
+  serial devices"). `mynx ble bind DEVICE` connects once to check it
+  has one, then makes it `nus0` (the next one `nus1`; `mynx ble bind
+  DEVICE nus3` picks the name) and prints its path and URL:
+  `/dev/serial/nus0`, also `/dev/nus0`, and
+  `rfc2217://localhost:2417` (2418 for the next, …). `mynx usb
+  monitor nus0`, picocom, pyserial and `mynx usb url nus0` work as
+  on `rfcomm0`.
+  - The binding is a line in `bluetooth.conf`, `nus0 = ADDRESS`
+    (with ` random` after it for a device whose address is random),
+    so it stays after a restart; `mynx check` checks it and `mynx
+    undo` takes it back. `mynx ble unbind nus0` (or the device)
+    removes it. `mynx bt` lists the port, marked "BLE UART".
+  - The link opens when a program opens the port and closes when the
+    last one leaves, as for `rfcomm` ports; a link that fails is
+    tried again after a wait.
+  - Data goes in chunks of the link's MTU less 3 bytes, one after
+    another, so it's slower than USB.
+  - No baud rate, DTR or RTS: what programs set changes nothing, and
+    the monitor's reset keys do nothing.
+  - pyserial's `list_ports` doesn't list it: name the path.
 
 ### Themes and colours
 

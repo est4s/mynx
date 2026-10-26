@@ -4,7 +4,7 @@
 
 usage: serial [PORT] [--baud N] [--lower]
 
-PORT is a name from `mynx usb` or `mynx bt` (ttyACM0, rfcomm0), a
+PORT is a name from `mynx usb` or `mynx bt` (ttyACM0, rfcomm0, nus0), a
 path, or nothing for the only port. --baud sets the speed (115200
 unless given). Opening the port raises DTR and RTS, as on Linux;
 --lower drops them (DTR first), for boards those hold in reset (the
@@ -313,7 +313,7 @@ class Monitor:
             self.keys.eol = order[(order.index(self.keys.eol) + 1) % len(order)]
             self.note("Enter sends " + {"cr": "CR", "lf": "LF", "crlf": "CR LF"}[self.keys.eol])
         elif key in "rbDR" and is_bluetooth(self.info):
-            # SPP has no modem lines: the board never sees DTR or RTS.
+            # SPP and BLE UART have no modem lines: the board never sees DTR or RTS.
             self.note(f"Ctrl+T {key} does nothing over Bluetooth (no DTR or RTS)")
         elif key in "DR":
             name = "dtr" if key == "D" else "rts"
