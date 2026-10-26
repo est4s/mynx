@@ -19,7 +19,9 @@ private val END = ByteArray(0)
  * one client at a time: others are refused while one is connected. A
  * client leaving drops RTS and DTR, as closing a port does on Linux.
  * The port's [settings] outlast clients. The port's data goes to
- * [fromLine]; with no client it's dropped.
+ * [fromLine]; with no client it's dropped. Each client is greeted, then
+ * the line opens ([SerialLine.clientArrived]) before any of its data
+ * reaches it, and closes ([SerialLine.clientLeft]) when it leaves.
  */
 class SerialServer(private val line: SerialLine, port: Int) : Closeable {
     // 127.0.0.1, which the Debian side connects to: Android's getLoopbackAddress() is ::1.
@@ -34,6 +36,10 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
 
     /** Whether a client is connected. */
     val busy: Boolean get() = client != null
+
+    /** Why the line didn't open for the last client ([SerialLine.clientArrived]'s message); null once one opens it. */
+    @Volatile var lastError: String? = null
+        private set
 
     fun start() {
         thread(name = "serial-server-$port", isDaemon = true) {
@@ -50,6 +56,11 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
 
     fun fromLine(data: ByteArray, length: Int) {
         client?.session?.fromLine(data, length)
+    }
+
+    /** Closes the connected client, if any, as if it had left: a Bluetooth link that dropped. */
+    fun endClient() {
+        client?.close()
     }
 
     override fun close() {
@@ -72,7 +83,17 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
             runCatching { socket.tcpNoDelay = true }
             session.greet()
             thread(name = "serial-write-$port", isDaemon = true) { writeLoop() }
-            thread(name = "serial-read-$port", isDaemon = true) { readLoop() }
+            thread(name = "serial-read-$port", isDaemon = true) { if (open()) readLoop() else close() }
+        }
+
+        // On the client's own thread: a Bluetooth link takes seconds, and others must still be refused meanwhile.
+        private fun open(): Boolean = try {
+            line.clientArrived()
+            lastError = null
+            true
+        } catch (e: Exception) {
+            lastError = e.message ?: e.toString()
+            false
         }
 
         private fun writeLoop() {
@@ -115,6 +136,7 @@ class SerialServer(private val line: SerialLine, port: Int) : Closeable {
             // C3's USB-Serial-JTAG) reset it, into the bootloader after DTR on.
             runCatching { line.setRts(false) }
             runCatching { line.setDtr(false) }
+            runCatching { line.clientLeft() }
             // Only now, so the next client's lines aren't dropped by this one.
             synchronized(this@SerialServer) { client = null }
         }
