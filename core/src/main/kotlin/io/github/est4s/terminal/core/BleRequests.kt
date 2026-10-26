@@ -223,7 +223,13 @@ private fun advertJson(advert: BleAdvert) = obj(
     "time" to advert.time.toString(),
 )
 
-/** [bleRequests] with its clock and timer given, for tests. */
+/**
+ * [bleRequests] with its clock and timer given, for tests. Decided here,
+ * beyond the contract: an unfiltered scan while [BleHost.inFront] is
+ * false is refused, since Android would find nothing; names for DEVICE
+ * come from every scan since the app started, not only the last one;
+ * a number format whose size doesn't fit the bytes gives `value` null.
+ */
 internal fun bleRequests(
     home: File,
     host: BleHost,
