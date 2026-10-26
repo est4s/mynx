@@ -164,5 +164,5 @@ interface BleHost {
 }
 
 /** The `ble-*` requests ([BLE_REQUEST_NAMES]), for [MynxRequests]'s `later`. */
-@Suppress("UNUSED_PARAMETER")
-fun bleRequests(home: java.io.File, host: BleHost): Map<String, Later> = emptyMap()
+fun bleRequests(home: java.io.File, host: BleHost): Map<String, Later> =
+    bleRequests(home, host, System::currentTimeMillis, ::bleSchedule)
