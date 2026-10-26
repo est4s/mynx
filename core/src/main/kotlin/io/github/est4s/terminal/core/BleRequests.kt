@@ -165,6 +165,12 @@ private fun parseDevice(request: String, raw: List<String>, chars: Boolean = fal
     return DeviceQuery(device, char, format, value, "no-response" in args.options)
 }
 
+/** A link `ble-connect` holds ([link] once it's up), and what uses it wants to hear of a drop. */
+private class Held {
+    var link: BleLink? = null
+    val listeners = mutableListOf<(String) -> Unit>()
+}
+
 /** A device a request names: [random] as a scan saw its address. */
 private class Dev(val address: String, val name: String?, val random: Boolean) {
     val who get() = if (name != null) "$name ($address)" else address
@@ -227,7 +233,10 @@ internal fun bleRequests(
     val settings = File(home, "$CONFIG_DIR/settings.conf")
     val lock = Any()
     val scanStarts = ArrayDeque<Long>()
+    // Every scan's latest advertisement of each device, for DEVICE names and random addresses.
     val seen = HashMap<String, BleAdvert>()
+    // The links `ble-connect` holds, by address: from its start, so a second one is refused while the first connects.
+    val held = HashMap<String, Held>()
 
     fun <T> later(seconds: Int?, parse: (List<String>) -> T, run: (T, Op) -> Unit) = Later(seconds) { raw, reply ->
         val query = try {
@@ -314,8 +323,13 @@ internal fun bleRequests(
         }
     }
 
-    // Connects for [op] and runs [job] on the link, which closes when op ends.
+    // Runs [job] on the link `ble-connect` holds, else on one of [op]'s own, which closes when op ends.
     fun useLink(op: Op, dev: Dev, dropped: (String) -> Unit, job: (BleLink) -> Unit) {
+        val hold = synchronized(lock) { held[dev.address]?.takeIf { it.link != null }?.also { it.listeners += dropped } }
+        if (hold != null) {
+            if (op.onEnd { synchronized(lock) { hold.listeners -= dropped } }) job(hold.link!!)
+            return
+        }
         host.connect(
             dev.address,
             dev.random,
@@ -388,7 +402,70 @@ internal fun bleRequests(
         }
     }
 
+    fun notify(query: DeviceQuery, op: Op) = deviceOp(query, op) { _, link, char ->
+        char!!
+        val name = label(char.uuid)
+        if (BleProp.NOTIFY !in char.properties && BleProp.INDICATE !in char.properties) {
+            throw BleRefused("$name can't notify or indicate (it has: ${propsText(char)})")
+        }
+        val format = query.format ?: defaultFormat(char.uuid)
+        val stop = link.subscribe(
+            char,
+            value = { bytes, time ->
+                op.line(
+                    obj(
+                        "char" to json(char.uuid),
+                        "name" to (bleName(char.uuid)?.let(::json) ?: "null"),
+                        "as" to json(format.word),
+                        "value" to format.json(bytes),
+                        "hex" to json(bleHex(bytes)),
+                        "time" to time.toString(),
+                    ),
+                )
+            },
+            done = { result -> result.onFailure { op.refuse("couldn't subscribe to $name: ${why(it)}") } },
+        )
+        op.onEnd(stop::stop)
+    }
+
+    fun connect(query: DeviceQuery, op: Op) {
+        val dev = device(query.device)
+        val hold = Held()
+        synchronized(lock) {
+            if (dev.address in held) throw BleRefused("${dev.address} is already held by another mynx ble connect")
+            held[dev.address] = hold
+        }
+        fun release() = synchronized(lock) { if (held[dev.address] === hold) held.remove(dev.address) }
+        op.onEnd(::release)
+        host.connect(
+            dev.address,
+            dev.random,
+            ready = { result ->
+                op.guard {
+                    val link = result.getOrElse { throw BleRefused("couldn't connect to ${dev.who}: ${why(it)}") }
+                    val kept = op.onEnd {
+                        release()
+                        link.close()
+                    }
+                    if (kept) {
+                        synchronized(lock) { hold.link = link }
+                        op.line(obj("state" to json("connected"), "device" to dev.json, "mtu" to link.mtu.toString()))
+                    }
+                }
+            },
+            dropped = { why ->
+                release()
+                val listeners = synchronized(lock) { hold.listeners.toList() }
+                op.line(obj("state" to json("disconnected"), "device" to dev.json, "error" to json(why)))
+                listeners.forEach { runCatching { it(why) } }
+                op.refuse("the link to ${dev.who} dropped: $why")
+            },
+        )
+    }
+
     return mapOf(
+        "ble-notify" to later(null, { parseDevice("ble-notify", it, chars = true) }, ::notify),
+        "ble-connect" to later(null, { parseDevice("ble-connect", it) }, ::connect),
         "ble-scan" to later(SCAN_SECONDS, { parseScan("ble-scan", it, timed = true) }, ::scan),
         "ble-scan-stream" to later(null, { parseScan("ble-scan-stream", it, timed = false) }, ::scanStream),
         "ble-services" to later(DEVICE_SECONDS, { parseDevice("ble-services", it) }, ::services),

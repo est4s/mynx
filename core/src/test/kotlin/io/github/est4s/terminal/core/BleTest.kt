@@ -52,7 +52,7 @@ class FakeBleLink(override val address: String, override val services: List<BleS
     }
     override fun subscribe(char: BleChar, value: (ByteArray, Long) -> Unit, done: (Result<Unit>) -> Unit): BleStop {
         pending += "subscribe ${char.uuid}" to (value to done)
-        return BleStop { pending += "unsubscribe ${char.uuid}" to Unit }
+        return BleStop { pending += "unsubscribe ${char.uuid}${if (closed) " after closing" else ""}" to Unit }
     }
     override fun close() { closed = true }
 
@@ -125,8 +125,8 @@ class BleTest {
     }
 
     @Test
-    fun `answers only the planned requests`() {
-        assertTrue(BLE_REQUEST_NAMES.containsAll(bleRequests(home, host).keys))
+    fun `answers every planned request`() {
+        assertEquals(BLE_REQUEST_NAMES.toSet(), bleRequests(home, host).keys)
     }
 
     @Test
@@ -314,6 +314,10 @@ class BleTest {
             listOf("ble-write", c3, "2a19") to "what to write? (a value: hex unless as= says)",
             listOf("ble-write", c3, "2a19", "0g") to "'0g' isn't hex: two digits a byte, like 0a1b or 0a 1b",
             listOf("ble-write", c3, "2a19", "300", "as=u8") to "u8 is 0 to 255, not '300'",
+            listOf("ble-notify", c3) to "which characteristic? (a UUID or a name: mynx ble services $c3 lists them)",
+            listOf("ble-notify", c3, "2a19", "no-response") to "unknown option 'no-response' for ble-notify",
+            listOf("ble-connect") to "which device? (an address, or a name: mynx ble scan finds them)",
+            listOf("ble-connect", c3, "as=u8") to "unknown option 'as=u8' for ble-connect",
         )
         bad.entries.forEachIndexed { i, (lines, error) ->
             send("2-$i", *lines.toTypedArray())
@@ -525,5 +529,108 @@ class BleTest {
         send("3-9", "ble-write", c3, "nus-rx", "01")
         connected(writeOnly)
         assertEquals(refusal("nus-rx only takes writes without a response: add no-response"), reply("3-9"))
+    }
+
+    @Test
+    fun `notify streams each value until cancelled, then unsubscribes and disconnects`() {
+        send("1-1", "ble-notify", c3, "battery-level")
+        assertEquals("stream", file("1-1.wait").readText())
+        val link = connected()
+        val (value, done) = link.subscription(level)
+        done(Result.success(Unit))
+        value(byteArrayOf(42), 1234)
+        value(byteArrayOf(41), 2234)
+        assertEquals(
+            listOf(
+                """{"char":"$level","name":"battery-level","as":"u8","value":42,"hex":"2a","time":1234}""",
+                """{"char":"$level","name":"battery-level","as":"u8","value":41,"hex":"29","time":2234}""",
+            ),
+            lines("1-1"),
+        )
+        cancel("1-1")
+        assertEquals(listOf("subscribe $level", "unsubscribe $level"), link.pending.map { it.first })
+        assertTrue(link.closed)
+        assertEquals("""{"ok":true}""", reply("1-1"))
+    }
+
+    @Test
+    fun `notify takes indicate too, in the format asked, and refuses what has neither`() {
+        send("1-1", "ble-notify", c3, counter, "as=u16")
+        val link = connected()
+        link.subscription(counter).first(byteArrayOf(1, 1), 5)
+        assertEquals(listOf("""{"char":"$counter","name":null,"as":"u16","value":257,"hex":"01 01","time":5}"""), lines("1-1"))
+        send("1-2", "ble-notify", c3, box)
+        assertTrue(connected().closed)
+        assertEquals(refusal("$box can't notify or indicate (it has: read, write)"), reply("1-2"))
+    }
+
+    @Test
+    fun `notify ends as a refusal when subscribing fails or the link drops`() {
+        send("1-1", "ble-notify", c3, "nus-tx")
+        var link = connected()
+        link.subscription(tx).second(Result.failure(Exception("not permitted")))
+        assertEquals(refusal("couldn't subscribe to nus-tx: not permitted"), reply("1-1"))
+        assertTrue(link.closed)
+        send("1-2", "ble-notify", c3, "nus-tx")
+        link = connected()
+        link.subscription(tx).second(Result.success(Unit))
+        host.connects.last().dropped("link lost")
+        assertEquals(refusal("the link to $c3 dropped: link lost"), reply("1-2"))
+    }
+
+    @Test
+    fun `connect holds a link that other requests on the device use until it's cancelled`() {
+        send("1-1", "ble-connect", c3)
+        assertEquals("stream", file("1-1.wait").readText())
+        val link = connected(c3Link(mtu = 185))
+        assertEquals(listOf("""{"state":"connected","device":{"address":"$c3","name":null},"mtu":185}"""), lines("1-1"))
+        send("1-2", "ble-read", c3, "2a19")
+        send("1-3", "ble-services", c3)
+        assertEquals(1, host.connects.size)
+        link.answer("read $level", Result.success(byteArrayOf(9)))
+        assertEquals(9L, (parseJson(reply("1-2")!!) as Map<*, *>)["value"])
+        assertEquals(185L, (parseJson(reply("1-3")!!) as Map<*, *>)["mtu"])
+        send("1-4", "ble-notify", c3, "2a19")
+        link.subscription(level).second(Result.success(Unit))
+        cancel("1-4")
+        assertEquals(listOf("subscribe $level", "unsubscribe $level"), link.pending.map { it.first })
+        assertFalse(link.closed)
+        cancel("1-1")
+        assertTrue(link.closed)
+        assertEquals("""{"ok":true}""", reply("1-1"))
+        send("1-5", "ble-read", c3, "2a19")
+        assertEquals(2, host.connects.size)
+    }
+
+    @Test
+    fun `a held link that drops says so, ends what uses it, and isn't used again`() {
+        send("1-1", "ble-connect", c3)
+        val link = connected()
+        send("1-2", "ble-notify", c3, "nus-tx")
+        link.subscription(tx).second(Result.success(Unit))
+        host.connects.single().dropped("link lost")
+        assertEquals(
+            """{"state":"disconnected","device":{"address":"$c3","name":null},"error":"link lost"}""",
+            lines("1-1").last(),
+        )
+        assertEquals(refusal("the link to $c3 dropped: link lost"), reply("1-1"))
+        assertEquals(refusal("the link to $c3 dropped: link lost"), reply("1-2"))
+        send("1-3", "ble-connect", c3)
+        assertEquals(2, host.connects.size)
+    }
+
+    @Test
+    fun `one connect per device at a time, and a failed one frees it`() {
+        send("1-1", "ble-connect", c3)
+        send("1-2", "ble-connect", c3.lowercase())
+        assertEquals(refusal("$c3 is already held by another mynx ble connect"), reply("1-2"))
+        assertEquals(1, host.connects.size)
+        // Until it's connected, other requests connect for themselves.
+        send("1-3", "ble-read", c3, "2a19")
+        assertEquals(2, host.connects.size)
+        host.connects[0].ready(Result.failure(Exception("timed out")))
+        assertEquals(refusal("couldn't connect to $c3: timed out"), reply("1-1"))
+        send("1-4", "ble-connect", c3)
+        assertEquals(3, host.connects.size)
     }
 }
