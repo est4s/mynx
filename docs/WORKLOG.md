@@ -20,7 +20,8 @@ are in git history: the full log up to entry 92 is
   bug reports (`mynx report`), and **mynx dev**, debug builds as a
   separate app (entry 82).
 - **Released:** v0.1.0 and v0.1.1 (2026-10-10), v0.1.2 (2026-10-12),
-  v0.2.0 (2026-10-13, background services), signed with the
+  v0.2.0 (2026-10-13, background services), v0.3.0 (2026-10-26,
+  development boards: USB serial, raw USB, UF2), signed with the
   release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer's
   daily mynx is the release, and it updated 0.1.0 → 0.1.1 → 0.1.2
   through `mynx update` (entry 81's updates, confirmed); 0.1.2 came
@@ -43,33 +44,32 @@ are in git history: the full log up to entry 92 is
 - **USB serial:** the bridge (PR #33) and the preload library for
   `/dev/serial` (PR #34) are merged; every phone test passed with an
   ESP32-C3, an ESP32-CAM-MB, an Arduino Nano and a Pro Micro (two at
-  once on a hub). Not released yet. The plans and tests:
+  once on a hub). Released in v0.3.0. The plans and tests:
   `git show d748955:docs/WORKLOG.md` (bridge),
   `git show 46bd16c:docs/WORKLOG.md` (preload, entries 115-122).
 - **USB serial part 3** (serial monitor, board tools, port names):
-  merged (PR #36). Not released yet.
+  merged (PR #36). Released in v0.3.0.
 - **Go programs** (proot's `mynx_serial` extension: `arduino-cli
   board list` and `monitor`): every phone test passed (entry 129);
-  merged (PR #37). Not released yet.
+  merged (PR #37). Released in v0.3.0.
 - **PlatformIO's ESP32 toolchains** (proot's `mynx_links`
   extension): a C3 project builds on the phone (entry 132); merged
-  (PR #39). Not released yet.
+  (PR #39). Released in v0.3.0.
 - **Small serial fixes** (PR #42, entry 136): the bridge's own read
   queue (`UsbReads`), the busy hint and the no-port retry; the 4 MB
   `read_flash` on the C3, the Nano, a Pro Micro upload and the busy
-  hint passed on the phone (build 214); FTDI not tried. Not released
-  yet.
+  hint passed on the phone (build 214); FTDI not tried. Released in v0.3.0.
 - **Android's process limit:** confirmed on the Nord 2 (entry
   138): the `device_config` commands stop the kills; the guide now
   gives them for Android 12-13.
 - **Services and `~/.local/bin`:** fixed and confirmed on the phone
-  (PR #46, entry 139). Not released yet.
+  (PR #46, entry 139). Released in v0.3.0.
 - **Raw USB:** the spike worked on the phone with an RP2040 Zero
   (entry 141: `picotool info` and `load`, libusb, `lsusb`, pyusb);
   rebuilt test-first and merged (PR #47, entry 142); every phone
-  test passed. Not released yet.
+  test passed. Released in v0.3.0.
 - **UF2** (`mynx uf2 flash`): every phone test passed with the
-  RP2040 Zero; merged (PR #49, entry 144). Not released yet.
+  RP2040 Zero; merged (PR #49, entry 144). Released in v0.3.0.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -152,16 +152,6 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    the maintainer's flash in a tab showed `writing... 1302/1302`.
    All passed. Not tried: an RP2350, TinyUF2 or Adafruit
    bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
-
-### Then, release v0.3.0 (the maintainer's)
-
-Moved after the development boards by the maintainer (2026-10-25),
-so the release takes them too. USB serial parts 1-3, Go programs,
-PlatformIO's ESP32 toolchains, the small serial fixes (PR #33, #34,
-#36, #37, #39, #42), the process-limit guide (#45) and services'
-`~/.local/bin` (#46) raw USB (#47) and UF2 (#49) are tested on the phone, unreleased. Only the
-maintainer tags (`docs/RELEASING.md`). Go programs' test plan and how the tests ran:
-`git show 2eaa373:docs/WORKLOG.md`.
 
 ### 1. Smaller things
 
@@ -272,6 +262,13 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (145): v0.3.0 released
+
+The maintainer tagged v0.3.0 (`mynx-0.3.0.apk`): everything since
+v0.2.0, PR #33 to #49. The work log's status says so, and the
+release's plan left "Next". On the release app, Android asks for each
+board again (a different app from mynx dev).
 
 ### 2026-10-26 (144): UF2 flashing (branch `uf2`)
 
