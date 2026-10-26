@@ -204,7 +204,10 @@ private class BtRefused(message: String) : Exception(message)
  * Answers: `bt-list` gives `enabled`, `devices` (`name`, `address`,
  * `type`, `port`: the one bound to it or null) and `ports` ([btPortJson]);
  * with Bluetooth off, no devices, and the ports from the config.
- * `bt-bind` gives the `port`, `bt-unbind` the ports `removed`. DEVICE is
+ * `bt-bind` gives the `port`, `bt-unbind` the ports `removed`. BLE
+ * UART ports (`nusN`) are listed and unbound as `rfcomm` ones, but
+ * `bt-bind` refuses them (and a device bound to one): `ble-bind` checks
+ * the device has a UART first. DEVICE is
  * an address (any case, paired or not) or a paired device's name: exact,
  * else in any case.
  */
@@ -279,12 +282,14 @@ fun bluetoothRequests(home: File, host: BluetoothHost): Map<String, Later> {
         val device = args.getOrNull(0)?.takeIf { it.isNotEmpty() }
             ?: throw BtRefused("bt-bind needs a device: its name or address (mynx bt lists them)")
         val port = args.getOrNull(1)?.takeIf { it.isNotEmpty() }
+        if (port != null && isNusName(port)) throw BtRefused("$port is a Bluetooth LE UART port: use mynx ble bind")
         if (port != null && !isRfcommName(port)) throw BtRefused(badRfcommName(port))
         val address = address(device)
         val text = conf.takeIf { it.isFile }?.readText()
         val bindings = text?.let { parseBluetooth(it).bindings }.orEmpty()
         val devices = bonded()
         bindings.firstOrNull { it.address == address }?.let { bound ->
+            if (isNusName(bound.port)) throw BtRefused("$address is already bound to ${bound.port} (mynx ble unbind ${bound.port} first)")
             if (port != null && port != bound.port) throw BtRefused("$address is already bound to ${bound.port}")
             return ok("port" to portJson(bound, devices, host.ports()))
         }
@@ -302,7 +307,7 @@ fun bluetoothRequests(home: File, host: BluetoothHost): Map<String, Later> {
         val which = args.getOrNull(0)?.takeIf { it.isNotEmpty() }
             ?: throw BtRefused("bt-unbind needs a port or a device (mynx bt lists them)")
         val text = conf.takeIf { it.isFile }?.readText().orEmpty()
-        val unbound = if (isRfcommName(which)) {
+        val unbound = if (isBluetoothPortName(which)) {
             removeBluetoothBindings(text) { it.port == which }
                 .also { if (it.ports.isEmpty()) throw BtRefused("no Bluetooth port $which (mynx bt lists them)") }
         } else {
