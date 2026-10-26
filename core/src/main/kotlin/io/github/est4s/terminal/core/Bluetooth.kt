@@ -13,8 +13,12 @@ const val FIRST_BLUETOOTH_TCP_PORT = 2317
 // Linux's RFCOMM_MAX_DEV.
 private const val MAX_RFCOMM = 255
 
-/** A Bluetooth serial port: [port] (`rfcomm0`) links to the device at [address] (upper case) when it's used. */
-data class BtBinding(val port: String, val address: String)
+/**
+ * A Bluetooth serial port: [port] (`rfcomm0`, or a BLE UART's `nus0`)
+ * links to the device at [address] (upper case) when it's used;
+ * [random] when that BLE address is random (see `BleUart.kt`).
+ */
+data class BtBinding(val port: String, val address: String, val random: Boolean = false)
 
 data class ParsedBluetooth(val bindings: List<BtBinding>, val problems: List<String>)
 
