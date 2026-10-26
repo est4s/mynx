@@ -53,7 +53,10 @@ sensors, microphone, speaker and flashlight.
   `avrdude`, `arduino-cli`, PlatformIO, `mpremote` and `picocom` find
   it, flash it, reset it into its bootloader and talk to it. A serial
   monitor (`mynx usb monitor`) comes with its own key bar. CH340,
-  CP210x, FTDI, PL2303 and native USB (CDC ACM).
+  CP210x, FTDI, PL2303 and native USB (CDC ACM). Tools that drive a
+  device themselves over USB work too: `picotool` flashes a Raspberry
+  Pi Pico, and `lsusb`, pyusb and other libusb tools find and open
+  devices.
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
   and packages survive app updates.
 - **Tabs** that keep running in the background and come back when you

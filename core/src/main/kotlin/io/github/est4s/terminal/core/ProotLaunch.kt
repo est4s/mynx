@@ -46,7 +46,9 @@ fun serialPreload(toolsDir: File, enabled: Boolean): String? =
  * [serialDir] (a host path) holds the USB serial ports' links, bound at [SERIAL_MOUNT];
  * proot's mynx_serial extension gets it too (`MYNX_SERIAL_DIR`), for
  * programs the [preload] can't reach (static ones, like Go's).
- * [ownDev] gives Debian a `/dev` of its own instead of the host's (see [OwnDev]).
+ * [ownDev] gives Debian a `/dev` of its own instead of the host's (see [OwnDev]);
+ * with its `sysBus`, also a `/sys/bus` with USB devices' stand-in and the
+ * app's socket for their fds (`MYNX_USB_SOCKET`, for proot's mynx_usb extension).
  * [preload] (a Debian path) is a library every program in Debian loads
  * (`LD_PRELOAD`, set inside the guest only: Android's linker must not
  * see it in proot's own environment).
@@ -82,6 +84,9 @@ fun prootLaunch(
             add("-b"); add("${ownDev.dir}:/dev")
             ownDev.devices.forEach { add("-b"); add("/dev/$it") }
             add("-b"); add("${ownDev.sysTty}:$SYS_TTY_MOUNT")
+            // All of /sys/bus, not just usb: libudev lists it, and Android refuses that listing.
+            ownDev.sysBus?.let { add("-b"); add("$it:$SYS_BUS_MOUNT") }
+            ownDev.buses.forEach { add("-b"); add("$SYS_BUS_MOUNT/$it") }
         }
         HOST_BINDS.filter { ownDev == null || it != "/dev" }.forEach { add("-b"); add(it) }
         fakeProc.forEach { (procPath, fake) -> add("-b"); add("$fake:$procPath") }
@@ -109,12 +114,16 @@ fun prootLaunch(
         // Debian's own zone is UTC; a TZ set in .bashrc still wins.
         timeZone?.let { add("TZ=$it") }
         preload?.let { add("LD_PRELOAD=$it") }
+        // libudev (libusb's) refuses device folders outside a real sysfs unless told not to check.
+        if (ownDev?.sysBus != null) add("SYSTEMD_DEVICE_VERIFY_SYSFS=0")
         addAll(command)
     }
     val env = buildMap {
         put("PROOT_LOADER", paths.loader)
         put("PROOT_TMP_DIR", paths.tmpDir)
         serialDir?.let { put("MYNX_SERIAL_DIR", it) }
+        // proot's mynx_usb extension fetches USB devices' fds from the app there.
+        if (ownDev?.sysBus != null) put("MYNX_USB_SOCKET", "${ownDev.dir}/$USB_SOCKET_NAME")
     }
     return Launch(argv, env)
 }

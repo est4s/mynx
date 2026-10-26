@@ -114,6 +114,34 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `with its own sys bus, Debian sees USB devices' stand-in and the phone's buses, and proot gets the app's socket`() {
+        val own = OwnDev(
+            dir = "/data/files/dev", devices = listOf("null"), sysTty = "/data/files/sys-tty",
+            sysBus = "/data/files/sys-bus", buses = listOf("platform", "iio"),
+        )
+        val launch = prootLaunch(paths, ownDev = own)
+        val binds = launch.argv.valuesAfter("-b")
+
+        // All of /sys/bus: libudev lists it to find usb, and Android refuses that listing.
+        assertTrue("/data/files/sys-bus:/sys/bus" in binds)
+        // The phone's buses inside it, after it.
+        assertTrue(binds.indexOf("/sys/bus/platform") > binds.indexOf("/data/files/sys-bus:/sys/bus"))
+        assertTrue("/sys/bus/iio" in binds)
+        assertEquals("/data/files/dev/bus/usb/.ctl", launch.env["MYNX_USB_SOCKET"])
+        // libudev refuses devices outside a real sysfs unless told not to check.
+        assertTrue("SYSTEMD_DEVICE_VERIFY_SYSFS=0" in launch.argv)
+    }
+
+    @Test
+    fun `without its own sys bus, no USB socket`() {
+        val own = OwnDev(dir = "/data/files/dev", devices = listOf("null"), sysTty = "/data/files/sys-tty")
+        val launch = prootLaunch(paths, ownDev = own)
+
+        assertEquals(null, launch.env["MYNX_USB_SOCKET"])
+        assertTrue(launch.argv.none { it.endsWith(":/sys/bus") || it.startsWith("SYSTEMD_") })
+    }
+
+    @Test
     fun `has the shell write its folder to a file after each prompt`() {
         val argv = prootLaunch(paths, cwdFile = "/tmp/.mynx/cwd-3").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

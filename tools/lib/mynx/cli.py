@@ -45,7 +45,7 @@ Commands:
   rotation   rotation [status] | lock [portrait|landscape] | unlock
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
-  usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB serial ports
+  usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
@@ -778,6 +778,8 @@ def cmd_usb(args, as_json):
         answer = request("usb-allow", *rest)
         device = answer["device"]
         lines = [f"Allowed: {usb_label(device)}"]
+        if device.get("driver") is None:
+            lines.append(f"{'raw USB':<8} {device['id']}")
         for port in device["ports"]:
             lines += [f"{port['name']:<8} {port['path']}", f"{'':<8} {port['url']}"]
         if device.get("error"):
@@ -807,9 +809,10 @@ def usb_label(device):
 
 
 def usb_text(devices):
-    """Each port with its path and URL; devices without ports say why."""
+    """Each port with its path and URL, a device with no serial driver its
+    raw USB node; devices without ports say why."""
     if not devices:
-        return ("No USB serial device. Connect one with a USB-C OTG adapter or\n"
+        return ("No USB device. Connect one with a USB-C OTG adapter or\n"
                 "cable; Android asks whether mynx may use it.")
     lines = []
     for device in devices:
@@ -820,6 +823,9 @@ def usb_text(devices):
                       f"  {port['url']}"]
         if not device["allowed"]:
             lines += [f"{label}: not allowed", f"  mynx usb allow {device['ids']} (app on screen)"]
+        elif device.get("driver") is None:
+            # No serial driver: Debian's tools reach it through its node (libusb, picotool, …).
+            lines += [f"{label}: raw USB", f"  {device['id']}"]
         elif device.get("error"):
             lines.append(f"{label}: {device['error']}")
         elif not device["ports"]:

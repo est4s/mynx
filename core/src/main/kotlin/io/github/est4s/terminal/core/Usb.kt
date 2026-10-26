@@ -20,9 +20,11 @@ data class SerialPortInfo(val name: String, val tcpPort: Int, val inUse: Boolean
 fun serialWaitingMark(name: String) = ".$name.waiting"
 
 /**
- * A USB device a serial driver can drive. [id] is Android's name for it
- * (`/dev/bus/usb/001/002`); [driver] is [usbDriverName]'s. Its [ports]
- * are served once it's [allowed]; [error] says why they aren't.
+ * A USB device the app sees. [id] is Android's name for it
+ * (`/dev/bus/usb/001/002`, Debian's too, for raw USB once it's
+ * [allowed]); [driver] is [usbDriverName]'s, null when no serial driver
+ * drives it. Its [ports] are served once it's [allowed]; [error] says why
+ * they aren't.
  */
 data class UsbSerialDevice(
     val id: String,
@@ -31,7 +33,7 @@ data class UsbSerialDevice(
     val manufacturer: String?,
     val product: String?,
     val serial: String?,
-    val driver: String,
+    val driver: String?,
     val allowed: Boolean,
     val ports: List<SerialPortInfo>,
     val error: String?,
@@ -84,7 +86,7 @@ fun usbDeviceJson(device: UsbSerialDevice): String = obj(
     "manufacturer" to (device.manufacturer?.let(::json) ?: "null"),
     "product" to (device.product?.let(::json) ?: "null"),
     "serial" to (device.serial?.let(::json) ?: "null"),
-    "driver" to json(device.driver),
+    "driver" to (device.driver?.let(::json) ?: "null"),
     "allowed" to device.allowed.toString(),
     "error" to (device.error?.let(::json) ?: "null"),
     "ports" to array(device.ports.map { port ->
@@ -117,17 +119,18 @@ fun usbRequests(
         val which = args.firstOrNull()?.trim().orEmpty()
         val all = devices()
         // Allowed but with no port: the bridge missed it, or failed to open it; it tries again.
-        fun waits(device: UsbSerialDevice) = !device.allowed || device.ports.isEmpty()
+        // One with no serial driver has no port to wait for.
+        fun waits(device: UsbSerialDevice) = !device.allowed || (device.driver != null && device.ports.isEmpty())
         val device = if (which.isEmpty()) {
             val waiting = all.filter(::waits)
             when (waiting.size) {
-                0 -> return@Later reply.refuse("no USB serial device is waiting for access")
+                0 -> return@Later reply.refuse("no USB device is waiting for access")
                 1 -> waiting.single()
                 else -> return@Later reply.refuse("${waiting.size} USB devices are waiting: say which (mynx usb lists them)")
             }
         } else {
             all.firstOrNull { it.id == which || usbIds(it.vendorId, it.productId) == which.lowercase() }
-                ?: return@Later reply.refuse("no USB serial device $which (mynx usb lists them)")
+                ?: return@Later reply.refuse("no USB device $which (mynx usb lists them)")
         }
         if (!waits(device)) return@Later reply.ok("device" to usbDeviceJson(device))
         allow(device.id) { error ->

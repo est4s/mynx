@@ -441,6 +441,36 @@ See `docs/ROADMAP.md` "How it works". The details:
   (the patch's `handle_option_link2symlink()`), not by a variable.
   Every `getdents64` now stops in proot (one `readlink` per symlink
   listed); the old 32-bit `getdents` isn't covered.
+- **Raw USB** (`core/.../UsbDevices.kt`, `app/.../UsbFds.kt`,
+  `proot/mynx_usb/`; agent's design, 2026-10-25, spike entry 141, PR
+  #47): Android won't let apps open `/dev/bus/usb/*` (SELinux: no
+  `open` on `usb_device`), but the fd `UsbManager.openDevice()` gives
+  takes the usbfs ioctls. `UsbFds` serves a fresh one per request on
+  a Unix socket in Debian's own `/dev` (`/dev/bus/usb/.ctl`; `BBB/DDD\n`
+  in, `ok\n` with the fd by `SCM_RIGHTS` or `err ERRNO\n` out; the
+  peer's uid checked), so usbfs claims are per program. It seeks the
+  fd to 0 first: Android read the descriptors through it, and the copy
+  shares the offset. **proot's `mynx_usb`** (`MYNX_USB_SOCKET`) turns
+  a program's `open`/`openat` of a node beside that socket into
+  chained `socket`, `connect`, `write`, `recvmsg`, `close` made by the
+  program (memory below its stack pointer), so the fd lands in it, for
+  programs that skip libc too (nusb, Go); only such an open stops at
+  its exit (`sysexit_pending`, as link2symlink: `FILTER_SYSEXIT` would
+  stop every open twice). A node whose bus folder is missing gets
+  proot's own ENOENT before the extension sees it. **Finding devices:**
+  Debian's libusb enumerates through libudev, which lists `/sys/bus`
+  (Android refuses that) and reads `usb/devices/*/uevent` and the
+  `subsystem` link, so the own `/dev` comes with an own `/sys/bus`
+  (`OwnDev.sysBus`, `filesDir/sys-bus`): `writeUsbDevices()` lays
+  out each device the app may use (no MAJOR/MINOR in `uevent`:
+  libudev's enumerator skips a device with a number and no udev
+  database entry; a folder per interface, as nusb reads), and each of
+  `HOST_BUSES` the phone has is bound into it.
+  `SYSTEMD_DEVICE_VERIFY_SYSFS=0` stops libudev refusing folders that
+  aren't on a real sysfs. The stand-in is rewritten on Android's
+  attach, detach and permission broadcasts and the app's USB refresh;
+  `usb-allow` answers after it. **Not yet:** hotplug while a program
+  runs (libudev's monitor wants libudev-format messages from uid 0).
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its
@@ -610,7 +640,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`prootLaunch(cwdFile = …)`).
 - App data paths come in two spellings (`/data/user/0/<app>` from
   `filesDir`, `/data/data/<app>` from the kernel). Don't compare paths by
-  prefix across the two.
+  prefix across the two. proot gives a bind's host path its real
+  spelling, so the paths an extension sees are `/data/data/…` while
+  the variables the app passes say `/data/user/0/…`: mynx_usb
+  resolves its socket's folder (`realpath`) before comparing (its
+  first phone run missed every open).
 - **Don't `mv` a git repo (or anything with hard links) in proot.**
   proot fakes hard links with symlinks to `.l2s.*` files holding the
   absolute path, so a moved repo's loose objects all break ("bad object
@@ -733,6 +767,16 @@ Bugs that took a phone round to find; keep them from coming back.
   (OnePlus withholds `WRITE_SECURE_SETTINGS`), but `device_config put
   activity_manager max_phantom_processes 2147483647` (with sync off)
   works: two C3 builds at once then passed (entry 138).
+- **Android reads a USB device's descriptors through the fd it
+  gives** (`openDevice()`), so it's at the end (offset 73 for an
+  RP2040 in BOOTSEL), and a dup shares that: a program reading its
+  node from the start, as on Linux, got 0 bytes. `UsbFds` seeks it
+  back to 0. The RP2040's BOOTSEL drive shows as "damaged USB
+  storage": Android won't mount it.
+- **Tests run under the build being tested:** core's tests made a
+  temp `…/dev/bus/usb/001/004`, and the spike's proot took it for a
+  device (any path ending so). Match proot's paths exactly (the
+  extension now takes only nodes beside the app's socket).
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

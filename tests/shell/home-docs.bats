@@ -189,3 +189,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 @test "the guide says services find commands in ~/.local/bin" {
     grep -qF 'the login PATH (with `~/.local/bin`)' "$GUIDE"
 }
+
+@test "the guide says how tools reach raw USB devices" {
+    for text in "### Raw USB devices" "/dev/bus/usb/BBB/DDD" "/sys/bus/usb/devices" \
+        "picotool load -x" "mynx usb allow DEVICE" "driver: null" "tick \"always\" once per board" \
+        "/tmp/.mynx/serial/usb.log"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}

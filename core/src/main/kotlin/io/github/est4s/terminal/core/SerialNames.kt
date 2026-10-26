@@ -19,6 +19,16 @@ val HOST_DEVICES = listOf(
     "ashmem", "kgsl-3d0", "dri", "dma_heap", "ion", "mali0", "fuse", "tun", "net",
 )
 
+/**
+ * The phone's buses an [OwnDev]'s `/sys/bus` brings in, those it has
+ * (Android lets apps read them, not list `/sys/bus`). Not `usb`: that's
+ * the app's stand-in ([writeUsbDevices]).
+ */
+val HOST_BUSES = listOf(
+    "platform", "cpu", "node", "soc", "amba", "i2c", "spi", "iio", "event_source", "hid",
+    "mmc", "scsi", "gpio", "nvmem", "virtio", "pci", "serio", "clocksource", "clockevents", "workqueue",
+)
+
 // The links Linux's /dev has; proot resolves /proc/self for each program.
 private val DEV_LINKS = mapOf(
     "fd" to "/proc/self/fd",
@@ -37,29 +47,45 @@ enum class HostEntry { FILE, DIR }
  * host's [devices] bound into it, and [sysTty] at [SYS_TTY_MOUNT]. Its
  * own, so tools can list it and the ports' names come and go in it:
  * Android doesn't let apps list its `/dev`, and proot can't add a bind
- * once started (see [writeSerialNames]).
+ * once started (see [writeSerialNames]). With [sysBus], a `/sys/bus` of
+ * its own too, at [SYS_BUS_MOUNT]: USB devices' stand-in
+ * ([writeUsbDevices]), with the phone's [buses] bound into it.
  */
-data class OwnDev(val dir: String, val devices: List<String>, val sysTty: String)
+data class OwnDev(
+    val dir: String,
+    val devices: List<String>,
+    val sysTty: String,
+    val sysBus: String? = null,
+    val buses: List<String> = emptyList(),
+)
 
 /**
  * Sets up [devDir] and [sysTtyDir] for an [OwnDev]: a placeholder for each
- * of [HOST_DEVICES] that [probe] (given a name in the host's `/dev`) finds,
- * so listings show it, Linux's links, and the folder for `/dev/serial`.
- * The ports' names are left alone.
+ * of [HOST_DEVICES] that [probe] (given a host path) finds, so listings
+ * show it, Linux's links, and the folder for `/dev/serial`. The ports'
+ * names are left alone. With [sysBusDir], USB devices' stand-in and their
+ * nodes' folder, and a placeholder for each of [HOST_BUSES] the phone has.
  */
-fun prepareOwnDev(devDir: File, sysTtyDir: File, probe: (String) -> HostEntry?): OwnDev {
+fun prepareOwnDev(devDir: File, sysTtyDir: File, sysBusDir: File? = null, probe: (String) -> HostEntry?): OwnDev {
     devDir.mkdirs()
     sysTtyDir.mkdirs()
-    val devices = HOST_DEVICES.filter { name ->
-        val placeholder = File(devDir, name)
-        // Gone from the host (or no longer allowed): an empty file there would only stand in for it.
-        val kind = probe(name) ?: return@filter false.also { placeholder.deleteRecursively() }
-        if (kind == HostEntry.DIR) placeholder.mkdirs() else if (!placeholder.exists()) placeholder.createNewFile()
-        true
-    }
+    val devices = placeholders(devDir, HOST_DEVICES) { probe("/dev/$it") }
     DEV_LINKS.forEach { (name, target) -> setLink(File(devDir, name), target) }
     File(devDir, "serial").mkdirs()
-    return OwnDev(devDir.absolutePath, devices, sysTtyDir.absolutePath)
+    if (sysBusDir == null) return OwnDev(devDir.absolutePath, devices, sysTtyDir.absolutePath)
+    File(sysBusDir, "usb/devices").mkdirs()
+    File(devDir, "bus/usb").mkdirs()
+    val buses = placeholders(sysBusDir, HOST_BUSES) { probe("$SYS_BUS_MOUNT/$it") }
+    return OwnDev(devDir.absolutePath, devices, sysTtyDir.absolutePath, sysBusDir.absolutePath, buses)
+}
+
+// The names the host has, each with a placeholder in dir.
+private fun placeholders(dir: File, names: List<String>, probe: (String) -> HostEntry?): List<String> = names.filter { name ->
+    val placeholder = File(dir, name)
+    // Gone from the host (or no longer allowed): an empty file there would only stand in for it.
+    val kind = probe(name) ?: return@filter false.also { placeholder.deleteRecursively() }
+    if (kind == HostEntry.DIR) placeholder.mkdirs() else if (!placeholder.exists()) placeholder.createNewFile()
+    true
 }
 
 /**
