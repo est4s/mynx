@@ -125,8 +125,9 @@ cable, using standard tools.
   devices in `/sys/bus/usb` as on Linux. The app opens the device
   through Android and hands the fd to the program (a proot extension
   of ours), so unpatched tools work, Rust and Go ones too. `picotool
-  load` flashes a Pico. Later: devices coming and going while a tool
-  runs.
+  load` flashes a Pico; OpenOCD (Espressif's), GDB and probe-rs
+  debug an ESP32-C3 over its built-in JTAG beside its serial port.
+  Later: devices coming and going while a tool runs.
 - **UF2 boards** *(PR #49; tested with an RP2040 Zero)*: copy
   firmware to the board's drive. Android sees the drive but won't
   mount it (an RP2040's shows as damaged), so `mynx uf2 flash` writes

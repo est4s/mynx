@@ -197,3 +197,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }
+
+@test "the guide says how to debug an ESP32-C3 over its built-in JTAG" {
+    for text in "board/esp32c3-builtin.cfg" "openocd-esp32/releases" "gdb-multiarch" \
+        "riscv:rv32" "probe-rs-tools-aarch64-unknown-linux-gnu" "ESP JTAG" \
+        "interface is busy (errno 16)"; do
+        grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
