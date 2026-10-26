@@ -109,19 +109,26 @@ class MynxRequests(
     }
 
     private fun startLater(id: String, request: MynxRequest, handler: Later) {
-        val reply = PendingReply(dir, id) { synchronized(open) { open -= it } }
+        val change = handler.change?.let { runCatching { it(request.args) }.getOrNull() }
+        // Whether start has returned: one that answers after (a permission dialog first) writes then.
+        var returned = false
+        val reply = PendingReply(dir, id) { reply ->
+            synchronized(open) { open -= reply }
+            val late = synchronized(reply) { returned }
+            if (late && change != null) runCatching { history.observe(change, undoKeep()) }
+        }
         synchronized(open) { open += reply }
         val wait = File(dir, "$id.wait.tmp")
         wait.writeText(handler.seconds?.toString() ?: "stream")
         wait.renameTo(File(dir, "$id.wait"))
-        val change = handler.change?.let { runCatching { it(request.args) }.getOrNull() }
         if (change != null) runCatching { history.observe(HAND_EDITS, undoKeep()) }
         try {
             handler.start(request.args, reply)
         } catch (e: Refused) {
             reply.refuse(e.message!!)
         }
-        if (change != null) runCatching { history.observe(change, undoKeep()) }
+        val answered = synchronized(reply) { returned = true; reply.answered }
+        if (change != null && answered) runCatching { history.observe(change, undoKeep()) }
     }
 
     /** Whether a [Later] request is still running: while one is, call [sweep] now and then. */
