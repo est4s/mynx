@@ -486,7 +486,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   status after the last block is success: the board restarts first.
   Tested natively against a fake drive (`tests/mynx/test_uf2.py`);
   the usbfs ioctls only on the phone.
-- **Bluetooth serial** (`core/.../Bluetooth.kt`; maintainer's
+- **Bluetooth serial** (`core/.../Bluetooth.kt`, `app/.../BtBridge.kt`,
+  `BtLine.kt`, `ServedPort.kt`; maintainer's
   decisions, 2026-10-26, entry 147: Classic SPP, Linux's `rfcomm
   bind`, pairing in Android's settings): a bound device is a port
   like a USB one (`/dev/serial/rfcommN`, RFC 2217 from the same
@@ -503,7 +504,15 @@ See `docs/ROADMAP.md` "How it works". The details:
   it writes, so a [Later]'s change is observed when it answers.
   `/dev/rfcommN`, a virtual tty in `/sys/class/tty` (no `device`) and
   uevents (major 216), as Linux makes them: pyserial globs
-  `/dev/rfcomm*`.
+  `/dev/rfcomm*`. The app serves a port while the setting, the
+  permission (`BLUETOOTH_CONNECT`, asked by `mynx bt`, never by `mynx
+  usb`: `bt-list --no-ask`) and Bluetooth itself allow, re-read on
+  Bluetooth's state broadcasts, reloading requests and coming on
+  screen. Each port is a `ServedPort` (server, helper, link; shared
+  with `UsbBridge`); servers take the lowest TCP port they can bind,
+  so the two bridges need no shared list. `BtLine` tries an
+  authenticated link, then an unauthenticated one (old HC-05s), and
+  closes a link still opening when its client leaves.
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds
   each `mynx rotation lock` for a process (pid + start time from
   `/proc/PID/stat`, so a reused pid doesn't count); `mynx` sends its

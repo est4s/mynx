@@ -24,7 +24,6 @@ import io.github.est4s.terminal.core.SerialLine
 import io.github.est4s.terminal.core.SerialServer
 import io.github.est4s.terminal.core.StopBits
 import io.github.est4s.terminal.core.UsbSerialDevice
-import io.github.est4s.terminal.core.tcpPorts
 import io.github.est4s.terminal.core.ttyName
 import io.github.est4s.terminal.core.usbString
 import io.github.est4s.terminal.core.usbDriverName
@@ -248,7 +247,7 @@ class UsbBridge(
                     step = "dropping RTS"
                     line.setRts(false)
                     step = "serving it"
-                    val server = newServer(line)
+                    val server = newSerialServer(line, open.values.flatMap { d -> d.ports.map { it.served.server.port } }.toSet())
                     opened.ports += OpenPort(port, reads, ServedPort(name, server, helpers)).also { it.start() }
                 } catch (e: Exception) {
                     queued?.cancel()
@@ -268,16 +267,6 @@ class UsbBridge(
     }
 
     private fun takenNames(): Set<String> = open.values.flatMap { d -> d.ports.map { it.name } }.toSet()
-
-    // The lowest free port from 2217; one another app holds is skipped.
-    private fun newServer(line: SerialLine): SerialServer {
-        val taken = open.values.flatMap { d -> d.ports.map { it.served.server.port } }.toSet()
-        for (port in tcpPorts(taken).take(100)) {
-            val server = runCatching { SerialServer(line, port) }.getOrNull()
-            if (server != null) return server
-        }
-        throw IOException("no free TCP port from 2217")
-    }
 
     private fun close(name: String) {
         val device = open.remove(name) ?: return
