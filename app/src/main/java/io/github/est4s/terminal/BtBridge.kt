@@ -106,18 +106,7 @@ class BtBridge(
 
     override val enabled: Boolean get() = runCatching { adapter?.isEnabled == true }.getOrDefault(false)
 
-    @SuppressLint("MissingPermission") // core asks only once allowed
-    override fun bonded(): List<BtDevice> = runCatching { adapter?.bondedDevices.orEmpty() }.getOrDefault(emptySet())
-        .map { device ->
-            val type = when (runCatching { device.type }.getOrNull()) {
-                BluetoothDevice.DEVICE_TYPE_CLASSIC -> BtType.CLASSIC
-                BluetoothDevice.DEVICE_TYPE_LE -> BtType.LE
-                BluetoothDevice.DEVICE_TYPE_DUAL -> BtType.DUAL
-                else -> BtType.UNKNOWN
-            }
-            BtDevice(runCatching { device.name }.getOrNull(), device.address, type)
-        }
-        .sortedBy { it.name ?: it.address }
+    override fun bonded(): List<BtDevice> = bondedDevices(adapter)
 
     override fun ports(): Map<String, BtPortState> = served.mapValues { (_, port) ->
         val info = port.served.info()
@@ -147,3 +136,18 @@ class BtBridge(
 
     override fun bindingsChanged() = refresh()
 }
+
+/** The paired devices, by name; for `mynx bt` and `mynx ble`. */
+@SuppressLint("MissingPermission") // core asks only once allowed
+fun bondedDevices(adapter: BluetoothAdapter?): List<BtDevice> =
+    runCatching { adapter?.bondedDevices.orEmpty() }.getOrDefault(emptySet())
+        .map { device ->
+            val type = when (runCatching { device.type }.getOrNull()) {
+                BluetoothDevice.DEVICE_TYPE_CLASSIC -> BtType.CLASSIC
+                BluetoothDevice.DEVICE_TYPE_LE -> BtType.LE
+                BluetoothDevice.DEVICE_TYPE_DUAL -> BtType.DUAL
+                else -> BtType.UNKNOWN
+            }
+            BtDevice(runCatching { device.name }.getOrNull(), device.address, type)
+        }
+        .sortedBy { it.name ?: it.address }

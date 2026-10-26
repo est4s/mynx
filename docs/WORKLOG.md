@@ -72,8 +72,13 @@ are in git history: the full log up to entry 92 is
   RP2040 Zero; merged (PR #49, entry 144). Released in v0.3.0.
 - **Bluetooth serial** (SPP, `mynx bt`): every phone test passed with
   the ESP32-CAM (entry 149); merged (PR #52). The plan and its tests:
-  `git show 0280cfa:docs/WORKLOG.md`. Next for Bluetooth, when the
-  maintainer picks it: BLE (`mynx ble`, roadmap).
+  `git show 0280cfa:docs/WORKLOG.md`.
+- **Bluetooth LE** (`mynx ble`): built by four subagents against a
+  contract (entries 151-152); every phone test passed with the
+  ESP32-C3 as `mynx-ble` (entry 153) but refusing the permission
+  (revoking it kills the app, and the session ran in it; core's tests
+  cover it). PR #53. The plan and its tests:
+  `git show 49b137b:docs/WORKLOG.md`.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -82,7 +87,21 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Development boards (leftovers; the maintainer picks)
+### 0. Bluetooth LE: what's left
+
+- **Nordic UART as a serial port** (`/dev/serial/nus0`, the
+  maintainer's decision of 2026-10-26: the PR after `mynx ble`): a
+  NUS device bound like `rfcomm0`, its `nus-tx` notifications in and
+  writes to `nus-rx` out, through `ServedPort`. The C3's test
+  peripheral (`~/sketches/ble-peripheral`) already echoes on NUS.
+- **Small:** cancelling a connect (`BleHost.connect` has no cancel:
+  a cancelled request leaves Android trying up to 30 s; core closes
+  the late link); scans don't say when Bluetooth turns off;
+  background scans on Android 10-11 likely need background location;
+  `write` VALUE can't hold a line break (percent-encode it, as
+  `clipboard-set` does).
+
+### 1. Development boards (leftovers; the maintainer picks)
 
 The roadmap's last items, planned with the maintainer 2026-10-25
 (entry 140). **Maintainer's decisions:** raw USB first, then UF2;
@@ -161,7 +180,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    All passed. Not tried: an RP2350, TinyUF2 or Adafruit
    bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
-### 1. Smaller things
+### 2. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (guide: "Making an
@@ -270,6 +289,53 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (153): BLE on the phone (build 246)
+
+The phone tests with the C3 as `mynx-ble`, run from inside mynx dev:
+scan (all four services, no prompt: "Nearby devices" was allowed for
+Bluetooth serial), services (known names, MTU 512), read (u8, text,
+hex), write (text, hex, `--no-response`), notify (the counter until
+Ctrl+C), a held link (`connect`: reads 0.41 s against 1.3-1.7 s), the
+6th scan refused ("try again in 23 s"), the C3 unplugged mid-notify
+(ends, rc 2), Bluetooth off and `android-bluetooth off` refused with
+the reason, and with the screen off `--name mynx-ble` found it while
+an unfiltered scan was refused. All passed. Not tried: refusing the
+permission (revoking it kills the app). The C3 stops advertising
+while connected, so scans don't see it while a link is held. The
+unplug came back as status 0, not 8, so the reason said only
+"disconnected": now "the device went away or closed the link". The
+plan left "Next" (`git show 49b137b:docs/WORKLOG.md`); what's left
+of BLE is "Next", 0.
+
+### 2026-10-26 (152): BLE built by subagents (branch `ble`)
+
+Part 0, the contract (`Ble.kt`: `BleHost`, `BleLink`, the requests'
+JSON in KDoc, fakes in `BleTest.kt`), then four subagents at once in
+worktrees: A core (`BleRequests.kt`, `BleValues.kt`, 6 commits, 29
+tests), B app (`BleCentral.kt`, manifest, wiring; its commit waited
+for A's Gradle, since the hook runs core's tests), C `mynx ble` and
+the guide (17 tests), D the C3's MicroPython peripheral (flashed;
+MicroPython on the ESP32 gets no subscribe event, so phone test 5
+changed). Each worktree came up on `main`, not `ble`: they reset to
+the contract themselves. Merged into `ble`; core, Python (493) and
+bats (177) green. Decisions A made where the contract was open are
+in `BleRequests.kt`'s KDoc (refusal order, unfiltered background
+scans refused, names from every scan since start). Docs: README,
+roadmap, AGENTS.md, the guide's examples renamed to `mynx-ble`.
+
+### 2026-10-26 (151): BLE planned for subagents
+
+The maintainer asked for a BLE plan that subagents can build ("plan
+ble to work with subagents"). Read Bluetooth serial's plan and code
+(`Bluetooth.kt`'s `BluetoothHost`, `BtBridge`) and wrote "Next", 0:
+`mynx ble scan/services/read/write/notify/connect`, logic in core's
+`Ble.kt` behind a `BleHost`, a contract commit first, then four
+subagents in worktrees (core, app, CLI and guide, a MicroPython test
+peripheral for the C3), integration and phone tests by the main
+agent. The maintainer answered its three questions (per-command
+connections plus `connect`, Nordic UART in a second PR, names
+allowed). Nothing built yet.
 
 ### 2026-10-26 (150): helper back-off; PR #52 merged
 

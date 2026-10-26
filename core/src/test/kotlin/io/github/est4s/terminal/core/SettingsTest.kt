@@ -201,6 +201,12 @@ class SettingsTest {
     }
 
     @Test
+    fun `the Bluetooth setting says it covers serial ports and Bluetooth LE`() {
+        val description = SETTINGS.single { it.key == "android-bluetooth" }.description
+        assertTrue("mynx bt" in description && "mynx ble" in description && "Bluetooth LE" in description, description)
+    }
+
+    @Test
     fun `the microphone is on by default and can be turned off`() {
         assertTrue(Settings().androidMicrophone)
         val parsed = parseSettings("android-microphone = off\nandroid-microphone = muted\n")

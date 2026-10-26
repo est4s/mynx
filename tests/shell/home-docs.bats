@@ -208,6 +208,14 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide says how to use Bluetooth LE devices" {
+    for text in "### Bluetooth LE devices" "mynx ble scan" "mynx ble services DEVICE" "mynx ble connect DEVICE" \
+        "--no-response" "SERVICE/CHAR" "float32" "At most 5 scans in 30 s" "use \`--name\` or \`--service\`" \
+        "Android 8" "no BlueZ" "\`bluetoothctl\`" "Nordic UART"; do
+        grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
+
 @test "the guide says how to debug an ESP32-C3 over its built-in JTAG" {
     for text in "board/esp32c3-builtin.cfg" "openocd-esp32/releases" "gdb-multiarch" \
         "riscv:rv32" "probe-rs-tools-aarch64-unknown-linux-gnu" "ESP JTAG" \

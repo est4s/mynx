@@ -156,6 +156,12 @@ their own.
 | `mynx bt bind DEVICE [PORT]` | make a paired device (its name or address) a serial port, `rfcomm0` unless PORT names another; saved in `bluetooth.conf` |
 | `mynx bt unbind PORT\|DEVICE` | remove a port (or a device's ports) and its line in `bluetooth.conf` |
 | `mynx bt settings` | open Android's Bluetooth settings, to pair a device |
+| `mynx ble scan [--seconds N] [--name TEXT] [--service UUID] [--all]` | the Bluetooth LE devices around: address, signal, name, services (see "Bluetooth LE devices"); `--stream` until Ctrl+C |
+| `mynx ble services DEVICE` | a device's services and characteristics, with their properties |
+| `mynx ble read DEVICE CHAR [--as FORMAT]` | read a characteristic's value |
+| `mynx ble write DEVICE CHAR VALUE [--as FORMAT] [--no-response]` | write a characteristic |
+| `mynx ble notify DEVICE CHAR [--as FORMAT]` | print each value a characteristic sends, until Ctrl+C |
+| `mynx ble connect DEVICE` | hold a link to a device until Ctrl+C; other `mynx ble` commands on it use it |
 | `mynx uf2 [list]` | the UF2 bootloader drives plugged in (a Pico in BOOTSEL, …), with the board each says it is (see "Raw USB devices") |
 | `mynx uf2 flash FILE [DEVICE]` | flash a UF2 file onto a board's bootloader drive, which Android won't mount; DEVICE is `vendor:product` or its node |
 | `mynx fix-links DIR…` | repair the hard links an installer broke by moving the folder it unpacked (arduino-cli's toolchains: see "USB serial devices") |
@@ -217,8 +223,9 @@ One `key = value` per line; `mynx settings` describes each.
   here can record from the microphone (`mynx audio record`, and
   the sound device: they get silence while it's off).
 - `android-bluetooth`: `on` (default) or `off`: whether programs
-  here can use Bluetooth serial ports (`mynx bt`; see "Bluetooth
-  serial devices").
+  here can use Bluetooth: serial ports (`mynx bt`; see "Bluetooth
+  serial devices") and Bluetooth LE devices (`mynx ble`; see
+  "Bluetooth LE devices").
 - `sound-device`: `on` (default) or `off`: whether the app runs the
   sound device, so programs here play through the phone's speaker.
 - `share-folder`: where files other apps share to this app are saved,
@@ -858,8 +865,84 @@ becomes a serial port in Debian, like a USB one.
   off` each refuse with the reason; turn Bluetooth on in Android
   (the app can't).
 - Bluetooth Low Energy devices (most watches, sensors, BLE UART
-  modules like the HM-10) have no SPP and aren't covered yet: `mynx
-  bt` marks them "Bluetooth LE only".
+  modules like the HM-10) have no SPP: `mynx bt` marks them
+  "Bluetooth LE only", and `mynx ble` talks to them (see "Bluetooth
+  LE devices").
+
+### Bluetooth LE devices
+
+Sensors, watches, heart rate straps, beacons, and boards running a
+GATT server (an ESP32's NimBLE or MicroPython's `bluetooth` module):
+`mynx ble` finds them, reads and writes their characteristics, and
+prints what they send. Android keeps the Bluetooth controller to
+itself, so Debian has no BlueZ: `bluetoothctl`, `gatttool`, `bleak`
+and other tools built on BlueZ don't work here. `mynx ble` (with
+`--json` for scripts) is the way in, as `mynx sensor` is for the
+sensors.
+
+- **Finding devices:** `mynx ble scan` listens for 5 s
+  (`--seconds N`, 1 to 60) and lists what it heard, strongest
+  first: address, signal (dBm), name, the services it advertises
+  (`180f`: 16-bit UUIDs are shown short) and maker data (company ID
+  and bytes). Devices with no name and no services are left out
+  unless `--all`. `--name TEXT` keeps the names containing TEXT (any
+  case), `--service UUID` those advertising a service. `--stream`
+  prints each device as it's heard (at most once a second each),
+  until Ctrl+C. `--json` gives `devices`: `address`,
+  `address_type`, `name`, `rssi`, `services`, `manufacturer`
+  (`company`, `hex`), `connectable`, `time`; with `--stream`, one
+  object per line.
+- **DEVICE** is an address (`D4:E9:F4:A2:4A:06`, any case) or a
+  name: a paired device's (`mynx bt` lists them) or one the last scan
+  heard, exact, else in any case. Pairing stays in Android's
+  settings (`mynx bt settings`); a device that needs it makes
+  Android ask on its own.
+- **The table:** `mynx ble services DEVICE` connects and shows the
+  services, each with its characteristics, their properties (`read`,
+  `write`, `write-no-response`, `notify`, `indicate`) and known
+  names (`battery-level`, `nus-rx`, …). `--json` gives `device`,
+  `mtu` and `services` (`uuid`, `name`, `characteristics`: `uuid`,
+  `name`, `properties`, `descriptors`).
+- **CHAR** is a full UUID, a 16-bit one (`2a19`), a known name
+  (`battery-level`), or `SERVICE/CHAR` when two services have it.
+- **Values:** `--as FORMAT` says how to show or write the bytes:
+  `hex` (`0a 1b`), `text` (UTF-8), `u8`, `u16`, `u32`, `i8`, `i16`,
+  `i32` (little-endian, as GATT has them), `float32`. Reading and
+  notify show `hex` unless the characteristic is a known one with its
+  own (`battery-level` is `u8`); other formats come with the bytes in
+  hex too. A write takes `hex` unless given; `0a1b` and `0a 1b` both
+  work.
+  - `mynx ble read mynx-ble battery-level` prints `87 (hex 57)`.
+    `--json` gives `device`, `char`, `name`, `as`, `value` (a number
+    for the number formats) and `hex`.
+  - `mynx ble write mynx-ble nus-rx 'hello' --as text` writes it
+    and says how many bytes; `--no-response` writes without waiting
+    for the device's answer, for characteristics with
+    `write-no-response`. A value longer than the link's MTU less 3
+    is refused with the limit.
+  - `mynx ble notify mynx-ble nus-tx --as text` subscribes (notify,
+    else indicate) and prints each value with its time, until Ctrl+C;
+    when the link drops, it ends with the reason. `--json`: one
+    object per line (`char`, `name`, `as`, `value`, `hex`, `time`).
+- **Links:** each command connects, does its job and disconnects,
+  so a few seconds each. `mynx ble connect DEVICE` in another tab
+  holds a link until Ctrl+C, printing when it's connected (with the
+  MTU) and when it drops; while it holds one, the other `mynx ble`
+  commands on that device use it, and are quick. Nothing stays
+  connected in the background.
+- **Android's limits:**
+  - At most 5 scans in 30 s: Android silently finds nothing after
+    that, so the 6th is refused, saying how long to wait.
+  - With the screen off or the app in the background, Android only
+    finds devices a scan filters for: use `--name` or `--service`.
+  - **Permission:** the first use asks for Android's "Nearby
+    devices" permission, so the app must be on screen. On Android 8
+    to 11, scanning needs location instead: allowed, and turned on
+    in the phone's settings, or scans find nothing. Bluetooth turned
+    off, the permission refused, or `android-bluetooth off` each
+    refuse with the reason.
+- Nordic UART devices (`nus-rx`, `nus-tx`) work through `write` and
+  `notify`; making them a serial port like `rfcomm0` comes later.
 
 ### Themes and colours
 

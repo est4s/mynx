@@ -35,6 +35,7 @@ import io.github.est4s.terminal.core.BatteryReading
 import io.github.est4s.terminal.core.BatteryReport
 import io.github.est4s.terminal.core.batteryRequests
 import io.github.est4s.terminal.core.BLUETOOTH_CONF
+import io.github.est4s.terminal.core.bleRequests
 import io.github.est4s.terminal.core.bluetoothRequests
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
@@ -190,7 +191,8 @@ class TerminalService : Service() {
                 updater.requests { apk -> onMain { openInstaller(apk) } } +
                 serviceRequests(serviceManager) +
                 usbRequests(usb::devices, ::allowUsb) +
-                bluetoothRequests(File(rootfs, "root"), bluetooth),
+                bluetoothRequests(File(rootfs, "root"), bluetooth) +
+                bleRequests(File(rootfs, "root"), ble),
         )
     }
     // The USB serial ports' links, bound at /dev/serial in every proot.
@@ -233,6 +235,10 @@ class TerminalService : Service() {
                 serialPortsChanged()
             },
         )
+    }
+    // Bluetooth LE (mynx ble): scans and links only while a request holds them.
+    private val ble by lazy {
+        BleCentral(this, mainHandler, onScreen = { activity?.onScreen == true }, askPermissions = ::askPermissions)
     }
     private var usbPorts = emptyList<UsbSerialDevice>()
     private var rfcommPorts = emptyList<String>()
@@ -563,6 +569,7 @@ class TerminalService : Service() {
         runCatching { usb.stop() }
         runCatching { usbFds.stop() }
         runCatching { bluetooth.stop() }
+        runCatching { ble.closeAll() }
         killAll()
         stopServices()
         releaseWakeLock()
