@@ -70,6 +70,10 @@ are in git history: the full log up to entry 92 is
   test passed. Released in v0.3.0.
 - **UF2** (`mynx uf2 flash`): every phone test passed with the
   RP2040 Zero; merged (PR #49, entry 144). Released in v0.3.0.
+- **Bluetooth serial** (SPP, `mynx bt`): every phone test passed with
+  the ESP32-CAM (entry 149); merged (PR #52). The plan and its tests:
+  `git show 0280cfa:docs/WORKLOG.md`. Next for Bluetooth, when the
+  maintainer picks it: BLE (`mynx ble`, roadmap).
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -78,111 +82,7 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Bluetooth serial (SPP), branch `bt-serial`
-
-Picked by the maintainer 2026-10-26 (entry 147): SPP first, BLE
-(`mynx ble`) later as its own plan. Test hardware: the
-**ESP32-CAM**'s ESP32-D0WD-V3 (Classic BT; its USB is a CH340 on
-the MB board, `ttyUSB0`, for flashing), running an Arduino
-`BluetoothSerial` sketch built with PlatformIO (`platform =
-espressif32`, `board = esp32cam`; the original ESP32's libs aren't
-in `~/.platformio` yet, only the C3's).
-
-**Maintainer's decisions (2026-10-26):** the link opens when the
-port is opened and closes when it's let go (as `rfcomm bind`, not
-always connected); pairing stays in Android's Settings.
-
-**Design (agent's proposal, change it if the maintainer objects):**
-- **Linux's `rfcomm bind`:** a bound device is a port
-  (`/dev/serial/rfcomm0`, `rfcomm1`, … and `rfc2217://localhost:N`
-  from 2317, so USB keeps 2217) that costs nothing until used; the
-  RFCOMM link opens when a client arrives (a program opens the pty,
-  so `serial-port` connects; or a URL client) and closes when it
-  leaves. The phone and the board aren't linked while nothing uses
-  the port, and nothing reconnects in the background. A link that
-  fails or drops ends the client (the helper retries with its
-  backoff; `mynx bt` says why).
-- **Reuse the bridge:** a `BtLine : SerialLine` over a
-  `BluetoothSocket` (`createRfcommSocketToServiceRecord`, the SPP
-  UUID `00001101-…`; discovery cancelled first). Baud, DTR, RTS,
-  break and flow control mean nothing over SPP: accepted and
-  ignored; modem state reads CTS, DSR and CD on while linked.
-  `SerialServer` gets hooks for a client arriving and leaving (for
-  the link). The port's lifecycle in `UsbBridge` (server, read
-  thread, helper with restarts, link removal) moves into a shared
-  `ServedPort` in a refactor commit first, so `BtBridge` only
-  links.
-- **Pairing stays in Android's Settings** (bonded devices only, no
-  scanning, so only `BLUETOOTH_CONNECT`); `mynx bt settings` opens
-  Bluetooth settings. Pairing from Debian could come with BLE,
-  which needs scanning anyway.
-- **Bindings are config:** `~/.config/mynx/bluetooth.conf`, one
-  `rfcomm0 = D4:E9:F4:A2:4A:02` per line (as Linux's old
-  `rfcomm.conf`), so they survive restarts, `mynx check` checks it
-  and undo covers it. Parsing, names, checking and the requests'
-  answers in core (`Bluetooth.kt`), tested.
-- **Commands:** `mynx bt [list]` (bonded devices: name, address,
-  type, and each bound port's path, URL, `linked`/`in_use`, last
-  error); `mynx bt bind DEVICE [PORT]` (DEVICE a name or address,
-  PORT `rfcommN`, else the lowest free); `mynx bt unbind
-  PORT|DEVICE`; `mynx bt settings`; `--json` on all. `mynx usb
-  url|path|monitor` also take rfcomm ports (the monitor's resets
-  do nothing over SPP: say so).
-- **Permission:** `BLUETOOTH_CONNECT` (Android 12+), asked through
-  the activity on first use (app on screen), like location;
-  `BLUETOOTH` with `maxSdkVersion 30` below. Setting
-  `android-bluetooth` (on). Bluetooth off: refused with "Bluetooth
-  is off" (no enable dialog: Android 13+ doesn't let apps turn it on).
-- **Port names:** `/dev/rfcomm0` links (pyserial's `list_ports`
-  globs `/dev/rfcomm*`), `/sys/class/tty/rfcomm0` with no `device`
-  (a virtual tty, as on Linux), and the uevents, through
-  `SerialNames`/`SerialUevents` like USB ports.
-- **Docs:** the guide ("Bluetooth serial devices", `mynx bt` rows),
-  README, roadmap, AGENTS.md's architecture.
-
-**Parts (each test-first, one PR):**
-1. Refactor: `ServedPort` out of `UsbBridge` (`TDD: refactor`).
-2. Core: `bluetooth.conf` (parse, check, bind/unbind edits), names,
-   `bt-*` requests and JSON, the setting; `SerialServer`'s client
-   hooks; names and uevents for rfcomm ports.
-3. App: `BtBridge`, `BtLine`, permission, manifest.
-4. `mynx bt` in `tools/lib/mynx/` (tests against the fake app), the
-   monitor taking rfcomm ports, guide and `home-docs.bats`.
-5. Test sketch in `~/sketches/esp32-spp` (not in the repo): echo
-   what it gets, print a counter every second, name `mynx-spp`.
-
-**Status:** PR #52; build 241 passed every phone test (entry 149;
-a refused permission not tried). Next: the merge, once the
-maintainer agrees, with the docs it makes stale. The sketch is flashed: it
-advertises as `mynx-spp`, BT address `D4:E9:F4:A2:4A:02`, and logs
-connects, disconnects and what it gets on USB serial (`ttyUSB0`,
-115200, DTR and RTS low). **Watch for:** pyserial's RFC 2217 client
-gives up negotiating after ~3 s, and the server holds the client's
-data until the link opens, so miniterm on the URL may time out on a
-slow link (the pty path is fine); if it does, let the session
-negotiate while only the line's data waits.
-
-**Phone tests (mynx dev, with the ESP32-CAM):**
-1. Pair `mynx-spp` in Settings; `mynx bt` lists it; the first use
-   asks for the permission.
-2. `mynx bt bind mynx-spp` → `rfcomm0`; `mynx bt` shows its path
-   and URL, not linked.
-3. `picocom /dev/serial/rfcomm0`: the counter arrives, typed text
-   echoes; quitting unlinks (the board's sketch sees the
-   disconnect).
-4. miniterm on the URL; then pyserial's `list_ports` shows
-   `/dev/rfcomm0`.
-5. `mynx usb monitor rfcomm0`.
-6. Board powered off while open: the error shows, power on and
-   reopen works.
-7. A restart of the app keeps the binding; `mynx bt unbind
-   rfcomm0` removes the port and the config line; `mynx undo` brings
-   it back.
-8. Bluetooth off, permission denied, `android-bluetooth off`: each
-   refused with its reason.
-9. A USB port and `rfcomm0` at once (the CAM's CH340 and its BT).
-
-### 1. Development boards (leftovers; the maintainer picks)
+### 0. Development boards (leftovers; the maintainer picks)
 
 The roadmap's last items, planned with the maintainer 2026-10-25
 (entry 140). **Maintainer's decisions:** raw USB first, then UF2;
@@ -261,7 +161,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
    All passed. Not tried: an RP2350, TinyUF2 or Adafruit
    bootloaders (other `INFO_UF2.TXT` layouts, no MBR).
 
-### 2. Smaller things
+### 1. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (guide: "Making an
@@ -370,6 +270,15 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-26 (150): helper back-off; PR #52 merged
+
+The maintainer asked to fix phone test 6's log noise before the
+merge: `serial-port` now waits 1 s, doubling to 30 s, when the app
+closes a connection before answering its setup (a Bluetooth link that
+failed); `Unescaper.answered` tells, since the server answers only
+once the line is up (tests in `test_serial_port.py`). Docs for the
+merge: status, the plan out of "Next", roadmap. Merged as PR #52.
 
 ### 2026-10-26 (149): Bluetooth serial on the phone (build 241)
 

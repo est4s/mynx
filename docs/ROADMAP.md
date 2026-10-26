@@ -137,7 +137,8 @@ cable, using standard tools.
 Android doesn't let apps reach the Bluetooth hardware, so BlueZ can't
 run; the app uses Android's Bluetooth API. Build the USB serial bridge
 first.
-- **Bluetooth serial** (classic SPP) *(branch `bt-serial`)*:
+- **Bluetooth serial** (classic SPP) *(PR #52; tested with an
+  ESP32-CAM's ESP32)*:
   HC-05/HC-06, ESP32 `BluetoothSerial`, … as a serial port in Debian
   (`/dev/serial/rfcomm0`, RFC 2217), through the same bridge. Paired
   in Android's settings, bound with `mynx bt bind`; the link opens
