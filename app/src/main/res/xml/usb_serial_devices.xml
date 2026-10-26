@@ -2,7 +2,8 @@
 <!-- USB devices that open mynx when connected (Android asks first): the
      serial chips usb-serial-for-android drives, and any device with a
      CDC interface (Arduino Uno's ATmega16U2, ESP32-S2/S3/C3's own USB,
-     Raspberry Pi Pico, …): Android matches a class on its interfaces too. -->
+     Raspberry Pi Pico, …): Android matches a class on its interfaces too.
+     And boards Debian's tools drive over raw USB (UsbFds). -->
 <resources>
     <usb-device class="2" />
     <!-- QinHeng CH340/CH341 -->
@@ -13,4 +14,8 @@
     <usb-device vendor-id="1027" />
     <!-- Prolific PL2303 -->
     <usb-device vendor-id="1659" />
+    <!-- Raw USB: Raspberry Pi's boards (RP2040 and RP2350 in BOOTSEL, Debug Probe) -->
+    <usb-device vendor-id="11914" />
+    <!-- Raw USB: STM32's DFU bootloader -->
+    <usb-device vendor-id="1155" product-id="57105" />
 </resources>

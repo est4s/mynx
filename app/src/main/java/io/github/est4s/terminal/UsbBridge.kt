@@ -43,7 +43,8 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import kotlin.concurrent.thread
 
-private const val ACTION_USB_PERMISSION = "io.github.est4s.terminal.USB_PERMISSION"
+/** Android's answer to our permission requests; [UsbFds] listens for it too. */
+internal const val ACTION_USB_PERMISSION = "io.github.est4s.terminal.USB_PERMISSION"
 private const val WRITE_TIMEOUT_MS = 5000
 // Reads kept queued on each port, a packet each, at most. Linux's cdc-acm
 // keeps 16, but it queues each again as it completes; here our thread must

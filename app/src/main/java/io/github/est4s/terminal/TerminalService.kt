@@ -82,6 +82,7 @@ import io.github.est4s.terminal.core.serialPreload
 import io.github.est4s.terminal.core.HostEntry
 import io.github.est4s.terminal.core.OwnDev
 import io.github.est4s.terminal.core.prepareOwnDev
+import io.github.est4s.terminal.core.USB_SOCKET_NAME
 import io.github.est4s.terminal.core.writeSerialNames
 import io.github.est4s.terminal.core.serviceCommand
 import io.github.est4s.terminal.core.serviceGaveUpText
@@ -194,6 +195,9 @@ class TerminalService : Service() {
     // Debian's own /dev and the ports' sysfs stand-in (serial-names), so tools find the ports.
     private val devDir by lazy { File(filesDir, "dev") }
     private val sysTtyDir by lazy { File(filesDir, "sys-tty") }
+    // Raw USB: Debian's own /sys/bus with the USB devices, and their fds on a socket in its /dev.
+    private val sysBusDir by lazy { File(filesDir, "sys-bus") }
+    private val usbFds by lazy { UsbFds(this, File(devDir, USB_SOCKET_NAME), sysBusDir, devDir, File(rootfs, "$SERIAL_LOG_DIR/usb.log")) }
     private val uevents by lazy { UeventSender(serialDir, File(rootfs, "$SERIAL_LOG_DIR/uevents.log")) }
     private val usb by lazy {
         UsbBridge(
@@ -335,6 +339,7 @@ class TerminalService : Service() {
         applySoundSetting()
         serialDir.mkdirs()
         runCatching { usb.start() }
+        runCatching { usbFds.start() }
         launchServices()
         applyWakelockSetting()
         keepPowerSupply()
@@ -406,12 +411,14 @@ class TerminalService : Service() {
         mic.update()
         // A device allowed through Android's "open mynx?" dialog, which opened the app.
         runCatching { usb.refresh() }
+        runCatching { usbFds.refresh() }
         applyWakelockSetting() // the settings file may have been edited by hand
     }
 
     /** A USB device may have been allowed: serve its ports. */
     fun refreshUsb() {
         runCatching { usb.refresh() }
+        runCatching { usbFds.refresh() }
     }
 
     // Before any shell starts, so none runs old tools while they're replaced.
@@ -517,6 +524,7 @@ class TerminalService : Service() {
         mic.stop()
         sound.stop()
         runCatching { usb.stop() }
+        runCatching { usbFds.stop() }
         killAll()
         stopServices()
         releaseWakeLock()
@@ -802,7 +810,7 @@ class TerminalService : Service() {
         return runCatching {
             // stat, as proot checks a bind: Android lets apps see that /dev/full and
             // /dev/fuse exist (File.exists) but not stat them, and proot drops those.
-            prepareOwnDev(devDir, sysTtyDir) { path ->
+            prepareOwnDev(devDir, sysTtyDir, sysBusDir) { path ->
                 val mode = runCatching { Os.stat(path).st_mode }.getOrNull()
                 when {
                     mode == null -> null
