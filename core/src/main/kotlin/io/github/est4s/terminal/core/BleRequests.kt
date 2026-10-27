@@ -248,8 +248,8 @@ private fun advertJson(advert: BleAdvert) = obj(
  * a number format whose size doesn't fit the bytes gives `value` null.
  *
  * `ble-bind` and `ble-unbind` (BLE UART ports, see `BleUart.kt`) also
- * decide: a device already bound answers its port with `kind` null,
- * without connecting; one bound to an `rfcomm` port is refused (unbind
+ * decide: a device already bound is checked again and answers its
+ * port and kind, the file unchanged; one bound to an `rfcomm` port is refused (unbind
  * it first), as is a port name another device has, before connecting;
  * `ble-unbind` works with Bluetooth off (it only edits the file), and
  * takes DEVICE as an address or a paired or scanned name; an `rfcomm`
@@ -520,10 +520,17 @@ internal fun bleRequests(
     }
 
     fun bind(query: BindQuery, op: Op) {
-        val dev = device(query.device)
-        boundPort(dev.address, query.port, dev.name)?.let { return op.ok("port" to it, "kind" to "null") }
+        val named = device(query.device)
+        // Conflicts are refused before connecting; a device already bound is still checked,
+        // its address random if its line says so (no scan since a restart).
+        boundPort(named.address, query.port, named.name)
+        val bound = loadBluetooth(conf).bindings.firstOrNull { it.address == named.address }
+        val dev = if (bound?.random == true) Dev(named.address, named.name, true) else named
         useLink(op, dev, { why -> op.refuse("the link to ${dev.who} dropped: $why") }) { link ->
-            val uart = bleUart(link.services) ?: throw BleRefused("${dev.who} has no Nordic UART or HM-10 service")
+            val uart = bleUart(link.services) ?: run {
+                val hint = bound?.let { " (it's bound to ${it.port}: mynx ble unbind ${it.port})" }.orEmpty()
+                throw BleRefused("${dev.who} has no Nordic UART or HM-10 service$hint")
+            }
             // Read again: the file may have changed while connecting.
             boundPort(dev.address, query.port, dev.name)?.let { return@useLink op.ok("port" to it, "kind" to json(uart.kind.word)) }
             val text = confText()

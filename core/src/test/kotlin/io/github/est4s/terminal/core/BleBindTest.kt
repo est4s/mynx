@@ -168,14 +168,37 @@ class BleBindTest {
     }
 
     @Test
-    fun `a device already bound answers with its port, without connecting`() {
+    fun `a device already bound is checked again, and answers with its port and kind`() {
         write("nus3 = $c3 random\n")
-        val answer = parseJson(ask("ble-bind", c3)!!) as Map<*, *>
+        send("1-1", "ble-bind", c3)
+        val connect = host.connects.single()
+        assertTrue(connect.randomAddress)
+        val link = hm10Link()
+        connect.ready(Result.success(link))
+        val answer = parseJson(reply("1-1")!!) as Map<*, *>
         assertEquals("nus3", (answer["port"] as Map<*, *>)["name"])
-        assertEquals(null, answer["kind"])
-        assertTrue(host.connects.isEmpty())
+        assertEquals("hm-10", answer["kind"])
+        assertEquals("nus3 = $c3 random\n", conf.readText())
         assertEquals(0, bt.changes)
+        assertTrue(link.closed)
+    }
+
+    @Test
+    fun `a device already bound to another nus port is refused before connecting`() {
+        write("nus3 = $c3 random\n")
         assertEquals(refusal("$c3 is already bound to nus3"), ask("ble-bind", c3, "nus0"))
+        assertTrue(host.connects.isEmpty())
+    }
+
+    @Test
+    fun `a device already bound that has no UART now is refused, its line kept`() {
+        // The same board running another program: its address doesn't change.
+        write("nus3 = $c3\n")
+        send("1-1", "ble-bind", c3)
+        host.connects.single().ready(Result.success(FakeBleLink(c3, listOf(BleService(nus.service, emptyList())))))
+        assertEquals(refusal("$c3 has no Nordic UART or HM-10 service (it's bound to nus3: mynx ble unbind nus3)"), reply("1-1"))
+        assertEquals("nus3 = $c3\n", conf.readText())
+        assertEquals(0, bt.changes)
     }
 
     @Test

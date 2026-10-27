@@ -24,9 +24,11 @@ import java.io.IOException
  *     Nordic UART or HM-10 service"); then writes the line (the lowest
  *     free `nusN` unless given), calls `bindingsChanged()` and answers
  *     `{"ok":true,"port":PORT,"kind":"nordic-uart"|"hm-10"}`, PORT as
- *     [btPortJson]. Already bound: answers its port, with `kind` null
- *     and without connecting (refused if a different name was asked,
- *     or it's bound to an `rfcomm` port). Undo's change text: `ble bind DEVICE`.
+ *     [btPortJson]. Already bound: still connects to check (with its
+ *     line's ` random`), then answers its port and kind, the file
+ *     unchanged; with no UART it's refused naming the port to unbind.
+ *     Refused before connecting if a different name was asked, or it's
+ *     bound to an `rfcomm` port. Undo's change text: `ble bind DEVICE`.
  *   - `ble-unbind PORT|DEVICE`: removes `nus` lines as `bt-unbind`
  *     removes `rfcomm` ones; `{"ok":true,"removed":[NAME…]}`. DEVICE
  *     is an address or a paired or scanned name; it works with
