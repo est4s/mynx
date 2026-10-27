@@ -557,7 +557,10 @@ See `docs/ROADMAP.md` "How it works". The details:
   ends the client on a drop and backs off 2 s doubling to 30 s. The
   port's link is its own `BleCentral` connection beside any `mynx
   ble` request's; Android shares the device's notify setting between
-  them, so ending a `notify` leaves it on while a port listens.
+  them, so ending a `notify` leaves it on while a port listens. On
+  the phone (entry 156) an unplugged device took about 6 s to show as
+  a drop (the link's supervision timeout), and echoes ran at
+  15-32 KB/s with MTU 517.
   `ble-bind` connects once to check for a UART. Built by four
   subagents against the contract (entry 155).
 - **Rotation lock** (`core/.../Rotation.kt`): `RotationLocks` holds

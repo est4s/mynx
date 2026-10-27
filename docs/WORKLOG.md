@@ -80,8 +80,8 @@ are in git history: the full log up to entry 92 is
   cover it). PR #53. The plan and its tests:
   `git show 49b137b:docs/WORKLOG.md`.
 - **BLE UART ports** (`mynx ble bind`, `nus0`): built overnight on
-  branch `nus` (entry 155), every suite green here; phone tests next
-  ("Next", 0).
+  branch `nus` (entry 155); all 10 phone tests passed on build 249
+  with the C3 (entry 156). Draft PR #54.
 - **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
@@ -146,15 +146,16 @@ read AGENTS.md and this plan; test-first, hooks on; only the part's
 files; don't edit this log, push or open PRs; commit on their branch,
 end with a report. Only A runs Gradle; B commits after A is done.
 
-**Status:** parts 1-5 done on branch `nus` (entry 155). Morning:
-the maintainer installs the PR's build and plugs in the C3; flash
-the peripheral first (`cd ~/sketches/ble-peripheral && mpremote
-connect /dev/serial/ttyACM0 cp echo.py :echo.py + cp main.py
-:main.py + reset`; for test 7 `cp hm10.py :main.py` instead), then
-the tests below, then `mynx reset wakelock`. Watch: a second
+**Status:** all 10 phone tests below passed on build 249 (entry
+156); waiting on the maintainer to merge PR #54. Flashing the
+peripheral: `cd ~/sketches/ble-peripheral && mpremote connect
+/dev/serial/ttyACM0 cp echo.py :echo.py + cp main.py :main.py +
+reset` (`mpremote … run hm10.py` runs the HM-10 one from RAM). A
+re-bind now connects to check too (entry 157; not phone-tested yet:
+bind `mynx-ble` twice, then once while `mpremote … run` runs a script
+with no UART, which should be refused naming `nus0`). Open: a second
 connection to a device may not get MTU 517 (the port then writes
-20-byte chunks: slow, still right); an already-bound `ble-bind`
-answers `kind: null` (no connect). `test_vibrate_chain_stops_on_ctrl_c`
+20-byte chunks: slow, still right). `test_vibrate_chain_stops_on_ctrl_c`
 failed twice under load in the full Python run and passes alone:
 timing, untouched by this branch.
 
@@ -361,6 +362,41 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-10-27 (157): A re-bind checks the device again
+
+The maintainer asked for it in branch `nus` (entry 156 found it).
+`ble-bind` on an address already bound as `nusN` now connects like a
+first bind, with the line's ` random` (no scan after a restart),
+answers the port with its real `kind`, and leaves the file alone;
+with no UART it's refused, "… (it's bound to nus3: mynx ble unbind
+nus3)". Conflicts (another `nusN` asked, an `rfcomm` binding) are
+still refused before connecting. Core tests in `BleBindTest`.
+
+### 2026-10-27 (156): BLE UART ports on the phone (build 249)
+
+The 10 phone tests with the C3, all passed. 1: `mynx ble bind
+mynx-ble` made `nus0` (Nordic UART), `mynx bt` listed it, `mynx
+check` clean; `mynx-plain` (a script with only the battery service,
+run from RAM) was refused, "has no Nordic UART or HM-10 service",
+rc 2. 2: the maintainer's `mynx usb monitor nus0` echoed typed lines.
+3-4: pyserial on the path and the URL, picocom on the path; 4 KB of
+base64 came back identical on both, 32 KB too (more than the C3's
+2 KB buffer), at 15-32 KB/s. 5: "not linked" after each client
+closed. 6: unplugged with the URL open, the echoes stopped and about
+6 s later (the link's supervision timeout) the client got "connection
+failed", `mynx bt` saying "the link dropped: the device went away or
+closed the link"; with the path open, it linked again by itself
+after the C3 came back (46 s gap) and the echo went on. 7: `hm10.py`
+run from RAM, `mynx ble bind mynx-hm10` said HM-10, 4 KB and 32 KB
+identical. 8: `ble unbind nus0` removed the line and port, `mynx
+undo` brought both back. 9: `android-bluetooth off` and Bluetooth off
+each took the port away (path gone, URL refused), `mynx bt` saying
+why; both came back on. 10: after the app was closed and reopened,
+`nus0` was served and echoed. Found: binding an address already bound
+answers without connecting, so `mynx ble bind mynx-plain` "succeeded"
+while `nus0` already held the C3's address (the same board under
+another script). The wakelock is back to `auto`.
 
 ### 2026-10-27 (155): BLE UART ports built by subagents (branch `nus`)
 
