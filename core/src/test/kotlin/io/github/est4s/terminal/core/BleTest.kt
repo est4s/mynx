@@ -79,7 +79,7 @@ class BleTest {
     private val timers = mutableListOf<Pair<Long, () -> Unit>>()
     private val requests = MynxRequests(
         dir, home,
-        later = bleRequests(home, host, now = { clock }, schedule = { ms, run -> timers += ms to run }),
+        later = bleRequests(home, host, FakeBluetoothHost(), now = { clock }, schedule = { ms, run -> timers += ms to run }),
         alive = { true },
     )
 
@@ -126,7 +126,7 @@ class BleTest {
 
     @Test
     fun `answers every planned request`() {
-        assertEquals(BLE_REQUEST_NAMES.toSet(), bleRequests(home, host).keys)
+        assertEquals(BLE_REQUEST_NAMES.toSet(), bleRequests(home, host, FakeBluetoothHost()).keys)
     }
 
     @Test

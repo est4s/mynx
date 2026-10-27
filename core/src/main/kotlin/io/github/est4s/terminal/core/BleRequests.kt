@@ -165,6 +165,23 @@ private fun parseDevice(request: String, raw: List<String>, chars: Boolean = fal
     return DeviceQuery(device, char, format, value, "no-response" in args.options)
 }
 
+/** `ble-bind`'s DEVICE and the port name asked, if any. */
+private class BindQuery(val device: String, val port: String?)
+
+private fun parseBind(raw: List<String>): BindQuery {
+    val args = Args("ble-bind", raw, 2)
+    val device = args.at(0) { "which device? (an address, or a name: mynx ble scan finds them)" }.trim()
+    val port = args.positional.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+    if (port != null && !isNusName(port)) {
+        val rfcomm = if (isRfcommName(port)) " (rfcomm ports: mynx bt bind)" else ""
+        throw BleRefused("'$port' isn't a BLE UART port's name: use nus0 to nus255$rfcomm")
+    }
+    return BindQuery(device, port)
+}
+
+private fun parseUnbind(raw: List<String>): String =
+    Args("ble-unbind", raw, 1).at(0) { "which port or device? (mynx bt lists them)" }.trim()
+
 /** A link `ble-connect` holds ([link] once it's up), and what uses it wants to hear of a drop. */
 private class Held {
     var link: BleLink? = null
@@ -229,14 +246,24 @@ private fun advertJson(advert: BleAdvert) = obj(
  * false is refused, since Android would find nothing; names for DEVICE
  * come from every scan since the app started, not only the last one;
  * a number format whose size doesn't fit the bytes gives `value` null.
+ *
+ * `ble-bind` and `ble-unbind` (BLE UART ports, see `BleUart.kt`) also
+ * decide: a device already bound is checked again and answers its
+ * port and kind, the file unchanged; one bound to an `rfcomm` port is refused (unbind
+ * it first), as is a port name another device has, before connecting;
+ * `ble-unbind` works with Bluetooth off (it only edits the file), and
+ * takes DEVICE as an address or a paired or scanned name; an `rfcomm`
+ * port is refused there (`mynx bt unbind`).
  */
 internal fun bleRequests(
     home: File,
     host: BleHost,
+    bluetooth: BluetoothHost,
     now: () -> Long,
     schedule: (Long, () -> Unit) -> Unit,
 ): Map<String, Later> {
     val settings = File(home, "$CONFIG_DIR/settings.conf")
+    val conf = File(home, "$CONFIG_DIR/$BLUETOOTH_CONF")
     val lock = Any()
     val scanStarts = ArrayDeque<Long>()
     // Every scan's latest advertisement of each device, for DEVICE names and random addresses.
@@ -244,7 +271,13 @@ internal fun bleRequests(
     // The links `ble-connect` holds, by address: from its start, so a second one is refused while the first connects.
     val held = HashMap<String, Held>()
 
-    fun <T> later(seconds: Int?, parse: (List<String>) -> T, run: (T, Op) -> Unit) = Later(seconds) { raw, reply ->
+    fun <T> later(
+        seconds: Int?,
+        parse: (List<String>) -> T,
+        run: (T, Op) -> Unit,
+        change: ((List<String>) -> String)? = null,
+        needsOn: Boolean = true,
+    ) = Later(seconds, change) { raw, reply ->
         val query = try {
             parse(raw)
         } catch (e: BleRefused) {
@@ -258,7 +291,7 @@ internal fun bleRequests(
         val op = Op(reply)
         reply.onCancel(op::end)
         fun go() = op.guard {
-            if (!host.enabled) throw BleRefused("Bluetooth is off: turn it on in Android's settings (mynx bt settings)")
+            if (needsOn && !host.enabled) throw BleRefused("Bluetooth is off: turn it on in Android's settings (mynx bt settings)")
             run(query, op)
         }
         if (host.allowed) go() else host.askPermission { why -> if (why == null) go() else op.refuse("Bluetooth isn't allowed: $why") }
@@ -469,7 +502,77 @@ internal fun bleRequests(
         )
     }
 
+    fun confText() = conf.takeIf { it.isFile }?.readText()
+
+    fun portJson(binding: BtBinding, device: String?) = btPortJson(binding, device, bluetooth.ports()[binding.port])
+
+    // A device already bound answers its port (refused if it's another kind, or another name was asked); null if it isn't.
+    fun boundPort(address: String, port: String?, device: String?): String? {
+        val text = confText()
+        val bindings = text?.let { parseBluetooth(it).bindings }.orEmpty()
+        bindings.firstOrNull { it.address == address }?.let { bound ->
+            if (!isNusName(bound.port)) throw BleRefused("$address is already bound to ${bound.port} (mynx bt unbind ${bound.port} first)")
+            if (port != null && port != bound.port) throw BleRefused("$address is already bound to ${bound.port}")
+            return portJson(bound, device)
+        }
+        if (port != null) bindings.firstOrNull { it.port == port }?.let { throw BleRefused("$port is already bound to ${it.address}") }
+        return null
+    }
+
+    fun bind(query: BindQuery, op: Op) {
+        val named = device(query.device)
+        // Conflicts are refused before connecting; a device already bound is still checked,
+        // its address random if its line says so (no scan since a restart).
+        boundPort(named.address, query.port, named.name)
+        val bound = loadBluetooth(conf).bindings.firstOrNull { it.address == named.address }
+        val dev = if (bound?.random == true) Dev(named.address, named.name, true) else named
+        useLink(op, dev, { why -> op.refuse("the link to ${dev.who} dropped: $why") }) { link ->
+            val uart = bleUart(link.services) ?: run {
+                val hint = bound?.let { " (it's bound to ${it.port}: mynx ble unbind ${it.port})" }.orEmpty()
+                throw BleRefused("${dev.who} has no Nordic UART or HM-10 service$hint")
+            }
+            // Read again: the file may have changed while connecting.
+            boundPort(dev.address, query.port, dev.name)?.let { return@useLink op.ok("port" to it, "kind" to json(uart.kind.word)) }
+            val text = confText()
+            // Lines the parser skips count too, so a name isn't given twice.
+            val taken = text?.lines().orEmpty().map { it.substringBefore('=').trim() }.filter(::isNusName).toSet()
+            val name = query.port ?: (0..255).map { "nus$it" }.firstOrNull { it !in taken }
+                ?: throw BleRefused("every nus port is taken")
+            val binding = BtBinding(name, dev.address, dev.random)
+            val written = addBluetoothBinding(text, binding).getOrElse { throw BleRefused(it.message!!) }
+            conf.parentFile.mkdirs()
+            conf.writeText(written)
+            bluetooth.bindingsChanged()
+            op.ok("port" to portJson(binding, dev.name), "kind" to json(uart.kind.word))
+        }
+    }
+
+    fun unbind(which: String, op: Op) {
+        if (isRfcommName(which)) throw BleRefused("$which is a Bluetooth serial port: use mynx bt unbind")
+        val text = confText().orEmpty()
+        val unbound = if (isNusName(which)) {
+            removeBluetoothBindings(text) { it.port == which }
+                .also { if (it.ports.isEmpty()) throw BleRefused("no BLE UART port $which (mynx bt lists them)") }
+        } else {
+            val addresses = btAddress(which)?.let(::setOf) ?: run {
+                val bonded = if (host.enabled) host.bonded().mapNotNull { d -> d.name?.let { it to d.address } } else emptyList()
+                val scanned = synchronized(lock) { seen.values.mapNotNull { a -> a.name?.let { it to a.address } } }
+                val named = bonded + scanned
+                named.filter { it.first == which }.ifEmpty { named.filter { it.first.equals(which, ignoreCase = true) } }
+                    .map { it.second }.toSet()
+            }
+            removeBluetoothBindings(text) { isNusName(it.port) && it.address in addresses }
+                .also { if (it.ports.isEmpty()) throw BleRefused("no BLE UART port is bound to $which (mynx bt lists them)") }
+        }
+        conf.writeText(unbound.text)
+        bluetooth.bindingsChanged()
+        op.ok("removed" to array(unbound.ports.map(::json)))
+    }
+
+    fun first(args: List<String>) = args.firstOrNull()?.trim().orEmpty()
     return mapOf(
+        "ble-bind" to later(DEVICE_SECONDS, ::parseBind, ::bind, change = { "ble bind ${first(it)}" }),
+        "ble-unbind" to later(BLE_ASK_SECONDS, ::parseUnbind, ::unbind, change = { "ble unbind ${first(it)}" }, needsOn = false),
         "ble-notify" to later(null, { parseDevice("ble-notify", it, chars = true) }, ::notify),
         "ble-connect" to later(null, { parseDevice("ble-connect", it) }, ::connect),
         "ble-scan" to later(SCAN_SECONDS, { parseScan("ble-scan", it, timed = true) }, ::scan),

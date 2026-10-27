@@ -231,7 +231,7 @@ class SerialNamesTest {
     @Test
     fun `an rfcomm port gets its name in dev beside USB ones`() {
         prepare()
-        writeSerialNames(dev, sysTty, listOf(nano), rfcomm = listOf("rfcomm0"))
+        writeSerialNames(dev, sysTty, listOf(nano), bluetooth = listOf("rfcomm0"))
 
         assertEquals("serial/rfcomm0", link(File(dev, "rfcomm0")))
         assertEquals("serial/ttyUSB0", link(File(dev, "ttyUSB0")))
@@ -240,7 +240,7 @@ class SerialNamesTest {
     @Test
     fun `an rfcomm port's sysfs entry is a virtual tty's, with no device`() {
         prepare()
-        writeSerialNames(dev, sysTty, emptyList(), rfcomm = listOf("rfcomm1"))
+        writeSerialNames(dev, sysTty, emptyList(), bluetooth = listOf("rfcomm1"))
 
         val tty = File(sysTty, "rfcomm1")
         assertFalse(File(tty, "device").exists())
@@ -252,11 +252,36 @@ class SerialNamesTest {
     @Test
     fun `an rfcomm port that's unbound loses its names`() {
         prepare()
-        writeSerialNames(dev, sysTty, emptyList(), rfcomm = listOf("rfcomm0", "rfcomm1"))
-        writeSerialNames(dev, sysTty, emptyList(), rfcomm = listOf("rfcomm1"))
+        writeSerialNames(dev, sysTty, emptyList(), bluetooth = listOf("rfcomm0", "rfcomm1"))
+        writeSerialNames(dev, sysTty, emptyList(), bluetooth = listOf("rfcomm1"))
 
         assertFalse(Files.exists(File(dev, "rfcomm0").toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS))
         assertFalse(File(sysTty, "rfcomm0").exists())
         assertTrue(File(sysTty, "rfcomm1").isDirectory)
+    }
+
+    @Test
+    fun `a BLE UART port gets its name in dev and a virtual tty with no number`() {
+        prepare()
+        writeSerialNames(dev, sysTty, listOf(nano), bluetooth = listOf("rfcomm0", "nus0"))
+
+        assertEquals("serial/nus0", link(File(dev, "nus0")))
+        val tty = File(sysTty, "nus0")
+        assertFalse(File(tty, "device").exists())
+        assertFalse(File(tty, "dev").exists())
+        assertEquals("tty", subsystem(tty))
+        assertEquals("DEVNAME=nus0", read(tty, "uevent"))
+        assertEquals("216:0", read(File(sysTty, "rfcomm0"), "dev"))
+    }
+
+    @Test
+    fun `a BLE UART port that's unbound loses its names`() {
+        prepare()
+        writeSerialNames(dev, sysTty, emptyList(), bluetooth = listOf("nus0", "nus1"))
+        writeSerialNames(dev, sysTty, emptyList(), bluetooth = listOf("nus1"))
+
+        assertFalse(Files.exists(File(dev, "nus0").toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS))
+        assertFalse(File(sysTty, "nus0").exists())
+        assertTrue(File(sysTty, "nus1").isDirectory)
     }
 }

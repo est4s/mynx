@@ -17,8 +17,13 @@ class SerialUevents {
     private var names = emptySet<String>()
     private var seqnum = 0L
 
-    /** The messages for the ports that went since the last call, then those that came: [now] are the ports' names. */
-    fun changed(now: Set<String>): List<ByteArray> {
+    /**
+     * The messages for the ports that went since the last call, then
+     * those that came: [ports] are the ports' names. BLE UART ports
+     * (`nus0`) get none: Linux has no such tty, so nothing listens for one.
+     */
+    fun changed(ports: Set<String>): List<ByteArray> {
+        val now = ports.filterNot(::isNusName).toSet()
         val messages = (names - now).map { message("remove", it) } + (now - names).map { message("add", it) }
         names = now
         return messages

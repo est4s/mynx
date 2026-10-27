@@ -216,6 +216,16 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide says how a BLE UART device becomes a serial port" {
+    for text in "mynx ble bind DEVICE [nusN]" "mynx ble unbind PORT\\|DEVICE" "/dev/serial/nus0" "/dev/nus0" \
+        "rfc2217://localhost:2417" "nus0 = " " random" "HM-10" "MTU less 3" "list_ports" \
+        "can be a port with \`mynx ble bind\`" "\`/dev/serial/rfcomm0\`, \`/dev/serial/nus0\`"; do
+        grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+    run grep -qF "comes later" "$GUIDE"
+    [ "$status" -ne 0 ]
+}
+
 @test "the guide says how to debug an ESP32-C3 over its built-in JTAG" {
     for text in "board/esp32c3-builtin.cfg" "openocd-esp32/releases" "gdb-multiarch" \
         "riscv:rv32" "probe-rs-tools-aarch64-unknown-linux-gnu" "ESP JTAG" \

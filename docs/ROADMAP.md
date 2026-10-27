@@ -145,8 +145,10 @@ first.
   while a program uses the port, as Linux's `rfcomm bind`.
 - **BLE** *(PR #53; tested with an ESP32-C3)*: `mynx ble` scans, connects, reads, writes
   and subscribes, with `--json` and streams like `mynx sensor`.
-- **Nordic UART** devices as a serial port (`/dev/serial/nus0`): the
-  next PR after BLE.
+- **BLE UART** devices as a serial port *(PR #54; tested with an ESP32-C3)*: Nordic UART
+  and HM-10-style modules, bound with `mynx ble bind`, become
+  `/dev/serial/nus0` (RFC 2217 from 2417), linked while a program
+  uses the port.
 - Bluetooth headphones and speakers need nothing: the sound device
   plays through Android, which sends it to them.
 

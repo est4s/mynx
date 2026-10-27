@@ -296,4 +296,45 @@ class BluetoothRequestTest {
         host.settingsError = "mynx isn't on screen"
         assertEquals(refusal("mynx isn't on screen"), ask("bt-settings"))
     }
+
+    @Test
+    fun `bind refuses a nus port, which is mynx ble bind's, and picks rfcomm names past nus lines`() {
+        host.devices = listOf(cam, buds)
+        assertEquals(refusal("nus0 is a Bluetooth LE UART port: use mynx ble bind"), ask("bt-bind", "mynx-spp", "nus0"))
+        conf.apply { parentFile.mkdirs() }.writeText("nus0 = AA:BB:CC:DD:EE:01 random\n")
+        val port = (parseJson(ask("bt-bind", "mynx-spp")) as Map<*, *>)["port"] as Map<*, *>
+        assertEquals("rfcomm0", port["name"])
+    }
+
+    @Test
+    fun `bind refuses a device bound to a nus port`() {
+        host.devices = listOf(buds)
+        conf.apply { parentFile.mkdirs() }.writeText("nus0 = AA:BB:CC:DD:EE:01\n")
+        assertEquals(refusal("AA:BB:CC:DD:EE:01 is already bound to nus0 (mynx ble unbind nus0 first)"), ask("bt-bind", "Buds"))
+        assertEquals(0, host.changes)
+    }
+
+    @Test
+    fun `unbind removes nus ports too, by name or device`() {
+        host.devices = listOf(cam, buds)
+        conf.apply { parentFile.mkdirs() }.writeText("rfcomm0 = D4:E9:F4:A2:4A:02\nnus0 = AA:BB:CC:DD:EE:01 random\n")
+        assertEquals("""{"ok":true,"removed":["nus0"]}""", ask("bt-unbind", "nus0"))
+        conf.writeText("rfcomm0 = D4:E9:F4:A2:4A:02\nnus0 = AA:BB:CC:DD:EE:01 random\n")
+        assertEquals("""{"ok":true,"removed":["nus0"]}""", ask("bt-unbind", "Buds"))
+        assertEquals("rfcomm0 = D4:E9:F4:A2:4A:02\n", conf.readText())
+    }
+
+    @Test
+    fun `lists nus ports with the others`() {
+        host.devices = listOf(buds)
+        conf.apply { parentFile.mkdirs() }.writeText("nus0 = AA:BB:CC:DD:EE:01 random\n")
+        host.served = mapOf("nus0" to BtPortState(tcpPort = 2417, linked = true, inUse = true, waiting = false, error = null))
+        val answer = parseJson(ask("bt-list")) as Map<*, *>
+        assertEquals("nus0", ((answer["devices"] as List<*>).single() as Map<*, *>)["port"])
+        val port = (answer["ports"] as List<*>).single() as Map<*, *>
+        assertEquals("nus0", port["name"])
+        assertEquals("/dev/serial/nus0", port["path"])
+        assertEquals("rfc2217://localhost:2417", port["url"])
+        assertEquals(true, port["linked"])
+    }
 }

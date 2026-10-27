@@ -496,6 +496,11 @@ class BleCentral(
                     val subscribed = target ?: return@post
                     listeners.remove(subscribed)
                     if (stage != Stage.READY) return@post
+                    // The descriptor is the device's, not this link's: another link to it (a nus port's) still listening keeps it on.
+                    if (connections.any { it !== this@Connection && it.address == address && it.listensTo(subscribed.uuid) }) {
+                        gatt?.setCharacteristicNotification(subscribed, false)
+                        return@post
+                    }
                     // Its answer goes nowhere: core has moved on.
                     val unsubscribe: () -> String? = start@{
                         gatt?.setCharacteristicNotification(subscribed, false)
@@ -507,6 +512,8 @@ class BleCentral(
                 }
             }
         }
+
+        fun listensTo(uuid: UUID): Boolean = listeners.keys.any { it.uuid == uuid }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             listeners[characteristic]?.invoke(value, System.currentTimeMillis())

@@ -13,8 +13,12 @@ const val FIRST_BLUETOOTH_TCP_PORT = 2317
 // Linux's RFCOMM_MAX_DEV.
 private const val MAX_RFCOMM = 255
 
-/** A Bluetooth serial port: [port] (`rfcomm0`) links to the device at [address] (upper case) when it's used. */
-data class BtBinding(val port: String, val address: String)
+/**
+ * A Bluetooth serial port: [port] (`rfcomm0`, or a BLE UART's `nus0`)
+ * links to the device at [address] (upper case) when it's used;
+ * [random] when that BLE address is random (see `BleUart.kt`).
+ */
+data class BtBinding(val port: String, val address: String, val random: Boolean = false)
 
 data class ParsedBluetooth(val bindings: List<BtBinding>, val problems: List<String>)
 
@@ -33,20 +37,39 @@ fun btAddress(text: String): String? = text.trim().takeIf { BT_ADDRESS.matches(i
 fun rfcommName(taken: Set<String>): String = (0..MAX_RFCOMM).map { "rfcomm$it" }.firstOrNull { it !in taken }
     ?: error("every rfcomm port is taken")
 
+// What bluetooth.conf takes as a port's name: Classic's or a BLE UART's.
+private fun isBluetoothPortName(name: String) = isRfcommName(name) || isNusName(name)
+
+private fun badPortName(name: String) = "'$name' isn't a Bluetooth port's name: use rfcomm0 to rfcomm$MAX_RFCOMM, or nus0 to nus255"
+
+private const val RANDOM = "random"
+private val SPACES = Regex("\\s+")
+
 // A line's binding, or why it can't be one; null for comments and blank lines.
 private fun lineBinding(raw: String): Result<BtBinding>? {
     val line = raw.trim()
     if (line.isEmpty() || line.startsWith("#")) return null
-    if ('=' !in line) return Result.failure(Exception("expected rfcommN = ADDRESS"))
+    if ('=' !in line) return Result.failure(Exception("expected rfcommN = ADDRESS, or nusN = ADDRESS [random]"))
     val port = line.substringBefore('=').trim()
     val value = line.substringAfter('=').trim()
-    if (!isRfcommName(port)) return Result.failure(Exception(badRfcommName(port)))
-    val address = btAddress(value)
+    if (!isBluetoothPortName(port)) return Result.failure(Exception(badPortName(port)))
+    val words = value.split(SPACES)
+    val address = btAddress(words[0])
         ?: return Result.failure(Exception("'$value' isn't a Bluetooth address (like D4:E9:F4:A2:4A:02)"))
-    return Result.success(BtBinding(port, address))
+    val rest = words.drop(1)
+    val random = rest.singleOrNull()?.equals(RANDOM, ignoreCase = true) == true
+    if (rest.isNotEmpty() && !random) {
+        return Result.failure(Exception("'${rest.joinToString(" ")}' after the address: only $RANDOM may follow it"))
+    }
+    if (random && !isNusName(port)) return Result.failure(Exception("$RANDOM is only for nus ports (Bluetooth LE): $port = ADDRESS"))
+    return Result.success(BtBinding(port, address, random))
 }
 
-/** Reads `bluetooth.conf` (`rfcomm0 = D4:E9:F4:A2:4A:02` lines); bad lines are reported and skipped. */
+/**
+ * Reads `bluetooth.conf` (`rfcomm0 = D4:E9:F4:A2:4A:02` lines, and BLE
+ * UART ports' `nus0 = ADDRESS [random]`); bad lines are reported and
+ * skipped. An address is bound once, whatever the kind.
+ */
 fun parseBluetooth(text: String): ParsedBluetooth {
     val bindings = mutableListOf<BtBinding>()
     val problems = mutableListOf<String>()
@@ -78,8 +101,10 @@ fun loadBluetooth(file: File): ParsedBluetooth =
 
 /** What a new `bluetooth.conf` starts with. */
 const val BLUETOOTH_HEADER = """# Bluetooth serial ports: one "rfcommN = ADDRESS" per line, a device
-# paired in Android's Bluetooth settings. `mynx bt bind` writes them,
-# `mynx check` checks edits made by hand (see ~/AGENTS.md).
+# paired in Android's Bluetooth settings (`mynx bt bind` writes them),
+# or "nusN = ADDRESS" for a Bluetooth LE device's UART, with "random"
+# after a random address (`mynx ble bind` writes them). `mynx check`
+# checks edits made by hand (see ~/AGENTS.md).
 """
 
 /**
@@ -88,13 +113,14 @@ const val BLUETOOTH_HEADER = """# Bluetooth serial ports: one "rfcommN = ADDRESS
  * people if the name is wrong, or the port or address is taken.
  */
 fun addBluetoothBinding(text: String?, binding: BtBinding): Result<String> = runCatching {
-    if (!isRfcommName(binding.port)) error(badRfcommName(binding.port))
+    if (!isBluetoothPortName(binding.port)) error(badPortName(binding.port))
+    if (binding.random && !isNusName(binding.port)) error("$RANDOM is only for nus ports (Bluetooth LE)")
     val address = btAddress(binding.address) ?: error("'${binding.address}' isn't a Bluetooth address")
     val bindings = text?.let { parseBluetooth(it).bindings }.orEmpty()
     bindings.firstOrNull { it.port == binding.port }?.let { error("${it.port} is already bound to ${it.address}") }
     bindings.firstOrNull { it.address == address }?.let { error("${it.address} is already bound to ${it.port}") }
     val lines = (text ?: BLUETOOTH_HEADER).lines().dropLastWhile { it.isBlank() }
-    (lines + "${binding.port} = $address").joinToString("\n", postfix = "\n")
+    (lines + "${binding.port} = $address${if (binding.random) " $RANDOM" else ""}").joinToString("\n", postfix = "\n")
 }
 
 /** A file's text after [removeBluetoothBindings], and the ports it took out, in file order. */
@@ -178,7 +204,10 @@ private class BtRefused(message: String) : Exception(message)
  * Answers: `bt-list` gives `enabled`, `devices` (`name`, `address`,
  * `type`, `port`: the one bound to it or null) and `ports` ([btPortJson]);
  * with Bluetooth off, no devices, and the ports from the config.
- * `bt-bind` gives the `port`, `bt-unbind` the ports `removed`. DEVICE is
+ * `bt-bind` gives the `port`, `bt-unbind` the ports `removed`. BLE
+ * UART ports (`nusN`) are listed and unbound as `rfcomm` ones, but
+ * `bt-bind` refuses them (and a device bound to one): `ble-bind` checks
+ * the device has a UART first. DEVICE is
  * an address (any case, paired or not) or a paired device's name: exact,
  * else in any case.
  */
@@ -253,12 +282,14 @@ fun bluetoothRequests(home: File, host: BluetoothHost): Map<String, Later> {
         val device = args.getOrNull(0)?.takeIf { it.isNotEmpty() }
             ?: throw BtRefused("bt-bind needs a device: its name or address (mynx bt lists them)")
         val port = args.getOrNull(1)?.takeIf { it.isNotEmpty() }
+        if (port != null && isNusName(port)) throw BtRefused("$port is a Bluetooth LE UART port: use mynx ble bind")
         if (port != null && !isRfcommName(port)) throw BtRefused(badRfcommName(port))
         val address = address(device)
         val text = conf.takeIf { it.isFile }?.readText()
         val bindings = text?.let { parseBluetooth(it).bindings }.orEmpty()
         val devices = bonded()
         bindings.firstOrNull { it.address == address }?.let { bound ->
+            if (isNusName(bound.port)) throw BtRefused("$address is already bound to ${bound.port} (mynx ble unbind ${bound.port} first)")
             if (port != null && port != bound.port) throw BtRefused("$address is already bound to ${bound.port}")
             return ok("port" to portJson(bound, devices, host.ports()))
         }
@@ -276,7 +307,7 @@ fun bluetoothRequests(home: File, host: BluetoothHost): Map<String, Later> {
         val which = args.getOrNull(0)?.takeIf { it.isNotEmpty() }
             ?: throw BtRefused("bt-unbind needs a port or a device (mynx bt lists them)")
         val text = conf.takeIf { it.isFile }?.readText().orEmpty()
-        val unbound = if (isRfcommName(which)) {
+        val unbound = if (isBluetoothPortName(which)) {
             removeBluetoothBindings(text) { it.port == which }
                 .also { if (it.ports.isEmpty()) throw BtRefused("no Bluetooth port $which (mynx bt lists them)") }
         } else {
