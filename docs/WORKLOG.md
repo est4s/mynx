@@ -151,9 +151,8 @@ end with a report. Only A runs Gradle; B commits after A is done.
 peripheral: `cd ~/sketches/ble-peripheral && mpremote connect
 /dev/serial/ttyACM0 cp echo.py :echo.py + cp main.py :main.py +
 reset` (`mpremote … run hm10.py` runs the HM-10 one from RAM). A
-re-bind now connects to check too (entry 157; not phone-tested yet:
-bind `mynx-ble` twice, then once while `mpremote … run` runs a script
-with no UART, which should be refused naming `nus0`). Open: a second
+re-bind now connects to check too (entry 157, passed on build 250).
+Open: a second
 connection to a device may not get MTU 517 (the port then writes
 20-byte chunks: slow, still right). `test_vibrate_chain_stops_on_ctrl_c`
 failed twice under load in the full Python run and passes alone:
@@ -371,7 +370,12 @@ first bind, with the line's ` random` (no scan after a restart),
 answers the port with its real `kind`, and leaves the file alone;
 with no UART it's refused, "… (it's bound to nus3: mynx ble unbind
 nus3)". Conflicts (another `nusN` asked, an `rfcomm` binding) are
-still refused before connecting. Core tests in `BleBindTest`.
+still refused before connecting. Core tests in `BleBindTest`. On
+build 250: re-binding `nus0` said "Nordic UART" with the file
+unchanged, `nus1` was refused ("already bound to nus0"), and with the
+C3 running a script with no UART it was refused naming `nus0`, the
+line kept. Killing `mpremote … run` left the C3 in "waiting for
+download"; a reset with DTR low (pyserial, RTS pulse) booted it.
 
 ### 2026-10-27 (156): BLE UART ports on the phone (build 249)
 
