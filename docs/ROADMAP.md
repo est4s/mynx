@@ -60,6 +60,73 @@ prompt line ("Ask Claude…") with a mic button at its end.
   copy, like the shortcuts.
 - To check: whether each agent keeps what's typed while it starts.
 
+### Touch mode
+A second way to use mynx, for tapping instead of typing: the
+launcher's items as native screens, and AI agents as a chat like
+Claude's app. The terminal stays the default (mynx is keyboard-first);
+a setting picks the view, `view = terminal | touch` (perhaps `desktop` later),
+and either view switches to the other.
+- **Home:** the launcher menu's items as native lists, read from the
+  same `menu.conf` and app folders, acting through the same `mynx`
+  commands, so both views always show the same things. The settings
+  editors, games and other terminal programs open in a tab.
+- **Chat:** an agent conversation with streamed replies, Markdown and
+  code blocks, and its permission questions as Allow / Deny buttons.
+  The agent runs headless and speaks a structured protocol instead of
+  its full-screen terminal interface: ACP (the Agent Client Protocol;
+  Gemini CLI speaks it, Claude Code and Codex through adapters), or
+  each agent's own JSON stream if an adapter falls short. Users sign
+  in with their own accounts, as in the terminal.
+- **Artifact cards:** when an agent makes or changes an app in
+  `~/apps` (seen in its file writes, or declared with a `mynx`
+  command), the chat shows a card: Run (a terminal app in a tab),
+  Open (a web app, below), Share, or Install (an APK).
+- **Open in terminal:** hands the conversation to a tab that resumes
+  it (`claude --resume ID` and the others' equivalents); the chat lets
+  go of it first, so two programs never drive one session.
+- The agent widget could open straight into a chat.
+- **Size:** the biggest feature yet, and mostly in `app/`, which only
+  the phone can check: about 6-8 PRs. Order: a spike (does ACP or
+  Claude's stream-json run under proot; do sign-in and resume work?),
+  then Home, then Chat for Claude Code, then the cards, the hand-off
+  and the other agents. The protocol and transcript logic go in
+  `core`, test-first. Screenshots in CI (Robolectric or an emulator)
+  would save phone rounds, so they may come first.
+
+### Web apps
+A third kind of app beside terminal apps and APKs (the agent guide's
+"Making an app"): HTML and JavaScript in `~/apps/NAME`, opened inside
+mynx with no build and no install, like Claude's artifacts. Today an
+agent can already serve one from a service (`python3 -m http.server`)
+and open it in the phone's browser; this makes them part of mynx.
+- **A web app view:** a WebView screen with back and reload, each app
+  served under an origin of its own (`WebViewAssetLoader` or a scheme
+  of ours) that sees only its own folder, never the rest of Debian.
+- **What counts as one:** a folder in `~/apps` with an `index.html`,
+  its name and icon from a small manifest (as terminal apps' `#
+  label:` line), decided in core. The Apps menu and touch mode's Home
+  list them; `mynx app open NAME` opens one from the terminal, so
+  agents can too. This doesn't need touch mode and can ship first.
+- **The phone through a bridge:** a `mynx` JavaScript object that
+  sends the requests `mynx` already sends (location, sensors, camera,
+  vibration, flashlight, sound, …), streams as events, answered by
+  the same code in core.
+- **Permissions per app:** each app asks for what it uses the first
+  time ("weather wants your location"); the answers live in a
+  plain-text config, covered by `mynx check` and changed with a `mynx`
+  command.
+- **Home screen shortcuts:** "Add to home screen" (Android's pinned
+  shortcuts) opens mynx straight into the app.
+- **The agent guide** says how to make one and what the bridge
+  offers, so agents build them unasked; "Making an app" then offers
+  three kinds.
+- **Not an APK:** a web app only runs inside mynx and only reaches
+  what the bridge offers; no widgets, no opening other apps' files or
+  shares, no background work of its own. For those, an APK, as today.
+- **Order:** the view, the listing, `mynx app open` and the guide
+  first (without phone features; they also give touch mode's cards
+  something to open), then the bridge, permissions and shortcuts.
+
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
 APIs like `mynx sensor` and `mynx camera`, each with `--json` and an
