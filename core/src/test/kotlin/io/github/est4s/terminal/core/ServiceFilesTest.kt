@@ -22,6 +22,34 @@ class ServiceFilesTest {
     }
 
     @Test
+    fun `how many services run, for the launcher menu`() {
+        assertEquals("/tmp/.mynx/services-active", SERVICES_ACTIVE)
+        val file = File(dir, "services-active")
+        writeServicesActive(file, 2)
+        assertEquals("2\n", file.readText())
+        writeServicesActive(file, 1)
+        assertEquals("1\n", file.readText())
+        assertFalse(File(dir, "services-active.tmp").exists())
+    }
+
+    @Test
+    fun `none running leaves no file`() {
+        val file = File(dir, "services-active")
+        writeServicesActive(file, 3)
+        writeServicesActive(file, 0)
+        assertFalse(file.exists())
+        writeServicesActive(file, 0)
+        assertFalse(file.exists())
+    }
+
+    @Test
+    fun `a missing folder is made`() {
+        val file = File(dir, "tmp/.mynx/services-active")
+        writeServicesActive(file, 1)
+        assertEquals("1\n", file.readText())
+    }
+
+    @Test
     fun `the exit code the wrapper wrote`() {
         File(dir, "web.exit").writeText("143\n")
         assertEquals(143, readServiceExit(dir, "web"))

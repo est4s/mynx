@@ -380,7 +380,8 @@ the app: the services come back, hidden.
 **Seeing them from anywhere:** while any service runs, the tab strip
 shows `● N` (how many) right of **+**; tapping it opens a tab with the
 menu's Services list (`menu services` does the same in a shell). The
-app's notification has a **Services** button too.
+launcher menu's Services item shows the count too (`Services ● 2`),
+and the app's notification has a **Services** button.
 
 **A tab into a service:** long-press a tab and pick **Run as
 service** (it offers the name of the program running in it), or type
