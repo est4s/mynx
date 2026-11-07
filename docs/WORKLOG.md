@@ -186,6 +186,14 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   or an offset) before the first upload. Play also restricts
   `REQUEST_INSTALL_PACKAGES`: a Play build needs a variant without it.
 
+### 3. Touch mode and web apps (when the maintainer picks them)
+
+Planned in `docs/ROADMAP.md` ("Touch mode", "Web apps"), entry 159.
+Web apps' first part (the view, `mynx app open`, the guide) doesn't
+need touch mode and is the smallest start; touch mode starts with a
+spike on a branch: ACP (or Claude Code's stream-json) under proot,
+sign-in and resume. Ask the maintainer which first.
+
 ### Parked: roadmap step 8, Profiles
 
 **Parked by the maintainer 2026-10-04** ("not such an important feature to
@@ -281,6 +289,18 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-07 (159): Touch mode and web apps planned
+
+The maintainer asked about a Claude-app-style view of mynx and agents'
+apps opening inside it; at their request, both went into
+`docs/ROADMAP.md` ("Touch mode", "Web apps"). Name "touch mode"
+(agent's suggestion: "app" already means `~/apps`, the APKs and mynx
+itself), setting `view = terminal | touch`. Not yet decided by the
+maintainer: whether to start, and in which order; the roadmap's
+order is the agent's proposal. Also talked about, not planned: a
+desktop mode (an X server, VNC first, a tiling window manager) and
+Chromium in Debian (`--no-sandbox`); untried on the phone. No code.
 
 ### 2026-11-01 (158): Docs after PR #54, release v0.4.0
 
