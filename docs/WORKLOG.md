@@ -251,7 +251,11 @@ at start (clearing a count the last run left) and on exit (deleted at
 Tests: `ServiceFilesTest`, three in `menu.bats`. The app side only
 compiles in CI. Also brought the log up to date: v0.4.0 in the
 status, Play's item gone from "Smaller things" (Play left the
-roadmap, entry 160).
+roadmap, entry 160). CI's runner moved to Ubuntu 26.04, whose
+coreutils is one multicall binary, so the sound tests' copy of
+`sleep` named `pulseaudio` refused to run; they now fake Pulse with
+a script of that name (the scripts only check its comm). Build run
+42423781994.
 
 ### 2026-11-08 (160): Roadmap trimmed
 
