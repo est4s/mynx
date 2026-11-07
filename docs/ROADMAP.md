@@ -13,33 +13,11 @@ services.
 
 ## Planned
 
-### Profiles *(parked)*
-A **profile** is a complete setup: theme, font, key bars, launcher menu,
-dotfiles, package list and setup script.
-- Several profiles on one phone ("Neon", "Minimal", "Python dev"), a
-  profile per tab and a default one for new tabs.
-- **Export** a profile as one small, readable text file (the setup
-  *recipe*, not a whole Linux system); **import** shows exactly what it
-  will install and run before anything runs.
-- Later: a separate Debian per profile, and full backup/restore of an
-  environment.
-
-The design and the parts are in the work log ("Parked: roadmap step 8").
-
-### Tab strip
-- Tabs coloured by profile, or a colour for a single tab.
-- **⌄** next to **+**: open a tab in any profile.
-- Drag to reorder, a tab overview, Duplicate.
-
 ### File manager
 - Open other files in an Android app, share, "open terminal here" in a
   new tab.
 - Tap support, off by default behind a setting (the app is
   keyboard-first).
-
-### Android integration
-- Turn each phone permission on or off per profile (today: one
-  `android-*` setting each).
 
 ### Agent widget
 A home screen widget that starts a chat with an AI agent, even when
@@ -219,11 +197,6 @@ first.
 - Bluetooth headphones and speakers need nothing: the sound device
   plays through Android, which sends it to them.
 
-### Google Play
-Once the app is stable. Needs a version-code scheme that only goes up,
-and a build without `REQUEST_INSTALL_PACKAGES` (and without the SMS and
-call permissions, see "More of the phone").
-
 ---
 
 ## How it works
@@ -234,7 +207,6 @@ call permissions, see "More of the phone").
 | Terminal | Termux's `terminal-emulator` / `terminal-view` libraries (Apache 2.0) |
 | Linux | Termux's Android-patched `proot`, shipped as a native library so it can run on modern Android |
 | Debian | A prebuilt arm64 rootfs, customized at build time and unpacked on first launch |
-| Profiles | A recipe file (config + dotfiles + package list + script) applied to a Debian environment |
 | Builds | GitHub Actions builds and signs the APK |
 
 ### Limitations
