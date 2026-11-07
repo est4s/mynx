@@ -933,11 +933,10 @@ does this automatically through `.claude/settings.json`.)
 
 ### Where code and tests go
 - **`core/`**: plain Kotlin, no Android imports. Put **all logic** here:
-  config parsing and checking, the profile format, export/import, undo
-  snapshots, migrations, the proot command, rootfs unpacking, keyboard
-  layouts and key bars, and so on. (The file manager is nnn, set up in
-  the rootfs.) Tests in `core/src/test/`
-  (`kotlin.test` on JUnit 5).
+  config parsing and checking, undo snapshots, migrations, the proot
+  command, rootfs unpacking, keyboard layouts and key bars, and so on.
+  (The file manager is nnn, set up in the rootfs.) Tests in
+  `core/src/test/` (`kotlin.test` on JUnit 5).
 - **`app/`**: a thin Android layer that connects `core` to Android (views,
   services, permissions, USB, camera). Keep logic out of it. When Android
   code needs tests, add Robolectric tests in `app/src/test/`; they only run

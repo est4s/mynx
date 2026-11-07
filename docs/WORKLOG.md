@@ -85,7 +85,6 @@ are in git history: the full log up to entry 92 is
   The plan and its tests: `git show 3539809:docs/WORKLOG.md`.
 - **Release:** `v0.4.0` (Bluetooth serial, BLE, BLE UART ports since
   `v0.3.0`) asked for by the maintainer after PR #54 (entry 158).
-- **Step 8 (*Profiles*) is parked** by the maintainer (plan below).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`.
@@ -194,65 +193,6 @@ need touch mode and is the smallest start; touch mode starts with a
 spike on a branch: ACP (or Claude Code's stream-json) under proot,
 sign-in and resume. Ask the maintainer which first.
 
-### Parked: roadmap step 8, Profiles
-
-**Parked by the maintainer 2026-10-04** ("not such an important feature to
-work on yet"): step 9 comes first. The plan below stands for when it's
-picked up again.
-
-README roadmap: "multiple profiles, switching, export/import"; README
-section "Profiles: share your setup". Planned with the maintainer
-2026-10-04. Build test-first, with a maintainer test after each part, as
-in step 7.
-
-**Maintainer's decisions (2026-10-04):**
-- **All profiles share the one Debian** in step 8. A separate Debian
-  per profile and full backup/restore of an environment come in a
-  later step.
-- **A profile per tab**, plus an **app-wide default profile**: new
-  tabs and a fresh start use it; **⌄** next to **+** opens a tab in
-  any profile.
-- **Export is one plain-text file**: manifest, package list, setup
-  script and config files inline, readable before import. Fonts are
-  referenced (apt package or URL), never embedded.
-- **Dotfiles: a shell snippet per profile** (aliases, prompt, env),
-  sourced by `~/.bashrc` in that profile's tabs. The user's own
-  dotfiles stay theirs.
-
-**Design (agent's proposal, change it if the maintainer objects):**
-- A profile is `~/.config/mynx/profiles/NAME/`, with the
-  same layout as the config folder (`settings.conf`,
-  `colors.properties`, `keybars/`, `menu.conf`) plus `profile.conf`
-  (label, tab colour, icon), `packages` (apt names), `setup.sh` and
-  `bashrc`. A profile only holds what it changes: its files lie over
-  the top-level config (per file; `settings.conf` per key), so the
-  existing config is the `default` profile and current installs keep
-  working unchanged.
-- `default-profile = NAME` in the top-level `settings.conf`.
-- Each saved tab records its profile (`profile = NAME` in
-  `filesDir/state/tabs`). The tab's shell gets `MYNX_PROFILE`;
-  `mynx` commands act on that profile unless given `--profile NAME`
-  (`--profile default` for the top level).
-- Undo and `mynx check` cover the profile folders too.
-
-**Parts:**
-1. **8.1 Model and commands:** layering in `core` (tested);
-   `mynx profile list/show/new/copy/rename/delete/default`, `--json`;
-   `--profile` on the config commands; `mynx check` per profile.
-2. **8.2 Profiles in the app:** tabs remember their profile and use
-   its theme, font and key bars; the strip shows its colour; **⌄**
-   opens a tab in a chosen profile; `MYNX_PROFILE` in the shell.
-3. **8.3 Recipe:** `packages`, `setup.sh`, `bashrc` snippet (sourced
-   via `/opt/mynx/shell.bash`); `mynx profile apply NAME`
-   installs the packages and runs the script after showing them and
-   asking.
-4. **8.4 Export/import:** `mynx profile export NAME [FILE]` writes
-   the text file; `mynx profile import FILE` shows everything it
-   will write, install and run, asks, then adds the profile (applying
-   it is a separate yes). Name clashes ask for a new name.
-5. **8.5 Editors and docs:** a Profiles editor in `mynx edit`, a
-   menu item, the agent guide (`tools/AGENTS.md`) and README.
-
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
   and key bar readable); the theme editor's live preview and `r` reset;
@@ -289,6 +229,13 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (160): Roadmap trimmed
+
+At the maintainer's request, "Profiles", "Tab strip", "Android
+integration" (per-profile permissions) and "Google Play" left
+`docs/ROADMAP.md`, and the parked Profiles plan left "Next" (it's in
+`git show 07287c5:docs/WORKLOG.md`). No code.
 
 ### 2026-11-07 (159): Touch mode and web apps planned
 
