@@ -837,7 +837,8 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
   `/dev/serial` file open, its URL is busy, and the other way round.
   A program that opens the file while the URL is in use gets nothing
   until the URL's program lets go; `mynx usb` shows the path as
-  "waiting", and the helper's log says "busy".
+  "waiting", the helper's log says "busy", and `mynx usb monitor`
+  says so on screen, and again when the port is free.
 - **What Android doesn't allow, and the serial library:** Android
   refuses programs the modem-line calls on a terminal device
   (`TIOCMGET`, `TIOCMSET`, `TIOCMBIS`, `TIOCMBIC`, `TIOCEXCL`,

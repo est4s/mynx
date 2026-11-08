@@ -266,6 +266,18 @@ class MonitorTest(unittest.TestCase):
         os.write(self.port_master, b"again\r\n")
         self.expect(b"again")
 
+    def test_says_when_another_program_has_the_port_and_when_it_lets_go(self):
+        # serial-port marks the port .NAME.waiting while its URL's client keeps us out
+        folder = self.tmp()
+        link = os.path.join(folder, "ttyACM0")
+        os.symlink(self.port_path, link)
+        mark = os.path.join(folder, ".ttyACM0.waiting")
+        open(mark, "w").close()
+        self.start(link)
+        self.expect(b"ttyACM0 is busy")
+        os.unlink(mark)
+        self.expect(b"ttyACM0 is free")
+
     def test_over_bluetooth_the_lines_and_resets_do_nothing_and_say_so(self):
         link = os.path.join(self.tmp(), "rfcomm0")
         os.symlink(self.port_path, link)

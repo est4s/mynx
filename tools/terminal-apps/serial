@@ -264,6 +264,7 @@ class Monitor:
         self.keys = Keys()
         self.display = Display()
         self.echo = False
+        self.busy = False
         self.out = sys.stdout.buffer
 
     def write(self, text):
@@ -336,6 +337,18 @@ class Monitor:
             self.note(f"Ctrl+T {key!r}: not a command (Ctrl+T h lists them)")
         return True
 
+    def waiting_marks(self):
+        """serial-port's marks for this port; /dev/ttyACM0 is a link to the one in /dev/serial."""
+        mark = f".{os.path.basename(self.port.path)}.waiting"
+        return os.path.join(os.path.dirname(self.port.path), mark), os.path.join("/dev/serial", mark)
+
+    def check_busy(self):
+        busy = any(os.path.exists(mark) for mark in self.waiting_marks())
+        if busy != self.busy:
+            self.busy = busy
+            name = self.info["name"]
+            self.note(f"{name} is busy: another program has it; waiting" if busy else f"{name} is free")
+
     def wait_for_port(self, stdin):
         self.port.close()
         self.note(f"{self.info['name']} is gone; waiting for it (Ctrl+T q quits)")
@@ -385,6 +398,7 @@ class Monitor:
                 checked = time.monotonic()
                 if self.port.gone() and not self.wait_for_port(stdin):
                     return 0
+                self.check_busy()
 
 
 def ask_ports():
