@@ -93,7 +93,12 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Web apps, part 1: planned for subagents (branch `webapps`)
+### 0. Web apps, part 1: built, awaiting CI and the phone tests (branch `webapps`)
+
+**Status (entry 163):** parts 0, A, B and C are built and merged into
+`webapps`; the suites pass here. Left: CI green (B's Kotlin has
+never compiled), `scripts/deliver.sh`, the phone tests below, then the
+README's feature list and the roadmap, and merging the PR.
 
 Picked by the maintainer 2026-11-08 (entry 162). The roadmap's "Web
 apps" first part: HTML and JavaScript apps in `~/apps/NAME/`,
@@ -461,6 +466,21 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (163): Web apps part 1 built by subagents
+
+Part 0 (the contract, `WebApps.kt`'s KDoc, fakes, fixtures in
+`tests/fixtures/apps/`), then A (core), B (the app's screen, the
+service's `WebAppHost`) and C (`mynx app`, the terminal apps' move to
+`tools/terminal-apps/`, the menu's Apps and Terminal apps, the
+`sketch` example, the guide) in worktrees, merged into `webapps`.
+Decisions where the contract was open are in its KDoc (A: a started
+service is remembered only once its screen opened, a cancelled open
+stops what it started, autostart services are never stopped; B: Open
+in browser only for served apps, links to other sites open in the
+view). Integration: the menu ignored a served app's `<title>` while
+core used it; the menu now follows core. AGENTS.md has the
+Architecture entry. Not yet compiled: `app/` (CI).
 
 ### 2026-11-08 (162): Web apps part 1 planned for subagents
 

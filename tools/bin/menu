@@ -254,8 +254,7 @@ web_app_label() { # web_app_label <folder>: app.conf's name, else the <title>, e
   local dir=$1 label w name
   web_app_conf "$dir/app.conf"
   label=$CONF_NAME
-  # A served app's index.html, if any, is ignored.
-  [[ -n $label || -n $CONF_URL ]] || label=$(web_app_title "$dir/index.html")
+  [[ -n $label ]] || label=$(web_app_title "$dir/index.html")
   if [[ -z $label ]]; then   # pixel-hero → "Pixel Hero"
     name=${dir##*/}
     for w in ${name//-/ }; do label+="${label:+ }${w^}"; done

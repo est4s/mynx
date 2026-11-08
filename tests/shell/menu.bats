@@ -377,14 +377,14 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     [ "${ACTS[*]}" = "webapp:pixel-hero" ]
 }
 
-@test "served apps: url on 127.0.0.1 or localhost; their index.html is ignored" {
+@test "served apps: url on 127.0.0.1 or localhost; an index.html still gives the label, as core" {
     mkdir -p "$HOME/apps/one" "$HOME/apps/two"
     printf 'url = http://localhost:8080\n' >"$HOME/apps/one/app.conf"
-    printf '<title>Ignored</title>\n' >"$HOME/apps/one/index.html"
+    printf '<title>Titled</title>\n' >"$HOME/apps/one/index.html"
     printf '  url=http://127.0.0.1:65535/x?y=1  \n' >"$HOME/apps/two/app.conf"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "One Two" ]
+    [ "${ITEMS[*]}" = "Titled Two" ]
 }
 
 @test "an app's label: app.conf's name, then <title>, then the folder" {
