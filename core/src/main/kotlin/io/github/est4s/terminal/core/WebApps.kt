@@ -1,6 +1,7 @@
 package io.github.est4s.terminal.core
 
 import java.io.File
+import java.nio.file.Files
 
 /*
  * Apps (web apps): the contract the parts share (work log, "Next", 0).
@@ -412,23 +413,229 @@ data class WebAppResponse(
  * thread may use it, and the activity makes its own.
  */
 class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
+    private val guestHome = home.absoluteFile.relativeToOrNull(File(rootfs).absoluteFile)
+        ?.invariantSeparatorsPath?.let { "/$it" } ?: "/root"
+    private val rootfsCanonical by lazy { runCatching { File(rootfs).canonicalPath }.getOrDefault(rootfs) }
+
     /** Every app, `~/apps` first winning, sorted by name. */
-    fun list(): List<WebApp> = TODO()
+    fun list(): List<WebApp> {
+        val found = sortedMapOf<String, WebApp>()
+        for (folder in listOf(TOOLS_WEB_APPS, "$guestHome/$WEB_APPS_DIR")) {
+            for (name in names(folder)) inspect(name, "$folder/$name")?.app?.let { found[name] = it }
+        }
+        return found.values.toList()
+    }
 
     /** The app named [name], or null. */
-    fun find(name: String): WebApp? = TODO()
+    fun find(name: String): WebApp? {
+        if (!isWebAppName(name)) return null
+        return inspect(name, "$guestHome/$WEB_APPS_DIR/$name")?.app ?: inspect(name, "$TOOLS_WEB_APPS/$name")?.app
+    }
+
+    /** What's wrong in each folder of `~/apps` that looks like an app, by its Debian path ([webAppProblems]). */
+    internal fun problems(): List<Pair<String, List<String>>> {
+        val folder = "$guestHome/$WEB_APPS_DIR"
+        return names(folder).mapNotNull { name ->
+            val found = inspect(name, "$folder/$name") ?: return@mapNotNull null
+            when {
+                !isWebAppName(name) -> "~/$WEB_APPS_DIR/$name" to listOf(
+                    "not a usable app name: use a-z, 0-9 and -, up to 40 characters, not starting or ending with -",
+                )
+                else -> "~/$WEB_APPS_DIR/$name/$WEB_APP_CONF" to found.problems
+            }
+        }.filter { it.second.isNotEmpty() }
+    }
+
+    private fun names(folder: String): List<String> =
+        host(folder)?.list().orEmpty().sorted()
+
+    private class Inspected(val app: WebApp?, val problems: List<String>)
+
+    // A folder with an index.html or app.conf; app is null when it isn't one (a bad name, no url and no page).
+    private fun inspect(name: String, path: String): Inspected? {
+        val root = resolve(path) ?: return null
+        if (host(root)?.isDirectory != true) return null
+        val index = confinedFile(root, "index.html")
+        val confFile = confinedFile(root, WEB_APP_CONF)
+        if (index == null && confFile == null) return null
+        if (!isWebAppName(name)) return Inspected(null, emptyList())
+
+        val parsed = confFile?.let { f -> runCatching { parseAppConf(f.readText()) }.getOrNull() } ?: ParsedAppConf(AppConf(), emptyList())
+        val conf = parsed.conf
+        val problems = parsed.problems.toMutableList()
+        val icon = conf.icon?.let { icon ->
+            val guest = resolve("$root/$icon")
+            when {
+                guest == null || !inside(guest, root) -> null.also { problems += "icon: $icon is outside the app's folder" }
+                host(guest)?.isFile != true -> null.also { problems += "icon: no such file $icon in the app's folder" }
+                else -> guest
+            }
+        }
+        if (conf.service != null && conf.url != null) {
+            val defined = loadServices(File(home, "$CONFIG_DIR/$SERVICES_CONF")).services.any { it.name == conf.service }
+            if (!defined) problems += "service: no service named ${conf.service} in ~/$CONFIG_DIR/$SERVICES_CONF"
+        }
+        val served = conf.url
+        if (served == null && index == null) {
+            problems += "not an app: no index.html, and no url"
+            return Inspected(null, problems)
+        }
+        val label = conf.name ?: index?.let(::readTitle) ?: folderLabel(name)
+        val app = if (served != null) {
+            WebApp(name, label, path, root, WebAppKind.SERVED, servedOrigin(served), served, servedPort(served), conf.service, icon, problems)
+        } else {
+            WebApp(name, label, path, root, WebAppKind.STATIC, webAppOrigin(name), webAppOrigin(name) + "/", null, null, icon, problems)
+        }
+        return Inspected(app, problems)
+    }
+
+    private fun readTitle(file: File): String? = runCatching {
+        val bytes = file.inputStream().use { it.readNBytes(4096) }
+        htmlTitle(String(bytes, Charsets.UTF_8))
+    }.getOrNull()
+
+    // The host file of [name] in folder [root] (a resolved guest path), if it's a file inside it.
+    private fun confinedFile(root: String, name: String): File? {
+        val guest = resolve("$root/$name") ?: return null
+        if (!inside(guest, root)) return null
+        return host(guest)?.takeIf { it.isFile }
+    }
+
+    private fun inside(path: String, root: String) =
+        path == root || path.startsWith(if (root == "/") "/" else "$root/")
 
     /** [guest] with every link along it resolved as Debian sees it (a link-free guest path), or null: see LINKS. */
-    fun resolve(guest: String): String? = TODO()
+    fun resolve(guest: String): String? {
+        if (!guest.startsWith("/")) return null
+        val done = ArrayList<String>()
+        val todo = ArrayDeque(guest.split('/').filter { it.isNotEmpty() })
+        var links = 0
+        while (todo.isNotEmpty()) {
+            when (val part = todo.removeFirst()) {
+                "." -> continue
+                ".." -> { done.removeLastOrNull(); continue }
+                else -> done += part
+            }
+            val file = host("/" + done.joinToString("/")) ?: return null
+            val path = file.toPath()
+            if (!Files.isSymbolicLink(path)) continue
+            if (++links > MAX_LINKS) return null
+            val target = runCatching { Files.readSymbolicLink(path).toString() }.getOrNull() ?: return null
+            done.removeAt(done.lastIndex)
+            val next = fakedHardLink(target) ?: target
+            if (next.startsWith("/")) done.clear()
+            next.split('/').filter { it.isNotEmpty() }.asReversed().forEach(todo::addFirst)
+        }
+        return "/" + done.joinToString("/")
+    }
+
+    // link2symlink's target, a host path to a `.l2s.*` file in the rootfs, as a guest path.
+    private fun fakedHardLink(target: String): String? {
+        val file = File(target)
+        if (!target.startsWith("/") || !file.name.startsWith(L2S)) return null
+        val parent = runCatching { file.parentFile.canonicalPath }.getOrNull() ?: return null
+        return when {
+            parent == rootfsCanonical -> "/${file.name}"
+            parent.startsWith("$rootfsCanonical/") -> parent.removePrefix(rootfsCanonical) + "/" + file.name
+            else -> null
+        }
+    }
 
     /** Where the guest path [guest] lives on the host ([TOOLS_MOUNT] → [toolsDir], else [hostPath]). */
-    fun host(guest: String): File? = TODO()
+    fun host(guest: String): File? = when {
+        guest == TOOLS_MOUNT -> toolsDir
+        guest.startsWith("$TOOLS_MOUNT/") -> File(toolsDir, guest.removePrefix("$TOOLS_MOUNT/"))
+        else -> hostPath(guest, rootfs)?.let(::File)
+    }
 
     /** The answer to [method] on [encodedPath] of static app [app]: see STATIC APPS. */
-    fun respond(app: WebApp, method: String, encodedPath: String): WebAppResponse = TODO()
+    fun respond(app: WebApp, method: String, encodedPath: String): WebAppResponse {
+        if (method != "GET" && method != "HEAD") {
+            return plain(405, "Method Not Allowed", "only GET and HEAD\n", mapOf("Allow" to "GET, HEAD"))
+        }
+        if (app.kind != WebAppKind.STATIC) return notFound()
+        val raw = encodedPath.removePrefix("/").split('/')
+        val segments = mutableListOf<String>()
+        for (encoded in raw) {
+            if (encoded.isEmpty()) continue
+            val segment = percentDecode(encoded) ?: return notFound()
+            if (segment == "." || segment == ".." || '/' in segment || '\u0000' in segment || segment.startsWith(L2S)) {
+                return notFound()
+            }
+            segments += segment
+        }
+        if (raw.last().isEmpty()) segments += "index.html"
+        val guest = resolve(app.root + "/" + segments.joinToString("/")) ?: return notFound()
+        if (!inside(guest, app.root)) return notFound()
+        val file = host(guest)?.takeIf { it.isFile } ?: return notFound()
+        val mime = webAppMimeType(segments.last())
+        return WebAppResponse(200, "OK", mime, if (isTextMime(mime)) "utf-8" else null, NO_STORE, file = file)
+    }
 
     /** A value that changes when any file under [app]'s root does: see AUTO-RELOAD. */
-    fun fingerprint(app: WebApp): Long = TODO()
+    fun fingerprint(app: WebApp): Long {
+        var hash = FNV_OFFSET
+        var files = 0
+        val seen = mutableSetOf<String>()
+        fun add(text: String) {
+            for (b in text.toByteArray()) hash = (hash xor (b.toLong() and 0xff)) * FNV_PRIME
+        }
+        fun walk(guest: String, relative: String) {
+            if (!seen.add(guest)) return
+            for (name in host(guest)?.list().orEmpty().sorted()) {
+                if (files >= WEB_APP_FINGERPRINT_FILES) return
+                if (name.startsWith(L2S)) continue
+                val resolved = resolve("$guest/$name") ?: continue
+                if (!inside(resolved, app.root)) continue
+                val file = host(resolved) ?: continue
+                when {
+                    file.isDirectory -> walk(resolved, "$relative$name/")
+                    file.isFile -> {
+                        files++
+                        add("$relative$name\u0000${file.length()}\u0000${file.lastModified()}\n")
+                    }
+                }
+            }
+        }
+        walk(app.root, "")
+        return hash
+    }
+}
+
+private const val MAX_LINKS = 40
+private const val L2S = ".l2s."
+private const val FNV_OFFSET = -0x340d631b7bdddcdbL
+private const val FNV_PRIME = 0x100000001b3L
+private val NO_STORE = mapOf("Cache-Control" to "no-store")
+
+private fun plain(status: Int, reason: String, body: String, headers: Map<String, String> = emptyMap()) =
+    WebAppResponse(status, reason, "text/plain", "utf-8", NO_STORE + headers, body = body)
+
+private fun notFound() = plain(404, "Not Found", "not found\n")
+
+// Percent-decodes one path segment as UTF-8 (`+` stays); null for bad encoding.
+private fun percentDecode(text: String): String? {
+    val bytes = java.io.ByteArrayOutputStream()
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        if (c == '%') {
+            if (i + 2 >= text.length) return null
+            val hex = text.substring(i + 1, i + 3)
+            if (hex.any { Character.digit(it, 16) < 0 }) return null
+            bytes.write(hex.toInt(16))
+            i += 3
+        } else {
+            bytes.write(c.toString().toByteArray(Charsets.UTF_8))
+            i++
+        }
+    }
+    return runCatching {
+        Charsets.UTF_8.newDecoder()
+            .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+            .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+            .decode(java.nio.ByteBuffer.wrap(bytes.toByteArray())).toString()
+    }.getOrNull()
 }
 
 /**
@@ -441,7 +648,11 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
  * link to `/opt/mynx/…` can't be followed here (no tools folder), so
  * it counts as dangling.
  */
-fun webAppProblems(home: File): List<ConfigProblems> = TODO()
+fun webAppProblems(home: File): List<ConfigProblems> =
+    // Nothing exists below /dev/null: the tools' folder isn't here.
+    WebApps(home, home.parentFile.path, File("/dev/null/no-tools")).problems().map { (file, problems) ->
+        ConfigProblems(file, problems)
+    }
 
 /** One poll's outcome: whether to reload now, and when to poll next. */
 data class ReloadStep(val reload: Boolean, val nextMs: Long)
