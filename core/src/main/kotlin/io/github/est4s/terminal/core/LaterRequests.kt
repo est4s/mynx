@@ -18,15 +18,15 @@ class Later(
 )
 
 /**
- * The answer to a [Later] request; any thread may use it. Next to
- * `ID.req`, the app writes `ID.wait` (the seconds to wait, or `stream`)
- * at once, appends each [line] of a stream to `ID.stream`, and puts the
- * answer in `ID.reply`; only the first answer counts. `mynx` cancels a
- * stream by writing `ID.cancel`; [onCancel] then runs, as it does when
- * `mynx` has gone (see [MynxRequests.sweep]).
+ * The answer to a [Later] request; any thread may use it. It goes
+ * through a [ReplySink]: for `mynx` a [FileReplySink] (`ID.wait` at
+ * once, each [line] of a stream appended to `ID.stream`, the answer in
+ * `ID.reply`); only the first answer counts. `mynx` cancels a stream by
+ * writing `ID.cancel`; [onCancel] then runs, as it does when `mynx` has
+ * gone (see [MynxRequests.sweep]).
  */
 class PendingReply internal constructor(
-    private val dir: File,
+    private val sink: ReplySink,
     internal val id: String,
     private val closed: (PendingReply) -> Unit,
 ) {
@@ -40,7 +40,7 @@ class PendingReply internal constructor(
     /** One reading of a stream, as a JSON object. */
     @Synchronized
     fun line(json: String) {
-        if (!done) File(dir, "$id.stream").appendText(json + "\n")
+        if (!done) sink.line(json)
     }
 
     /** Answers `{"ok":true, ...}`; field values are JSON. */
@@ -66,8 +66,7 @@ class PendingReply internal constructor(
         synchronized(this) {
             if (done) return
             done = true
-            writeReply(dir, id, json)
-            File(dir, "$id.wait").delete()
+            sink.answer(json)
         }
         closed(this)
     }
@@ -83,10 +82,9 @@ class PendingReply internal constructor(
         runCatching { block?.invoke() }
         if (listening) {
             ok()
-            File(dir, "$id.cancel").delete()
         } else {
             synchronized(this) { done = true }
-            dir.listFiles { f -> f.name.startsWith("$id.") }.orEmpty().forEach { it.delete() }
+            sink.discard()
         }
         closed(this)
     }
@@ -120,16 +118,32 @@ interface ReplySink {
  * removes `ID.wait` (and `ID.cancel`), [discard] removes every `ID.*`.
  */
 class FileReplySink(private val dir: File, private val id: String) : ReplySink {
-    override fun waiting(seconds: Int?): Unit = TODO("part A")
-    override fun line(json: String): Unit = TODO("part A")
-    override fun answer(json: String): Unit = TODO("part A")
-    override fun discard(): Unit = TODO("part A")
+    override fun waiting(seconds: Int?) {
+        val wait = File(dir, "$id.wait.tmp")
+        wait.writeText(seconds?.toString() ?: "stream")
+        wait.renameTo(File(dir, "$id.wait"))
+    }
+
+    override fun line(json: String) {
+        File(dir, "$id.stream").appendText(json + "\n")
+    }
+
+    override fun answer(json: String) {
+        writeReply(dir, id, json)
+        File(dir, "$id.wait").delete()
+        File(dir, "$id.cancel").delete()
+    }
+
+    override fun discard() {
+        dir.listFiles { f -> f.name.startsWith("$id.") }.orEmpty().forEach { it.delete() }
+    }
 }
 
 /**
  * A request run in-process by [MynxRequests.call]. [seconds] is its
  * [Later.seconds] (null: a stream; a plain request is answered before
- * `call` returns, with [done] true). [stop]: the caller stopped it, as
+ * `call` returns, with [done] true and [seconds] 0; its sink gets no
+ * [ReplySink.waiting]). [stop]: the caller stopped it, as
  * `mynx`'s `ID.cancel` (Ctrl+C): `onCancel` runs and an answer always
  * follows (the handler's, else `{"ok":true}`). [cancel]: nobody listens
  * any more, as `mynx` gone: `onCancel` runs, then the sink's

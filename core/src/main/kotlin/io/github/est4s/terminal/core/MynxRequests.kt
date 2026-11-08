@@ -91,45 +91,47 @@ class MynxRequests(
             val request = MynxRequest(lines.firstOrNull()?.trim().orEmpty(), lines.drop(1))
             val id = file.name.removeSuffix(".req")
             later[request.name]?.let { handler ->
-                startLater(id, request, handler)
+                startLater(id, request.args, handler, FileReplySink(dir, id))
                 file.delete()
                 return@map request
             }
-            val reply = try {
-                val change = changeName(request)
-                if (change != null) history.observe(HAND_EDITS, undoKeep())
-                answer(request).also { if (change != null) history.observe(change, undoKeep()) }
-            } catch (e: Refused) {
-                refusal(e.message!!)
-            }
-            writeReply(dir, id, reply)
+            writeReply(dir, id, plain(request))
             file.delete()
             request
         }
     }
 
-    private fun startLater(id: String, request: MynxRequest, handler: Later) {
-        val change = handler.change?.let { runCatching { it(request.args) }.getOrNull() }
+    private fun plain(request: MynxRequest): String = try {
+        val change = changeName(request)
+        if (change != null) history.observe(HAND_EDITS, undoKeep())
+        answer(request).also { if (change != null) history.observe(change, undoKeep()) }
+    } catch (e: Refused) {
+        refusal(e.message!!)
+    }
+
+    private fun startLater(id: String, args: List<String>, handler: Later, sink: ReplySink): PendingReply {
+        val change = handler.change?.let { runCatching { it(args) }.getOrNull() }
         // Whether start has returned: one that answers after (a permission dialog first) writes then.
         var returned = false
-        val reply = PendingReply(dir, id) { reply ->
+        val reply = PendingReply(sink, id) { reply ->
             synchronized(open) { open -= reply }
             val late = synchronized(reply) { returned }
             if (late && change != null) runCatching { history.observe(change, undoKeep()) }
         }
         synchronized(open) { open += reply }
-        val wait = File(dir, "$id.wait.tmp")
-        wait.writeText(handler.seconds?.toString() ?: "stream")
-        wait.renameTo(File(dir, "$id.wait"))
+        sink.waiting(handler.seconds)
         if (change != null) runCatching { history.observe(HAND_EDITS, undoKeep()) }
         try {
-            handler.start(request.args, reply)
+            handler.start(args, reply)
         } catch (e: Refused) {
             reply.refuse(e.message!!)
         }
         val answered = synchronized(reply) { returned = true; reply.answered }
         if (change != null && answered) runCatching { history.observe(change, undoKeep()) }
+        return reply
     }
+
+    private var calls = 0
 
     /**
      * Runs request [name] in-process (the bridge; work log "Next", 0,
@@ -140,13 +142,37 @@ class MynxRequests(
      * at once (unknown names refused as from `mynx`). Main thread, as
      * [processPending]. The [Call] stops or cancels it.
      */
-    fun call(name: String, args: List<String>, sink: ReplySink): Call = TODO("part A")
+    fun call(name: String, args: List<String>, sink: ReplySink): Call {
+        later[name]?.let { return call(it, args, sink) }
+        val answer = try {
+            plain(MynxRequest(name, args))
+        } catch (e: Exception) {
+            refusal("$name failed: ${e.message ?: e.javaClass.simpleName}")
+        }
+        sink.answer(answer)
+        return object : Call {
+            override val seconds = 0
+            override val done = true
+            override fun stop() {}
+            override fun cancel() {}
+        }
+    }
 
     /** Runs [handler], a [Later] that isn't in `later` (the bridge's own calls), as [call] runs one. */
-    fun call(handler: Later, args: List<String>, sink: ReplySink): Call = TODO("part A")
+    fun call(handler: Later, args: List<String>, sink: ReplySink): Call {
+        val reply = startLater("$BRIDGE_ID${++calls}", args, handler, sink)
+        return object : Call {
+            override val seconds = handler.seconds
+            override val done get() = reply.answered
+            override fun stop() = reply.cancel(listening = true)
+            override fun cancel() = reply.cancel(listening = false)
+        }
+    }
 
     /** Records a change to the config files made outside a request (an app's permission answered in its dialog) as an undo step named [name]. */
-    fun recordChange(name: String): Unit = TODO("part A")
+    fun recordChange(name: String) {
+        runCatching { history.observe(name, undoKeep()) }
+    }
 
     /** Whether a [Later] request is still running: while one is, call [sweep] now and then. */
     fun hasOpen(): Boolean = synchronized(open) { open.isNotEmpty() }
@@ -155,6 +181,7 @@ class MynxRequests(
     fun sweep() {
         for (reply in synchronized(open) { open.toList() }) {
             val pid = pidOfRequest(reply.id)
+            if (reply.id.startsWith(BRIDGE_ID)) continue
             when {
                 File(dir, "${reply.id}.cancel").exists() -> reply.cancel(listening = true)
                 pid != null && !alive(pid) -> reply.cancel(listening = false)
@@ -503,6 +530,8 @@ class MynxRequests(
 }
 
 private const val HAND_EDITS = "edits by hand"
+// The ids of requests run by [MynxRequests.call]: no process number, so [MynxRequests.sweep] leaves them be.
+private const val BRIDGE_ID = "bridge-"
 private const val UNDO_DIR = ".local/state/mynx/undo"
 
 private const val NEW_KEY_BAR = """# A key bar: one button per line, "label = keys". Buttons fill two
