@@ -138,7 +138,7 @@ class AppPermissionsCheckTest {
     private val changes = mutableListOf<String>()
     private val permissions = AppPermissions(home, apps) { changes += it }
     private val host = FakeBridgeHost()
-    private val weather = app("weather", "Weather")
+    private val weather = testApp("weather", "Weather")
 
     init {
         File(home, "$WEB_APPS_DIR/weather").mkdirs()
@@ -359,7 +359,7 @@ class AppPermissionsCheckTest {
 }
 
 /** A static app for the tests, not on disk. */
-fun app(name: String, label: String = folderLabel(name), service: String? = null, served: Boolean = false): WebApp =
+fun testApp(name: String, label: String = folderLabel(name), service: String? = null, served: Boolean = false): WebApp =
     if (served) {
         WebApp(name, label, "/root/apps/$name", "/root/apps/$name", WebAppKind.SERVED, "http://127.0.0.1:8080",
             "http://127.0.0.1:8080/", 8080, service, null, emptyList())

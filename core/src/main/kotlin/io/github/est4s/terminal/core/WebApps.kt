@@ -303,7 +303,7 @@ const val WEB_APP_OPEN_SECONDS = 30
 const val WEB_APP_FINGERPRINT_FILES = 5000
 
 /** Every request [webAppRequests] answers. */
-val WEB_APP_REQUEST_NAMES = listOf("app-list", "app-open", "app-reload")
+val WEB_APP_REQUEST_NAMES = listOf("app-list", "app-open", "app-reload", "app-shortcut")
 
 private val WEB_APP_NAME = Regex("[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?")
 
@@ -417,6 +417,15 @@ fun parseAppConf(text: String): ParsedAppConf {
                 set { copy(url = value) }
             }
             "service" -> if (isServiceName(value)) set { copy(service = value) } else problem(badServiceName(value))
+            "fullscreen" -> {
+                val fullscreen = Fullscreen.of(value)
+                if (fullscreen == null) problem("fullscreen is no, yes or edge") else set { copy(fullscreen = fullscreen) }
+            }
+            "screen-awake" -> when (value) {
+                "yes" -> set { copy(screenAwake = true) }
+                "no" -> set { copy(screenAwake = false) }
+                else -> problem("screen-awake is yes or no")
+            }
         }
     }
     if (conf.service != null && conf.url == null) {
@@ -426,7 +435,7 @@ fun parseAppConf(text: String): ParsedAppConf {
     return ParsedAppConf(conf, problems)
 }
 
-private val APP_CONF_KEYS = setOf("name", "icon", "url", "service")
+private val APP_CONF_KEYS = setOf("name", "icon", "url", "service", "fullscreen", "screen-awake")
 private val ICON_TYPES = setOf("image/png", "image/jpeg", "image/webp")
 private val SERVED_URL = Regex("""http://(127\.0\.0\.1|localhost):([0-9]{1,5})(/[^\s?#]*)?(\?[^\s#]*)?""")
 
@@ -578,7 +587,7 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
             WebApp(name, label, path, root, WebAppKind.SERVED, servedOrigin(served), served, servedPort(served), conf.service, icon, problems)
         } else {
             WebApp(name, label, path, root, WebAppKind.STATIC, webAppOrigin(name), webAppOrigin(name) + "/", null, null, icon, problems)
-        }
+        }.copy(fullscreen = conf.fullscreen, screenAwake = conf.screenAwake)
         return Inspected(app, problems)
     }
 
@@ -670,7 +679,14 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
      * `/mynx.js` is the tools' [BRIDGE_SCRIPT_FILE] (`text/javascript`,
      * utf-8, no-store); GET and HEAD only (else 405); any other path 404.
      */
-    fun bridgeScript(method: String, encodedPath: String): WebAppResponse = TODO("part A")
+    fun bridgeScript(method: String, encodedPath: String): WebAppResponse {
+        if (method != "GET" && method != "HEAD") {
+            return plain(405, "Method Not Allowed", "only GET and HEAD\n", mapOf("Allow" to "GET, HEAD"))
+        }
+        if (encodedPath != "/mynx.js") return notFound()
+        val file = File(toolsDir, BRIDGE_SCRIPT_FILE).takeIf { it.isFile } ?: return notFound()
+        return WebAppResponse(200, "OK", "text/javascript", "utf-8", NO_STORE, file = file)
+    }
 
     /** A value that changes when any file under [app]'s root does: see AUTO-RELOAD. */
     fun fingerprint(app: WebApp): Long {
@@ -932,7 +948,20 @@ data class AppShortcut(
 )
 
 /** [app]'s shortcut under the theme [colors]; [iconFile] is its icon's host file, if it has one. */
-fun appShortcut(app: WebApp, iconFile: File?, colors: ColorScheme): AppShortcut = TODO("part A")
+fun appShortcut(app: WebApp, iconFile: File?, colors: ColorScheme): AppShortcut {
+    val letter = (app.label.firstOrNull { it.isLetterOrDigit() } ?: app.name.first()).uppercase()
+    val index = SHORTCUT_COLORS[Math.floorMod(app.name.hashCode(), SHORTCUT_COLORS.size)]
+    val background = colors.palette[index] ?: colors.foreground
+    val foreground = if (contrast(background, colors.background) >= contrast(background, colors.foreground)) {
+        colors.background
+    } else {
+        colors.foreground
+    }
+    return AppShortcut(webAppShortcutId(app.name), app.name, app.label, iconFile, letter, background, foreground)
+}
+
+// The theme's chromatic colours, normal then bright.
+private val SHORTCUT_COLORS = listOf(1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14)
 
 /** What [WebAppLauncher.openStep] did: the [app] shown, and whether it started its service. */
 data class WebAppOpened(val app: WebApp, val startedService: Boolean)
@@ -961,6 +990,7 @@ class WebAppLauncher(
             val app = named(args, "app-reload", reply) ?: return@Later
             if (host.reload(app.name)) reply.answer(ok("name" to json(app.name))) else reply.refuse("${app.name} isn't open")
         },
+        "app-shortcut" to Later(WEB_APP_SHORTCUT_SECONDS) { args, reply -> shortcut(args, reply) },
     ).mapValues { (name, later) ->
         // Anything thrown would leave the request to fail again at every poll.
         Later(later.seconds, later.change) { args, reply ->
@@ -983,37 +1013,97 @@ class WebAppLauncher(
         if (!host.onScreen) {
             return reply.refuse("mynx must be on screen to open an app: bring it to the front and try again")
         }
+        val cancel = openStep(app.name, host::open) { result ->
+            result.fold(
+                { opened ->
+                    reply.ok(
+                        "name" to json(opened.app.name),
+                        "opened" to "true",
+                        "origin" to json(opened.app.origin),
+                        "url" to json(opened.app.url),
+                        "started_service" to opened.startedService.toString(),
+                    )
+                },
+                { reply.refuse(it.message ?: "couldn't open ${app.name}") },
+            )
+        }
+        reply.onCancel { cancel() }
+    }
+
+    private fun shortcut(args: List<String>, reply: PendingReply) {
+        val app = named(args, "app-shortcut", reply) ?: return
+        if (!host.onScreen) return reply.refuse("mynx must be on screen to add a shortcut")
+        val shortcut = shortcutOf(app)
+        host.pinShortcut(shortcut)?.let { return reply.refuse(it) }
+        reply.ok("name" to json(app.name), "id" to json(shortcut.id))
+    }
+
+    private fun shortcutOf(app: WebApp) = appShortcut(
+        app,
+        app.icon?.let(apps::host),
+        loadColorScheme(File(apps.home, "$CONFIG_DIR/colors.properties")).scheme,
+    )
+
+    private class Started(val service: String, val autostart: Boolean)
+
+    /**
+     * THE OPEN STEP: opens app [name] (looked up, its service started
+     * and waited for), then calls [show] with it (null: shown, else why
+     * not). [done] gets the result, or the refusal as `app-open` words
+     * it; once, on the main thread. The handle cancels it (a service it
+     * started is stopped; [done] isn't called). Once shown, the app's
+     * pinned shortcut is updated ([WebAppHost.updateShortcut]).
+     */
+    fun openStep(name: String, show: (WebApp) -> String?, done: (Result<WebAppOpened>) -> Unit): () -> Unit {
+        var cancelled = false
+        val handle = { cancelled = true }
+        fun fail(message: String) = done(Result.failure(Exception(message)))
+        val app = apps.find(name) ?: return handle.also { fail("no app named $name (mynx app list shows them)") }
+
+        // Shows the screen; [started] is the service this step started, if any.
+        fun finish(started: Started?) {
+            show(app)?.let { error ->
+                started?.let { services.stop(it.service) }
+                return fail(error)
+            }
+            if (started != null && !started.autostart) startedFor[app.name] = started.service
+            runCatching { host.updateShortcut(shortcutOf(app)) }
+            done(Result.success(WebAppOpened(app, started != null)))
+        }
+
         val port = app.port
-        if (app.kind == WebAppKind.STATIC || port == null) return show(app, null, reply)
+        if (app.kind == WebAppKind.STATIC || port == null) return handle.also { finish(null) }
         val service = app.service
         if (service == null) {
             host.portAnswers(port) { answered ->
-                if (answered) show(app, null, reply) else reply.refuse("nothing answers on 127.0.0.1:$port (app.conf's url)")
+                when {
+                    cancelled -> {}
+                    answered -> finish(null)
+                    else -> fail("nothing answers on 127.0.0.1:$port (app.conf's url)")
+                }
             }
-            return
+            return handle
         }
         val status = services.status(service)
-            ?: return reply.refuse("no service named $service (app.conf's service; mynx service list shows them)")
+            ?: return handle.also { fail("no service named $service (app.conf's service; mynx service list shows them)") }
         var started: Started? = null
         when (status.state) {
-            ServiceState.STOPPING -> return reply.refuse("$service is stopping: try again in a moment")
+            ServiceState.STOPPING -> return handle.also { fail("$service is stopping: try again in a moment") }
             ServiceState.STOPPED, ServiceState.FAILED -> {
-                services.start(service)?.let { return reply.refuse(it) }
+                services.start(service)?.let { return handle.also { _ -> fail(it) } }
                 started = Started(service, status.autostart)
             }
             ServiceState.RUNNING -> {}
         }
-        var cancelled = false
-        reply.onCancel { cancelled = true }
         val deadline = now() + WEB_APP_PORT_WAIT_MS
         fun probe() {
             host.portAnswers(port) { answered ->
                 when {
                     cancelled -> started?.let { services.stop(it.service) }
-                    answered -> show(app, started, reply)
+                    answered -> finish(started)
                     now() >= deadline -> {
                         started?.let { services.stop(it.service) }
-                        reply.refuse(
+                        fail(
                             "$service didn't answer on 127.0.0.1:$port within ${WEB_APP_PORT_WAIT_MS / 1000} s " +
                                 "(mynx service log $service shows its output)",
                         )
@@ -1023,35 +1113,8 @@ class WebAppLauncher(
             }
         }
         probe()
+        return handle
     }
-
-    private class Started(val service: String, val autostart: Boolean)
-
-    // Opens the screen; [started] is the service this request started, if any.
-    private fun show(app: WebApp, started: Started?, reply: PendingReply) {
-        host.open(app)?.let { error ->
-            started?.let { services.stop(it.service) }
-            return reply.refuse(error)
-        }
-        if (started != null && !started.autostart) startedFor[app.name] = started.service
-        reply.ok(
-            "name" to json(app.name),
-            "opened" to "true",
-            "origin" to json(app.origin),
-            "url" to json(app.url),
-            "started_service" to (started != null).toString(),
-        )
-    }
-
-    /**
-     * THE OPEN STEP: opens app [name] (looked up, its service started
-     * and waited for), then calls [show] with it (null: shown, else why
-     * not). [done] gets the result, or the refusal as `app-open` words
-     * it; once, on the main thread. The handle cancels it (a service it
-     * started is stopped; [done] isn't called).
-     */
-    fun openStep(name: String, show: (WebApp) -> String?, done: (Result<WebAppOpened>) -> Unit): () -> Unit =
-        TODO("part A")
 
     /** App [name]'s screen finished: stops the service opening it started, if nothing else needs it. */
     fun screenClosed(name: String) {
@@ -1076,6 +1139,8 @@ class WebAppLauncher(
         "service" to (app.service?.let(::json) ?: "null"),
         "icon" to (app.icon?.let(::json) ?: "null"),
         "problems" to array(app.problems.map(::json)),
+        "fullscreen" to json(app.fullscreen.word),
+        "screen_awake" to app.screenAwake.toString(),
     )
 
     private companion object {

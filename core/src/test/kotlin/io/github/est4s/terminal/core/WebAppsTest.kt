@@ -49,6 +49,20 @@ class FakeWebAppHost : WebAppHost {
         scheduled += delayMs to block
     }
 
+    val pinned = mutableListOf<AppShortcut>()
+    var pinFails: String? = null
+    val updated = mutableListOf<AppShortcut>()
+
+    override fun pinShortcut(shortcut: AppShortcut): String? {
+        pinFails?.let { return it }
+        pinned += shortcut
+        return null
+    }
+
+    override fun updateShortcut(shortcut: AppShortcut) {
+        updated += shortcut
+    }
+
     /** Runs what was scheduled, in order, until nothing is left or [limit] runs; [tick] passes each delay to the clock. */
     fun runScheduled(limit: Int = 1000, tick: (Long) -> Unit = {}) {
         var runs = 0
@@ -805,6 +819,7 @@ class WebAppLauncherTest {
                 "name" to "hello", "label" to "Hello & Welcome", "path" to "/root/apps/hello", "kind" to "static",
                 "origin" to "https://hello.mynx.invalid", "url" to "https://hello.mynx.invalid/",
                 "service" to null, "icon" to null, "problems" to emptyList<String>(),
+                "fullscreen" to "no", "screen_awake" to false,
             ),
             apps[1],
         )
