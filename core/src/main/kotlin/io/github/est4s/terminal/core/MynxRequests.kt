@@ -15,8 +15,8 @@ data class MynxRequest(val name: String, val args: List<String>)
  */
 data class Notice(val title: String, val text: String, val shell: Int?, val ifAway: Boolean)
 
-private const val MAX_NOTICE_TITLE = 100
-private const val MAX_NOTICE_TEXT = 1000
+internal const val MAX_NOTICE_TITLE = 100
+internal const val MAX_NOTICE_TEXT = 1000
 private const val DEFAULT_VIBRATE_MS = 300L
 private const val MAX_VIBRATE_MS = 5000L
 /** The longest text `mynx clipboard set` copies (Android's clipboard goes through Binder, which has a ~1 MB limit). */

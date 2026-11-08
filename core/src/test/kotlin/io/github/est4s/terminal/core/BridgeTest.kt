@@ -124,10 +124,14 @@ class FakeBridgeHost : BridgeHost {
         return { entry.cancelled = true }
     }
 
-    /** Runs every scheduled block not cancelled, oldest first (blocks scheduled meanwhile wait for the next call). */
-    fun runScheduled() {
-        val due = scheduled.toList()
-        scheduled.clear()
+    /**
+     * Runs every scheduled block not cancelled whose delay is at most
+     * [maxDelayMs] (0: only what was posted, not the timers), oldest
+     * first; blocks scheduled meanwhile wait for the next call.
+     */
+    fun runScheduled(maxDelayMs: Long = Long.MAX_VALUE) {
+        val due = scheduled.filter { it.delayMs <= maxDelayMs }
+        scheduled.removeAll(due)
         due.filter { !it.cancelled }.forEach { it.block() }
     }
 }

@@ -1,6 +1,9 @@
 package io.github.est4s.terminal.core
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.util.Base64
 
 /*
  * The bridge (web apps, part 2): the phone from an app's JavaScript.
@@ -396,11 +399,19 @@ class Bridge(
     private val rootfs: File,
     private val serial: (WebApp) -> BridgeSerial = NO_BRIDGE_SERIAL,
 ) {
+    private var temps = 0
+    private val tempRoot = File(rootfs, WEB_APP_TEMP_DIR.removePrefix("/"))
+
     /** Call when the service starts: empties the apps' temp folders' `bridge-*` files left from before. */
-    fun start(): Unit = TODO("part A")
+    fun start() {
+        for (folder in tempRoot.listFiles().orEmpty()) {
+            if (!Files.isDirectory(folder.toPath(), LinkOption.NOFOLLOW_LINKS)) continue
+            folder.listFiles().orEmpty().filter { it.name.startsWith(BRIDGE_TEMP) }.forEach(::deleteNoFollow)
+        }
+    }
 
     /** The wire names offered (`hello`'s `calls`), in [BRIDGE_CALLS] order. */
-    fun offered(): List<String> = TODO("part A")
+    fun offered(): List<String> = BRIDGE_CALLS.filter { it.call != "camera" || host.cameraApp }.map { it.call }
 
     /**
      * Why [app]'s page on [origin] gets no bridge, or null when it
@@ -409,25 +420,509 @@ class Bridge(
      * running. A refusal is logged (`warn bridge: no bridge for ORIGIN:
      * WHY`) before it's returned.
      */
-    fun refusal(app: WebApp, origin: String): String? = TODO("part A")
+    fun refusal(app: WebApp, origin: String): String? {
+        val service = app.service
+        val why = when {
+            !sameOrigin(origin, app.origin) -> "not ${app.name}'s origin (${app.origin})"
+            app.kind == WebAppKind.SERVED && service == null -> "${app.name} has no service (app.conf's service)"
+            service != null && !host.serviceRunning(service) -> "$service isn't running"
+            else -> return null
+        }
+        host.log(app.name, WebAppLogLevel.WARN, "no bridge for $origin: $why")
+        return why
+    }
 
     /**
-     * A new session for one port posted to a page of [app] (after [refusal] said
-     * null). [send] takes each message to post on the port (any thread;
-     * the app posts it on the port); the hello is sent before this
-     * returns.
+     * A new session for one port posted to a page of [app] (after
+     * [refusal] said null). [send] takes each message to post on the
+     * port (any thread; the app posts it on the port); the hello is sent
+     * before this returns. A page load may have two (see THE CHANNEL):
+     * sessions know nothing of each other.
      */
-    fun session(app: WebApp, send: (String) -> Unit): BridgeSession = TODO("part A")
+    fun session(app: WebApp, send: (String) -> Unit): BridgeSession =
+        BridgeSession(this, app, send).also { it.hello() }
+
+    internal val requests get() = calls
+    internal val appsOnDisk get() = apps
+    internal val decider get() = permissions
+    internal val bridgeHost get() = host
+    internal val rootfsDir get() = rootfs
+    internal fun serialFor(app: WebApp) = serial(app)
+
+    /** A new temp file (or folder, with no [ending]) in [app]'s temp folder: its host file and Debian path. */
+    internal fun newTemp(app: String, ending: String): Pair<File, String> {
+        val name = "$BRIDGE_TEMP${++temps}$ending"
+        val folder = File(tempRoot, app).apply { mkdirs() }
+        return File(folder, name) to "$WEB_APP_TEMP_DIR/$app/$name"
+    }
 }
 
-/** One posted port's bridge (a page load may have two) (see SESSIONS AND CANCELLATION). Main thread. */
-class BridgeSession internal constructor() {
+private const val BRIDGE_TEMP = "bridge-"
+private const val QUICK_SECONDS = 10
+private const val SERVICE_WAIT_SECONDS = MAX_STOP_TIMEOUT + 30
+private val RECORD_FORMATS = mapOf(
+    "m4a" to "audio/mp4", "aac" to "audio/aac", "ogg" to "audio/ogg", "opus" to "audio/ogg", "wav" to "audio/wav",
+)
+private val AUDIO_ENDINGS = mapOf(
+    "audio/mpeg" to "mp3", "audio/mp3" to "mp3", "audio/ogg" to "ogg", "audio/opus" to "opus", "audio/wav" to "wav",
+    "audio/wave" to "wav", "audio/x-wav" to "wav", "audio/mp4" to "m4a", "audio/m4a" to "m4a", "audio/x-m4a" to "m4a",
+    "audio/aac" to "aac", "audio/flac" to "flac", "audio/x-flac" to "flac", "audio/webm" to "webm", "audio/midi" to "mid",
+)
+
+/** Whether two origins are the same: scheme and host in any case, the port as given. */
+internal fun sameOrigin(a: String, b: String): Boolean {
+    fun parts(origin: String): Triple<String, String, String>? {
+        val at = origin.indexOf("://").takeIf { it > 0 } ?: return null
+        val rest = origin.substring(at + 3)
+        if (rest.isEmpty() || '/' in rest) return null
+        val colon = rest.lastIndexOf(':')
+        val host = if (colon >= 0) rest.substring(0, colon) else rest
+        val port = if (colon >= 0) rest.substring(colon + 1) else ""
+        return Triple(origin.substring(0, at).lowercase(), host.lowercase(), port)
+    }
+    return parts(a)?.let { it == parts(b) } ?: false
+}
+
+/** Deletes [file], a folder with what's in it, without following links (a link goes as a link). */
+internal fun deleteNoFollow(file: File) {
+    runCatching {
+        val path = file.toPath()
+        if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return
+        if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+            Files.walk(path).use { paths -> paths.sorted(Comparator.reverseOrder()).forEach(Files::delete) }
+        } else {
+            Files.delete(path)
+        }
+    }
+}
+
+/** A parsed JSON value (as [parseJson] gives them) as JSON text again. */
+internal fun toJson(value: Any?): String = when (value) {
+    null -> "null"
+    is String -> json(value)
+    is Boolean, is Long, is Int -> value.toString()
+    is Double -> if (value.isFinite()) value.toString() else "null"
+    is Map<*, *> -> value.entries.joinToString(",", "{", "}") { (k, v) -> json(k.toString()) + ":" + toJson(v) }
+    is List<*> -> value.joinToString(",", "[", "]") { toJson(it) }
+    else -> json(value.toString())
+}
+
+private fun megabytes(bytes: Long) = (bytes + (1 shl 20) - 1) / (1 shl 20)
+
+private fun cutText(text: String, max: Int) = if (text.length <= max) text else text.take(max - 1) + "…"
+
+// A name for a shared file, made safe as the inbox makes names.
+private fun safeShareName(wanted: String): String {
+    val name = wanted.substringAfterLast('/').substringAfterLast('\\').filter { it >= ' ' && it != '\u007f' }.trim()
+    val safe = if (name.isEmpty() || name == "." || name == "..") "file" else name
+    if (safe.length <= MAX_SHARED_NAME) return safe
+    val ext = safe.substringAfterLast('.', "").takeIf { it.length in 1..10 }?.let { ".$it" } ?: ""
+    return safe.take(MAX_SHARED_NAME - ext.length) + ext
+}
+
+/** A sink an own call passes to the request it runs: straight to its callbacks, on the caller's thread. */
+private class InnerSink(private val onLine: (String) -> Unit = {}, private val onAnswer: (String) -> Unit) : ReplySink {
+    override fun waiting(seconds: Int?) {}
+    override fun line(json: String) = onLine(json)
+    override fun answer(json: String) = onAnswer(json)
+    override fun discard() {}
+}
+
+private class BridgeRefused(message: String) : Exception(message)
+
+/** One posted port's bridge; a page load may have two (see SESSIONS AND CANCELLATION). Main thread. */
+class BridgeSession internal constructor(
+    private val bridge: Bridge,
+    private val app: WebApp,
+    private val send: (String) -> Unit,
+) {
+    private val host = bridge.bridgeHost
+    private val calls = bridge.requests
+    private val serial = bridge.serialFor(app)
+    private val own: Map<String, Later> = ownCalls() + serial.calls()
+    private val open = linkedMapOf<Long, Entry>()
+    private val temps = java.util.Collections.synchronizedSet(mutableSetOf<File>())
+    private var foreignLogged = false
+    private var rotationHeld = false
+    private var isClosed = false
+
+    private class Entry(val id: Long, val def: BridgeCall) {
+        var call: Call? = null
+        var withdraw: (() -> Unit)? = null
+        var timer: (() -> Unit)? = null
+        var finished = false
+    }
+
+    internal fun hello() {
+        val hello = obj("app" to json(app.name), "label" to json(app.label), "calls" to array(bridge.offered().map(::json)))
+        post(obj("hello" to hello))
+    }
+
+    private fun post(message: String) {
+        if (!isClosed) runCatching { send(message) }
+    }
+
+    private fun log(message: String) = host.log(app.name, WebAppLogLevel.WARN, message)
+
     /** A message from the page; [origin] is the view's current URL's origin (the second fence). */
-    fun receive(message: String, origin: String): Unit = TODO("part A")
+    fun receive(message: String, origin: String) {
+        if (isClosed) return
+        if (!sameOrigin(origin, app.origin)) {
+            if (!foreignLogged) log("message from $origin ignored")
+            foreignLogged = true
+            return
+        }
+        if (message.length > MAX_BRIDGE_MESSAGE_CHARS) return log("bad message: longer than $MAX_BRIDGE_MESSAGE_CHARS characters")
+        val parsed = try {
+            parseJson(message)
+        } catch (e: JsonException) {
+            return log("bad message: not JSON (${e.message})")
+        }
+        if (parsed !is Map<*, *>) return log("bad message: not a JSON object")
+        val id = (parsed["id"] as? Long)?.takeIf { it >= 1 } ?: return log("bad message: no id (an integer from 1)")
+        if (parsed["cancel"] == true) return cancel(id)
+        if (id in open) return refuse(id, null, "call $id is already open")
+        val name = parsed["call"] as? String ?: return refuse(id, null, "a call needs a name")
+        val rawArgs = parsed["args"] ?: emptyList<String>()
+        val args = (rawArgs as? List<*>)?.takeIf { list -> list.all { it is String } }?.map { it as String }
+            ?: return refuse(id, name, "args must be a list of strings")
+        val def = BRIDGE_CALLS.firstOrNull { it.call == name }?.takeIf { it.call in bridge.offered() }
+            ?: return refuse(id, name, "$name isn't offered to apps")
+        if (open.size >= MAX_BRIDGE_OPEN_CALLS) return refuse(id, name, "too many calls at once")
+        val entry = Entry(id, def)
+        open[id] = entry
+        val permission = def.permission ?: return run(entry, args)
+        val withdraw = bridge.decider.check(app, permission, host) { refusal ->
+            entry.withdraw = null
+            when {
+                refusal != null -> finish(entry, refusalJson(refusal.message, refusal.code))
+                !isClosed && !entry.finished -> run(entry, args)
+            }
+        }
+        if (entry.call == null && !entry.finished) entry.withdraw = withdraw
+    }
+
+    private fun cancel(id: Long) {
+        val entry = open[id] ?: return
+        val call = entry.call
+        if (call != null) call.stop() else entry.withdraw?.invoke()
+    }
+
+    private fun run(entry: Entry, args: List<String>) {
+        val def = entry.def
+        val sink = object : ReplySink {
+            override fun waiting(seconds: Int?) {}
+            override fun line(json: String) {
+                host.schedule(0) { if (!isClosed && !entry.finished) post("""{"id":${entry.id},"line":$json}""") }
+            }
+            override fun answer(json: String) {
+                host.schedule(0) { finish(entry, json) }
+            }
+            override fun discard() {
+                host.schedule(0) { forget(entry) }
+            }
+        }
+        val call = try {
+            when (def.route) {
+                BridgeRoute.REQUEST -> calls.call(def.call, args, sink)
+                BridgeRoute.OWN -> calls.call(own[def.call] ?: return finish(entry, refusalJson("${def.call} isn't available here")), args, sink)
+            }
+        } catch (e: Exception) {
+            return finish(entry, refusalJson("${def.call} failed: ${e.message ?: e.javaClass.simpleName}"))
+        }
+        entry.call = call
+        val seconds = call.seconds
+        if (!call.done && seconds != null && seconds > 0 && !entry.finished) {
+            entry.timer = host.schedule(seconds * 1000L) {
+                if (isClosed || entry.finished) return@schedule
+                forget(entry)
+                call.cancel()
+                reply(entry.id, def.call, refusalJson("${def.call} timed out after $seconds s"))
+            }
+        }
+    }
+
+    private fun refusalJson(message: String, code: BridgeError = BridgeError.REFUSED) =
+        """{"ok":false,"error":${json(message)},"code":${json(code.word)}}"""
+
+    private fun forget(entry: Entry) {
+        if (entry.finished) return
+        entry.finished = true
+        if (open[entry.id] === entry) open.remove(entry.id)
+        entry.timer?.invoke()
+    }
+
+    private fun finish(entry: Entry, json: String) {
+        if (isClosed || entry.finished) return
+        forget(entry)
+        reply(entry.id, entry.def.call, json)
+    }
+
+    private fun refuse(id: Long, call: String?, message: String) = reply(id, call, refusalJson(message))
+
+    // Sends the answer, a refusal with its code (refused unless it has one), and logs a refusal.
+    private fun reply(id: Long, call: String?, answer: String) {
+        val parsed = runCatching { parseJson(answer) as? Map<*, *> }.getOrNull()
+        var out = answer
+        if (parsed != null && parsed["ok"] == false) {
+            if ("code" !in parsed) out = answer.trimEnd().removeSuffix("}") + ""","code":"${BridgeError.REFUSED.word}"}"""
+            log("${call ?: "bridge"}: ${parsed["error"]}")
+        }
+        post("""{"id":$id,"reply":$out}""")
+    }
 
     /** Ends the session: every call cancelled, nothing sent after. */
-    fun close(): Unit = TODO("part A")
+    fun close() {
+        if (isClosed) return
+        isClosed = true
+        for (entry in open.values.toList()) {
+            entry.finished = true
+            entry.timer?.invoke()
+            val call = entry.call
+            runCatching { if (call != null) call.cancel() else entry.withdraw?.invoke() }
+        }
+        open.clear()
+        runCatching { serial.close() }
+        if (rotationHeld) runCatching { host.rotation(app.name, null) }
+        rotationHeld = false
+        temps.toList().forEach(::deleteNoFollow)
+        temps.clear()
+    }
 
     /** Whether [close] was called. */
-    val closed: Boolean get() = TODO("part A")
+    val closed: Boolean get() = isClosed
+
+    // THE BRIDGE'S OWN CALLS
+
+    private fun ownCalls(): Map<String, Later> = mapOf(
+        "notify" to Later(QUICK_SECONDS) { args, reply -> notify(args, reply) },
+        "rotation-lock" to Later(QUICK_SECONDS) { args, reply -> rotationLock(args, reply) },
+        "rotation-unlock" to Later(QUICK_SECONDS) { _, reply ->
+            host.rotation(app.name, null)?.let { throw BridgeRefused(it) }
+            rotationHeld = false
+            reply.ok("locked" to json("no"))
+        },
+        "camera-quick" to Later(QUICK_SHOT_SECONDS) { args, reply ->
+            val side = args.firstOrNull()?.trim().orEmpty().ifEmpty { "back" }
+            if (side != "front" && side != "back") throw BridgeRefused("the camera is front or back, not '$side'")
+            photo("camera-quick", listOf(side), reply)
+        },
+        "camera" to Later(CAMERA_APP_SECONDS) { _, reply -> photo("camera", emptyList(), reply) },
+        "audio-record" to Later(null) { args, reply -> record(args, reply) },
+        "audio-play" to Later(null) { args, reply -> play(args, reply) },
+        "share-files" to Later(QUICK_SECONDS) { args, reply -> shareFiles(args, reply) },
+        "service-list" to Later(QUICK_SECONDS) { args, reply -> service("service-list", args, reply) },
+        "service-start" to Later(QUICK_SECONDS) { args, reply -> service("service-start", args, reply) },
+        "service-stop" to Later(SERVICE_WAIT_SECONDS) { args, reply -> service("service-stop", args, reply) },
+        "service-restart" to Later(SERVICE_WAIT_SECONDS) { args, reply -> service("service-restart", args, reply) },
+        "service-log" to Later(QUICK_SECONDS) { args, reply -> service("service-log", args, reply) },
+    ).mapValues { (name, later) ->
+        Later(later.seconds) { args, reply ->
+            try {
+                later.start(args.map { it.trim() }, reply)
+            } catch (e: BridgeRefused) {
+                reply.refuse(e.message!!)
+            } catch (e: Exception) {
+                reply.refuse("$name failed: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun notify(args: List<String>, reply: PendingReply) {
+        val title = args.getOrNull(0).orEmpty()
+        if (title.isEmpty()) throw BridgeRefused("notify needs a title")
+        var ifAway = false
+        for (option in args.drop(2).filter { it.isNotEmpty() }) {
+            if (option == "if-away") ifAway = true else throw BridgeRefused("unknown notify option '$option'")
+        }
+        val text = args.getOrNull(1).orEmpty()
+        val why = host.notify(app, cutText(title, MAX_NOTICE_TITLE), cutText(text, MAX_NOTICE_TEXT), ifAway)
+        if (why == null) reply.ok("shown" to "true") else reply.ok("shown" to "false", "reason" to json(why))
+    }
+
+    private fun rotationLock(args: List<String>, reply: PendingReply) {
+        val words = args.filter { it.isNotEmpty() }
+        val orientation = when (words.firstOrNull()) {
+            null, "current" -> Orientation.CURRENT
+            "portrait" -> Orientation.PORTRAIT
+            "landscape" -> Orientation.LANDSCAPE
+            else -> null
+        }
+        if (orientation == null || words.size > 1) throw BridgeRefused("rotation-lock is portrait, landscape or current")
+        host.rotation(app.name, orientation)?.let { throw BridgeRefused(it) }
+        rotationHeld = true
+        reply.ok("locked" to json(orientation.word))
+    }
+
+    private fun newTemp(ending: String): Pair<File, String> =
+        bridge.newTemp(app.name, ending).also { temps += it.first }
+
+    private fun dropTemp(file: File) {
+        deleteNoFollow(file)
+        temps -= file
+    }
+
+    private fun parse(answer: String): Map<*, *> = runCatching { parseJson(answer) as? Map<*, *> }.getOrNull() ?: emptyMap<String, Any?>()
+
+    // Answers [reply] with [file]'s bytes as base64 (then deletes it), or why not.
+    private fun data(reply: PendingReply, file: File, type: String, what: String, vararg fields: Pair<String, String>) {
+        try {
+            val bytes = file.length()
+            when {
+                !file.isFile -> reply.refuse("couldn't read the $what")
+                bytes > MAX_BRIDGE_DATA_BYTES -> reply.refuse(
+                    "the $what is too big for a page: ${megabytes(bytes)} MB (at most ${MAX_BRIDGE_DATA_BYTES shr 20} MB)",
+                )
+                else -> {
+                    val data = Base64.getEncoder().encodeToString(file.readBytes())
+                    reply.ok("type" to json(type), "bytes" to bytes.toString(), *fields, "data" to json(data))
+                }
+            }
+        } finally {
+            dropTemp(file)
+        }
+    }
+
+    private fun photo(request: String, extra: List<String>, reply: PendingReply) {
+        val (file, path) = newTemp(".jpg")
+        val inner = calls.call(request, listOf(path) + extra, InnerSink { answer ->
+            if (parse(answer)["ok"] == true) data(reply, file, "image/jpeg", "photo") else {
+                dropTemp(file)
+                reply.answer(answer)
+            }
+        })
+        reply.onCancel {
+            inner.cancel()
+            dropTemp(file)
+        }
+    }
+
+    private fun record(args: List<String>, reply: PendingReply) {
+        val format = args.firstOrNull { it.startsWith("format=") }?.substringAfter('=') ?: "m4a"
+        val type = RECORD_FORMATS[format] ?: throw BridgeRefused("the format is m4a, aac, ogg, opus or wav")
+        val (file, path) = newTemp(".$format")
+        val options = args.filter { it.isNotEmpty() && !it.startsWith("format=") }
+        val inner = calls.call("audio-record", listOf(path) + options, InnerSink({ reply.line(it) }) { answer ->
+            val answered = parse(answer)
+            if (answered["ok"] == true) {
+                data(reply, file, type, "recording", "seconds" to toJson(answered["seconds"]))
+            } else {
+                dropTemp(file)
+                reply.answer(answer)
+            }
+        })
+        // A stop or the session closing: the recording ends, and says what it saved.
+        reply.onCancel { inner.stop() }
+    }
+
+    private fun decode(data: String): ByteArray {
+        if (data.length.toLong() * 3 / 4 > MAX_BRIDGE_DATA_BYTES) {
+            throw BridgeRefused("the data is too big: ${megabytes(data.length.toLong() * 3 / 4)} MB (at most ${MAX_BRIDGE_DATA_BYTES shr 20} MB)")
+        }
+        return try {
+            Base64.getDecoder().decode(data)
+        } catch (e: IllegalArgumentException) {
+            throw BridgeRefused("data= isn't base64")
+        }
+    }
+
+    private fun play(args: List<String>, reply: PendingReply) {
+        val options = args.filter { it.isNotEmpty() }.associate { it.substringBefore('=') to it.substringAfter('=', "") }
+        val path = options["file"]
+        val data = options["data"]
+        val played: Pair<File?, String> = when {
+            path != null -> {
+                if (app.kind != WebAppKind.STATIC) throw BridgeRefused("file= is for static apps: send data=")
+                val response = if (path.startsWith("/")) bridge.appsOnDisk.respond(app, "GET", path) else null
+                val found = response?.file?.takeIf { response.status == 200 }
+                    ?: throw BridgeRefused("no such file in ${app.name}: $path")
+                val rootfs = bridge.rootfsDir.absoluteFile
+                val relative = found.absoluteFile.relativeToOrNull(rootfs)?.invariantSeparatorsPath
+                if (relative != null && !relative.startsWith("..")) {
+                    null to "/$relative"
+                } else {
+                    // The tools' apps aren't under the rootfs, where the player looks.
+                    val (copy, guest) = newTemp(found.name.substringAfterLast('.', "").let { if (it.isEmpty()) "" else ".$it" })
+                    found.copyTo(copy, overwrite = true)
+                    copy to guest
+                }
+            }
+            data != null -> {
+                val bytes = decode(data)
+                val ending = AUDIO_ENDINGS[options["type"]?.lowercase()]?.let { ".$it" } ?: ""
+                val (file, guest) = newTemp(ending)
+                file.writeBytes(bytes)
+                file to guest
+            }
+            else -> throw BridgeRefused("audio-play needs file=PATH or data=BASE64 type=MIME")
+        }
+        val (temp, guest) = played
+        val inner = calls.call("audio-play", listOf(guest), InnerSink { answer ->
+            temp?.let(::dropTemp)
+            val answered = parse(answer)
+            when {
+                answered["ok"] != true -> reply.answer(answer)
+                "seconds" in answered -> reply.ok("seconds" to toJson(answered["seconds"]))
+                else -> reply.ok()
+            }
+        })
+        reply.onCancel {
+            inner.stop()
+            temp?.let(::dropTemp)
+        }
+    }
+
+    private fun shareFiles(args: List<String>, reply: PendingReply) {
+        val usage = "share-files takes name=, type= and data= for each file"
+        if (args.isEmpty() || args.size % 3 != 0) throw BridgeRefused(usage)
+        val files = args.chunked(3).map { (name, type, data) ->
+            if (!name.startsWith("name=") || !type.startsWith("type=") || !data.startsWith("data=")) throw BridgeRefused(usage)
+            name.substringAfter('=') to data.substringAfter('=')
+        }
+        if (files.size > MAX_SHARE_FILES) throw BridgeRefused("too many files: ${files.size} (at most $MAX_SHARE_FILES at once)")
+        val decoded = files.map { (name, data) -> name to decode(data) }
+        // Not the session's: the receiving app reads them after the page may have gone.
+        val (folder, guest) = bridge.newTemp(app.name, "")
+        val removeLater = { deleteNoFollow(folder) }
+        try {
+            folder.mkdirs()
+            val taken = mutableSetOf<String>()
+            val paths = decoded.map { (wanted, bytes) ->
+                val safe = safeShareName(wanted)
+                var name = safe
+                var n = 1
+                while (!taken.add(name)) {
+                    n++
+                    val dot = safe.lastIndexOf('.').takeIf { it > 0 } ?: safe.length
+                    name = "${safe.take(dot)} ($n)${safe.drop(dot)}"
+                }
+                File(folder, name).writeBytes(bytes)
+                "$guest/$name"
+            }
+            calls.call("share", paths, InnerSink { answer ->
+                if (parse(answer)["ok"] == true) host.schedule(BRIDGE_SHARE_KEEP_MS, removeLater) else removeLater()
+                reply.answer(answer)
+            })
+        } catch (e: Exception) {
+            removeLater()
+            throw e
+        }
+    }
+
+    private fun service(request: String, args: List<String>, reply: PendingReply) {
+        val own = app.service ?: throw BridgeRefused("${app.name} has no service (app.conf's service)")
+        if (request == "service-list") {
+            calls.call(request, emptyList(), InnerSink { answer ->
+                val answered = parse(answer)
+                if (answered["ok"] != true) return@InnerSink reply.answer(answer)
+                val mine = (answered["services"] as? List<*>).orEmpty().filter { (it as? Map<*, *>)?.get("name") == own }
+                reply.ok("services" to toJson(mine))
+            })
+            return
+        }
+        val name = args.firstOrNull().orEmpty().ifEmpty { own }
+        if (name != own) throw BridgeRefused("$name isn't ${app.name}'s service (app.conf's service)")
+        val inner = calls.call(request, listOf(own) + args.drop(1), InnerSink { reply.answer(it) })
+        reply.onCancel { inner.cancel() }
+    }
 }
