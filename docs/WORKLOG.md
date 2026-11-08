@@ -124,7 +124,7 @@ shortcuts, and two `app.conf` keys.
 - **Permissions per app, asked the first time, for the private
   ones:** location, camera, microphone, reading the clipboard,
   notifications, and (agent's proposal, as they came with
-  "everything") Bluetooth, serial ports and services. Vibration, the
+  "everything") Bluetooth and serial ports. Vibration, the
   flashlight, the battery, sensors, writing the clipboard, share,
   playing sound and rotation just work. The answers live in a
   plain-text config (checked by `mynx check`, covered by undo),
@@ -138,6 +138,31 @@ shortcuts, and two `app.conf` keys.
 - **`app.conf` keys:** full screen (status and navigation bars
   hidden, for games) and screen awake (the screen stays on while the
   app is in front).
+
+**The maintainer's answers to the plan's questions (2026-11-08):**
+- **Services: only the app's own** (`app.conf`'s `service`), and so
+  no prompt for them (`services` isn't a permission); an app with no
+  `service` gets `refused` for every `service.*` call.
+- **Camera: quick photos first** (`{quick: 'back'|'front'}`); the
+  camera app from a page only if moving `startForResult` off
+  `MainActivity` turns out easy (not needed to pass).
+- **Photos and recordings as base64, capped at 16 MB:** accepted.
+- **Shortcuts from the launcher menu too:** the Apps list ends with
+  "Add to home screen…", which lists the apps and runs `mynx app
+  shortcut NAME` for the one picked (picking an app still opens it).
+- **`fullscreen = yes` covers the camera cutout too** (the page runs
+  edge to edge: `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, ALWAYS on
+  API 30+); only the keyboard is still padded for. The guide tells
+  games to keep controls clear of the corners
+  (`env(safe-area-inset-*)` works in CSS).
+- **No "only this time"** in the prompt: Allow or Don't allow.
+- **Served apps get the bridge only while their own mynx service
+  runs** (agent's proposal, accepted): the origin is just
+  `127.0.0.1:PORT`, so with the service down any other Android app
+  could listen there. Before posting the port, the view checks that
+  the app has a `service` and `ServiceManager` says it's running; a
+  served app with no `service` gets no bridge (`no-bridge`, logged).
+  It's still trust, not proof: the guide says so.
 
 **Design (agent's, change it if the maintainer objects):**
 - **The JavaScript API:** one global `mynx`, from `mynx.js`, which
@@ -246,7 +271,7 @@ shortcuts, and two `app.conf` keys.
   ```
   Names: `location`, `camera`, `microphone`, `clipboard` (reading),
   `notifications`, `bluetooth` (every `ble.*`), `serial` (every
-  port, USB or Bluetooth), `services`. Core reads the file at each
+  port, USB or Bluetooth). Core reads the file at each
   call that needs one (no cache, so a hand edit counts at once) and
   checks it in `checkConfig` (unknown permission, value, a bad app
   name; an app that isn't installed is fine: its answers wait for it).
@@ -303,7 +328,8 @@ shortcuts, and two `app.conf` keys.
   after the keyboard or a rotation; the cutout and the keyboard are
   still padded for. `screen-awake = yes|no` (default no):
   `FLAG_KEEP_SCREEN_ON` on the app's window, which Android honours
-  only while it's visible. Both checked as the other keys, both in
+  only while it's visible. (Full screen covers the cutout: see the
+  maintainer's answers above.) Both checked as the other keys, both in
   `app-list`.
 - **Home screen shortcuts:** `mynx app shortcut NAME` (request
   `app-shortcut`; the app must be on screen) asks Android to pin one
@@ -417,7 +443,9 @@ they made, in temp folders, and never follow links while deleting
    loading `mynx.js` gets `no-bridge` from `mynx.ready`; back on the
    app's page it works again. An iframe of another site gets nothing.
 8. A served app (`url`, `service`) gets the bridge on
-   `http://127.0.0.1:PORT`.
+   `http://127.0.0.1:PORT` while its service runs; stop the service
+   while the page is open and reload: `no-bridge`, logged. A served
+   app with no `service` never gets it.
 9. **Cancellation:** a location stream and a sensor stream running,
    close the screen: the GPS icon goes, `mynx app log` shows no
    errors after; same for a reload and for auto-reload while
@@ -434,18 +462,20 @@ they made, in temp folders, and never follow links while deleting
     `set({dtr:false})` and back resets the Nano; while the page has
     it, `mynx usb monitor` says busy; closing the screen frees it.
     Then a Bluetooth port (`rfcomm0`) links on open.
-14. Services: asked once; list, stop, start, restart, log of a test
-    service.
-15. **Shortcut:** `mynx app shortcut gadgets`: Android's dialog, the
+14. Services, no prompt: a served app lists, restarts and reads the
+    log of its own service; any other service name is refused, and a
+    static app's `service.*` calls are refused.
+15. **Shortcut:** `mynx app shortcut gadgets`, and the menu's Apps →
+    Add to home screen… → Gadgets: Android's dialog, the
     icon (`app.conf`'s), and one without an icon gets the generated
     letter. With mynx swiped away, the shortcut opens the app
     directly; a served app's shortcut starts its service and
     closing stops it.
 16. A shortcut for an app that was deleted shows the error on the
     screen.
-17. `fullscreen = yes`: no status or navigation bar; a swipe shows
-    them for a moment; after the keyboard and a rotation they hide
-    again; the cutout isn't covered.
+17. `fullscreen = yes`: no status or navigation bar, and the page
+    runs under the camera cutout; a swipe shows the bars for a
+    moment; after the keyboard and a rotation they hide again.
 18. `screen-awake = yes`: the screen stays on past the timeout while
     the app is in front, and goes off normally once it's in the
     background.
@@ -457,20 +487,8 @@ they made, in temp folders, and never follow links while deleting
     part 1's no-bar test).
 22. Pixel Hero and sketch still behave as in part 1 (no regressions).
 
-**Risks and open questions for the maintainer:**
-- Should `services` be limited to the app's own `service` (from
-  `app.conf`) rather than all of them? The plan gives all, asked once.
-- The camera app from an app's screen depends on moving
-  `startForResult` off `MainActivity`; if it's fiddly, quick photos
-  only at first?
-- Photos and recordings travel as base64 strings (16 MB cap); a
-  big photo may be slow. Saving into the app's folder instead is an
-  option for static apps.
-- Shortcuts: also from the launcher menu (Apps → an app → Add to
-  home screen), or `mynx app shortcut` only?
-- `fullscreen` keeps the cutout padded; games may want the whole
-  screen (`fullscreen = edge`?).
-- Whether a permission prompt should offer "only this time".
+**Questions:** answered by the maintainer (above). Left to find out
+on the phone: whether the camera app from an app's screen is easy.
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -618,6 +636,11 @@ bridge calls reach the same core handlers in-process,
 `app-permissions.conf`, serial as an RFC 2217 client of the port's
 own server) and the parts for subagents are "Next", 0. Roadmap
 updated. No code.
+Then the maintainer answered the plan's questions: services only the
+app's own (no prompt), quick photos first, base64 up to 16 MB, an
+"Add to home screen…" item in the menu's Apps, `fullscreen` covering
+the cutout, no "only this time", and served apps get the bridge only
+while their own service runs.
 
 ### 2026-11-08 (166): No top bar on an app's screen
 
