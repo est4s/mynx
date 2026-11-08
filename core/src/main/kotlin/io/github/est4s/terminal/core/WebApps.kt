@@ -48,10 +48,15 @@ import java.nio.file.Files
  *   `http://localhost:PORT…`, PORT 1024 to 65535 (nothing here can
  *   listen below). Anything else is a problem and the line is skipped.
  * - `service`: a service name ([isServiceName]); only with `url` (a
- *   problem otherwise). [checkConfig] also reports one that isn't in
- *   `services.conf`; opening the app then refuses.
+ *   problem otherwise). One that isn't in `services.conf` is a problem
+ *   too ([checkConfig] and `app-list`'s `problems`); opening the app
+ *   then refuses.
  * - Any other key: "line N: unknown key 'K'". A key given twice: the
- *   last counts, reported.
+ *   last good line counts, reported (a bad line is skipped as if it
+ *   weren't there).
+ * - A folder with an `app.conf` but no `url` and no `index.html` isn't
+ *   an app; [checkConfig] says so ("not an app: no index.html, and no
+ *   url").
  *
  * THE LABEL ([WebApp.label]; the menu's bash scan must give the same,
  * tested on `tests/fixtures/apps/`): `app.conf`'s `name`; else the
@@ -100,7 +105,8 @@ import java.nio.file.Files
  *   and its resolved guest path must be the app's root (its folder,
  *   resolved) or below it. Anything else is 404: a link out of the
  *   folder is as missing as a file that isn't there.
- * - 200 answers carry the file, [webAppMimeType] and, for text types,
+ * - 200 answers carry the file, [webAppMimeType] (of the name asked
+ *   for, not a link's target: a faked hard link's is `.l2s.…`) and, for text types,
  *   the encoding `utf-8`; every answer has `Cache-Control: no-store`
  *   (so a reload sees edits). 404 and 405 have a short plain-text body.
  *   No Range requests in part 1 (whole files only).
@@ -172,7 +178,8 @@ import java.nio.file.Files
  *     up to [WEB_APP_PORT_WAIT_MS]; after that: "S didn't answer on
  *     127.0.0.1:PORT within 15 s (mynx service log S shows its
  *     output)", and a service this request started is stopped again
- *     and forgotten (a backend that never answers isn't left running);
+ *     and forgotten (a backend that never answers isn't left running;
+ *     nor is it when `mynx` cancels the request while it waits);
  *   - served without a `service`: one probe; none: "nothing answers on
  *     127.0.0.1:PORT (app.conf's url)";
  *   - [WebAppHost.open] refused: its reason (a service started by this

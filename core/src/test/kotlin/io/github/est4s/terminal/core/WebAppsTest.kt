@@ -863,6 +863,18 @@ class WebAppLauncherTest {
     }
 
     @Test
+    fun `cancelling while it waits stops the service it started`() {
+        backend(ServiceState.STOPPED)
+        ask("app-open", "served")
+        File(dir, "q.cancel").writeText("")
+        requests.sweep()
+        host.answering += 8765
+        runClock()
+        assertEquals(listOf("start served-backend", "stop served-backend"), services.events)
+        assertEquals(emptyList(), host.opened)
+    }
+
+    @Test
     fun `a running service whose port never answers stays running`() {
         backend(ServiceState.RUNNING)
         ask("app-open", "served")
