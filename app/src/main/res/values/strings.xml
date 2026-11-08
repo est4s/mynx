@@ -2,4 +2,8 @@
     <string name="app_name">mynx</string>
     <!-- The launcher shortcut (long-press the app icon) that opens the settings editors. -->
     <string name="shortcut_settings">Settings</string>
+    <!-- An app's first use of a private thing (the bridge): "Weather wants to use your location". -->
+    <string name="app_permission_question">%1$s wants to use %2$s</string>
+    <string name="app_permission_allow">Allow</string>
+    <string name="app_permission_deny">Don\'t allow</string>
 </resources>

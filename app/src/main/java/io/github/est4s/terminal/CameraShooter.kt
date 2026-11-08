@@ -40,7 +40,7 @@ private const val QUICK_SHOT_MS = 15_000L
  */
 class CameraShooter(
     private val context: Context,
-    private val activity: () -> MainActivity?,
+    private val activity: () -> FrontActivity?,
 ) {
     private val manager = context.getSystemService(CameraManager::class.java)
     private val handler by lazy { Handler(HandlerThread("camera").apply { start() }.looper) }
@@ -65,7 +65,7 @@ class CameraShooter(
         }
     }
 
-    private fun start(shown: MainActivity, query: PhotoQuery, report: PhotoReport) {
+    private fun start(shown: FrontActivity, query: PhotoQuery, report: PhotoReport) {
         val file = File(photos, "${UUID.randomUUID()}.jpg")
         val facing = query.quick
         if (facing == null) {
@@ -78,7 +78,7 @@ class CameraShooter(
         }
     }
 
-    private fun withCameraApp(shown: MainActivity, file: File, report: PhotoReport) {
+    private fun withCameraApp(shown: FrontActivity, file: File, report: PhotoReport) {
         file.createNewFile()
         val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
             .putExtra(MediaStore.EXTRA_OUTPUT, PhotoProvider.uriFor(file))

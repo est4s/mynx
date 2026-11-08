@@ -68,7 +68,10 @@
         </activity>
 
         <!-- An app's screen (mynx app open): one task per app, by its mynx-app://NAME data
-             URI, so opening it again brings it back; each is its own entry in recents. -->
+             URI, so opening it again brings it back; each is its own entry in recents.
+             Home screen shortcuts (mynx app shortcut) open it too: Android starts a pinned
+             shortcut's intent as this app, so it needn't be exported. -->
+
         <activity
             android:name=".WebAppActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
