@@ -50,6 +50,7 @@ fun checkConfig(home: File): List<ConfigProblems> {
     val bluetooth = File(config, BLUETOOTH_CONF)
     if (bluetooth.isFile) report(bluetooth, parseBluetooth(bluetooth.readText()).problems)
 
+    found += appPermissionProblems(home)
     found += webAppProblems(home)
     return found
 }

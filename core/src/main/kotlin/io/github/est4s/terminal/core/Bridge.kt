@@ -23,12 +23,16 @@ import java.io.File
  * [BRIDGE_SCRIPT_FILE]) and the view serves it to any page at
  * `https://mynx.invalid/mynx.js` ([BRIDGE_SCRIPT_URL], through
  * [WebApps.bridgeScript]); alone it has no power. The app makes a
- * `WebView.createWebMessageChannel()` per page load and posts one end
+ * `WebView.createWebMessageChannel()` per port it posts and posts one end
  * with `postWebMessage(WebMessage(BRIDGE_PORT_MESSAGE, [port]),
  * Uri.parse(app.origin))`, so Android hands it over only when the main
  * frame is on the app's origin; at `onPageCommitVisible` and again at
- * `onPageFinished` (each a new channel and a new [BridgeSession]; the
- * earlier one is closed; mynx.js keeps the latest port). Before posting,
+ * `onPageFinished` (each a new channel and a new [BridgeSession]).
+ * mynx.js keeps the FIRST port it receives and closes later ones, so a
+ * later session doesn't close an earlier one: a page load may have two
+ * sessions, both closed when the page goes (the next page starting, a
+ * reload, the screen finishing), or each when its port closes. Sessions
+ * know nothing of each other; the app keeps the page's. Before posting,
  * the view asks [Bridge.refusal] (the page's origin; a served app's
  * service must be running): when it refuses, no port, and it was logged
  * (`warn bridge: no bridge for ORIGIN: WHY`).
@@ -101,7 +105,7 @@ import java.io.File
  * A [BridgeSession] holds every call it started. A cancel message runs
  * [Call.stop] (the handler's `onCancel`, which may answer, as a
  * recording does; else `{"ok":true}`), and that answer is sent.
- * [BridgeSession.close] (a new page load: navigation, reload,
+ * [BridgeSession.close] (the page going: the next page starting, a reload,
  * auto-reload; the port closing; the screen finishing) runs
  * [Call.cancel] on every open call (nothing more is sent), withdraws
  * waiting permission checks, closes the [BridgeSerial] (its ports let
@@ -408,7 +412,7 @@ class Bridge(
     fun refusal(app: WebApp, origin: String): String? = TODO("part A")
 
     /**
-     * A new session for one page load of [app] (after [refusal] said
+     * A new session for one port posted to a page of [app] (after [refusal] said
      * null). [send] takes each message to post on the port (any thread;
      * the app posts it on the port); the hello is sent before this
      * returns.
@@ -416,7 +420,7 @@ class Bridge(
     fun session(app: WebApp, send: (String) -> Unit): BridgeSession = TODO("part A")
 }
 
-/** One page load's bridge (see SESSIONS AND CANCELLATION). Main thread. */
+/** One posted port's bridge (a page load may have two) (see SESSIONS AND CANCELLATION). Main thread. */
 class BridgeSession internal constructor() {
     /** A message from the page; [origin] is the view's current URL's origin (the second fence). */
     fun receive(message: String, origin: String): Unit = TODO("part A")
