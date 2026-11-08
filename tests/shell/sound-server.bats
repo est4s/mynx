@@ -52,10 +52,13 @@ gone() {
     [ ! -e "/proc/$1" ] || grep -q '^State:.*Z' "/proc/$1/status"
 }
 
-# A copy of sleep named pulseaudio, as an older server left running.
+# A program named $1 (its comm), as an older server left running. A
+# script, not a copy of sleep: a multicall coreutils (Ubuntu 26.04's)
+# runs only under its own names.
 old_server() {
     mkdir -p "$BATS_TEST_TMPDIR/old" "$MYNX_SOUND_DIR"
-    cp "$(command -v sleep)" "$BATS_TEST_TMPDIR/old/$1"
+    printf '#!/bin/sh\nsleep "$1"\n' >"$BATS_TEST_TMPDIR/old/$1"
+    chmod +x "$BATS_TEST_TMPDIR/old/$1"
     "$BATS_TEST_TMPDIR/old/$1" 30 &
     OLD=$!
     echo $! >"$MYNX_SOUND_DIR/pid"

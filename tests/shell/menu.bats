@@ -11,6 +11,7 @@ setup() {
     export MENU_GAME_DIRS="$BATS_TEST_TMPDIR/games:$HOME/games"
     export MENU_APP_DIRS="$BATS_TEST_TMPDIR/apps:$HOME/apps"
     export MENU_UPDATE_FILE="$BATS_TEST_TMPDIR/update-available"
+    export MENU_SERVICES_FILE="$BATS_TEST_TMPDIR/services-active"
     mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games" "$BATS_TEST_TMPDIR/apps"
     gh_set_up
 }
@@ -83,6 +84,36 @@ keys() {
     printf 'Shell = shell\n' >"$HOME/.config/mynx/menu.conf"
     menu_items main
     [ "${ITEMS[*]}" = "Update available Shell" ]
+}
+
+@test "Services shows how many services run, as the strip's mark" {
+    echo 2 >"$MENU_SERVICES_FILE"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[2]}" = "Services ● 2" ]
+    [ "${ACTS[2]}" = menu:services ]
+}
+
+@test "with none running, or a bad count, Services has no number" {
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[2]}" = Services ]
+    echo 0 >"$MENU_SERVICES_FILE"
+    menu_items main
+    [ "${ITEMS[2]}" = Services ]
+    echo lots >"$MENU_SERVICES_FILE"
+    menu_items main
+    [ "${ITEMS[2]}" = Services ]
+}
+
+@test "the count goes on the user's services item, its label shortened to fit" {
+    echo 12 >"$MENU_SERVICES_FILE"
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Shell = shell\nMy background things = services\n' >"$HOME/.config/mynx/menu.conf"
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[0]}" = Shell ]
+    [ "${ITEMS[1]}" = "My background ● 12" ]
 }
 
 @test "Update available runs mynx update" {

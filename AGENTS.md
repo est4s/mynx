@@ -656,7 +656,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   foreground command comes from `/proc` (`foregroundCommand()`: the
   shell's `tpgid`, that group leader's `cmdline`). The strip's
   `● N` (`servicesMark()`) and the notification's Services button
-  open `SERVICES_TAB_COMMAND` (`menu services`). `service-set`
+  open `SERVICES_TAB_COMMAND` (`menu services`). The launcher
+  menu's Services item shows the same count from a file the app
+  writes on every change (`SERVICES_ACTIVE`,
+  `/tmp/.mynx/services-active`, gone at 0): asking `mynx service
+  list` would take half a second each time the menu redraws. `service-set`
   (`setServiceKey()`) changes one key of a saved service's block, for
   `mynx service autostart` and the menu's Autostart item.
   `onTerminalCursorStateChange` doesn't say whose terminal changed, so

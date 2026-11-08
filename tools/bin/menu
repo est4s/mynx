@@ -19,11 +19,14 @@
 # Update available: the app writes the version of a newer release to
 #   /tmp/.mynx/update-available; while it's there, the main menu starts with
 #   "Update available" (mynx update).
+# Services: the app writes how many services run to
+#   /tmp/.mynx/services-active (none: no file), and the main menu's Services
+#   item shows it as the tab strip does: "Services ● 2".
 # GitHub setup: in the main menu (after AI agents) until gh is signed in and
 #   git's email is set, then in Settings → System (mynx github).
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
 # MENU_APP_DIRS (colon-separated) override where games and apps are found,
-# MENU_UPDATE_FILE the app's update notice, MENU_ART the boot splash's title
+# MENU_UPDATE_FILE the app's update notice, MENU_SERVICES_FILE its count, MENU_ART the boot splash's title
 # art (all for testing).
 
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/mynx
@@ -35,6 +38,7 @@ ART=${MENU_ART:-${DEFAULT_MENU%/*}/lib/mynx-art}
 ART_W=52                  # the art's width in columns, with a margin
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
 UPDATE_FILE=${MENU_UPDATE_FILE:-/tmp/.mynx/update-available}
+SERVICES_FILE=${MENU_SERVICES_FILE:-/tmp/.mynx/services-active}
 IFS=: read -r -a APP_DIRS <<<"${MENU_APP_DIRS:-${DEFAULT_MENU%/*}/apps:$HOME/apps}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
 export LC_COLLATE=C       # games in the same order whatever the locale
@@ -211,6 +215,23 @@ offer_github() { # "Set up GitHub" after AI agents, else last
   ITEMS+=("Set up GitHub") ACTS+=(github)
 }
 
+count_services() { # "● N" after the services item while N services run
+  local n i label
+  read -r n <"$SERVICES_FILE" 2>/dev/null || return 0
+  [[ $n =~ ^[1-9][0-9]*$ ]] || return 0
+  local mark=" ● $n"
+  for i in "${!ACTS[@]}"; do
+    [[ ${ACTS[i]} == menu:services ]] || continue
+    label=${ITEMS[i]}
+    if ((${#label} + ${#mark} > 20)); then   # shorten it, at a word if it can
+      label=${label:0:20-${#mark}}
+      [[ ${ITEMS[i]:${#label}:1} == ' ' || $label != *' '* ]] || label=${label% *}
+      label=${label%"${label##*[![:space:]]}"}
+    fi
+    ITEMS[i]=$label$mark
+  done
+}
+
 menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
   # Actions: "menu:<name>" opens a submenu, "exit" drops to the shell,
   # "quit_session" closes the tab (exit code 10, handled in ~/.bashrc),
@@ -230,6 +251,7 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ACTS=(exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session)
       fi
       github_ready || offer_github
+      count_services
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
         ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
       fi ;;

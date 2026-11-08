@@ -64,10 +64,17 @@ EOF
     chmod +x "$STUBS/pactl"
 }
 
-# A copy of sleep named pulseaudio, as the server the watcher follows.
-pulse() {
+# A program named pulseaudio (its comm) that sleeps, as the server the
+# watcher follows. A script, not a copy of sleep: a multicall coreutils
+# (Ubuntu 26.04's) runs only under its own names.
+fake_pulse() {
     mkdir -p "$BATS_TEST_TMPDIR/bin"
-    cp "$(command -v sleep)" "$BATS_TEST_TMPDIR/bin/pulseaudio"
+    printf '#!/bin/sh\nsleep "$1"\n' >"$BATS_TEST_TMPDIR/bin/pulseaudio"
+    chmod +x "$BATS_TEST_TMPDIR/bin/pulseaudio"
+}
+
+pulse() {
+    fake_pulse
     "$BATS_TEST_TMPDIR/bin/pulseaudio" "$1" &
     PULSE=$!
 }
@@ -85,8 +92,7 @@ lists() {
 # a busy phone can run the watcher's first check before that exec.
 @test "sound-watch waits for its server to become Pulse" {
     stub_pactl
-    mkdir -p "$BATS_TEST_TMPDIR/bin"
-    cp "$(command -v sleep)" "$BATS_TEST_TMPDIR/bin/pulseaudio"
+    fake_pulse
     printf '#!/bin/sh\nsleep 0.5\nexec "%s" 3\n' "$BATS_TEST_TMPDIR/bin/pulseaudio" >"$BATS_TEST_TMPDIR/bin/server"
     chmod +x "$BATS_TEST_TMPDIR/bin/server"
     "$BATS_TEST_TMPDIR/bin/server" &

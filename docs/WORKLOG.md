@@ -21,7 +21,8 @@ are in git history: the full log up to entry 92 is
   separate app (entry 82).
 - **Released:** v0.1.0 and v0.1.1 (2026-10-10), v0.1.2 (2026-10-12),
   v0.2.0 (2026-10-13, background services), v0.3.0 (2026-10-26,
-  development boards: USB serial, raw USB, UF2), signed with the
+  development boards: USB serial, raw USB, UF2), v0.4.0 (2026-11-01,
+  Bluetooth serial, BLE, BLE UART ports), signed with the
   release key (certificate SHA-256 `24b7fefa…2b40`). The maintainer's
   daily mynx is the release, and it updated 0.1.0 → 0.1.1 → 0.1.2
   through `mynx update` (entry 81's updates, confirmed); 0.1.2 came
@@ -83,8 +84,8 @@ are in git history: the full log up to entry 92 is
   subagents (entry 155); all 10 phone tests passed with the C3
   (entry 156), and the re-bind check (entry 157). Merged (PR #54).
   The plan and its tests: `git show 3539809:docs/WORKLOG.md`.
-- **Release:** `v0.4.0` (Bluetooth serial, BLE, BLE UART ports since
-  `v0.3.0`) asked for by the maintainer after PR #54 (entry 158).
+- **Services count in the launcher menu** (`Services ● 2`): all 4
+  phone tests passed (entry 161); merged (PR #58).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`.
@@ -179,11 +180,6 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   APK in release builds too (`install-apk` answers only in debug),
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
-- **Before Play (not urgent):** `release.yml` has its own
-  `GITHUB_RUN_NUMBER`, so release version codes are far below debug
-  ones; Play needs codes that only go up: pick a scheme (from the tag,
-  or an offset) before the first upload. Play also restricts
-  `REQUEST_INSTALL_PACKAGES`: a Play build needs a variant without it.
 
 ### 3. Touch mode and web apps (when the maintainer picks them)
 
@@ -229,6 +225,27 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (161): Services count in the launcher menu
+
+At the maintainer's request, the main menu's Services item shows how
+many services run, as the strip's `● N` (`Services ● 2`; a user's
+label is shortened to 20 columns at a word). Agent's design: the app
+writes `serviceManager.active` to `/tmp/.mynx/services-active` (core's
+`SERVICES_ACTIVE`, `writeServicesActive()`) on every services change,
+at start (clearing a count the last run left) and on exit (deleted at
+0); the menu reads it (`count_services`). Asking `mynx service list
+--json` measured 0.5 s on the phone, paid on every main-menu redraw.
+Tests: `ServiceFilesTest`, three in `menu.bats`. The app side only
+compiles in CI. Also brought the log up to date: v0.4.0 in the
+status, Play's item gone from "Smaller things" (Play left the
+roadmap, entry 160). CI's runner moved to Ubuntu 26.04, whose
+coreutils is one multicall binary, so the sound tests' copy of
+`sleep` named `pulseaudio` refused to run; they now fake Pulse with
+a script of that name (the scripts only check its comm). On build
+run 42423781994 the maintainer passed all 4 phone tests (no count,
+`● 1` as the strip, `● 2` and back, no stale count after Exit);
+merged as PR #58.
 
 ### 2026-11-08 (160): Roadmap trimmed
 

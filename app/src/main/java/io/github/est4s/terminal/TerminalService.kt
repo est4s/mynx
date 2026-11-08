@@ -57,6 +57,8 @@ import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.ToolsInstaller
 import io.github.est4s.terminal.core.UPDATE_NOTICE
+import io.github.est4s.terminal.core.SERVICES_ACTIVE
+import io.github.est4s.terminal.core.writeServicesActive
 import io.github.est4s.terminal.core.Updater
 import io.github.est4s.terminal.core.downloadApk
 import io.github.est4s.terminal.core.fetchLatestRelease
@@ -401,6 +403,12 @@ class TerminalService : Service() {
     private fun launchServices() {
         val saved = runCatching { parseSavedServices(servicesStateFile.readText()) }.getOrNull()
         runCatching { serviceManager.launch(saved) }
+        writeActiveServices()   // also clears a count the last run left
+    }
+
+    // For the launcher menu's Services item (core's SERVICES_ACTIVE).
+    private fun writeActiveServices() {
+        runCatching { writeServicesActive(File(rootfs, SERVICES_ACTIVE), if (serviceHost.exiting) 0 else serviceManager.active) }
     }
 
     // Held while the `wakelock` setting says (auto: while a service runs), so jobs keep running with the screen off.
@@ -654,6 +662,7 @@ class TerminalService : Service() {
         serviceManager.stopAll()
         stateFile.delete()
         servicesStateFile.delete()
+        writeActiveServices()
         killAll()
         releaseWakeLock()
         activity?.finishAndRemoveTask()
@@ -672,6 +681,7 @@ class TerminalService : Service() {
     // notification, the services' tabs and the strip's mark.
     private fun servicesChanged() {
         saveServices()
+        writeActiveServices()
         applyWakelockSetting()
         refreshNotification()
         val hadTabs = !tabs.isEmpty

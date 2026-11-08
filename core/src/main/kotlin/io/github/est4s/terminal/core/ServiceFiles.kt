@@ -11,6 +11,25 @@ import java.io.File
  */
 const val SERVICES_DIR = "/tmp/.mynx/services"
 
+/**
+ * How many services run or wait to restart (the strip's `● N`), for the
+ * launcher menu's Services item: a file it reads costs nothing, where
+ * asking `mynx service list` takes half a second. No file means none.
+ */
+const val SERVICES_ACTIVE = "/tmp/.mynx/services-active"
+
+/** Writes [active] to [file] (the host path of [SERVICES_ACTIVE]), renamed into place; 0 deletes it. */
+fun writeServicesActive(file: File, active: Int) {
+    if (active <= 0) {
+        file.delete()
+        return
+    }
+    file.parentFile?.mkdirs()
+    val tmp = File(file.path + ".tmp")
+    tmp.writeText("$active\n")
+    tmp.renameTo(file)
+}
+
 /** NAME's exit code from [dir] (the host path of [SERVICES_DIR]), or null if it left none. */
 fun readServiceExit(dir: File, name: String): Int? = readNumber(File(dir, "$name.exit"))
 
