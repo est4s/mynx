@@ -84,6 +84,9 @@ are in git history: the full log up to entry 92 is
   subagents (entry 155); all 10 phone tests passed with the C3
   (entry 156), and the re-bind check (entry 157). Merged (PR #54).
   The plan and its tests: `git show 3539809:docs/WORKLOG.md`.
+- **Web apps, part 1** (`~/apps/NAME/`, `mynx app`, terminal apps
+  in `~/terminal-apps`): all 13 phone tests passed (entry 164); PR
+  #59.
 - **Services count in the launcher menu** (`Services ● 2`): all 4
   phone tests passed (entry 161); merged (PR #58).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
@@ -93,247 +96,23 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Web apps, part 1: built, awaiting CI and the phone tests (branch `webapps`)
+### 0. Web apps: part 1 done; part 2 next (the maintainer picks)
 
-**Status (entry 163):** parts 0, A, B and C are built and merged into
-`webapps`; the suites pass here. Left: CI green (B's Kotlin has
-never compiled), `scripts/deliver.sh`, the phone tests below, then the
-README's feature list and the roadmap, and merging the PR.
+Part 1 passed all 13 phone tests (entry 164) and merges with PR #59.
+The plan, design and tests: `git show 345d224:docs/WORKLOG.md`; the
+decisions are in AGENTS.md ("Apps (web apps, part 1)") and
+`WebApps.kt`'s KDoc. **Small follow-ups** (from the phone tests):
+- the WebView's own `/favicon.ico` request logs a 404 at every open
+  of an app without one: don't log that one;
+- "the app must be on screen to open an app" reads badly now that
+  web apps are "apps": "mynx must be on screen to open an app";
+- one `sed -i` on `index.html` may have reloaded Probe more than once
+  (three `probe loaded` lines in 12 s; unconfirmed: the maintainer
+  may have reloaded by hand).
 
-Picked by the maintainer 2026-11-08 (entry 162). The roadmap's "Web
-apps" first part: HTML and JavaScript apps in `~/apps/NAME/`,
-opened inside mynx with no build and no install. The bridge (phone
-features from JavaScript), per-app permissions and home-screen
-shortcuts are part 2, **not** this branch.
-
-**Maintainer's decisions (2026-11-08):**
-- **Own screen:** a web app opens in an activity of its own, not a
-  tab; each app is its own entry in Android's recents (like an
-  installed PWA), and opening it again brings that one back.
-- **Auto-reload:** the open view reloads by itself when the app's
-  files change (an agent edits, the phone shows it).
-- **Served apps are in part 1:** an app can instead be served by a
-  mynx background service (a Python backend on `127.0.0.1:PORT`).
-  The backend is an ordinary service (`services.conf`, the Services
-  menu, `● N`, its log and tab): nothing new on that side.
-- **The service's lifecycle:** opening the app starts its service
-  if it isn't running and waits for the port; closing the app (its
-  screen finishing, not going to the background) stops the service
-  **only if opening the app started it**. One already running, or
-  with `autostart = yes`, is left alone. (Why: `wakelock = auto`
-  holds the CPU awake while any service runs, so a forgotten backend
-  would cost battery all day.)
-- **Names** (2026-11-08, after the first plan): web apps are now
-  just **apps**: `~/apps/NAME/`, `/opt/mynx/apps/NAME/`, the menu's
-  **Apps**, `mynx app …`. Today's apps (programs run in a tab) become
-  **terminal apps**: `~/terminal-apps/`, `/opt/mynx/terminal-apps/`,
-  the menu's **Terminal apps**. **Both work** for old Debians: no
-  user file is moved (updates never touch the user's files), so
-  executable files left in `~/apps` still show under Terminal apps;
-  the guide sends new ones to `~/terminal-apps`.
-- Example the maintainer gave: a rhythm game like `~/pixel-hero`
-  (static HTML/JS, Web Audio, touch, `localStorage`) needs **no**
-  service. It's phone test 7.
-
-**Design (agent's, change it if the maintainer objects):**
-- **The rename of terminal apps** (part C, plus a few app lines):
-  the built-in ones move from `tools/apps/` to
-  `tools/terminal-apps/` (so `/opt/mynx/terminal-apps`: app-owned,
-  free to move), with `mic.py`, `needs.py` and every reference
-  (`grep -rn 'opt/mynx/apps\|tools/apps\|~/apps'`: the `tools/bin/`
-  wrappers, `tools/menu.conf`, `tools/bin/menu`'s `APP_DIRS` and
-  `MENU_APP_DIRS`, `tests/mynx/test_apps.py`,
-  `test_serial_monitor.py`, `menu.bats`, `home-docs.bats`, the
-  guide, README, AGENTS.md). Terminal apps are executable files in
-  `/opt/mynx/terminal-apps`, `~/terminal-apps` and (old) `~/apps`;
-  `# label:` and `keybar NAME,shell FILE` stay as they are. Apps are
-  folders; each scan skips the other kind (the menu's
-  `[[ -f $f && -x $f ]]` already skips folders).
-- **What counts as an app** (core): a folder `~/apps/NAME/` or
-  `/opt/mynx/apps/NAME/` (the tools' host folder, not under the
-  rootfs: `TOOLS_MOUNT`, see `hostPath()`/`HOST_BINDS`) that has an
-  `index.html`, or an `app.conf` with `url`. `NAME` must be
-  `[a-z0-9-]{1,40}` (it's a DNS label in the origin); other folders
-  aren't apps, and `mynx check` says why when they have an
-  `index.html`. A link in `~/apps` to a folder elsewhere counts
-  (`ln -s ~/pixel-hero/assets ~/apps/pixel-hero`). `~/apps` wins
-  over `/opt/mynx/apps` for the same name, as for terminal apps.
-- **`app.conf`** (optional, `key = value`, `#` comments, plain text
-  like the rest of mynx; checked by `mynx check`, bad lines skipped):
-  `name` (label, up to 20 characters), `icon` (a file in the folder,
-  for part 2's shortcuts and touch mode), `url`
-  (`http://127.0.0.1:PORT/…` or `http://localhost:PORT/…` only),
-  `service` (a service in `services.conf`; only with `url`). With no
-  `name`: the `<title>` of `index.html`, else the folder name
-  (`pixel-hero` → "Pixel Hero", as `game_label`). Cut to 20.
-- **Static apps' origin:** `https://NAME.mynx.invalid/` (`.invalid`
-  is reserved, RFC 2606, so never a real site; https makes it a
-  secure context). The view's `shouldInterceptRequest` answers every
-  request to that host from the folder, with core deciding: path →
-  host file, MIME type, 404. **Confinement:** the app's root is its
-  folder with links resolved; every file is resolved the way Debian
-  would (absolute link targets are guest paths → `hostPath()`;
-  proot's link2symlink fakes hard links as symlinks to `.l2s.*`
-  files, whose targets are host paths), and anything outside the
-  root is a 404. No new dependency (no AndroidX `WebViewAssetLoader`;
-  the app has no AndroidX). Requests to other hosts go to the network
-  as usual (internet works, normal CORS).
-- **Served apps' origin:** the `url` itself. Plain http allowed for
-  `127.0.0.1` and `localhost` only (`res/xml/network_security_config.xml`,
-  the manifest's `networkSecurityConfig`). No confinement (the app's
-  own server decides), storage is per port, and no auto-reload (the
-  view can't see the server's files: reload button and `mynx app
-  reload`).
-- **WebView settings:** JavaScript and DOM storage on;
-  `allowFileAccess`, `allowContentAccess` off; no
-  `addJavascriptInterface` (that's part 2's bridge). Sound keeps
-  Android's default (it starts after a tap), which `~/pixel-hero`
-  already copes with.
-- **The screen** (`WebAppActivity`): a slim top bar (the app's name;
-  back, reload; ⋮ with Open in browser and Close) in the theme's
-  colours; the system back key goes back in the page's history, and
-  at its start closes the screen. One task per app:
-  `documentLaunchMode="intoExisting"` with the app's own data URI
-  (e.g. `mynx-app://NAME`), so opening it again brings it back.
-  Recents shows its name.
-- **Auto-reload (static apps):** while the screen is on screen, poll
-  the folder once a second for a fingerprint (core: every file's
-  path, size and mtime under the root, links resolved); on a change,
-  reload after 300 ms of quiet. Polling, not `FileObserver`: it's
-  core-testable and FileObserver isn't recursive.
-- **The log, for agents** (no logcat here): console messages
-  (`WebChromeClient.onConsoleMessage`, which uncaught errors reach
-  too), load errors and HTTP errors go to `/tmp/.mynx/apps/NAME.log`
-  (`[time] level source:line message`; core formats and keeps the
-  last 1000 lines; a new line `--- opened` each open).
-- **Requests** (`core/.../WebApps.kt`, answered by the same
-  `MynxRequests` path as the rest):
-  - `app-list` → every web app: `name`, `label`, `path`,
-    `origin`, `url`, `service`, `problems`.
-  - `app-open NAME` → [Later]: refuses when the app isn't on screen
-    (Android won't start an activity from the background; as `mynx
-    open`), resolves the app, for a served one starts its service
-    through `ServiceManager` if it's stopped (remembering it did) and
-    waits for the port (15 s, then an error naming the service and
-    `mynx service log NAME`), then the activity opens. Answers
-    `opened`, `origin`, `started_service`.
-  - `app-reload NAME` → reloads the open screen (an error if it
-    isn't open).
-  - `app-log NAME [-n N]` is read by `mynx` from the file itself.
-  - The activity tells the service when an app's screen finishes;
-    the service stops the app's service if `app-open` started it
-    (core keeps that set; lost if Android kills the app, which is
-    fine: services come back stopped-or-running as today).
-- **CLI** (`tools/lib/mynx/`): `mynx app [list]` (table; `--json`), `mynx app open NAME`, `mynx app reload
-  NAME`, `mynx app log NAME [-n N]`. `mynx check` includes each web
-  app's `app.conf` problems (core's `checkConfig`, which already
-  merges `menu --check`).
-- **Launcher menu:** two items, **Apps** (action `apps`, now the
-  web apps) and **Terminal apps** (new action `terminal-apps`), in
-  the built-in `menu.conf` and the menu's fallback list
-  (`ITEMS=(Shell "AI agents" Services Apps …)`). A user's own
-  `menu.conf` from before has `apps` and no `terminal-apps`: then
-  the Apps list ends with a "Terminal apps" entry opening that list,
-  so nothing they had disappears (agent's design). Apps lists them
-  by label. Its own quick scan in bash (as `app_label` does for terminal
-  apps; asking `mynx` takes ~0.5 s): a folder with `index.html` or an
-  `app.conf`, label from `app.conf`'s `name`, else `<title>`, else
-  the folder name. Same fixtures as core's tests
-  (`tests/fixtures/apps/`), so the two rules can't drift. Picking
-  one runs `mynx app open NAME`, which shows the error in the tab if
-  it fails.
-- **Example app** (`tools/apps/sketch/`, so `/opt/mynx/apps/sketch`;
-  `scripts/pack-tools.sh` packs the folder):
-  a tiny finger-drawing pad kept in `localStorage`, to read and copy
-  and for the phone tests. Small; no build step.
-- **The guide** (`tools/AGENTS.md`): "Making an app" offers three
-  kinds (an app, a terminal app, an APK) with hints for picking (a game,
-  a page, "like an artifact", "quick to try on the phone" → an app);
-  an "Apps" section (web apps are just "apps" to users): the folder, `app.conf`, the origin and what
-  it can't reach, served apps and the service lifecycle, auto-reload,
-  `mynx app log` to see errors, the example, and what's coming (no
-  phone features yet: use a terminal app or an APK for those). The
-  command table gets the `mynx app` rows (`home-docs.bats` checks),
-  the setup table an "Apps" row (`/opt/mynx/apps`, yours in
-  `~/apps`) and a "Terminal apps" row, the launcher menu's action
-  table `apps` and `terminal-apps`; the old "Apps" section becomes
-  "Terminal apps".
-  The README's feature list and the roadmap get it once it passes.
-
-**Parts** (main agent: keep your own context small; delegate reading
-and building to subagents with the Agent tool, `isolation:
-"worktree"`, and read only their reports):
-0. **Contract** (main agent, or one subagent; first, alone, on
-   branch `webapps`, which holds this plan):
-   `core/.../WebApps.kt` with KDoc as the contract (the
-   rules above, `app.conf` keys, the requests' arguments and JSON, a
-   `WebAppHost` interface for what the app does: on screen?, open the
-   activity, reload, port answers?, plus `ServiceManager` calls),
-   signatures with `TODO()` bodies, and fakes in `WebAppsTest.kt`.
-   Also the fixture folders in `tests/fixtures/apps/` (a static
-   app, one with `app.conf`, a served one, a bad name, a link
-   escaping the folder).
-1. **A, core** (`WebApps.kt`, `ConfigCheck.kt`, tests): discovery and
-   labels, `app.conf` parsing and checking, path resolution and
-   confinement (links, `.l2s.*`, `..`, `%2e%2e`), MIME types, the
-   folder fingerprint, the log writer, the requests with the service
-   lifecycle against fakes. Runs Gradle.
-2. **B, app** (`WebAppActivity.kt`, `AndroidManifest.xml`,
-   `res/xml/network_security_config.xml`, layout/strings,
-   `TerminalService.kt`/`MainActivity.kt` wiring): the screen, the
-   intercept through core, the top bar, back, the log, polling,
-   closing → the service. Compiles only in CI: read the Kotlin for
-   what the compiler would catch (AGENTS.md "Lessons"). Commits after
-   A is done (the hook runs core's tests).
-3. **C, CLI, menu, guide, example** (`tools/`, `tests/mynx/`,
-   `tests/shell/`): `mynx app …` against the fake app, the menu's Apps and
-   Terminal apps items and listings, the terminal apps' move (bats, the shared fixtures), `tools/apps/sketch/`, the
-   guide and command table.
-4. **Integration** (main agent): merge into `webapps`, every suite
-   (`./gradlew :core:test`, `python3 -m unittest discover -s
-   tests/mynx`, `bats tests/shell/*.bats`), AGENTS.md's
-   Architecture entry ("Web apps"), push `webapps`, open a PR, CI
-   green, then `scripts/deliver.sh` and the phone tests with the
-   maintainer. Don't merge until they pass; docs before the merge.
-
-**Rules for the subagents:** read AGENTS.md and this plan; test-first,
-hooks on, never `--no-verify`; only their part's files; don't edit
-this log, push or open PRs; worktrees may come up on `main`: reset to
-`webapps` (the contract) first; commit on their branch and end with a
-short report (what's done, decisions made where the contract was
-open, anything left). Only A runs Gradle; B commits after A.
-
-**Phone tests (mynx dev):**
-1. `mynx app list` shows `sketch`; the menu's Apps lists Sketch,
-   Terminal apps lists compass, tuner, serial, … (from
-   `/opt/mynx/terminal-apps`); picking each opens it.
-2. `mynx app open sketch` from a tab: its own screen and recents
-   entry with its name; back key, reload, ⋮ Close; opening it again
-   brings the same screen back, not a second one.
-3. A drawing survives closing and reopening; a second web app
-   doesn't see `sketch`'s storage.
-4. Confinement: from the page, `fetch('/../../.bashrc')` and a link
-   out of the folder give 404.
-5. Auto-reload: change a file in `~/apps/NAME` while it's open: it
-   reloads within about a second.
-6. `console.log` and a thrown error show in `mynx app log NAME`.
-7. **Pixel Hero:** `ln -s ~/pixel-hero/assets ~/apps/pixel-hero`,
-   open it: music in time with the notes (as the APK), taps, scores
-   kept.
-8. A served app (`app.conf`: `url`, `service`) with its service
-   stopped: opening starts it (the Services menu shows it), closing
-   stops it; with the service already running, closing leaves it.
-9. A served app whose port never answers: `mynx app open` says so
-   after 15 s, naming the service log.
-10. `mynx app open` with the app in the background refuses, saying
-    to bring it on screen.
-11. A bad `app.conf` line and a bad folder name: `mynx check` lists
-    them.
-12. Old Debians: an executable file in `~/apps` still shows under
-    Terminal apps; a `menu.conf` from before (`apps`, no
-    `terminal-apps`) shows Apps ending with "Terminal apps".
-13. Swiping the app from recents: the service it started stops (if
-    Android doesn't tell us, note it and decide with the maintainer).
+**Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
+permissions per app, home screen shortcuts. Plan it with the
+maintainer first.
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -466,6 +245,24 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (164): Web apps part 1 passed on the phone
+
+All 13 phone tests passed on PR #59's build (run 42462436006) in
+mynx dev: the menu's Apps and Terminal apps, own screens and recents
+entries, storage per app, confinement (404 for `..`, links out of the
+folder, absolute links), auto-reload, the log, Pixel Hero as an app
+(music in time, scores kept), a served app's service started and
+stopped only when the open started it, the 15 s port timeout, the
+background refusal, `mynx check`, old Debians' `~/apps` executables
+and `menu.conf`, and swiping from recents (Android finishes the
+activity: the service stopped, 143). **A test bug:** `WebAppsTest`
+linked to real paths (`/root/pixel-hero/assets`) and cleaned up with
+`deleteRecursively()`, which follows links: every core test run on
+the phone emptied `~/pixel-hero/assets`. Restored from its APK;
+fixed with `deleteTree()` (0816a72), lesson in AGENTS.md. Files from
+the release mynx's Download can't be read by mynx dev (another app):
+served the test setup over 127.0.0.1 instead. Follow-ups in "Next".
 
 ### 2026-11-08 (163): Web apps part 1 built by subagents
 

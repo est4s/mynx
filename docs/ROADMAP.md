@@ -72,6 +72,10 @@ and either view switches to the other.
   would save phone rounds, so they may come first.
 
 ### Web apps
+**Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what
+counts as one, the menu's Apps and Terminal apps, `mynx app`, and the
+guide. Left: the bridge, permissions per app, home screen shortcuts.
+
 A third kind of app beside terminal apps and APKs (the agent guide's
 "Making an app"): HTML and JavaScript in `~/apps/NAME`, opened inside
 mynx with no build and no install, like Claude's artifacts. Today an

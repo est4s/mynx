@@ -34,6 +34,12 @@ sensors, microphone, speaker and flashlight.
 
 ## What you get
 
+- **Apps in HTML and JavaScript:** a folder in `~/apps` with an
+  `index.html` opens on a screen of its own, with no build and no
+  install, and reloads by itself when its files change. It sees only
+  its own folder. An app can also be served by a background service
+  on `127.0.0.1`, started when the app opens. Try the `sketch`
+  example, or ask an agent to make one.
 - **Example terminal apps to start from:** a compass, a spirit level, a
   flashlight, a sound spectrum, a sound meter, a guitar tuner and a
   metronome, each a short Python program that uses the phone. Run
