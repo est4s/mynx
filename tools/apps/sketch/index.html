@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Sketch</title>
+<link rel="stylesheet" href="sketch.css">
+</head>
+<body>
+<!-- An example app for mynx: draw with a finger; the drawing is kept in
+     localStorage, so it's still there next time. Copy the folder to
+     ~/apps/NAME to make it yours. -->
+<div id="bar">
+  <span id="colors"></span>
+  <button id="undo" aria-label="Undo">↶</button>
+  <button id="clear" aria-label="Clear">✕</button>
+</div>
+<canvas id="pad"></canvas>
+<script src="sketch.js"></script>
+</body>
+</html>

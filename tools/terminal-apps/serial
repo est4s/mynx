@@ -31,7 +31,7 @@ import termios
 import time
 import tty
 
-# the app's own library, next to the apps folder (/opt/mynx/lib)
+# the app's own library, next to the terminal-apps folder (/opt/mynx/lib)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
 from mynx.client import Failure  # noqa: E402
 from mynx.ports import is_bluetooth, serial_ports  # noqa: E402
