@@ -453,9 +453,11 @@ one back.
 - **No phone features yet:** JavaScript can't reach the sensors, the
   camera, notifications or `mynx` commands. For those, make a
   terminal app or an Android app (see "Making an app").
-- **The screen:** a slim bar with the app's name, back, reload, and ⋮
-  (Open in browser, Close). The back key goes back in the page's
-  history; at its first page it closes the screen.
+- **The screen:** the page fills it below the status bar, with no bar
+  of its own, like an installed web app; recents shows the app's
+  name. The back key goes back in the page's history; at its first
+  page it closes the screen, as swiping it away in recents does.
+  Reload it with `mynx app reload NAME`.
 - **Auto-reload:** while its screen shows, an app reloads by itself
   when a file in its folder changes: edit `index.html` and the phone
   shows the change within a second or two. `mynx app reload NAME`

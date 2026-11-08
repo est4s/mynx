@@ -82,7 +82,8 @@ mynx with no build and no install, like Claude's artifacts. Today an
 agent can already serve one from a service (`python3 -m http.server`)
 and open it in the phone's browser; this makes them part of mynx.
 - **A web app view:** a WebView screen of its own per app (its own
-  entry in recents), with back and reload, each app served under an
+  entry in recents, no bar: the back key and `mynx app reload`),
+  each app served under an
   origin of its own (`https://NAME.mynx.invalid/`, answered by the
   app from the folder) that sees only its own folder, never the rest
   of Debian. It reloads by itself when the app's files change.

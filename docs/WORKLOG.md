@@ -104,6 +104,13 @@ decisions are in AGENTS.md ("Apps (web apps, part 1)") and
 `WebApps.kt`'s KDoc. (The refusal now says "mynx must be on screen
 to open an app"; the extra reloads in test 6 were by hand.)
 
+**No top bar** (entry 166, PR "Web apps: no top bar on an app's
+screen", not yet on the phone): open `probe` and `pixel-hero`: no
+bar; the page starts below the status bar and ends above the
+navigation bar; the keyboard doesn't cover a focused text field
+(`probe`'s, if it has one); back goes back, then closes the screen;
+recents still shows the app's name.
+
 **Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
 permissions per app, home screen shortcuts. Plan it with the
 maintainer first.
@@ -239,6 +246,19 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (166): No top bar on an app's screen
+
+Maintainer's decision: `WebAppActivity` loses its bar (name, back,
+reload, ⋮ with Open in browser and Close); the page fills the screen
+like an installed PWA. Recents shows the name, the back key goes back
+then closes, static apps reload by themselves and `mynx app reload`
+reloads any, swiping from recents closes it (and stops a service the
+open started). No setting brings it back. The root is now a
+`FrameLayout` holding only the WebView, padded for the system bars,
+cutout and keyboard as before; the window keeps the theme's
+background. Guide, roadmap and AGENTS.md updated. **Not yet on the
+phone** (check in "Next" 0).
 
 ### 2026-11-08 (165): No favicon 404 in an app's log
 
