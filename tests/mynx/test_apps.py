@@ -191,6 +191,45 @@ class ExampleAppTest(unittest.TestCase):
             self.assertRegex(name, r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
 
 
+class GadgetsAppTest(unittest.TestCase):
+    """tools/apps/gadgets: the example of the phone from JavaScript."""
+    FOLDER = os.path.join(WEB_APPS, "gadgets")
+
+    def read(self, name):
+        with open(os.path.join(self.FOLDER, name)) as f:
+            return f.read()
+
+    def test_gadgets_is_a_static_app_that_loads_mynx_js_first(self):
+        page = self.read("index.html")
+        self.assertIn("<title>Gadgets</title>", page[:4096])
+        self.assertFalse(os.path.exists(os.path.join(self.FOLDER, "app.conf")))
+        head = page[:page.index("</head>")]
+        self.assertIn('<script src="https://mynx.invalid/mynx.js"></script>', head)
+
+    def test_its_other_files_are_in_its_folder_and_it_reaches_nowhere_else(self):
+        page = self.read("index.html")
+        refs = [r for r in re.findall(r'(?:src|href)="([^"]+)"', page) if r != "https://mynx.invalid/mynx.js"]
+        self.assertEqual(sorted(refs), ["gadgets.css", "gadgets.js"])
+        for name in os.listdir(self.FOLDER):
+            text = self.read(name).replace("https://mynx.invalid/mynx.js", "")
+            self.assertNotRegex(text, r"https?://", name)
+
+    def test_each_card_uses_the_bridge_and_shows_its_errors(self):
+        script = self.read("gadgets.js")
+        for call in ["mynx.ready", "mynx.sensor.stream('compass'", "mynx.battery", "mynx.torch.on",
+                     "mynx.torch.off", "mynx.vibrate(", "mynx.location(", "mynx.ble.scan(", "mynx.serial.list(",
+                     "mynx.serial.open(", ".write(", ".close("]:
+            self.assertIn(call, script, call)
+        self.assertIn("error.message", script)
+        self.assertIn("error.code", script)
+
+    @unittest.skipUnless(shutil.which("node"), "no node")
+    def test_its_script_parses(self):
+        run = subprocess.run(["node", "--check", os.path.join(self.FOLDER, "gadgets.js")],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+
 class PackToolsTest(unittest.TestCase):
     def test_the_tools_carry_the_apps_and_the_terminal_apps(self):
         with tempfile.TemporaryDirectory() as out:
@@ -199,6 +238,7 @@ class PackToolsTest(unittest.TestCase):
             with tarfile.open(os.path.join(out, "tools.tar.xz")) as tar:
                 members = {m.name: m for m in tar.getmembers()}
         for name in ["apps/sketch/index.html", "apps/sketch/sketch.js", "apps/sketch/sketch.css",
+                     "apps/gadgets/index.html", "apps/gadgets/gadgets.js", "apps/gadgets/gadgets.css",
                      "terminal-apps/mic.py", "terminal-apps/needs.py"]:
             self.assertIn(name, members)
         for name in NAMES:

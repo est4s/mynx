@@ -324,12 +324,12 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     cp -a "$FIXTURES/." "$HOME/"
     source "$MENU"
     menu_items apps
-    [ "${#ITEMS[@]}" -eq 4 ]
+    [ "${#ITEMS[@]}" -eq 5 ]
     [ "${ITEMS[0]}" = "Escape" ]
     [ "${ITEMS[1]}" = "Hello & Welcome" ]
     [ "${ITEMS[2]}" = "My Notes" ]
     [ "${ITEMS[3]}" = "Served" ]
-    [ "${ACTS[*]}" = "webapp:escape webapp:hello webapp:notes webapp:served" ]
+    [ "${ACTS[*]}" = "webapp:escape webapp:hello webapp:notes webapp:served menu:shortcuts" ]
 }
 
 @test "apps come from ~/apps and the tools' folder; ~/apps wins only with an app" {
@@ -339,8 +339,8 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     mkdir -p "$HOME/apps/sketch"   # not an app: doesn't hide the tools' one
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Mine Sketch" ]
-    [ "${ACTS[*]}" = "webapp:hello webapp:sketch" ]
+    [ "${ITEMS[*]}" = "Mine Sketch Add to home screen…" ]
+    [ "${ACTS[*]}" = "webapp:hello webapp:sketch menu:shortcuts" ]
 }
 
 @test "an app's name must be a DNS label" {
@@ -351,7 +351,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     web_app "$HOME/apps/a-1" "A 1"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "A 1 Forty" ]
+    [ "${ITEMS[*]}" = "A 1 Forty Add to home screen…" ]
 }
 
 @test "what isn't an app is skipped" {
@@ -373,8 +373,8 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     ln -s "$HOME/pixel-hero/assets" "$HOME/apps/pixel-hero"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Pixel Hero" ]
-    [ "${ACTS[*]}" = "webapp:pixel-hero" ]
+    [ "${ITEMS[*]}" = "Pixel Hero Add to home screen…" ]
+    [ "${ACTS[*]}" = "webapp:pixel-hero menu:shortcuts" ]
 }
 
 @test "served apps: url on 127.0.0.1 or localhost; an index.html still gives the label, as core" {
@@ -384,7 +384,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     printf '  url=http://127.0.0.1:65535/x?y=1  \n' >"$HOME/apps/two/app.conf"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Titled Two" ]
+    [ "${ITEMS[*]}" = "Titled Two Add to home screen…" ]
 }
 
 @test "an app's label: app.conf's name, then <title>, then the folder" {
@@ -418,7 +418,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     printf '<titlex>No</titlex><title>Yes</title>' >"$HOME/apps/titled/index.html"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Late Title Open Title Yes" ]
+    [ "${ITEMS[*]}" = "Late Title Open Title Yes Add to home screen…" ]
 }
 
 @test "Apps opens the chosen app with mynx app open" {
@@ -442,8 +442,8 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     app "$BATS_TEST_TMPDIR/terminal-apps/tuner" "Guitar tuner"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Sketch Terminal apps" ]
-    [ "${ACTS[*]}" = "webapp:sketch menu:terminal-apps" ]
+    [ "${ITEMS[*]}" = "Sketch Terminal apps Add to home screen…" ]
+    [ "${ACTS[*]}" = "webapp:sketch menu:terminal-apps menu:shortcuts" ]
 }
 
 @test "the Terminal apps entry under Apps opens them" {
@@ -464,13 +464,41 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     [ "${ACTS[*]}" = "none menu:terminal-apps" ]
 }
 
+@test "Apps ends with Add to home screen…, which lists the apps by label" {
+    web_app "$HOME/apps/zed" "Alpha"
+    web_app "$BATS_TEST_TMPDIR/apps/gadgets" "Gadgets"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[-1]}" = "Add to home screen…" ]
+    [ "${ACTS[-1]}" = menu:shortcuts ]
+    menu_items shortcuts
+    [ "${ITEMS[*]}" = "Alpha Gadgets" ]
+    [ "${ACTS[*]}" = "shortcut:zed shortcut:gadgets" ]
+    [ "${TITLE[shortcuts]}" = "Add to home screen" ]
+}
+
+@test "with no apps there's nothing to add to the home screen" {
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "(no apps yet)" ]
+}
+
+@test "picking an app under Add to home screen… runs mynx app shortcut; picking one under Apps still opens it" {
+    web_app "$HOME/apps/gadgets" "Gadgets"
+    run keys '421'
+    [[ $output == *"RUN: mynx app shortcut gadgets"* ]]
+    [[ $output != *"RUN: mynx app open"* ]]
+    run keys '41'
+    [[ $output == *"RUN: mynx app open gadgets"* ]]
+}
+
 @test "a menu file with terminal-apps gets no extra entry under Apps" {
     mkdir -p "$HOME/.config/mynx"
     printf 'Apps = apps\nTools = terminal-apps\n' >"$HOME/.config/mynx/menu.conf"
     web_app "$HOME/apps/sketch" "Sketch"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Sketch" ]
+    [ "${ITEMS[*]}" = "Sketch Add to home screen…" ]
 }
 
 @test "state survives a restart" {

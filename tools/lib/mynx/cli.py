@@ -50,7 +50,8 @@ Commands:
   ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
   uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
-  app        app [list] | open NAME | reload NAME | log NAME [-n N]: apps (HTML and JavaScript)
+  app        app [list] | open|reload|shortcut NAME | log NAME [-n N]
+             | permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]: apps (HTML and JavaScript)
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
@@ -767,7 +768,13 @@ def uptime_text(seconds):
     return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
 
 
-APP_USAGE = "usage: mynx app [list] | open NAME | reload NAME | log NAME [-n N]"
+APP_USAGE = """\
+usage: mynx app [list]
+       mynx app open|reload|shortcut NAME
+       mynx app log NAME [-n N]
+       mynx app permissions [NAME]
+       mynx app permissions NAME PERMISSION allow|deny|ask
+       mynx app permissions NAME reset"""
 WEB_APP_NAME = re.compile(r"[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?")  # a DNS label (core's isWebAppName)
 
 
@@ -793,6 +800,25 @@ def cmd_app(args, as_json):
     if sub == "reload" and len(rest) == 1:
         out(as_json, request("app-reload", rest[0]), f"Reloaded {rest[0]}")
         return 0
+    if sub == "shortcut" and len(rest) == 1:
+        answer = request("app-shortcut", rest[0])
+        out(as_json, answer, f"Android asks whether to add {rest[0]} to the home screen: answer it on the phone")
+        return 0
+    if sub == "permissions" and len(rest) <= 1:
+        answer = request("app-permissions", *rest)
+        out(as_json, answer, permissions_text(answer["apps"]))
+        return 0
+    if sub == "permissions" and len(rest) == 2 and rest[1] == "reset":
+        answer = request("app-permission-set", *rest)
+        out(as_json, answer, f"{rest[0]}: every permission is asked the next time")
+        return 0
+    if sub == "permissions" and len(rest) == 3:
+        # Core checks the words, as for a hand edit of the file.
+        name, permission, value = rest
+        answer = request("app-permission-set", name, permission, value)
+        text = {"allow": f"{name} may use {permission}", "deny": f"{name} may not use {permission}"}
+        out(as_json, answer, text.get(value, f"{name}: {permission} is asked the next time"))
+        return 0
     if sub == "log" and len(rest) in (1, 3):
         name, count = rest[0], 100
         if len(rest) == 3:
@@ -812,6 +838,18 @@ def apps_table(apps):
     for app in apps:
         lines.append(f"{app['name']:<16} {app['label']:<20} {app['kind']}")
         lines += ["  " + problem for problem in app.get("problems") or []]
+    return "\n".join(lines)
+
+
+def permissions_text(apps):
+    """Each app's answer for each permission, in 56 columns."""
+    if not apps:
+        return "No apps yet, and no answers kept for any\n(~/.config/mynx/app-permissions.conf)."
+    lines = []
+    for app in apps:
+        lines.append(f"{app['name']} ({app['label'] if app.get('installed') else 'not installed'})")
+        lines += [f"  {permission:<14} {value}" for permission, value in app["permissions"].items()]
+    lines.append("ask: asked the first time the app uses it")
     return "\n".join(lines)
 
 

@@ -2583,7 +2583,115 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
     ]
 
     def test_help_lists_app(self):
-        self.assertIn("\n  app        app [list] | open NAME | reload NAME | log NAME [-n N]", self.mynx("help").stdout)
+        help = self.mynx("help").stdout
+        self.assertIn("\n  app        app [list] | open|reload|shortcut NAME | log NAME [-n N]", help)
+        self.assertIn("permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]", help)
+
+    PERMISSIONS = [
+        {"name": "gadgets", "label": "Gadgets", "installed": True,
+         "permissions": {"location": "allow", "camera": "deny", "microphone": "ask", "clipboard": "ask",
+                         "notifications": "ask", "bluetooth": "ask", "serial": "ask"}},
+        {"name": "old", "label": None, "installed": False,
+         "permissions": {"location": "deny", "camera": "ask", "microphone": "ask", "clipboard": "ask",
+                         "notifications": "ask", "bluetooth": "ask", "serial": "allow"}},
+    ]
+
+    def test_app_permissions_lists_each_apps_answers(self):
+        self.start_app({"app-permissions": {"ok": True, "apps": self.PERMISSIONS}})
+        run = self.mynx("app", "permissions")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines(), [
+            "gadgets (Gadgets)",
+            "  location       allow",
+            "  camera         deny",
+            "  microphone     ask",
+            "  clipboard      ask",
+            "  notifications  ask",
+            "  bluetooth      ask",
+            "  serial         ask",
+            "old (not installed)",
+            "  location       deny",
+            "  camera         ask",
+            "  microphone     ask",
+            "  clipboard      ask",
+            "  notifications  ask",
+            "  bluetooth      ask",
+            "  serial         allow",
+            "ask: asked the first time the app uses it",
+        ])
+        self.assertEqual(self.app.requests, [["app-permissions"]])
+
+    def test_app_permissions_of_one_app_and_json(self):
+        answer = {"ok": True, "apps": self.PERMISSIONS[:1]}
+        self.start_app({"app-permissions": answer})
+        run = self.mynx("app", "permissions", "gadgets", "--json")
+        self.assertEqual(json.loads(run.stdout), answer)
+        self.assertEqual(self.app.requests, [["app-permissions", "gadgets"]])
+
+    def test_app_permissions_with_no_apps(self):
+        self.start_app({"app-permissions": {"ok": True, "apps": []}})
+        run = self.mynx("app", "permissions")
+        self.assertEqual(run.returncode, 0)
+        self.assertIn("No apps yet", run.stdout)
+
+    def test_app_permissions_refused_is_shown(self):
+        error = "no app named nope (mynx app list shows them)"
+        self.start_app({"app-permissions": {"ok": False, "error": error}})
+        run = self.mynx("app", "permissions", "nope")
+        self.assertEqual((run.returncode, run.stderr), (2, f"mynx: {error}\n"))
+
+    def test_app_permission_set(self):
+        def reply(name, permission, value):
+            return {"ok": True, "name": name, "permission": permission, "value": value}
+
+        self.start_app({"app-permission-set": reply})
+        for value, text in [("allow", "gadgets may use location"),
+                            ("deny", "gadgets may not use location"),
+                            ("ask", "gadgets: location is asked the next time")]:
+            run = self.mynx("app", "permissions", "gadgets", "location", value)
+            self.assertEqual((run.returncode, run.stdout), (0, text + "\n"), run.stderr)
+        run = self.mynx("app", "permissions", "gadgets", "camera", "deny", "--json")
+        self.assertEqual(json.loads(run.stdout),
+                         {"ok": True, "name": "gadgets", "permission": "camera", "value": "deny"})
+        self.assertEqual(self.app.requests[0], ["app-permission-set", "gadgets", "location", "allow"])
+        self.assertEqual(self.app.requests[-1], ["app-permission-set", "gadgets", "camera", "deny"])
+
+    def test_app_permission_set_refused_is_shown(self):
+        error = "unknown permission 'gps' (location, camera, microphone, clipboard, notifications, bluetooth, serial)"
+        self.start_app({"app-permission-set": {"ok": False, "error": error}})
+        run = self.mynx("app", "permissions", "gadgets", "gps", "allow")
+        self.assertEqual((run.returncode, run.stderr), (2, f"mynx: {error}\n"))
+
+    def test_app_permissions_reset(self):
+        self.start_app({"app-permission-set": {"ok": True, "name": "gadgets", "reset": True}})
+        run = self.mynx("app", "permissions", "gadgets", "reset")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "gadgets: every permission is asked the next time\n")
+        self.assertEqual(self.app.requests, [["app-permission-set", "gadgets", "reset"]])
+
+    def test_app_shortcut(self):
+        self.start_app({"app-shortcut": {"ok": True, "name": "gadgets", "id": "app-gadgets"}})
+        run = self.mynx("app", "shortcut", "gadgets")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("Android asks", run.stdout)
+        self.assertIn("home screen", run.stdout)
+        run = self.mynx("app", "shortcut", "gadgets", "--json")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "name": "gadgets", "id": "app-gadgets"})
+        self.assertEqual(self.app.requests, [["app-shortcut", "gadgets"]] * 2)
+
+    def test_app_shortcut_refused(self):
+        error = "mynx must be on screen to add a shortcut"
+        self.start_app({"app-shortcut": {"ok": False, "error": error}})
+        run = self.mynx("app", "shortcut", "gadgets")
+        self.assertEqual((run.returncode, run.stderr), (2, f"mynx: {error}\n"))
+
+    def test_app_permissions_and_shortcut_usage(self):
+        for args in [("app", "shortcut"), ("app", "shortcut", "a", "b"), ("app", "permissions", "a", "b"),
+                     ("app", "permissions", "a", "location", "allow", "x")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx app", run.stderr, args)
+            self.assertIn("permissions", run.stderr, args)
 
     def test_app_list_is_a_table_with_each_apps_problems(self):
         self.start_app({"app-list": {"ok": True, "apps": self.APPS}})

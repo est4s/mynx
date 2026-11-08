@@ -1,0 +1,30 @@
+:root { --bg: #0d0221; --card: #1a0b3d; --fg: #e0e0ff; --dim: #9a8fc7; --accent: #05d9e8; --bad: #ff2a6d; }
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--fg); }
+body {
+  margin: 0 auto; max-width: 560px; font: 16px sans-serif;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+           max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+header h1 { margin: 0; font-size: 24px; color: var(--accent); }
+#status { margin: 4px 0 12px; color: var(--dim); }
+.card { background: var(--card); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+.card h2 { margin: 0 0 8px; font-size: 17px; }
+.value { margin: 8px 0 0; font-size: 18px; white-space: pre-line; }
+.error { margin: 6px 0 0; color: var(--bad); font-size: 14px; }
+.error:empty { display: none; }
+.row { display: flex; gap: 8px; align-items: center; }
+button, select, input {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--dim);
+  border-radius: 6px; padding: 8px 12px; min-height: 40px;
+}
+button:active { background: var(--accent); color: var(--bg); }
+select, input { flex: 1; min-width: 0; }
+.dial { position: relative; width: 120px; height: 120px; margin: 0 auto;
+        border: 2px solid var(--dim); border-radius: 50%; }
+.needle { position: absolute; left: 50%; top: 10px; width: 4px; height: 50px; margin-left: -2px;
+          background: var(--bad); border-radius: 2px; transform-origin: 50% 50px; }
+.list { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.list li { padding: 4px 0; border-bottom: 1px solid var(--bg); }
+#output { height: 160px; overflow-y: auto; margin: 8px 0; padding: 8px; background: var(--bg);
+          border-radius: 6px; font: 13px monospace; white-space: pre-wrap; word-break: break-all; }

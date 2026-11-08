@@ -76,7 +76,8 @@ and applies them. See "Changing settings" below.
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
 | Menu state (last choices) | `~/.local/state/mynx/menu` |
-| Apps (HTML and JavaScript, on a screen of their own) | `/opt/mynx/apps` (`sketch`), yours in `~/apps` (see "Apps") |
+| Apps (HTML and JavaScript, on a screen of their own) | `/opt/mynx/apps` (`sketch`, `gadgets`), yours in `~/apps` (see "Apps") |
+| What each app may use from the phone | `~/.config/mynx/app-permissions.conf` (see "The phone from JavaScript") |
 | Terminal apps | `/opt/mynx/terminal-apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`, `serial`), yours in `~/terminal-apps` (and `~/apps`, from before) |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
 | The app's tools: `mynx`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/mynx/bin` |
@@ -145,6 +146,10 @@ their own.
 | `mynx app open NAME` | open an app on its own screen (the app must be on screen); a served one's service is started first |
 | `mynx app reload NAME` | reload an app's open screen |
 | `mynx app log NAME [-n N]` | the last N lines (100) of an app's log: its console, errors and failed loads |
+| `mynx app shortcut NAME` | ask Android to put an app on the home screen (the app must be on screen; see "Apps") |
+| `mynx app permissions [NAME]` | what each app may use from the phone: `allow`, `deny` or `ask` per permission (see "The phone from JavaScript") |
+| `mynx app permissions NAME PERMISSION allow\|deny\|ask` | change one app's answer; `ask` asks it again the next time |
+| `mynx app permissions NAME reset` | forget all of an app's answers |
 | `mynx service [list]` | the background services: state, uptime, restarts (see "Background services") |
 | `mynx service add NAME [OPTIONS] -- COMMAND…` | add a service to `services.conf`; `--autostart`, `--restart no\|on-failure\|always`, `--cwd DIR`, `--restart-limit N`, `--restart-delay S`, `--stop-timeout S` |
 | `mynx service start\|stop\|restart NAME` | start, stop (TERM, then force after `stop-timeout`) or restart a service |
@@ -440,9 +445,11 @@ one back.
   | Key | Means |
   |---|---|
   | `name` | its name in the menu and on its screen (up to 20 characters) |
-  | `icon` | a PNG, JPEG or WebP file in the folder (for home-screen shortcuts, later) |
+  | `icon` | a PNG, JPEG or WebP file in the folder: its home screen shortcut's icon (below) |
   | `url` | `http://127.0.0.1:PORT/…` or `http://localhost:PORT/…`: a served app (below) |
   | `service` | the background service that serves `url` |
+  | `fullscreen` | `no` (default), `yes` or `edge`: the status and navigation bars hidden, for games (below) |
+  | `screen-awake` | `yes` or `no` (default): the screen stays on while the app is in front |
 
 - **Where it runs:** at `https://NAME.mynx.invalid/`, an address of
   its own, so its `localStorage`, IndexedDB and cookies are its own
@@ -450,14 +457,33 @@ one back.
   or `..`, is "not found". The internet works as in a browser
   (`fetch` to other sites, with their CORS rules). Sound starts after
   a tap, as in a browser.
-- **No phone features yet:** JavaScript can't reach the sensors, the
-  camera, notifications or `mynx` commands. For those, make a
-  terminal app or an Android app (see "Making an app").
+- **The phone from JavaScript:** location, sensors, vibration, the
+  flashlight, the battery, the clipboard, share, notifications,
+  photos, the microphone, Bluetooth LE, serial ports and more, through
+  `mynx.js` (see "The phone from JavaScript" below). `mynx` commands
+  themselves aren't reachable from a page.
 - **The screen:** the page fills it below the status bar, with no bar
   of its own, like an installed web app; recents shows the app's
   name. The back key goes back in the page's history; at its first
   page it closes the screen, as swiping it away in recents does.
   Reload it with `mynx app reload NAME`.
+- **Full screen** (`fullscreen` in `app.conf`, for games): `yes` hides
+  the status and navigation bars (a swipe from the edge shows them
+  for a moment) and keeps the page clear of the camera cutout; `edge`
+  hides them too and lets the page run under the cutout, so keep
+  controls clear of the corners with CSS's `env(safe-area-inset-top)`
+  (`-right`, `-bottom`, `-left`) and `<meta name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover">`.
+  Both are padded for the keyboard, and hide the bars again after
+  the keyboard or a rotation. `screen-awake = yes` keeps the screen
+  on while the app is in front (not in the background).
+- **Home screen shortcuts:** `mynx app shortcut NAME`, or the menu's
+  Apps → **Add to home screen…**, asks Android to pin one (it shows
+  its own dialog; mynx must be on screen). Its icon is `app.conf`'s
+  `icon`, else a letter on a colour from the theme. Tapping it opens
+  the app straight away, starting mynx and the app's service if they
+  aren't running; a shortcut whose app is gone says so on its screen.
+  A changed name or icon shows at the next open.
 - **Auto-reload:** while its screen shows, an app reloads by itself
   when a file in its folder changes: edit `index.html` and the phone
   shows the change within a second or two. `mynx app reload NAME`
@@ -493,11 +519,119 @@ one back.
 - **The example:** `/opt/mynx/apps/sketch`, a finger-drawing pad that
   keeps the drawing in `localStorage` (`index.html`, `sketch.js`,
   `sketch.css`). To start one of your own from it: `cp -r
-  /opt/mynx/apps/sketch ~/apps/my-pad`.
+  /opt/mynx/apps/sketch ~/apps/my-pad`. `/opt/mynx/apps/gadgets`
+  uses the phone from JavaScript: a compass, the battery, the
+  flashlight and vibration, a location fix, a Bluetooth LE scan and a
+  serial console, each card showing why when it's refused.
 - `mynx app` lists them; `--json` gives `apps`: `name`, `label`,
   `path`, `kind` (`static` or `served`), `origin`, `url`, `service`,
-  `icon` and `problems`. `mynx app open NAME` needs the app on screen:
-  Android doesn't let it open a screen from the background.
+  `icon`, `fullscreen`, `screen_awake` and `problems`. `mynx app open
+  NAME` needs the app on screen: Android doesn't let it open a screen
+  from the background.
+
+#### The phone from JavaScript
+
+An app's page reaches the phone through `mynx.js`, which mynx serves
+to every page (it asks mynx for its connection when it loads, so one
+added later works too). Load it in the head, before your own scripts:
+
+```html
+<script src="https://mynx.invalid/mynx.js"></script>
+```
+
+It defines one global, `mynx`. Every call returns a promise of the
+answer `mynx --json` gives for the same command, without `ok`, and
+takes the same options (`mynx.location({gps: true})` is `mynx
+location --gps`). `mynx.ready` resolves with `{app, label, calls}`
+once mynx has connected the page (every call waits for it);
+`mynx.app` is the app's name and `mynx.can` a Set of the calls
+offered.
+
+```js
+await mynx.ready;
+const { battery } = await mynx.battery();
+mynx.vibrate(200);
+for await (const r of mynx.sensor.stream('compass', { rate: 10 })) {
+  needle.style.transform = `rotate(${-r.values.azimuth}deg)`;
+}
+```
+
+| Call | Answer | Permission |
+|---|---|---|
+| `mynx.location({gps, timeout})` | `{location: {latitude, longitude, accuracy, altitude, speed, bearing, provider, time}}` | location |
+| `mynx.location.stream({gps, every})` | a stream of fixes | location |
+| `mynx.sensor(name, {timeout})`, `mynx.sensor.list()` | `{reading: {sensor, values, unit, accuracy, time}}`, `{sensors}` | |
+| `mynx.sensor.stream(name, {rate})` | a stream of readings | |
+| `mynx.vibrate(ms, {strength})` | `{}` at once | |
+| `mynx.vibrate.effect(name)`, `.chain(prims)` | `{ms}` or `{stopped: true}` when it ends | |
+| `mynx.vibrate.wave(steps, {repeat})` | a stream; `done` gives `{ms}` or `{stopped: true}` | |
+| `mynx.vibrate.list()`, `.stop()` | as `mynx vibrate list`, `{}` | |
+| `mynx.torch.on(percent)`, `.off()` | `{}` | |
+| `mynx.battery()`, `mynx.battery.stream({every})` | `{battery: {percent, status, …}}`, a stream | |
+| `mynx.clipboard.get()` | the text | clipboard |
+| `mynx.clipboard.set(text)` | `{}` | |
+| `mynx.share.text(text)`, `mynx.share.files([{name, type, data}])` | `{}`, `{count}` (Android's share sheet) | |
+| `mynx.notify(title, text, {ifAway})` | `{shown, reason}`; tapping it opens the app | notifications |
+| `mynx.camera({quick: 'back'\|'front'})` | `{type, bytes, blob}`: a photo taken at once with no screen | camera |
+| `mynx.camera()` | the same, from the phone's camera app (only when `mynx.can.has('camera')`) | camera |
+| `mynx.audio.record({seconds, rate, format})` | a stream; `done` gives `{type, bytes, seconds, blob}` | microphone |
+| `mynx.audio.play(source)` | a stream; `done` gives `{seconds}`: a file of the app's own, a URL, a Blob or bytes | |
+| `mynx.rotation.lock(side)`, `.unlock()` | `{locked}`: the app's screen only, until the page goes | |
+| `mynx.ble.scan({seconds, name, service, all})`, `mynx.ble.scan.stream(…)` | `{devices}`, a stream of devices | bluetooth |
+| `mynx.ble.services(dev)`, `.read(dev, char, {as})`, `.write(dev, char, value, {as, noResponse})` | as `mynx ble` | bluetooth |
+| `mynx.ble.notify(dev, char, {as})`, `.connect(dev)` | streams; `connect` holds the link until stopped | bluetooth |
+| `mynx.serial.list()` | `{ports: [{name, kind, path, url, in_use, device}]}` | serial |
+| `mynx.serial.open(port, {baud, dataBits, parity, stopBits, lower})` | an open port (below) | serial |
+| `mynx.service.list()`, `.start()`, `.stop()`, `.restart()`, `.log(name, {lines})` | the app's own service only (`app.conf`'s `service`) | |
+
+- **Streams** are async iterators: `for await (const fix of s)` gets
+  each reading, `s.stop()` stops it (as Ctrl+C does), and `s.done` is
+  a promise of the final answer. Leaving the loop early stops it. A
+  page's streams stop when it's reloaded or its screen closes, not
+  when it goes to the background.
+- **Errors:** a refused call rejects with a `mynx.MynxError`: its
+  `message` is what the command would print, its `code` one of
+  `denied` (the app isn't allowed that permission), `refused`
+  (anything else: a setting off, Android's permission refused, bad
+  options, a timeout), `closed` (the page's screen closed or reloaded
+  under it, or the question was closed unanswered) or `no-bridge`
+  (not in mynx, or not on the app's own address: `mynx.ready`
+  rejects after 5 s). Every refusal is in the app's log too (`mynx app
+  log NAME`, `warn bridge …`), so an agent sees why a page got
+  nothing.
+- **Where it works:** only on the app's own address,
+  `https://NAME.mynx.invalid` for a static app, a served app's
+  `http://127.0.0.1:PORT` **while its own `service` runs** (a served
+  app with no `service` gets no bridge: with nothing of ours on the
+  port, another Android app could listen there). A page the app
+  navigates to elsewhere, or an iframe of another site, gets nothing.
+  That's trust, not proof: every script the page loads (a library
+  from a CDN too) shares its address and so its bridge.
+- **Permissions:** location, camera, microphone, reading the
+  clipboard, notifications, Bluetooth (every `mynx.ble` call) and
+  serial ports (every `mynx.serial` call) are asked the first time,
+  on the app's screen: "Gadgets wants to use your location", **Allow**
+  or **Don't allow**, then Android's own dialog if mynx hasn't got
+  that permission yet. The rest just work. The answers are kept in
+  `~/.config/mynx/app-permissions.conf`, one `[NAME]` block per app
+  with `PERMISSION = allow|deny` lines (not listed: asked); `mynx
+  check` checks it and `mynx undo` takes a change back. `mynx app
+  permissions [NAME]` lists them, `mynx app permissions NAME
+  location deny` changes one (`ask` asks again), `mynx app
+  permissions NAME reset` forgets them all. Asking needs the app on
+  screen, else the call is refused. The `android-*` settings still
+  apply on top (`android-location off` refuses every app).
+- **Binary data:** photos and recordings come as a `Blob` (`URL.
+  createObjectURL(answer.blob)` shows or plays one); files to share
+  or play and bytes to a serial port or a BLE characteristic go as a
+  `Uint8Array`, a `Blob` or a string (as UTF-8). At most 16 MB a
+  call.
+- **Serial ports:** `const p = await mynx.serial.open('ttyACM0',
+  {baud: 115200})` gives a stream of `Uint8Array` chunks (`for await
+  (const bytes of p)`), with `p.write('hi\r')`, `p.set({dtr: false,
+  rts: true, baud: 9600})` and `p.close()`. One user at a time, as
+  for programs here: "ttyACM0 is busy" while `mynx usb monitor` or
+  another program has it.
 
 ### The phone
 
@@ -1093,7 +1227,7 @@ line, in order; labels up to 20 characters. Actions:
 |---|---|
 | `shell` | leave the menu for the shell |
 | `files` | the file manager |
-| `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps") |
+| `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps"), then **Add to home screen…** |
 | `terminal-apps` | the Terminal apps menu (see "Terminal apps" under "More of the setup") |
 | `games` | the Games menu |
 | `settings` | the Settings menu: App settings, System, Help |
@@ -1288,9 +1422,12 @@ shows the generic game bar until `my-tool.conf` exists.
   opens on a screen of its own from the menu's Apps (see "Apps"). No
   build and no install: edit a file and the open screen reloads, so
   it's the quickest to try on the phone. Touch, drawing, Web Audio and
-  `localStorage` work as in a browser, and a Python backend can serve
-  it as a background service. No phone features from JavaScript yet
-  (sensors, camera, notifications). It runs only inside mynx.
+  `localStorage` work as in a browser, a Python backend can serve it
+  as a background service, and its JavaScript reaches the phone
+  through `mynx.js`: sensors, location, camera, microphone, vibration,
+  notifications, Bluetooth LE, serial ports (see "The phone from
+  JavaScript"). It can have a home screen shortcut, but runs only
+  inside mynx.
 - **A terminal app** that lives in mynx: a program in
   `~/terminal-apps` with its own key bar, in the menu's Terminal apps
   (see "Terminal apps" under "More of the setup"). Quick to write and
@@ -1303,9 +1440,9 @@ shows the generic game bar until `my-tool.conf` exists.
   Java (no Kotlin, Gradle or AndroidX libraries).
 
 Hints: "game", "page", "like an artifact", "quick to try on the
-phone", something to tap and draw on → an app. "Script", "tool",
-"uses my files or commands here", "needs the sensors" → a terminal
-app. "Widget", "on my home screen", "give it to a friend" → an
+phone", something to tap and draw on, a dashboard for the sensors →
+an app. "Script", "tool", "uses my files or commands here" → a
+terminal app. "Widget", "on my home screen", "give it to a friend" → an
 Android app. Mixes work too: an app or an Android widget can show
 what a program here serves (see "Apps" and below).
 
