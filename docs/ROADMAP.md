@@ -74,9 +74,9 @@ and either view switches to the other.
 ### Web apps
 **Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what
 counts as one, the menu's Apps and Terminal apps, `mynx app`, and the
-guide. Part 2 is planned (work log, entry 167): the bridge,
-permissions per app, home screen shortcuts, full screen and screen
-awake.
+guide. **Part 2 done** (2026-11-08, PR #64, in the next release): the
+bridge (`mynx.js`), permissions per app, home screen shortcuts, full
+screen and screen awake.
 
 A third kind of app beside terminal apps and APKs (the agent guide's
 "Making an app"): HTML and JavaScript in `~/apps/NAME`, opened inside
