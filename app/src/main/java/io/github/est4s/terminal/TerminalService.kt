@@ -198,7 +198,7 @@ class TerminalService : Service() {
     var toolsError: String? = null
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
-    private val requests by lazy {
+    private val requests: MynxRequests by lazy {
         MynxRequests(
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
@@ -227,11 +227,11 @@ class TerminalService : Service() {
     private val webApps by lazy { WebAppLauncher(webAppFiles, webAppHost, serviceManager.forWebApps()) }
     private val shortcuts by lazy { AppShortcuts(this) }
     // The phone from an app's JavaScript (Bridge.kt): pages get it through their screen's port.
-    private val appPermissions by lazy {
+    private val appPermissions: AppPermissions by lazy {
         AppPermissions(File(rootfs, "root"), webAppFiles) { change -> requests.recordChange(change) }
     }
     // Serial ports from pages: core's RFC 2217 client over BridgeSockets' sockets (connectSerial).
-    private val bridge by lazy {
+    private val bridge: Bridge by lazy {
         Bridge(requests, webAppFiles, appPermissions, bridgeHost, File(rootfs)) { app -> bridgeSerial(app, requests, bridgeHost) }
     }
     // Log lines from the bridge leave the main thread, in order.
