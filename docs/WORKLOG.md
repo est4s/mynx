@@ -104,12 +104,9 @@ decisions are in AGENTS.md ("Apps (web apps, part 1)") and
 `WebApps.kt`'s KDoc. (The refusal now says "mynx must be on screen
 to open an app"; the extra reloads in test 6 were by hand.)
 
-**No top bar** (entry 166, PR "Web apps: no top bar on an app's
-screen", not yet on the phone): open `probe` and `pixel-hero`: no
-bar; the page starts below the status bar and ends above the
-navigation bar; the keyboard doesn't cover a focused text field
-(`probe`'s, if it has one); back goes back, then closes the screen;
-recents still shows the app's name.
+**No top bar** (entry 166, PR #62): passed on the phone. Not
+checked: the keyboard over a focused text field (no app here has
+one); try it with the first app that does.
 
 **Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
 permissions per app, home screen shortcuts. Plan it with the
@@ -257,8 +254,10 @@ reloads any, swiping from recents closes it (and stops a service the
 open started). No setting brings it back. The root is now a
 `FrameLayout` holding only the WebView, padded for the system bars,
 cutout and keyboard as before; the window keeps the theme's
-background. Guide, roadmap and AGENTS.md updated. **Not yet on the
-phone** (check in "Next" 0).
+background. Guide, roadmap and AGENTS.md updated. **Passed on the
+phone** (PR #62's build, run 42473850694, in mynx dev): `probe` and
+`pixel-hero` with no bar, back closing them; the keyboard over a
+text field wasn't tried (no app has one). Merged (PR #62).
 
 ### 2026-11-08 (165): No favicon 404 in an app's log
 
