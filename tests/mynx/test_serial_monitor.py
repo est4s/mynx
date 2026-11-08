@@ -1,4 +1,4 @@
-"""Tests for tools/apps/serial, the serial monitor (`mynx usb monitor`).
+"""Tests for tools/terminal-apps/serial, the serial monitor (`mynx usb monitor`).
 
 Run: python3 -m unittest discover -s tests/mynx
 """
@@ -15,7 +15,7 @@ import tty
 import unittest
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
-APP = os.path.join(ROOT, "tools", "apps", "serial")
+APP = os.path.join(ROOT, "tools", "terminal-apps", "serial")
 
 
 def load_app():

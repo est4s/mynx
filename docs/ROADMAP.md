@@ -56,7 +56,7 @@ and either view switches to the other.
   each agent's own JSON stream if an adapter falls short. Users sign
   in with their own accounts, as in the terminal.
 - **Artifact cards:** when an agent makes or changes an app in
-  `~/apps` (seen in its file writes, or declared with a `mynx`
+  `~/apps` or `~/terminal-apps` (seen in its file writes, or declared with a `mynx`
   command), the chat shows a card: Run (a terminal app in a tab),
   Open (a web app, below), Share, or Install (an APK).
 - **Open in terminal:** hands the conversation to a tab that resumes
@@ -72,18 +72,29 @@ and either view switches to the other.
   would save phone rounds, so they may come first.
 
 ### Web apps
+**Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what
+counts as one, the menu's Apps and Terminal apps, `mynx app`, and the
+guide. Left: the bridge, permissions per app, home screen shortcuts.
+
 A third kind of app beside terminal apps and APKs (the agent guide's
 "Making an app"): HTML and JavaScript in `~/apps/NAME`, opened inside
 mynx with no build and no install, like Claude's artifacts. Today an
 agent can already serve one from a service (`python3 -m http.server`)
 and open it in the phone's browser; this makes them part of mynx.
-- **A web app view:** a WebView screen with back and reload, each app
-  served under an origin of its own (`WebViewAssetLoader` or a scheme
-  of ours) that sees only its own folder, never the rest of Debian.
+- **A web app view:** a WebView screen of its own per app (its own
+  entry in recents), with back and reload, each app served under an
+  origin of its own (`https://NAME.mynx.invalid/`, answered by the
+  app from the folder) that sees only its own folder, never the rest
+  of Debian. It reloads by itself when the app's files change.
+- **Served apps:** an app may instead be served by a background
+  service on `127.0.0.1` (a Python backend); opening it starts the
+  service, and closing it stops the service if opening started it.
 - **What counts as one:** a folder in `~/apps` with an `index.html`,
-  its name and icon from a small manifest (as terminal apps' `#
-  label:` line), decided in core. The Apps menu and touch mode's Home
-  list them; `mynx app open NAME` opens one from the terminal, so
+  its name and icon from an optional `app.conf` (else the page's
+  `<title>`), decided in core. The menu's Apps (terminal apps move
+  to `~/terminal-apps` and a Terminal apps item) and touch mode's
+  Home list them; `mynx app
+  open NAME` opens one from the terminal, so
   agents can too. This doesn't need touch mode and can ship first.
 - **The phone through a bridge:** a `mynx` JavaScript object that
   sends the requests `mynx` already sends (location, sensors, camera,
@@ -101,9 +112,10 @@ and open it in the phone's browser; this makes them part of mynx.
 - **Not an APK:** a web app only runs inside mynx and only reaches
   what the bridge offers; no widgets, no opening other apps' files or
   shares, no background work of its own. For those, an APK, as today.
-- **Order:** the view, the listing, `mynx app open` and the guide
-  first (without phone features; they also give touch mode's cards
-  something to open), then the bridge, permissions and shortcuts.
+- **Order:** part 1 is the view, served apps, the listing, `mynx
+  app` and the guide (without phone features; it also gives touch
+  mode's cards something to open; planned in the work log, entry
+  162), then the bridge, permissions and shortcuts.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's

@@ -84,6 +84,9 @@ are in git history: the full log up to entry 92 is
   subagents (entry 155); all 10 phone tests passed with the C3
   (entry 156), and the re-bind check (entry 157). Merged (PR #54).
   The plan and its tests: `git show 3539809:docs/WORKLOG.md`.
+- **Web apps, part 1** (`~/apps/NAME/`, `mynx app`, terminal apps
+  in `~/terminal-apps`): all 13 phone tests passed (entry 164); PR
+  #59.
 - **Services count in the launcher menu** (`Services ● 2`): all 4
   phone tests passed (entry 161); merged (PR #58).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
@@ -92,6 +95,20 @@ are in git history: the full log up to entry 92 is
 
 
 ## Next
+
+### 0. Web apps: part 1 done; part 2 next (the maintainer picks)
+
+Part 1 passed all 13 phone tests (entry 164) and merges with PR #59.
+The plan, design and tests: `git show 345d224:docs/WORKLOG.md`; the
+decisions are in AGENTS.md ("Apps (web apps, part 1)") and
+`WebApps.kt`'s KDoc. **Small follow-up** (from the phone tests): the WebView's own
+`/favicon.ico` request logs a 404 at every open of an app without
+one: don't log that one. (The refusal now says "mynx must be on
+screen to open an app"; the extra reloads in test 6 were by hand.)
+
+**Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
+permissions per app, home screen shortcuts. Plan it with the
+maintainer first.
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -181,13 +198,12 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode and web apps (when the maintainer picks them)
+### 3. Touch mode (when the maintainer picks it)
 
-Planned in `docs/ROADMAP.md` ("Touch mode", "Web apps"), entry 159.
-Web apps' first part (the view, `mynx app open`, the guide) doesn't
-need touch mode and is the smallest start; touch mode starts with a
-spike on a branch: ACP (or Claude Code's stream-json) under proot,
-sign-in and resume. Ask the maintainer which first.
+Planned in `docs/ROADMAP.md` ("Touch mode"), entry 159. It starts
+with a spike on a branch: ACP (or Claude Code's stream-json) under
+proot, sign-in and resume. Web apps (0. above) come first; their
+screen gives touch mode's cards something to open.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -225,6 +241,55 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (164): Web apps part 1 passed on the phone
+
+All 13 phone tests passed on PR #59's build (run 42462436006) in
+mynx dev: the menu's Apps and Terminal apps, own screens and recents
+entries, storage per app, confinement (404 for `..`, links out of the
+folder, absolute links), auto-reload, the log, Pixel Hero as an app
+(music in time, scores kept), a served app's service started and
+stopped only when the open started it, the 15 s port timeout, the
+background refusal, `mynx check`, old Debians' `~/apps` executables
+and `menu.conf`, and swiping from recents (Android finishes the
+activity: the service stopped, 143). **A test bug:** `WebAppsTest`
+linked to real paths (`/root/pixel-hero/assets`) and cleaned up with
+`deleteRecursively()`, which follows links: every core test run on
+the phone emptied `~/pixel-hero/assets`. Restored from its APK;
+fixed with `deleteTree()` (0816a72), lesson in AGENTS.md. Files from
+the release mynx's Download can't be read by mynx dev (another app):
+served the test setup over 127.0.0.1 instead. Follow-ups in "Next".
+
+### 2026-11-08 (163): Web apps part 1 built by subagents
+
+Part 0 (the contract, `WebApps.kt`'s KDoc, fakes, fixtures in
+`tests/fixtures/apps/`), then A (core), B (the app's screen, the
+service's `WebAppHost`) and C (`mynx app`, the terminal apps' move to
+`tools/terminal-apps/`, the menu's Apps and Terminal apps, the
+`sketch` example, the guide) in worktrees, merged into `webapps`.
+Decisions where the contract was open are in its KDoc (A: a started
+service is remembered only once its screen opened, a cancelled open
+stops what it started, autostart services are never stopped; B: Open
+in browser only for served apps, links to other sites open in the
+view). Integration: the menu ignored a served app's `<title>` while
+core used it; the menu now follows core. AGENTS.md has the
+Architecture entry. Not yet compiled: `app/` (CI).
+
+### 2026-11-08 (162): Web apps part 1 planned for subagents
+
+The maintainer picked web apps and decided with the agent how they
+work: an own screen per app (not a tab), auto-reload on file
+changes, and apps served by a background service in part 1, the
+service started on open and stopped on close only if opening started
+it (the wakelock). A rhythm game like `~/pixel-hero` needs no
+service: it's phone test 7. Then the maintainer named them: web
+apps are **apps** (`~/apps`, the menu's Apps, `mynx app …`) and
+today's apps **terminal apps** (`~/terminal-apps`, their own menu
+item); old `~/apps` programs keep working, nothing is moved. The agent's design (origin
+`https://NAME.mynx.invalid/` from our own intercept, `app.conf`
+plain text, the log in `/tmp/.mynx/apps/`, `mynx app …`) and the
+parts for subagents are "Next", 0. The roadmap's "Web apps" says the
+same. No code.
 
 ### 2026-11-08 (161): Services count in the launcher menu
 

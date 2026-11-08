@@ -9,10 +9,11 @@ setup() {
     export HOME="$BATS_TEST_TMPDIR/home"
     unset XDG_CONFIG_HOME GH_CONFIG_DIR GIT_CONFIG_GLOBAL # CI's runner sets XDG_CONFIG_HOME
     export MENU_GAME_DIRS="$BATS_TEST_TMPDIR/games:$HOME/games"
-    export MENU_APP_DIRS="$BATS_TEST_TMPDIR/apps:$HOME/apps"
+    export MENU_APP_DIRS="$HOME/apps:$BATS_TEST_TMPDIR/apps"
+    export MENU_TERMINAL_APP_DIRS="$BATS_TEST_TMPDIR/terminal-apps:$HOME/terminal-apps:$HOME/apps"
     export MENU_UPDATE_FILE="$BATS_TEST_TMPDIR/update-available"
     export MENU_SERVICES_FILE="$BATS_TEST_TMPDIR/services-active"
-    mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games" "$BATS_TEST_TMPDIR/apps"
+    mkdir -p "$HOME" "$BATS_TEST_TMPDIR/games" "$BATS_TEST_TMPDIR/apps" "$BATS_TEST_TMPDIR/terminal-apps"
     gh_set_up
 }
 
@@ -35,8 +36,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -54,7 +55,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -62,7 +63,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -144,27 +145,27 @@ keys() {
 }
 
 @test "Release notes shows mynx notes" {
-    run keys 732
+    run keys 832
     [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 734
+    run keys 834
     [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "Help has Getting started" {
-    run keys 731xxxxxxqqq
+    run keys 831xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 733
+    run keys 833
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 723
+    run keys 823
     [[ $output == *"RUN: mynx github"* ]]
 }
 
@@ -172,7 +173,7 @@ keys() {
     rm "$HOME/.config/gh/hosts.yml"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Terminal apps Games Files Settings Exit" ]
     [ "${ACTS[2]}" = github ]
     menu_items system
     [ "${ITEMS[*]}" = "Update all System info" ]
@@ -239,63 +240,237 @@ keys() {
     [ "${ACTS[*]}" = "none" ]
 }
 
-app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
+app() { # app FILE [LABEL]: an executable terminal app, labelled for the menu if given
     printf '#!/bin/sh\n%s\n' "${2:+# label: $2}" >"$1"
     chmod +x "$1"
 }
 
-@test "apps come from both folders, with their labels" {
-    mkdir -p "$HOME/apps"
-    app "$BATS_TEST_TMPDIR/apps/dbmeter" "Sound meter"
-    app "$BATS_TEST_TMPDIR/apps/tuner" "Guitar tuner"
-    printf 'not an app\n' >"$BATS_TEST_TMPDIR/apps/mic.py"
-    app "$HOME/apps/my-tool.py"
+@test "terminal apps come from all three folders, with their labels" {
+    mkdir -p "$HOME/terminal-apps" "$HOME/apps"
+    app "$BATS_TEST_TMPDIR/terminal-apps/dbmeter" "Sound meter"
+    app "$BATS_TEST_TMPDIR/terminal-apps/tuner" "Guitar tuner"
+    printf 'not an app\n' >"$BATS_TEST_TMPDIR/terminal-apps/mic.py"
+    app "$HOME/terminal-apps/my-tool.py"
+    app "$HOME/apps/old-tool"   # an old Debian's, from before apps were web apps
     source "$MENU"
-    menu_items apps
-    [ "${ITEMS[*]}" = "Guitar tuner My Tool Sound meter" ]
-    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/apps/tuner" ]
-    [ "${ACTS[1]}" = "app:$HOME/apps/my-tool.py" ]
+    menu_items terminal-apps
+    [ "${ITEMS[*]}" = "Guitar tuner My Tool Old Tool Sound meter" ]
+    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/terminal-apps/tuner" ]
+    [ "${ACTS[1]}" = "app:$HOME/terminal-apps/my-tool.py" ]
+    [ "${ACTS[2]}" = "app:$HOME/apps/old-tool" ]
 }
 
-@test "a label is cut to 20 characters" {
-    app "$BATS_TEST_TMPDIR/apps/x" "A label that is much too long"
+@test "app folders aren't terminal apps" {
+    mkdir -p "$HOME/apps/sketch"
+    printf '<title>Sketch</title>\n' >"$HOME/apps/sketch/index.html"
+    chmod +x "$HOME/apps/sketch"
     source "$MENU"
-    menu_items apps
+    menu_items terminal-apps
+    [ "${ITEMS[*]}" = "(no terminal apps yet)" ]
+}
+
+@test "a terminal app's label is cut to 20 characters" {
+    app "$BATS_TEST_TMPDIR/terminal-apps/x" "A label that is much too long"
+    source "$MENU"
+    menu_items terminal-apps
     [ "${ITEMS[0]}" = "A label that is much" ]
 }
 
-@test "no apps" {
+@test "no terminal apps" {
     source "$MENU"
-    menu_items apps
-    [ "${ITEMS[*]}" = "(no apps yet)" ]
+    menu_items terminal-apps
+    [ "${ITEMS[*]}" = "(no terminal apps yet)" ]
     [ "${ACTS[*]}" = "none" ]
 }
 
-@test "Apps starts the chosen app under its key bar" {
-    mkdir -p "$HOME/apps"
-    app "$BATS_TEST_TMPDIR/apps/tuner" "Guitar tuner"
-    app "$HOME/apps/my-tool.py"
-    run keys 41
-    [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/apps/tuner"* ]]
-    run keys 42
-    [[ $output == *"RUN: keybar my-tool,shell $HOME/apps/my-tool.py"* ]]
+@test "Terminal apps starts the chosen app under its key bar" {
+    mkdir -p "$HOME/terminal-apps"
+    app "$BATS_TEST_TMPDIR/terminal-apps/tuner" "Guitar tuner"
+    app "$HOME/terminal-apps/my-tool.py"
+    run keys 51
+    [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/terminal-apps/tuner"* ]]
+    run keys 52
+    [[ $output == *"RUN: keybar my-tool,shell $HOME/terminal-apps/my-tool.py"* ]]
 }
 
-@test "Apps are sorted by label, wherever they are" {
-    mkdir -p "$HOME/apps"
-    app "$BATS_TEST_TMPDIR/apps/a-tool" "Zulu"
-    app "$BATS_TEST_TMPDIR/apps/b-tool" "Alpha"
-    app "$HOME/apps/c-tool" "Mike"
+@test "terminal apps are sorted by label, wherever they are" {
+    mkdir -p "$HOME/terminal-apps"
+    app "$BATS_TEST_TMPDIR/terminal-apps/a-tool" "Zulu"
+    app "$BATS_TEST_TMPDIR/terminal-apps/b-tool" "Alpha"
+    app "$HOME/terminal-apps/c-tool" "Mike"
     source "$MENU"
-    menu_items apps
+    menu_items terminal-apps
     [ "${ITEMS[*]}" = "Alpha Mike Zulu" ]
-    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/apps/b-tool" ]
+    [ "${ACTS[0]}" = "app:$BATS_TEST_TMPDIR/terminal-apps/b-tool" ]
 }
 
-@test "menu --check accepts the apps action" {
-    printf 'Apps = apps\n' >"$BATS_TEST_TMPDIR/menu.conf"
+@test "menu --check accepts the apps and terminal-apps actions" {
+    printf 'Apps = apps\nTools = terminal-apps\n' >"$BATS_TEST_TMPDIR/menu.conf"
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+# --- apps (web apps): the same rules as core's, on the same fixtures -------
+
+FIXTURES="$BATS_TEST_DIRNAME/../fixtures"
+
+web_app() { # web_app DIR TITLE: a static app with that <title>
+    mkdir -p "$1"
+    printf '<!doctype html><title>%s</title>\n' "$2" >"$1/index.html"
+}
+
+@test "apps: the fixtures, by label, as core labels them" {
+    cp -a "$FIXTURES/." "$HOME/"
+    source "$MENU"
+    menu_items apps
+    [ "${#ITEMS[@]}" -eq 4 ]
+    [ "${ITEMS[0]}" = "Escape" ]
+    [ "${ITEMS[1]}" = "Hello & Welcome" ]
+    [ "${ITEMS[2]}" = "My Notes" ]
+    [ "${ITEMS[3]}" = "Served" ]
+    [ "${ACTS[*]}" = "webapp:escape webapp:hello webapp:notes webapp:served" ]
+}
+
+@test "apps come from ~/apps and the tools' folder; ~/apps wins only with an app" {
+    web_app "$HOME/apps/hello" "Mine"
+    web_app "$BATS_TEST_TMPDIR/apps/hello" "The tools'"
+    web_app "$BATS_TEST_TMPDIR/apps/sketch" "Sketch"
+    mkdir -p "$HOME/apps/sketch"   # not an app: doesn't hide the tools' one
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Mine Sketch" ]
+    [ "${ACTS[*]}" = "webapp:hello webapp:sketch" ]
+}
+
+@test "an app's name must be a DNS label" {
+    for name in Bad_Name -dash dash- "has space" "$(printf 'a%.0s' {1..41})"; do
+        web_app "$HOME/apps/$name" "$name"
+    done
+    web_app "$HOME/apps/$(printf 'a%.0s' {1..40})" "Forty"
+    web_app "$HOME/apps/a-1" "A 1"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "A 1 Forty" ]
+}
+
+@test "what isn't an app is skipped" {
+    mkdir -p "$HOME/apps/plain" "$HOME/apps/conf-only" "$HOME/apps/bad-url" "$HOME/apps/low-port"
+    printf 'name = No url\n' >"$HOME/apps/conf-only/app.conf"
+    printf 'url = https://127.0.0.1:8080/\n' >"$HOME/apps/bad-url/app.conf"
+    printf 'url = http://127.0.0.1:80/\n' >"$HOME/apps/low-port/app.conf"
+    app "$HOME/apps/old-tool"
+    ln -s "$HOME/nowhere" "$HOME/apps/dangling"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "(no apps yet)" ]
+    [ "${ACTS[*]}" = none ]
+}
+
+@test "a link to a folder elsewhere is an app" {
+    web_app "$HOME/pixel-hero/assets" ""
+    mkdir -p "$HOME/apps"
+    ln -s "$HOME/pixel-hero/assets" "$HOME/apps/pixel-hero"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Pixel Hero" ]
+    [ "${ACTS[*]}" = "webapp:pixel-hero" ]
+}
+
+@test "served apps: url on 127.0.0.1 or localhost; an index.html still gives the label, as core" {
+    mkdir -p "$HOME/apps/one" "$HOME/apps/two"
+    printf 'url = http://localhost:8080\n' >"$HOME/apps/one/app.conf"
+    printf '<title>Titled</title>\n' >"$HOME/apps/one/index.html"
+    printf '  url=http://127.0.0.1:65535/x?y=1  \n' >"$HOME/apps/two/app.conf"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Titled Two" ]
+}
+
+@test "an app's label: app.conf's name, then <title>, then the folder" {
+    mkdir -p "$HOME/apps/named" "$HOME/apps/empty-name"
+    printf '# mine\nname = First\n  name   =   Last Wins  \n' >"$HOME/apps/named/app.conf"
+    printf '<title>T</title>' >"$HOME/apps/named/index.html"
+    printf 'name =\n' >"$HOME/apps/empty-name/app.conf"
+    printf '<TITLE lang="en">  Fish &lt;&amp;&gt; &quot;Chips&quot; &#39;n&#39;\n </Title>' \
+        >"$HOME/apps/empty-name/index.html"
+    web_app "$HOME/apps/long" "A title that is much too long"
+    web_app "$HOME/apps/blank-title" "   "
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[0]}" = "A title that is much" ]
+    [ "${ITEMS[1]}" = "Blank Title" ]
+    [ "${ITEMS[2]}" = "Fish <&> \"Chips\" 'n'" ]
+    [ "${ITEMS[3]}" = "Last Wins" ]
+}
+
+@test "&amp; is decoded once: &amp;lt; stays &lt;" {
+    web_app "$HOME/apps/amp" "a &amp;lt; b"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[0]}" = "a &lt; b" ]
+}
+
+@test "a <title> must start within the first 4096 bytes and be closed" {
+    mkdir -p "$HOME/apps/late-title" "$HOME/apps/open-title" "$HOME/apps/titled"
+    { head -c 4090 /dev/zero | tr '\0' ' '; printf '<title>Late</title>'; } >"$HOME/apps/late-title/index.html"
+    printf '<title>Never closed\n' >"$HOME/apps/open-title/index.html"
+    printf '<titlex>No</titlex><title>Yes</title>' >"$HOME/apps/titled/index.html"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Late Title Open Title Yes" ]
+}
+
+@test "Apps opens the chosen app with mynx app open" {
+    cp -a "$FIXTURES/." "$HOME/"
+    run keys 42
+    [[ $output == *"RUN: mynx app open hello"* ]]
+}
+
+@test "the main menu has Apps and Terminal apps" {
+    source "$MENU"
+    menu_items main
+    [ "${ITEMS[3]}" = Apps ]
+    [ "${ITEMS[4]}" = "Terminal apps" ]
+    [ "${ACTS[4]}" = menu:terminal-apps ]
+}
+
+@test "with an old menu file (apps, no terminal-apps), Apps ends with Terminal apps" {
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Apps = apps\nExit = exit\n' >"$HOME/.config/mynx/menu.conf"
+    web_app "$HOME/apps/sketch" "Sketch"
+    app "$BATS_TEST_TMPDIR/terminal-apps/tuner" "Guitar tuner"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Sketch Terminal apps" ]
+    [ "${ACTS[*]}" = "webapp:sketch menu:terminal-apps" ]
+}
+
+@test "the Terminal apps entry under Apps opens them" {
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Apps = apps\nExit = exit\n' >"$HOME/.config/mynx/menu.conf"
+    web_app "$HOME/apps/sketch" "Sketch"
+    app "$BATS_TEST_TMPDIR/terminal-apps/tuner" "Guitar tuner"
+    run keys 121
+    [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/terminal-apps/tuner"* ]]
+}
+
+@test "with no apps and an old menu file, Apps still offers Terminal apps" {
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Apps = apps\n' >"$HOME/.config/mynx/menu.conf"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "(no apps yet) Terminal apps" ]
+    [ "${ACTS[*]}" = "none menu:terminal-apps" ]
+}
+
+@test "a menu file with terminal-apps gets no extra entry under Apps" {
+    mkdir -p "$HOME/.config/mynx"
+    printf 'Apps = apps\nTools = terminal-apps\n' >"$HOME/.config/mynx/menu.conf"
+    web_app "$HOME/apps/sketch" "Sketch"
+    source "$MENU"
+    menu_items apps
+    [ "${ITEMS[*]}" = "Sketch" ]
 }
 
 @test "state survives a restart" {
@@ -350,23 +525,23 @@ app() { # app FILE [LABEL]: an executable app, labelled for the menu if given
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 8
+    run keys 9
     [ "$status" -eq 10 ]
 }
 
 @test "Files opens the file manager" {
-    run keys 6
+    run keys 7
     [[ $output == *"RUN: files"* ]]
 }
 
 @test "Games starts the chosen game" {
     game "$BATS_TEST_TMPDIR/games/neon-rogue.py"
-    run keys 51
+    run keys 61
     [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
 @test "Settings → App settings opens the settings editors" {
-    run keys 71
+    run keys 81
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -566,7 +741,7 @@ no_services_mynx() {
 }
 
 @test "Update all runs apt" {
-    run keys 721
+    run keys 821
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 

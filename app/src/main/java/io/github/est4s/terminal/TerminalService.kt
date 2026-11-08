@@ -104,8 +104,17 @@ import io.github.est4s.terminal.core.UsbSerialDevice
 import io.github.est4s.terminal.core.usbReadyText
 import io.github.est4s.terminal.core.usbReadyTitle
 import io.github.est4s.terminal.core.usbRequests
+import io.github.est4s.terminal.core.WebApp
+import io.github.est4s.terminal.core.WebAppHost
+import io.github.est4s.terminal.core.WebAppLauncher
+import io.github.est4s.terminal.core.WebApps
+import io.github.est4s.terminal.core.forWebApps
+import io.github.est4s.terminal.core.webAppRequests
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.TimeZone
+import java.util.concurrent.Executors
 import java.util.WeakHashMap
 import java.util.concurrent.CountDownLatch
 
@@ -140,6 +149,8 @@ private const val USB_CHANNEL_ID = "usb"
 private const val USB_NOTICE_ID_BASE = 4000
 // How long Exit lets the services stop cleanly (TERM) before onDestroy forces them.
 private const val EXIT_GRACE_MS = 3000L
+// An app's port is probed on 127.0.0.1 (core's WebAppHost.portAnswers).
+private const val PORT_PROBE_TIMEOUT_MS = 1000
 private val LOCATION_PERMISSIONS = arrayOf(
     android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION,
 )
@@ -195,9 +206,47 @@ class TerminalService : Service() {
                 serviceRequests(serviceManager) +
                 usbRequests(usb::devices, ::allowUsb) +
                 bluetoothRequests(File(rootfs, "root"), bluetooth) +
-                bleRequests(File(rootfs, "root"), ble, bluetooth),
+                bleRequests(File(rootfs, "root"), ble, bluetooth) +
+                webAppRequests(webApps),
         )
     }
+    // Apps (mynx app): each opens in a WebAppActivity of its own; core decides the rest.
+    private val webApps by lazy {
+        WebAppLauncher(WebApps(File(rootfs, "root"), rootfs, tools.tools), webAppHost, serviceManager.forWebApps())
+    }
+    private val webAppHost = object : WebAppHost {
+        override val onScreen: Boolean get() = activity?.onScreen == true || WebAppActivity.anyOnScreen
+
+        override fun open(app: WebApp): String? {
+            val shown = activity?.takeIf { it.onScreen }
+            val intent = WebAppActivity.openIntent(shown ?: this@TerminalService, app.name)
+            if (shown == null) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return try {
+                (shown ?: this@TerminalService).startActivity(intent)
+                null
+            } catch (e: RuntimeException) {
+                "couldn't open the app's screen: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }
+
+        override fun isOpen(name: String): Boolean = WebAppActivity.isOpen(name)
+
+        override fun reload(name: String): Boolean = WebAppActivity.reload(name)
+
+        override fun portAnswers(port: Int, done: (Boolean) -> Unit) {
+            portProbes.execute {
+                val answered = runCatching {
+                    Socket().use { it.connect(InetSocketAddress("127.0.0.1", port), PORT_PROBE_TIMEOUT_MS) }
+                }.isSuccess
+                mainHandler.post { done(answered) }
+            }
+        }
+
+        override fun schedule(delayMs: Long, block: () -> Unit) {
+            mainHandler.postDelayed(block, delayMs)
+        }
+    }
+    private val portProbes by lazy { Executors.newCachedThreadPool() }
     // The USB serial ports' links, bound at /dev/serial in every proot.
     private val serialDir by lazy { File(filesDir, "serial") }
     // Debian's own /dev and the ports' sysfs stand-in (serial-names), so tools find the ports.
@@ -380,6 +429,8 @@ class TerminalService : Service() {
         runCatching { usbFds.start() }
         runCatching { bluetooth.start() }
         launchServices()
+        // An app's screen finishing stops the service opening it started (core decides).
+        WebAppActivity.closed = { name -> runCatching { webApps.screenClosed(name) } }
         applyWakelockSetting()
         keepPowerSupply()
         // After cwdDir is cleared: the menu's update notice lives there too.
@@ -567,6 +618,7 @@ class TerminalService : Service() {
 
     override fun onDestroy() {
         requestWatcher?.stopWatching()
+        WebAppActivity.closed = null
         mainHandler.removeCallbacks(sweep)
         mainHandler.removeCallbacks(rotationSweep)
         mainHandler.removeCallbacks(updateTick)

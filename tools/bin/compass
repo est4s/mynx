@@ -1,3 +1,3 @@
 #!/bin/sh
-# The compass example app, with its key bar. Source: /opt/mynx/apps/compass
-exec keybar compass,shell "$(dirname "$0")/../apps/compass" "$@"
+# The compass terminal app, with its key bar. Source: /opt/mynx/terminal-apps/compass
+exec keybar compass,shell "$(dirname "$0")/../terminal-apps/compass" "$@"

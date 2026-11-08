@@ -354,11 +354,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   `MainActivity`, which refreshes the bridge), and `mynx usb allow`
   asks with `requestPermission` (a mutable, explicit PendingIntent).
   Requests: `usb-list`, `usb-allow` (`usbRequests()`).
-  **Serial monitor** (`tools/apps/serial`, `mynx usb monitor`, bar
-  `serial`): an app like the others, so the menu's Apps lists it; it
+  **Serial monitor** (`tools/terminal-apps/serial`, `mynx usb monitor`,
+  bar `serial`): a terminal app like the others, so the menu's
+  Terminal apps lists it; it
   opens the `/dev/serial` path and sets DTR/RTS with plain
   `TIOCMBIS`/`TIOCMBIC`, which the preload passes to the helper. No
-  new-tab request: open a tab and run it (or Apps). Its resets follow
+  new-tab request: open a tab and run it (or Terminal apps). Its resets follow
   esptool's sequences (`reset()`); the plain reset pulses RTS (an
   ESP32's EN) and then DTR (an Arduino's reset capacitor).
 - **Serial preload** (`tools/src/libmynx-serial.c`,
@@ -665,6 +666,29 @@ See `docs/ROADMAP.md` "How it works". The details:
   `mynx service autostart` and the menu's Autostart item.
   `onTerminalCursorStateChange` doesn't say whose terminal changed, so
   the blinker always asks the shown one.
+- **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
+  the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
+  `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):
+  an app is a folder `~/apps/NAME/` or `/opt/mynx/apps/NAME/` with an
+  `index.html` or an `app.conf` with `url` (NAME a DNS label: it's in
+  the origin). Static apps are served at `https://NAME.mynx.invalid/`
+  from the folder by `shouldInterceptRequest` through core's
+  `respond()`, which resolves links as Debian would (guest paths;
+  `.l2s.*` targets are host paths) and 404s anything outside the
+  folder. Served apps load their `url` (cleartext only for 127.0.0.1
+  and localhost, `network_security_config.xml`); `WebAppLauncher`
+  starts their service if stopped, waits 15 s for the port, and stops
+  it when the screen finishes only if it started it (never an
+  autostart one), so `wakelock = auto` doesn't hold the CPU for a
+  forgotten backend. Each app is an activity task of its own
+  (`documentLaunchMode="intoExisting"`, data `mynx-app://NAME`).
+  Static apps reload when core's folder fingerprint changes (polled
+  once a second off the main thread while on screen). Console, load
+  and HTTP errors go to `/tmp/.mynx/apps/NAME.log` (`WebAppLog`).
+  No JavaScript bridge yet (part 2). Today's programs in a tab are
+  **terminal apps** (`tools/terminal-apps/`, `~/terminal-apps`, and
+  old Debians' executables in `~/apps`); the menu's bash scan of apps
+  must give core's labels (both tested on `tests/fixtures/apps/`).
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's
@@ -873,6 +897,11 @@ Bugs that took a phone round to find; keep them from coming back.
   temp `…/dev/bus/usb/001/004`, and the spike's proot took it for a
   device (any path ending so). Match proot's paths exactly (the
   extension now takes only nodes beside the app's socket).
+- **Tests that make links must not clean up with
+  `deleteRecursively()`**: it follows a link to a folder, and tests
+  run in the maintainer's own Debian, so a test linking to
+  `/root/pixel-hero/assets` emptied it on every run. Use
+  `deleteTree()` (`WebAppsTest.kt`), which deletes links themselves.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

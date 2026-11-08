@@ -1,5 +1,5 @@
-"""Tests for the example apps (tools/apps, /opt/mynx/apps) and their
-commands in tools/bin.
+"""Tests for the terminal apps (tools/terminal-apps, /opt/mynx/terminal-apps),
+their commands in tools/bin, and the example app (tools/apps/sketch).
 
 Run: python3 -m unittest discover -s tests/mynx
 """
@@ -7,12 +7,16 @@ import contextlib
 import importlib.util
 import io
 import os
+import re
+import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import unittest
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
-APPS = os.path.join(ROOT, "tools", "apps")
+APPS = os.path.join(ROOT, "tools", "terminal-apps")
 BIN = os.path.join(ROOT, "tools", "bin")
 BARS = os.path.join(ROOT, "core", "src", "main", "resources", "io", "github", "est4s",
                     "terminal", "core", "keybars")
@@ -71,7 +75,7 @@ class AppsTest(unittest.TestCase):
             with open(os.path.join(BIN, name)) as f:
                 script = f.read()
             self.assertIn(f"keybar {name},shell ", script, name)
-            self.assertIn(f"/apps/{name}", script, name)
+            self.assertIn(f"/terminal-apps/{name}", script, name)
             self.assertTrue(os.path.isfile(os.path.join(BARS, name + ".conf")), name)
 
     def test_a_command_runs_its_app(self):
@@ -143,6 +147,67 @@ class NeedsNumpyTest(unittest.TestCase):
         self.assertIn("apt install python3-numpy", str(stop.exception.code))
 
 
+WEB_APPS = os.path.join(ROOT, "tools", "apps")
+
+
+class ExampleAppTest(unittest.TestCase):
+    """tools/apps/sketch (/opt/mynx/apps/sketch): an app, as core's rules say."""
+
+    def test_sketch_is_a_static_app_named_sketch(self):
+        folder = os.path.join(WEB_APPS, "sketch")
+        with open(os.path.join(folder, "index.html")) as f:
+            page = f.read()
+        self.assertIn("<title>Sketch</title>", page[:4096])
+        self.assertFalse(os.path.exists(os.path.join(folder, "app.conf")))
+
+    def test_its_files_are_all_in_its_folder(self):
+        folder = os.path.join(WEB_APPS, "sketch")
+        with open(os.path.join(folder, "index.html")) as f:
+            page = f.read()
+        refs = re.findall(r'(?:src|href)="([^"]+)"', page)
+        self.assertEqual(sorted(refs), ["sketch.css", "sketch.js"])
+        for ref in refs:
+            self.assertTrue(os.path.isfile(os.path.join(folder, ref)), ref)
+        for name in os.listdir(folder):
+            with open(os.path.join(folder, name)) as f:
+                self.assertNotRegex(f.read(), r"https?://", name)  # works offline
+
+    def test_it_keeps_the_drawing_in_local_storage(self):
+        with open(os.path.join(WEB_APPS, "sketch", "sketch.js")) as f:
+            script = f.read()
+        self.assertIn("localStorage.setItem", script)
+        self.assertIn("localStorage.getItem", script)
+
+    @unittest.skipUnless(shutil.which("node"), "no node")
+    def test_its_script_parses(self):
+        run = subprocess.run(["node", "--check", os.path.join(WEB_APPS, "sketch", "sketch.js")],
+                             capture_output=True, text=True)
+        self.assertEqual(run.returncode, 0, run.stderr)
+
+    def test_app_folders_hold_no_terminal_apps(self):
+        for name in os.listdir(WEB_APPS):
+            path = os.path.join(WEB_APPS, name)
+            self.assertTrue(os.path.isdir(path), name)
+            self.assertRegex(name, r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")
+
+
+class PackToolsTest(unittest.TestCase):
+    def test_the_tools_carry_the_apps_and_the_terminal_apps(self):
+        with tempfile.TemporaryDirectory() as out:
+            subprocess.run([os.path.join(ROOT, "scripts", "pack-tools.sh"), out], check=True,
+                           capture_output=True)
+            with tarfile.open(os.path.join(out, "tools.tar.xz")) as tar:
+                members = {m.name: m for m in tar.getmembers()}
+        for name in ["apps/sketch/index.html", "apps/sketch/sketch.js", "apps/sketch/sketch.css",
+                     "terminal-apps/mic.py", "terminal-apps/needs.py"]:
+            self.assertIn(name, members)
+        for name in NAMES:
+            self.assertTrue(members[f"terminal-apps/{name}"].mode & 0o111, name)
+        self.assertFalse(members["terminal-apps/mic.py"].mode & 0o111)
+        self.assertFalse(any(m.startswith("apps/") and members[m].isfile() and members[m].mode & 0o111
+                             for m in members))
+
+
 class MenuActionsTest(unittest.TestCase):
     def test_the_menu_editor_offers_every_menu_action(self):
         sys.path.insert(0, os.path.join(ROOT, "tools", "lib"))
@@ -151,6 +216,7 @@ class MenuActionsTest(unittest.TestCase):
             line = next(l for l in f if l.startswith("MENU_ACTIONS="))
         actions = line.split('"')[1].replace(" or run COMMAND", "").split(", ")
         self.assertIn("apps", actions)
+        self.assertIn("terminal-apps", actions)
         self.assertIn("services", actions)
         self.assertEqual(editors.MENU_ACTIONS, actions)
 

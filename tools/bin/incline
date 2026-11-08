@@ -1,3 +1,3 @@
 #!/bin/sh
-# The incline example app, with its key bar. Source: /opt/mynx/apps/incline
-exec keybar incline,shell "$(dirname "$0")/../apps/incline" "$@"
+# The incline terminal app, with its key bar. Source: /opt/mynx/terminal-apps/incline
+exec keybar incline,shell "$(dirname "$0")/../terminal-apps/incline" "$@"

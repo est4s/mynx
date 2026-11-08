@@ -2571,6 +2571,128 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("service", "log", "web", "--json")
         self.assertEqual(json.loads(run.stdout)["log"], "Serving HTTP on 0.0.0.0 port 8080\nGET /")
 
+    # --- app ----------------------------------------------------------------
+
+    APPS = [
+        {"name": "hello", "label": "Hello & Welcome", "path": "/root/apps/hello", "kind": "static",
+         "origin": "https://hello.mynx.invalid", "url": "https://hello.mynx.invalid/", "service": None,
+         "icon": None, "problems": []},
+        {"name": "served", "label": "Served", "path": "/root/apps/served", "kind": "served",
+         "origin": "http://127.0.0.1:8765", "url": "http://127.0.0.1:8765/", "service": "served-backend",
+         "icon": None, "problems": ["line 4: unknown key 'colour'"]},
+    ]
+
+    def test_help_lists_app(self):
+        self.assertIn("\n  app        app [list] | open NAME | reload NAME | log NAME [-n N]", self.mynx("help").stdout)
+
+    def test_app_list_is_a_table_with_each_apps_problems(self):
+        self.start_app({"app-list": {"ok": True, "apps": self.APPS}})
+        for args in [("app",), ("app", "list")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual(run.stdout.splitlines(), [
+                "NAME             LABEL                KIND",
+                "hello            Hello & Welcome      static",
+                "served           Served               served",
+                "  line 4: unknown key 'colour'",
+            ])
+            self.assertTrue(all(len(line) <= 56 for line in run.stdout.splitlines()))
+        self.assertEqual(self.app.requests, [["app-list"], ["app-list"]])
+
+    def test_app_list_json_passes_the_answer_through(self):
+        answer = {"ok": True, "apps": self.APPS}
+        self.start_app({"app-list": answer})
+        run = self.mynx("app", "--json")
+        self.assertEqual(json.loads(run.stdout), answer)
+
+    def test_app_list_with_no_apps_says_how_to_make_one(self):
+        self.start_app({"app-list": {"ok": True, "apps": []}})
+        run = self.mynx("app", "list")
+        self.assertEqual(run.returncode, 0)
+        self.assertIn("No apps yet", run.stdout)
+        self.assertIn("~/apps", run.stdout)
+        self.assertIn("index.html", run.stdout)
+
+    def test_app_open(self):
+        self.start_app({"app-open": {"ok": True, "name": "hello", "opened": True,
+                                     "origin": "https://hello.mynx.invalid",
+                                     "url": "https://hello.mynx.invalid/", "started_service": False}})
+        run = self.mynx("app", "open", "hello")
+        self.assertEqual((run.returncode, run.stdout), (0, "Opened hello\n"), run.stderr)
+        self.assertEqual(self.app.requests, [["app-open", "hello"]])
+
+    def test_app_open_says_when_it_started_the_service(self):
+        self.start_app({"app-open": {"ok": True, "name": "served", "opened": True,
+                                     "origin": "http://127.0.0.1:8765",
+                                     "url": "http://127.0.0.1:8765/", "started_service": True}})
+        run = self.mynx("app", "open", "served")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("Opened served", run.stdout)
+        self.assertIn("started its service", run.stdout)
+        self.assertIn("closing the app stops it", run.stdout)
+
+    def test_app_open_refused(self):
+        error = "mynx must be on screen to open an app: bring it to the front and try again"
+        self.start_app({"app-open": {"ok": False, "error": error}})
+        run = self.mynx("app", "open", "hello")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, f"mynx: {error}\n")
+
+    def test_app_reload(self):
+        self.start_app({"app-reload": {"ok": True, "name": "hello"}})
+        run = self.mynx("app", "reload", "hello")
+        self.assertEqual((run.returncode, run.stdout), (0, "Reloaded hello\n"), run.stderr)
+        self.assertEqual(self.app.requests, [["app-reload", "hello"]])
+
+    def test_app_usage(self):
+        for args in [("app", "open"), ("app", "reload", "a", "b"), ("app", "frob"), ("app", "list", "x"),
+                     ("app", "log"), ("app", "log", "hello", "-n"), ("app", "log", "hello", "-n", "x")]:
+            run = self.mynx(*args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx app", run.stderr, args)
+
+    def write_app_log(self, name, lines):
+        folder = os.path.join(self.tmp.name, "apps")  # beside the requests folder, as /tmp/.mynx/apps
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, name + ".log"), "w") as f:
+            f.writelines(line + "\n" for line in lines)
+
+    def test_app_log_reads_the_file_itself(self):
+        lines = ["--- opened 2026-11-08 10:00:00 https://hello.mynx.invalid/"]
+        lines += [f"[10:00:{i % 60:02d}.000] log /app.js:{i} line {i}" for i in range(150)]
+        self.write_app_log("hello", lines)
+        run = self.mynx("app", "log", "hello")  # no app answering: it doesn't ask
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines(), lines[-100:])
+        run = self.mynx("app", "log", "hello", "-n", "2")
+        self.assertEqual(run.stdout.splitlines(), lines[-2:])
+        run = self.mynx("app", "log", "hello", "-n", "1000")
+        self.assertEqual(run.stdout.splitlines(), lines)
+
+    def test_app_log_json(self):
+        self.write_app_log("hello", ["a", "b", "c"])
+        run = self.mynx("app", "log", "hello", "-n", "2", "--json")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "name": "hello", "log": "b\nc\n"})
+
+    def test_app_log_with_no_log_yet(self):
+        run = self.mynx("app", "log", "hello")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no log for hello yet", run.stderr)
+        self.assertIn("mynx app open hello", run.stderr)
+
+    def test_app_log_refuses_a_name_that_isnt_an_apps(self):
+        self.write_app_log("x", ["secret"])
+        for name in ["../apps/x", "Bad_Name", "-x"]:
+            run = self.mynx("app", "log", name)
+            self.assertEqual(run.returncode, 2, name)
+            self.assertNotIn("secret", run.stdout)
+
+    def test_app_log_outside_the_app_uses_tmp_mynx(self):
+        env = {"MYNX_REQUESTS": ""}
+        run = self.mynx("app", "log", "no-such-app-here", env=env)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("/tmp/.mynx/apps/no-such-app-here.log", run.stderr)
+
     def test_service_add_sends_the_command_and_options(self):
         self.start_app({"service-add": {"ok": True}})
         run = self.mynx("service", "add", "web", "--autostart", "--restart", "always", "--cwd", "~/site",
