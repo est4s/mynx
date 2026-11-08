@@ -897,6 +897,11 @@ Bugs that took a phone round to find; keep them from coming back.
   temp `…/dev/bus/usb/001/004`, and the spike's proot took it for a
   device (any path ending so). Match proot's paths exactly (the
   extension now takes only nodes beside the app's socket).
+- **Tests that make links must not clean up with
+  `deleteRecursively()`**: it follows a link to a folder, and tests
+  run in the maintainer's own Debian, so a test linking to
+  `/root/pixel-hero/assets` emptied it on every run. Use
+  `deleteTree()` (`WebAppsTest.kt`), which deletes links themselves.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.
