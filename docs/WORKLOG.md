@@ -101,10 +101,8 @@ are in git history: the full log up to entry 92 is
 Part 1 passed all 13 phone tests (entry 164) and merges with PR #59.
 The plan, design and tests: `git show 345d224:docs/WORKLOG.md`; the
 decisions are in AGENTS.md ("Apps (web apps, part 1)") and
-`WebApps.kt`'s KDoc. **Small follow-up** (from the phone tests): the WebView's own
-`/favicon.ico` request logs a 404 at every open of an app without
-one: don't log that one. (The refusal now says "mynx must be on
-screen to open an app"; the extra reloads in test 6 were by hand.)
+`WebApps.kt`'s KDoc. (The refusal now says "mynx must be on screen
+to open an app"; the extra reloads in test 6 were by hand.)
 
 **Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
 permissions per app, home screen shortcuts. Plan it with the
@@ -241,6 +239,16 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (165): No favicon 404 in an app's log
+
+The WebView asks for `/favicon.ico` itself, so every open of an app
+with no icon logged `error /favicon.ico HTTP 404`. Core's new
+`WebAppLog.httpError()` writes HTTP errors and skips a 404 for exactly
+`ORIGIN/favicon.ico` (another path, a query, another status or origin
+still log); `WebAppActivity.onReceivedHttpError` calls it. Phone
+check: open an app without a favicon, `mynx app log NAME` has no
+favicon line.
 
 ### 2026-11-08 (164): Web apps part 1 passed on the phone
 

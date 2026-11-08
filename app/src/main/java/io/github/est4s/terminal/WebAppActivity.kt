@@ -335,7 +335,10 @@ class WebAppActivity : Activity() {
         }
 
         override fun onReceivedHttpError(view: WebView?, request: WebResourceRequest?, errorResponse: WebResourceResponse?) {
-            logEntry(WebAppLogLevel.ERROR, "HTTP ${errorResponse?.statusCode}", request?.url?.toString(), 0)
+            val l = log ?: return
+            val status = errorResponse?.statusCode
+            val url = request?.url?.toString()
+            runCatching { logWriter.execute { runCatching { l.httpError(status, url) } } }
         }
     }
 

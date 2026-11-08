@@ -144,7 +144,9 @@ import java.nio.file.Files
  * (`onConsoleMessage`, which uncaught errors reach too), load errors
  * (`error`, "load failed: DESCRIPTION", source the URL) and HTTP errors
  * of the main page and subresources (`error`, "HTTP 404", source the
- * URL) go there. A message's further lines follow, each indented by four
+ * URL) go there, but for a 404 for exactly `/favicon.ico` on the app's
+ * origin: the WebView asks for that itself (an app's page linking a
+ * missing icon by another path, or a query, still logs it). A message's further lines follow, each indented by four
  * spaces (each counts as a line). `mynx app log NAME [-n N]` reads the
  * file itself; nothing asks the app.
  *
@@ -726,6 +728,16 @@ class WebAppLog(
         }
         val parts = message.trimEnd('\n', '\r').split(Regex("\r?\n"))
         append(listOf("[${time("HH:mm:ss.SSS")}] ${level.word} $at${parts.first()}") + parts.drop(1).map { "    $it" })
+    }
+
+    /**
+     * An HTTP error [status] for [url] (`error`, "HTTP 404"), except a 404
+     * for exactly the app's own `/favicon.ico`: the WebView asks for that
+     * itself, so an app with no icon would log it at every open.
+     */
+    fun httpError(status: Int?, url: String?) {
+        if (status == 404 && url == "$origin/favicon.ico") return
+        entry(WebAppLogLevel.ERROR, "HTTP $status", url, 0)
     }
 
     private fun time(pattern: String) =

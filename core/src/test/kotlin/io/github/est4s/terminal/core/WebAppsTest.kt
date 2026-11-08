@@ -667,6 +667,28 @@ class WebAppLogTest {
     }
 
     @Test
+    fun `HTTP errors, but not the WebView's own favicon 404`() {
+        log.httpError(404, "https://hello.mynx.invalid/favicon.ico")
+        log.httpError(500, "https://hello.mynx.invalid/favicon.ico")
+        log.httpError(404, "https://hello.mynx.invalid/icons/favicon.ico")
+        log.httpError(404, "https://hello.mynx.invalid/favicon.ico?v=2")
+        log.httpError(404, "https://cdn.example.com/favicon.ico")
+        log.httpError(404, "https://hello.mynx.invalid/app.js")
+        log.httpError(null, null)
+        assertEquals(
+            listOf(
+                "[09:12:15.123] error /favicon.ico HTTP 500",
+                "[09:12:15.123] error /icons/favicon.ico HTTP 404",
+                "[09:12:15.123] error /favicon.ico?v=2 HTTP 404",
+                "[09:12:15.123] error https://cdn.example.com/favicon.ico HTTP 404",
+                "[09:12:15.123] error /app.js HTTP 404",
+                "[09:12:15.123] error HTTP null",
+            ),
+            lines(),
+        )
+    }
+
+    @Test
     fun `keeps the last thousand lines`() {
         repeat(WEB_APP_LOG_LINES + 5) { log.entry(WebAppLogLevel.LOG, "n$it", null, 0) }
         val lines = lines()
