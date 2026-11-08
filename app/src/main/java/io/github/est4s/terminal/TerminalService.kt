@@ -37,6 +37,7 @@ import io.github.est4s.terminal.core.batteryRequests
 import io.github.est4s.terminal.core.BLUETOOTH_CONF
 import io.github.est4s.terminal.core.bleRequests
 import io.github.est4s.terminal.core.bluetoothRequests
+import io.github.est4s.terminal.core.bridgeSerial
 import io.github.est4s.terminal.core.isNusName
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
@@ -229,8 +230,10 @@ class TerminalService : Service() {
     private val appPermissions by lazy {
         AppPermissions(File(rootfs, "root"), webAppFiles) { change -> requests.recordChange(change) }
     }
-    // Part D's serial calls plug in as Bridge's `serial`; until then core's NO_BRIDGE_SERIAL.
-    private val bridge by lazy { Bridge(requests, webAppFiles, appPermissions, bridgeHost, File(rootfs)) }
+    // Serial ports from pages: core's RFC 2217 client over BridgeSockets' sockets (connectSerial).
+    private val bridge by lazy {
+        Bridge(requests, webAppFiles, appPermissions, bridgeHost, File(rootfs)) { app -> bridgeSerial(app, requests, bridgeHost) }
+    }
     // Log lines from the bridge leave the main thread, in order.
     private val appLogWriter by lazy { Executors.newSingleThreadExecutor() }
     private val bridgeHost = object : BridgeHost {
