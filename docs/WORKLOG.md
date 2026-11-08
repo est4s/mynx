@@ -246,9 +246,11 @@ The WebView asks for `/favicon.ico` itself, so every open of an app
 with no icon logged `error /favicon.ico HTTP 404`. Core's new
 `WebAppLog.httpError()` writes HTTP errors and skips a 404 for exactly
 `ORIGIN/favicon.ico` (another path, a query, another status or origin
-still log); `WebAppActivity.onReceivedHttpError` calls it. Phone
-check: open an app without a favicon, `mynx app log NAME` has no
-favicon line.
+still log); `WebAppActivity.onReceivedHttpError` calls it. Also
+from this session: CI caches the terminal font (PR #60), after
+GitHub's release downloads gave 504s and failed builds. **Passed on
+the phone** (PR #61's build, run 42471508940, in mynx dev): opening
+`probe`, which has no favicon, logged only `probe loaded`.
 
 ### 2026-11-08 (164): Web apps part 1 passed on the phone
 
