@@ -150,11 +150,13 @@ shortcuts, and two `app.conf` keys.
 - **Shortcuts from the launcher menu too:** the Apps list ends with
   "Add to home screen…", which lists the apps and runs `mynx app
   shortcut NAME` for the one picked (picking an app still opens it).
-- **`fullscreen = yes` covers the camera cutout too** (the page runs
-  edge to edge: `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, ALWAYS on
-  API 30+); only the keyboard is still padded for. The guide tells
-  games to keep controls clear of the corners
-  (`env(safe-area-inset-*)` works in CSS).
+- **Full screen has two values:** `fullscreen = yes` hides the bars
+  and keeps the page clear of the camera cutout; `fullscreen = edge`
+  hides them and runs the page under the cutout too
+  (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, ALWAYS on API 30+),
+  only the keyboard padded for. The guide tells games using `edge` to
+  keep controls clear of the corners (`env(safe-area-inset-*)` works
+  in CSS).
 - **No "only this time"** in the prompt: Allow or Don't allow.
 - **Served apps get the bridge only while their own mynx service
   runs** (agent's proposal, accepted): the origin is just
@@ -322,13 +324,13 @@ shortcuts, and two `app.conf` keys.
   location: allow (asked)`, so an agent sees why a page got nothing.
   A page with no bridge (another origin) logs `warn bridge: no bridge
   for ORIGIN`.
-- **`app.conf` keys:** `fullscreen = yes|no` (default no): status and
+- **`app.conf` keys:** `fullscreen = no|yes|edge` (default no): status and
   navigation bars hidden (`WindowInsetsController` with swipe to show
   them, API 30+; the immersive-sticky flags on 26-29), hidden again
   after the keyboard or a rotation; the cutout and the keyboard are
   still padded for. `screen-awake = yes|no` (default no):
   `FLAG_KEEP_SCREEN_ON` on the app's window, which Android honours
-  only while it's visible. (Full screen covers the cutout: see the
+  only while it's visible. (`edge` covers the cutout too: see the
   maintainer's answers above.) Both checked as the other keys, both in
   `app-list`.
 - **Home screen shortcuts:** `mynx app shortcut NAME` (request
@@ -473,9 +475,10 @@ they made, in temp folders, and never follow links while deleting
     closing stops it.
 16. A shortcut for an app that was deleted shows the error on the
     screen.
-17. `fullscreen = yes`: no status or navigation bar, and the page
-    runs under the camera cutout; a swipe shows the bars for a
-    moment; after the keyboard and a rotation they hide again.
+17. `fullscreen = yes`: no status or navigation bar, the page clear
+    of the camera cutout; `fullscreen = edge`: the page runs under
+    the cutout too. A swipe shows the bars for a moment; after the
+    keyboard and a rotation they hide again.
 18. `screen-awake = yes`: the screen stays on past the timeout while
     the app is in front, and goes off normally once it's in the
     background.
@@ -638,8 +641,8 @@ own server) and the parts for subagents are "Next", 0. Roadmap
 updated. No code.
 Then the maintainer answered the plan's questions: services only the
 app's own (no prompt), quick photos first, base64 up to 16 MB, an
-"Add to home screen…" item in the menu's Apps, `fullscreen` covering
-the cutout, no "only this time", and served apps get the bridge only
+"Add to home screen…" item in the menu's Apps, `fullscreen = yes`
+(cutout kept clear) and `= edge` (covering it), no "only this time", and served apps get the bridge only
 while their own service runs.
 
 ### 2026-11-08 (166): No top bar on an app's screen
