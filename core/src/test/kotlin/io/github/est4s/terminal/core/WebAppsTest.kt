@@ -8,6 +8,8 @@ import kotlin.io.path.createTempDirectory
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** A [WebAppHost] the tests drive by hand: they see what was asked and answer the port probes. */
@@ -128,5 +130,130 @@ class WebAppsTest {
         assertTrue(Files.isSymbolicLink(link))
         assertEquals("../../secret.txt", Files.readSymbolicLink(link).toString())
         assertTrue(File(home, "secret.txt").isFile)
+    }
+}
+
+class WebAppRulesTest {
+    @Test
+    fun `app names are DNS labels`() {
+        for (good in listOf("a", "sketch", "pixel-hero", "app2", "0", "a".repeat(40))) assertTrue(isWebAppName(good), good)
+        for (bad in listOf("", "Bad_Name", "Sketch", "-a", "a-", "a.b", "a b", "a".repeat(41), "é")) {
+            assertFalse(isWebAppName(bad), bad)
+        }
+    }
+
+    @Test
+    fun `a static app's origin is its own host`() {
+        assertEquals("https://sketch.mynx.invalid", webAppOrigin("sketch"))
+    }
+
+    @Test
+    fun `the app of a host`() {
+        assertEquals("sketch", webAppNameOfHost("sketch.mynx.invalid"))
+        assertEquals("sketch", webAppNameOfHost("Sketch.MYNX.invalid"))
+        assertNull(webAppNameOfHost("mynx.invalid"))
+        assertNull(webAppNameOfHost("a.b.mynx.invalid"))
+        assertNull(webAppNameOfHost("-a.mynx.invalid"))
+        assertNull(webAppNameOfHost("sketch.example.com"))
+        assertNull(webAppNameOfHost("sketch.mynx.invalid.example.com"))
+    }
+
+    @Test
+    fun `MIME types by ending, in any case`() {
+        assertEquals("text/html", webAppMimeType("index.html"))
+        assertEquals("text/html", webAppMimeType("A.HTM"))
+        assertEquals("text/javascript", webAppMimeType("app.js"))
+        assertEquals("text/javascript", webAppMimeType("mod.mjs"))
+        assertEquals("text/css", webAppMimeType("s.css"))
+        assertEquals("application/json", webAppMimeType("d.json"))
+        assertEquals("application/manifest+json", webAppMimeType("m.webmanifest"))
+        assertEquals("image/svg+xml", webAppMimeType("i.svg"))
+        assertEquals("image/png", webAppMimeType("i.png"))
+        assertEquals("image/jpeg", webAppMimeType("i.JPG"))
+        assertEquals("image/webp", webAppMimeType("i.webp"))
+        assertEquals("application/wasm", webAppMimeType("m.wasm"))
+        assertEquals("audio/mpeg", webAppMimeType("s.mp3"))
+        assertEquals("audio/ogg", webAppMimeType("s.ogg"))
+        assertEquals("audio/wav", webAppMimeType("s.wav"))
+        assertEquals("font/woff2", webAppMimeType("f.woff2"))
+        assertEquals("application/octet-stream", webAppMimeType("x.unknown"))
+        assertEquals("application/octet-stream", webAppMimeType("Makefile"))
+    }
+
+    @Test
+    fun `app conf keys`() {
+        val parsed = parseAppConf(
+            "# comment\n\n  name =  My Notes  \nicon = icon.png\nurl = http://127.0.0.1:8765/a/b?x=1\nservice = backend\n",
+        )
+        assertEquals(AppConf("My Notes", "icon.png", "http://127.0.0.1:8765/a/b?x=1", "backend"), parsed.conf)
+        assertEquals(emptyList(), parsed.problems)
+    }
+
+    @Test
+    fun `app conf urls`() {
+        for (good in listOf("http://127.0.0.1:1024", "http://localhost:65535/", "http://localhost:8080/x/y.html", "http://127.0.0.1:8080?q")) {
+            assertEquals(good, parseAppConf("url = $good\n").conf.url, good)
+        }
+        for (bad in listOf("https://127.0.0.1:8080/", "http://127.0.0.1/", "http://127.0.0.1:80/", "http://127.0.0.1:65536/",
+            "http://example.com:8080/", "http://127.0.0.2:8080/", "http://localhost:8080/#x", "http://localhost:8080/a b", "")) {
+            val parsed = parseAppConf("url = $bad\n")
+            assertNull(parsed.conf.url, bad)
+            assertEquals(1, parsed.problems.size, bad)
+            assertTrue(parsed.problems[0].startsWith("line 1: url must be"), parsed.problems[0])
+        }
+    }
+
+    @Test
+    fun `app conf problems`() {
+        val parsed = parseAppConf(
+            "oops\nname =\ncolour = red\nname = A\nname = B\nservice = Bad_Name\nicon = icon.gif\nicon = /etc/x.png\nicon =\n",
+        )
+        assertEquals(AppConf(name = "B"), parsed.conf)
+        assertEquals(
+            listOf(
+                "line 1: expected key = value",
+                "line 2: name must not be empty",
+                "line 3: unknown key 'colour'",
+                "line 5: name is already set on line 4: the last counts",
+                "line 6: ${badServiceName("Bad_Name")}",
+                "line 7: icon must be a PNG, JPEG or WebP file",
+                "line 8: icon must be a file in the app's folder, relative to it",
+                "line 9: icon must not be empty",
+            ),
+            parsed.problems,
+        )
+    }
+
+    @Test
+    fun `a long name is cut and reported`() {
+        val parsed = parseAppConf("name = An Unusually Long App Name\n")
+        assertEquals("An Unusually Long Ap", parsed.conf.name)
+        assertEquals(listOf("line 1: name is longer than 20 characters: cut to 'An Unusually Long Ap'"), parsed.problems)
+    }
+
+    @Test
+    fun `a service needs a url`() {
+        val parsed = parseAppConf("service = backend\n")
+        assertNull(parsed.conf.service)
+        assertEquals(listOf("line 1: service needs a url (it's for served apps)"), parsed.problems)
+    }
+
+    @Test
+    fun `the title of a page`() {
+        assertEquals("Hello & Welcome", htmlTitle("<html><TITLE lang=\"en\">\n  Hello &amp;\n\t Welcome </title>"))
+        assertEquals("<a> \"b\" 'c' &lt;", htmlTitle("<title>&lt;a&gt; &quot;b&quot; &#39;c&#39; &amp;lt;</title>"))
+        assertEquals("Twenty Characters Ok", htmlTitle("<title>Twenty Characters Ok and more</title>"))
+        assertNull(htmlTitle("<title>   </title>"))
+        assertNull(htmlTitle("<title>never closed"))
+        assertNull(htmlTitle("<p>no title</p>"))
+        assertNull(htmlTitle("<titles>x</titles>"))
+    }
+
+    @Test
+    fun `labels from folder names`() {
+        assertEquals("Pixel Hero", folderLabel("pixel-hero"))
+        assertEquals("Sketch", folderLabel("sketch"))
+        assertEquals("App 2", folderLabel("app-2"))
+        assertEquals("Aaaaaaaaaa Bbbbbbbbb", folderLabel("aaaaaaaaaa-bbbbbbbbbbbb"))
     }
 }

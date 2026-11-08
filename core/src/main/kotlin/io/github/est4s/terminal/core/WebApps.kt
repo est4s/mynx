@@ -224,17 +224,53 @@ const val WEB_APP_FINGERPRINT_FILES = 5000
 /** Every request [webAppRequests] answers. */
 val WEB_APP_REQUEST_NAMES = listOf("app-list", "app-open", "app-reload")
 
+private val WEB_APP_NAME = Regex("[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?")
+
 /** Whether [name] can be an app's name (a DNS label: see the contract above). */
-fun isWebAppName(name: String): Boolean = TODO()
+fun isWebAppName(name: String): Boolean = WEB_APP_NAME.matches(name)
 
 /** `https://NAME.mynx.invalid`, a static app's origin (no slash at the end). */
-fun webAppOrigin(name: String): String = TODO()
+fun webAppOrigin(name: String): String = "https://$name.$WEB_APP_DOMAIN"
 
 /** The app [host] (a URL's host, any case) belongs to: `sketch.mynx.invalid` → `sketch`; null for any other host or a bad name. */
-fun webAppNameOfHost(host: String): String? = TODO()
+fun webAppNameOfHost(host: String): String? {
+    val lower = host.lowercase()
+    if (!lower.endsWith(".$WEB_APP_DOMAIN")) return null
+    return lower.removeSuffix(".$WEB_APP_DOMAIN").takeIf(::isWebAppName)
+}
+
+private val MIME_TYPES = mapOf(
+    "html" to "text/html", "htm" to "text/html",
+    "js" to "text/javascript", "mjs" to "text/javascript",
+    "css" to "text/css",
+    "txt" to "text/plain", "md" to "text/markdown", "csv" to "text/csv",
+    "json" to "application/json", "map" to "application/json",
+    "webmanifest" to "application/manifest+json",
+    "xml" to "application/xml",
+    "svg" to "image/svg+xml",
+    "png" to "image/png", "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "gif" to "image/gif",
+    "webp" to "image/webp", "avif" to "image/avif", "ico" to "image/x-icon", "bmp" to "image/bmp",
+    "wasm" to "application/wasm",
+    "mp3" to "audio/mpeg", "ogg" to "audio/ogg", "oga" to "audio/ogg", "opus" to "audio/ogg",
+    "wav" to "audio/wav", "m4a" to "audio/mp4", "flac" to "audio/flac", "mid" to "audio/midi", "midi" to "audio/midi",
+    "mp4" to "video/mp4", "webm" to "video/webm", "ogv" to "video/ogg",
+    "woff" to "font/woff", "woff2" to "font/woff2", "ttf" to "font/ttf", "otf" to "font/otf",
+    "pdf" to "application/pdf", "zip" to "application/zip",
+)
+
+private val TEXT_TYPES = setOf(
+    "text/javascript", "application/json", "application/manifest+json", "application/xml", "image/svg+xml",
+)
+
+/** Whether answers of [mime] carry the encoding `utf-8`. */
+internal fun isTextMime(mime: String) = mime.startsWith("text/") || mime in TEXT_TYPES
 
 /** The MIME type for a file [name], by its ending in any case; `application/octet-stream` when unknown. */
-fun webAppMimeType(name: String): String = TODO()
+fun webAppMimeType(name: String): String {
+    val dot = name.lastIndexOf('.')
+    if (dot < 0) return "application/octet-stream"
+    return MIME_TYPES[name.substring(dot + 1).lowercase()] ?: "application/octet-stream"
+}
 
 /** An app's `app.conf`, as parsed; null where it doesn't say. */
 data class AppConf(
@@ -252,13 +288,86 @@ data class ParsedAppConf(val conf: AppConf, val problems: List<String>)
  * (the icon's file, the service's existence) are [WebApps]'s and
  * [checkConfig]'s.
  */
-fun parseAppConf(text: String): ParsedAppConf = TODO()
+fun parseAppConf(text: String): ParsedAppConf {
+    var conf = AppConf()
+    val problems = mutableListOf<String>()
+    val setOn = mutableMapOf<String, Int>()
+    text.lines().forEachIndexed { i, raw ->
+        val line = raw.trim()
+        if (line.isEmpty() || line.startsWith("#")) return@forEachIndexed
+        val number = i + 1
+        fun problem(text: String) { problems += "line $number: $text" }
+        if ('=' !in line) return@forEachIndexed problem("expected key = value")
+        val key = line.substringBefore('=').trim()
+        val value = line.substringAfter('=').trim()
+        if (key !in APP_CONF_KEYS) return@forEachIndexed problem("unknown key '$key'")
+        // Only good lines count as set: a bad one is skipped, as if it weren't there.
+        fun set(change: AppConf.() -> AppConf) {
+            setOn[key]?.let { problem("$key is already set on line $it: the last counts") }
+            setOn[key] = number
+            conf = conf.change()
+        }
+        if (value.isEmpty() && key != "url") return@forEachIndexed problem("$key must not be empty")
+        when (key) {
+            "name" -> {
+                val cut = value.take(WEB_APP_LABEL_MAX)
+                if (cut != value) problem("name is longer than $WEB_APP_LABEL_MAX characters: cut to '$cut'")
+                set { copy(name = cut) }
+            }
+            "icon" -> when {
+                value.startsWith("/") -> problem("icon must be a file in the app's folder, relative to it")
+                webAppMimeType(value) !in ICON_TYPES -> problem("icon must be a PNG, JPEG or WebP file")
+                else -> set { copy(icon = value) }
+            }
+            "url" -> if (servedPort(value) == null) {
+                problem("url must be http://127.0.0.1:PORT/… or http://localhost:PORT/…, PORT 1024 to 65535")
+            } else {
+                set { copy(url = value) }
+            }
+            "service" -> if (isServiceName(value)) set { copy(service = value) } else problem(badServiceName(value))
+        }
+    }
+    if (conf.service != null && conf.url == null) {
+        problems += "line ${setOn["service"]}: service needs a url (it's for served apps)"
+        conf = conf.copy(service = null)
+    }
+    return ParsedAppConf(conf, problems)
+}
+
+private val APP_CONF_KEYS = setOf("name", "icon", "url", "service")
+private val ICON_TYPES = setOf("image/png", "image/jpeg", "image/webp")
+private val SERVED_URL = Regex("""http://(127\.0\.0\.1|localhost):([0-9]{1,5})(/[^\s?#]*)?(\?[^\s#]*)?""")
+
+/** A served app's port, from its `url`; null when it isn't one `app.conf` takes. */
+internal fun servedPort(url: String): Int? {
+    val match = SERVED_URL.matchEntire(url) ?: return null
+    return match.groupValues[2].toInt().takeIf { it in 1024..65535 }
+}
+
+private fun servedOrigin(url: String) = url.substringBefore('?').let { rest ->
+    val afterScheme = rest.removePrefix("http://")
+    "http://" + afterScheme.substringBefore('/')
+}
+
+private val TITLE_START = Regex("<title(\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+private val WHITESPACE = Regex("\\s+")
 
 /** The label from an `index.html`'s start ([html], up to 4096 bytes of it), or null: see THE LABEL. */
-fun htmlTitle(html: String): String? = TODO()
+fun htmlTitle(html: String): String? {
+    val start = TITLE_START.find(html) ?: return null
+    val end = html.indexOf("</title>", start.range.last + 1, ignoreCase = true)
+    if (end < 0) return null
+    val text = html.substring(start.range.last + 1, end)
+        .replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
+        .replace("&amp;", "&")
+        .replace(WHITESPACE, " ").trim()
+    return text.take(WEB_APP_LABEL_MAX).ifEmpty { null }
+}
 
 /** The label from a folder name: `pixel-hero` → "Pixel Hero", cut to [WEB_APP_LABEL_MAX]. */
-fun folderLabel(name: String): String = TODO()
+fun folderLabel(name: String): String =
+    name.split('-').filter { it.isNotEmpty() }.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+        .take(WEB_APP_LABEL_MAX)
 
 enum class WebAppKind(val word: String) { STATIC("static"), SERVED("served") }
 
