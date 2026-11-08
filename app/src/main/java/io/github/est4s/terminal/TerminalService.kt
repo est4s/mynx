@@ -37,6 +37,7 @@ import io.github.est4s.terminal.core.batteryRequests
 import io.github.est4s.terminal.core.BLUETOOTH_CONF
 import io.github.est4s.terminal.core.bleRequests
 import io.github.est4s.terminal.core.bluetoothRequests
+import io.github.est4s.terminal.core.bridgeSerial
 import io.github.est4s.terminal.core.isNusName
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
@@ -104,8 +105,18 @@ import io.github.est4s.terminal.core.UsbSerialDevice
 import io.github.est4s.terminal.core.usbReadyText
 import io.github.est4s.terminal.core.usbReadyTitle
 import io.github.est4s.terminal.core.usbRequests
+import io.github.est4s.terminal.core.AppPermission
+import io.github.est4s.terminal.core.AppPermissions
+import io.github.est4s.terminal.core.AppShortcut
+import io.github.est4s.terminal.core.Bridge
+import io.github.est4s.terminal.core.BridgeHost
+import io.github.est4s.terminal.core.BridgeSocket
+import io.github.est4s.terminal.core.WEB_APP_LOG_DIR
 import io.github.est4s.terminal.core.WebApp
 import io.github.est4s.terminal.core.WebAppHost
+import io.github.est4s.terminal.core.WebAppLog
+import io.github.est4s.terminal.core.WebAppLogLevel
+import io.github.est4s.terminal.core.WebAppOpened
 import io.github.est4s.terminal.core.WebAppLauncher
 import io.github.est4s.terminal.core.WebApps
 import io.github.est4s.terminal.core.forWebApps
@@ -187,7 +198,7 @@ class TerminalService : Service() {
     var toolsError: String? = null
         private set
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
-    private val requests by lazy {
+    private val requests: MynxRequests by lazy {
         MynxRequests(
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
@@ -207,12 +218,76 @@ class TerminalService : Service() {
                 usbRequests(usb::devices, ::allowUsb) +
                 bluetoothRequests(File(rootfs, "root"), bluetooth) +
                 bleRequests(File(rootfs, "root"), ble, bluetooth) +
-                webAppRequests(webApps),
+                webAppRequests(webApps) +
+                appPermissions.requests(),
         )
     }
     // Apps (mynx app): each opens in a WebAppActivity of its own; core decides the rest.
-    private val webApps by lazy {
-        WebAppLauncher(WebApps(File(rootfs, "root"), rootfs, tools.tools), webAppHost, serviceManager.forWebApps())
+    private val webAppFiles by lazy { WebApps(File(rootfs, "root"), rootfs, tools.tools) }
+    private val webApps by lazy { WebAppLauncher(webAppFiles, webAppHost, serviceManager.forWebApps()) }
+    private val shortcuts by lazy { AppShortcuts(this) }
+    // The phone from an app's JavaScript (Bridge.kt): pages get it through their screen's port.
+    private val appPermissions: AppPermissions by lazy {
+        AppPermissions(File(rootfs, "root"), webAppFiles) { change -> requests.recordChange(change) }
+    }
+    // Serial ports from pages: core's RFC 2217 client over BridgeSockets' sockets (connectSerial).
+    private val bridge: Bridge by lazy {
+        Bridge(requests, webAppFiles, appPermissions, bridgeHost, File(rootfs)) { app -> bridgeSerial(app, requests, bridgeHost) }
+    }
+    // Log lines from the bridge leave the main thread, in order.
+    private val appLogWriter by lazy { Executors.newSingleThreadExecutor() }
+    private val bridgeHost = object : BridgeHost {
+        override fun inFront(app: String): Boolean = WebAppActivity.screen(app)?.onScreen == true
+
+        override fun ask(app: WebApp, permission: AppPermission, answer: (Boolean?) -> Unit): () -> Unit {
+            val screen = WebAppActivity.screen(app.name)?.takeIf { it.onScreen }
+            if (screen == null) {
+                mainHandler.post { answer(null) }
+                return {}
+            }
+            return screen.ask(app.label, permission.what, answer)
+        }
+
+        override fun log(app: String, level: WebAppLogLevel, message: String) {
+            val file = File(rootfs, "$WEB_APP_LOG_DIR/$app.log")
+            runCatching {
+                appLogWriter.execute {
+                    runCatching {
+                        file.parentFile?.mkdirs()
+                        val origin = webAppFiles.find(app)?.origin ?: ""
+                        WebAppLog(file, origin).entry(level, message, "bridge", 0)
+                    }
+                }
+            }
+        }
+
+        override fun notify(app: WebApp, title: String, text: String, ifAway: Boolean): String? =
+            showAppNotice(app, title, text, ifAway)
+
+        override fun rotation(app: String, orientation: Orientation?): String? {
+            val screen = WebAppActivity.screen(app)
+                ?: return if (orientation == null) null else "the app's screen isn't open"
+            screen.applyRotation(orientation)
+            return null
+        }
+
+        // Both screens can start the camera app for a result (FrontActivity).
+        override val cameraApp: Boolean get() = true
+
+        override fun serviceRunning(name: String): Boolean = this@TerminalService.serviceRunning(name)
+
+        override fun connectSerial(
+            tcpPort: Int,
+            received: (ByteArray) -> Unit,
+            closed: (String?) -> Unit,
+            ready: (Result<BridgeSocket>) -> Unit,
+        ) = BridgeSockets.connect(tcpPort, received, closed, ready)
+
+        override fun schedule(delayMs: Long, block: () -> Unit): () -> Unit {
+            val timer = Runnable(block)
+            mainHandler.postDelayed(timer, delayMs)
+            return { mainHandler.removeCallbacks(timer) }
+        }
     }
     private val webAppHost = object : WebAppHost {
         override val onScreen: Boolean get() = activity?.onScreen == true || WebAppActivity.anyOnScreen
@@ -245,6 +320,10 @@ class TerminalService : Service() {
         override fun schedule(delayMs: Long, block: () -> Unit) {
             mainHandler.postDelayed(block, delayMs)
         }
+
+        override fun pinShortcut(shortcut: AppShortcut): String? = shortcuts.pin(shortcut)
+
+        override fun updateShortcut(shortcut: AppShortcut) = shortcuts.update(shortcut)
     }
     private val portProbes by lazy { Executors.newCachedThreadPool() }
     // The USB serial ports' links, bound at /dev/serial in every proot.
@@ -291,7 +370,7 @@ class TerminalService : Service() {
     }
     // Bluetooth LE (mynx ble): scans and links only while a request holds them.
     private val ble by lazy {
-        BleCentral(this, mainHandler, onScreen = { activity?.onScreen == true }, askPermissions = ::askPermissions)
+        BleCentral(this, mainHandler, onScreen = { front() != null }, askPermissions = ::askPermissions)
     }
     private var usbPorts = emptyList<UsbSerialDevice>()
     // rfcommN and nusN.
@@ -338,11 +417,11 @@ class TerminalService : Service() {
             mainHandler.postDelayed(this, UPDATE_TICK_MS)
         }
     }
-    private val camera by lazy { CameraShooter(this) { activity?.takeIf { it.onScreen } } }
+    private val camera by lazy { CameraShooter(this) { front() } }
     private val locator by lazy {
         Locator(
             this, mainHandler,
-            onScreen = { activity?.onScreen == true },
+            onScreen = { front() != null },
             askPermission = { answer -> askPermissions(LOCATION_PERMISSIONS, answer) },
             locatingChanged = ::setLocating,
         )
@@ -374,13 +453,13 @@ class TerminalService : Service() {
         MicFeeder(
             this, mainHandler, File(rootfs, SOUND_DIR),
             allowed = { currentSettings()?.androidMicrophone ?: true },
-            onScreen = { activity?.onScreen == true },
+            onScreen = { front() != null },
             askPermission = ::askPermissions,
             changed = ::setMic,
         )
     }
     private val recorder by lazy {
-        AudioRecorder(this, mainHandler, { activity?.onScreen == true }, ::askPermissions, ::setRecording)
+        AudioRecorder(this, mainHandler, { front() != null }, ::askPermissions, ::setRecording)
     }
     // Whether the foreground service has the location and microphone
     // types: only while something locates or records, so it keeps going
@@ -420,6 +499,9 @@ class TerminalService : Service() {
         cwdDir.deleteRecursively()
         updateTools()
         requests.start()
+        // The apps' temp files left from before; then pages can have the bridge.
+        runCatching { bridge.start() }
+        WebAppActivity.bridge = runCatching { bridge }.getOrNull()
         watchRequests()
         applySoundSetting()
         // Links from an earlier run point at terminals that are gone; both bridges link here.
@@ -619,6 +701,7 @@ class TerminalService : Service() {
     override fun onDestroy() {
         requestWatcher?.stopWatching()
         WebAppActivity.closed = null
+        WebAppActivity.bridge = null
         mainHandler.removeCallbacks(sweep)
         mainHandler.removeCallbacks(rotationSweep)
         mainHandler.removeCallbacks(updateTick)
@@ -796,6 +879,10 @@ class TerminalService : Service() {
     fun startService(name: String): String? = serviceManager.start(name)
     fun restartService(name: String): String? = serviceManager.restart(name)
     fun serviceRunning(name: String): Boolean = serviceManager.services[name]?.isRunning == true
+
+    /** An app's screen opened from its shortcut: core's open step (the app's service started as needed). */
+    fun openApp(name: String, show: (WebApp) -> String?, done: (Result<WebAppOpened>) -> Unit): () -> Unit =
+        webApps.openStep(name, show, done)
 
     // Like saveTabs: atomically, and never failing.
     private fun saveServices() {
@@ -1000,7 +1087,7 @@ class TerminalService : Service() {
     // Answers `mynx clipboard get`. Android only lets the app in front read
     // the clipboard (it gives others nothing), so say that instead.
     private fun readClipboard(): Result<String> {
-        if (activity?.onScreen != true) {
+        if (front() == null) {
             return Result.failure(Exception("the app must be on screen to read the clipboard (Android only lets the app in front read it)"))
         }
         val clip = clipboard.primaryClip
@@ -1010,7 +1097,7 @@ class TerminalService : Service() {
 
     // Answers `mynx share`: null when the share sheet opened, else why not.
     private fun share(share: Share): String? {
-        val shown = activity?.takeIf { it.onScreen }
+        val shown = front()?.activity
             ?: return "the app must be on screen to share (Android only lets the app in front open the share sheet)"
         val send = if (share.text != null) {
             Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, share.text)
@@ -1148,6 +1235,29 @@ class TerminalService : Service() {
         return null
     }
 
+    // The bridge's notify: tapping opens the app's screen (starting mynx if it has to).
+    private fun showAppNotice(app: WebApp, title: String, text: String, ifAway: Boolean): String? {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled()) return "the app's notifications are off in Android's settings"
+        if (ifAway && WebAppActivity.screen(app.name)?.onScreen == true) return "the app is on screen"
+        manager.createNotificationChannel(
+            NotificationChannel(NOTICE_CHANNEL_ID, "Notifications from programs", NotificationManager.IMPORTANCE_HIGH))
+        val id = WebAppActivity.noticeId(app.name)
+        val open = WebAppActivity.shortcutIntent(this, app.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val tap = PendingIntent.getActivity(this, id, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(id, Notification.Builder(this, NOTICE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSubText(app.label)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build())
+        return null
+    }
+
     // Called while the activity is visible: Android 12+ only allows going
     // foreground then.
     private fun goForeground() {
@@ -1194,7 +1304,11 @@ class TerminalService : Service() {
 
     // Android's permission dialogs need the activity on screen.
     private fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit): Boolean =
-        activity?.takeIf { it.onScreen }?.askPermissions(permissions, answer) != null
+        front()?.askPermissions(permissions, answer) != null
+
+    // The activity in front, the terminal's or an app's screen: Android's dialogs, the camera
+    // app and the share sheet need one.
+    private fun front(): FrontActivity? = FrontActivities.current ?: activity?.takeIf { it.onScreen }
 
     // Not after Exit, nor with nothing running: that would bring the notification back.
     private fun refreshNotification() {

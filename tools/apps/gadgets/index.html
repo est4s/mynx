@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gadgets</title>
+<link rel="stylesheet" href="gadgets.css">
+<script src="https://mynx.invalid/mynx.js"></script>
+</head>
+<body>
+<!-- An example app for mynx: the phone from JavaScript, through
+     mynx.js (see "The phone from JavaScript" in /opt/mynx/AGENTS.md).
+     Each card shows what mynx answered, or why it refused. Copy the
+     folder to ~/apps/NAME to make it yours. -->
+<header><h1>Gadgets</h1><p id="status">Waiting for mynx…</p></header>
+
+<section class="card" id="compass">
+  <h2>Compass</h2>
+  <div class="dial"><div class="needle"></div></div>
+  <p class="value">–</p>
+  <p class="error"></p>
+</section>
+
+<section class="card" id="battery">
+  <h2>Battery</h2>
+  <p class="value">–</p>
+  <p class="error"></p>
+</section>
+
+<section class="card" id="buttons">
+  <h2>Flashlight and vibration</h2>
+  <div class="row">
+    <button id="torch">Flashlight on</button>
+    <button id="buzz">Vibrate</button>
+  </div>
+  <p class="error"></p>
+</section>
+
+<section class="card" id="location">
+  <h2>Location</h2>
+  <button id="locate">Where am I?</button>
+  <p class="value"></p>
+  <p class="error"></p>
+</section>
+
+<section class="card" id="ble">
+  <h2>Bluetooth LE</h2>
+  <button id="scan">Scan for 5 s</button>
+  <ul class="list"></ul>
+  <p class="error"></p>
+</section>
+
+<section class="card" id="serial">
+  <h2>Serial console</h2>
+  <div class="row">
+    <select id="ports"><option value="">(no ports)</option></select>
+    <button id="refresh">↻</button>
+    <button id="connect">Open</button>
+  </div>
+  <pre id="output"></pre>
+  <form id="send" class="row">
+    <input id="line" autocomplete="off" placeholder="Type, then Enter" disabled>
+  </form>
+  <p class="error"></p>
+</section>
+
+<script src="gadgets.js"></script>
+</body>
+</html>

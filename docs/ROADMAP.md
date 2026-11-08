@@ -74,7 +74,9 @@ and either view switches to the other.
 ### Web apps
 **Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what
 counts as one, the menu's Apps and Terminal apps, `mynx app`, and the
-guide. Left: the bridge, permissions per app, home screen shortcuts.
+guide. **Part 2 done** (2026-11-08, PR #64, in the next release): the
+bridge (`mynx.js`), permissions per app, home screen shortcuts, full
+screen and screen awake.
 
 A third kind of app beside terminal apps and APKs (the agent guide's
 "Making an app"): HTML and JavaScript in `~/apps/NAME`, opened inside
@@ -97,16 +99,26 @@ and open it in the phone's browser; this makes them part of mynx.
   Home list them; `mynx app
   open NAME` opens one from the terminal, so
   agents can too. This doesn't need touch mode and can ship first.
-- **The phone through a bridge:** a `mynx` JavaScript object that
-  sends the requests `mynx` already sends (location, sensors, camera,
-  vibration, flashlight, sound, …), streams as events, answered by
-  the same code in core.
-- **Permissions per app:** each app asks for what it uses the first
-  time ("weather wants your location"); the answers live in a
-  plain-text config, covered by `mynx check` and changed with a `mynx`
-  command.
+- **The phone through a bridge:** a `mynx` JavaScript object
+  (`mynx.js`) that sends the requests `mynx` already sends, answered
+  by the same code in core: everything mynx has for the phone
+  (location, sensors, camera, microphone and sound, vibration,
+  flashlight, battery, clipboard, share, notifications, rotation
+  lock), Bluetooth LE, USB and Bluetooth serial ports, and background
+  services; streams as async iterators. Not settings, raw USB or
+  UF2. Static and served apps get it, only on the app's own origin.
+- **Permissions per app:** each app asks the first time for the
+  private ones (location, camera, microphone, reading the clipboard,
+  notifications, Bluetooth, serial ports, services: "Weather wants
+  your location"); the answers live in a plain-text config, covered
+  by `mynx check` and undo, changed with `mynx app permissions`.
+  The `android-*` settings and Android's dialogs still apply.
 - **Home screen shortcuts:** "Add to home screen" (Android's pinned
-  shortcuts) opens mynx straight into the app.
+  shortcuts, with the app's icon) opens mynx straight into the app,
+  starting its service as needed.
+- **Full screen and screen awake:** `app.conf` keys to hide the
+  system bars (games) and keep the screen on while the app is in
+  front.
 - **The agent guide** says how to make one and what the bridge
   offers, so agents build them unasked; "Making an app" then offers
   three kinds.

@@ -16,7 +16,9 @@
 #   or an app.conf with a url, labelled as core labels them
 #   (core/.../WebApps.kt; both are tested on tests/fixtures/apps). Picking
 #   one runs mynx app open. A menu file from before terminal apps (apps, no
-#   terminal-apps) gets a "Terminal apps" entry at the end of Apps.
+#   terminal-apps) gets a "Terminal apps" entry at the end of Apps; the very
+#   last, with any apps, is "Add to home screen…": the apps again, each
+#   running mynx app shortcut.
 # menu --boot plays the boot splash first (the app does this on a fresh start),
 #   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
 # menu services starts at the Services list; leaving it leaves the menu (the
@@ -184,7 +186,7 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [apps]=Apps [terminal-apps]="Terminal apps" [games]=Games [agents]="AI agents" [services]=Services [settings]=Settings
+declare -A TITLE=([main]=Main [apps]=Apps [shortcuts]="Add to home screen" [terminal-apps]="Terminal apps" [games]=Games [agents]="AI agents" [services]=Services [settings]=Settings
   [system]=System [help]=Help)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
@@ -354,7 +356,13 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
       # A menu file from before terminal apps: they stay a pick away.
       if ! main_menu_has menu:terminal-apps; then
         ITEMS+=("Terminal apps") ACTS+=(menu:terminal-apps)
-      fi ;;
+      fi
+      [[ ${ACTS[0]} == none ]] || { ITEMS+=("Add to home screen…") ACTS+=(menu:shortcuts); } ;;
+    shortcuts)   # the apps again: picking one asks Android to pin its shortcut
+      local label name
+      while IFS=$'\t' read -r label name; do
+        ITEMS+=("$label") ACTS+=("shortcut:$name")
+      done < <(web_apps | LC_ALL=C sort -f -t $'\t' -k1,1) ;;
     terminal-apps)
       local dir f label
       while IFS=$'\t' read -r label f; do   # by label, wherever they are
@@ -625,6 +633,7 @@ act_app() { # under the bar named after the file (tuner, my-tool), else the shel
   run keybar "${name%.*},shell" "$1"
 }
 act_webapp() { run mynx app open "$1" || pause; }  # its error stays on screen
+act_shortcut() { run mynx app shortcut "$1"; pause; }  # Android asks; what mynx said stays on screen
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
   run mynx agent start "$1" || pause
 }

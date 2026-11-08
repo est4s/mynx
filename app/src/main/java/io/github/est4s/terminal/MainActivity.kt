@@ -2,7 +2,6 @@ package io.github.est4s.terminal
 
 import android.app.Activity
 import android.app.AlertDialog
-import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -19,7 +18,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.Surface
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -79,14 +77,12 @@ private const val COLORS_FILE = "root/.config/mynx/colors.properties"
 private const val KEY_BARS_DIR = "root/.config/mynx/keybars"
 private const val SETTINGS_FILE = "root/.config/mynx/settings.conf"
 private const val CURSOR_BLINK_MS = 500
-private const val PERMISSION_REQUEST = 2
-private const val RESULT_REQUEST = 3
 private const val KEY_BAR_POLL_MS = 250L
 // Rows the terminal keeps when the screen is squeezed (the library's own minimum).
 private const val TERMINAL_MIN_ROWS = 4
 private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
 
-class MainActivity : Activity() {
+class MainActivity : Activity(), FrontActivity {
     private lateinit var terminalView: TerminalView
     private lateinit var stripScroll: HorizontalScrollView
     private lateinit var stripRow: LinearLayout
@@ -119,7 +115,7 @@ class MainActivity : Activity() {
     private var tabSwipe: TabSwipe? = null
     private var tabSwipeOn = true
     /** Whether the terminal is on screen (between onStart and onStop). */
-    val onScreen get() = visible
+    override val onScreen get() = visible
     // A tapped notification's tab, selected once the service is connected.
     private var shellToShow: Int? = null
     // The launcher shortcut "Settings" (the editors) or the update notification
@@ -242,6 +238,11 @@ class MainActivity : Activity() {
 
     // Folders change without tab changes, and leaving the app is the last
     // chance to save before Android may kill it.
+    override fun onResume() {
+        super.onResume()
+        FrontActivities.resumed(this)
+    }
+
     override fun onStop() {
         root.removeCallbacks(keyBarPoll)
         visible = false
@@ -252,7 +253,8 @@ class MainActivity : Activity() {
 
     // Sessions live in the service and keep running after the activity is gone.
     override fun onDestroy() {
-        permissionAsks.toList().also { permissionAsks.clear() }.forEach { it.second(false) }
+        asks.clear()
+        FrontActivities.gone(this)
         service?.let { if (it.activity === this) it.activity = null }
         service = null
         if (bound) unbindService(connection)
@@ -289,60 +291,30 @@ class MainActivity : Activity() {
         }
     }
 
-    // Asked one dialog at a time, in order.
-    private val permissionAsks = mutableListOf<Pair<Array<String>, (Boolean) -> Unit>>()
+    // Android's dialogs and the camera app's result, one at a time (shared with the apps' screens).
+    private val asks = ActivityAsks(this)
+
+    override val activity: Activity get() = this
 
     /** Shows Android's dialog for [permissions]; [answer] gets whether any of them was allowed. */
-    fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit) {
-        permissionAsks += permissions to answer
-        if (permissionAsks.size == 1) requestPermissions(permissions, PERMISSION_REQUEST)
-    }
-
-    // One at a time: the activity started is in front until it answers.
-    private var resultAnswer: ((Boolean) -> Unit)? = null
+    override fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit) = asks.askPermissions(permissions, answer)
 
     /** Starts [intent] (the camera app); [answer] gets whether it finished OK. False if nothing could start it. */
-    @Suppress("DEPRECATION") // the ActivityResult API needs AndroidX
-    fun startForResult(intent: Intent, answer: (Boolean) -> Unit): Boolean {
-        resultAnswer?.invoke(false)
-        return try {
-            startActivityForResult(intent, RESULT_REQUEST)
-            resultAnswer = answer
-            true
-        } catch (e: ActivityNotFoundException) {
-            false
-        }
-    }
+    override fun startForResult(intent: Intent, answer: (Boolean) -> Unit): Boolean = asks.startForResult(intent, answer)
 
     @Deprecated("Deprecated in Java")
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != RESULT_REQUEST) return
-        val answer = resultAnswer ?: return
-        resultAnswer = null
-        answer(resultCode == RESULT_OK)
+        asks.onActivityResult(requestCode, resultCode)
     }
 
     /** How far the screen is turned, in degrees (Surface's ROTATION_*), for photos taken now. */
-    val displayRotation: Int
-        get() {
-            @Suppress("DEPRECATION") // display needs API 30
-            val rotation = if (Build.VERSION.SDK_INT >= 30) display?.rotation else windowManager.defaultDisplay.rotation
-            return when (rotation) {
-                Surface.ROTATION_90 -> 90
-                Surface.ROTATION_180 -> 180
-                Surface.ROTATION_270 -> 270
-                else -> 0
-            }
-        }
+    override val displayRotation: Int get() = asks.displayRotation
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != PERMISSION_REQUEST || permissionAsks.isEmpty()) return
-        val answer = permissionAsks.removeAt(0).second
-        permissionAsks.firstOrNull()?.let { requestPermissions(it.first, PERMISSION_REQUEST) }
-        answer(grantResults.any { it == PackageManager.PERMISSION_GRANTED })
+        asks.onRequestPermissionsResult(requestCode, grantResults)
     }
 
     private fun showTerminal(session: TerminalSession) {

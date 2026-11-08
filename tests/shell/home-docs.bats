@@ -239,9 +239,34 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 @test "the guide explains apps: the folder, app.conf, where they run, the log, served apps" {
     for text in "### Apps" "\`~/apps/NAME/\`" "\`app.conf\`" "https://NAME.mynx.invalid/" \
         "/tmp/.mynx/apps/NAME.log" "mynx app log NAME" "\`--- opened\`" "/opt/mynx/apps/sketch" \
-        "**only if opening it started it**" "\`autostart = yes\`" "No phone features yet" \
+        "**only if opening it started it**" "\`autostart = yes\`" "The phone from JavaScript" \
         "reloads by itself" "\`terminal-apps\`" "Terminal apps → Serial monitor"; do
         grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
+
+@test "the guide explains the phone from JavaScript: loading mynx.js, errors, the origin, permissions" {
+    for text in "#### The phone from JavaScript" '<script src="https://mynx.invalid/mynx.js"></script>' \
+        "for await" "s.stop()" "\`denied\`" "\`refused\`" "\`closed\`" "\`no-bridge\`" \
+        "**while its own \`service\` runs**" "~/.config/mynx/app-permissions.conf" \
+        "mynx app permissions NAME reset" "16 MB" "env(safe-area-inset-top)" "\`screen-awake = yes\`" \
+        "mynx app shortcut NAME" "**Add to home screen…**" "/opt/mynx/apps/gadgets"; do
+        grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+    run grep -qF "No phone features" "$GUIDE"
+    [ "$status" -ne 0 ]
+}
+
+@test "the guide's calls table names every call apps are offered, and their permissions" {
+    bridge="$BATS_TEST_DIRNAME/../../core/src/main/kotlin/io/github/est4s/terminal/core/Bridge.kt"
+    # Each BRIDGE_CALLS line's JS function (its first word, before "(") must be in the guide.
+    while IFS= read -r js; do
+        grep -qF -- "\`$js(" "$GUIDE" || grep -qF -- ".${js##*.}(" "$GUIDE" ||
+            { echo "not in the guide: $js"; false; }
+    done < <(sed -n '/^val BRIDGE_CALLS/,/^)/p' "$bridge" | grep -oE '"(mynx|port)\.[a-zA-Z.]+\(' |
+        tr -d '"(' | sort -u)
+    for word in location camera microphone clipboard notifications bluetooth serial; do
+        grep -qE -- "^\| \`mynx\..*\| $word \|$" "$GUIDE" || { echo "no call needs $word in the table"; false; }
     done
 }
 

@@ -205,6 +205,77 @@ import java.nio.file.Files
  * the app opened, or with `autostart = yes`, is never stopped. What the
  * launcher remembers is in memory only: lost when Android kills the
  * app, which is fine (services come back as they do today).
+ *
+ * PART 2 (work log "Next", 0): the bridge is `Bridge.kt`, permissions
+ * `AppPermissions.kt`; this file gets the keys, shortcuts and the open
+ * step below (part A builds them, part B the Android side).
+ *
+ * APP.CONF, PART 2: two more keys, checked as the others (the line
+ * skipped on a bad value), both in `app-list`'s APP
+ * (`"fullscreen":"no"|"yes"|"edge","screen_awake":BOOL`) and [WebApp]:
+ * - `fullscreen = no|yes|edge` ([Fullscreen], default no; maintainer's
+ *   decision, 2026-11-08, over the plan's first answer; other values:
+ *   "line N: fullscreen is no, yes or edge"):
+ *   - `yes`: the status and navigation bars hidden (API 30+:
+ *     `WindowInsetsController`, swipe to show them for a moment; 26-29:
+ *     the immersive-sticky flags), hidden again after the keyboard or
+ *     a rotation; the page is kept clear of the camera cutout (padded
+ *     for it, as for the keyboard).
+ *   - `edge`: bars hidden as for `yes`, and the page runs under the
+ *     cutout too (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, ALWAYS
+ *     on API 30+); only the keyboard is padded for. The guide tells
+ *     games to keep controls clear of the corners
+ *     (`env(safe-area-inset-*)`).
+ * - `screen-awake = yes|no` (default no; else "line N: screen-awake is
+ *   yes or no"): `FLAG_KEEP_SCREEN_ON` on the app's window, which
+ *   Android honours only while it's visible.
+ *
+ * HOME SCREEN SHORTCUTS
+ *
+ * `app-shortcut NAME` (a [Later], [WEB_APP_SHORTCUT_SECONDS]; part A
+ * adds it to [WEB_APP_REQUEST_NAMES]) → `{"ok":true,"name","id"}` once
+ * Android was asked ([WebAppHost.pinShortcut]: `ShortcutManager.
+ * requestPinShortcut`, which shows Android's own "Add to home screen"
+ * dialog; the answer doesn't wait for it). Refused as `app-open` for no
+ * name or an unknown app, "mynx must be on screen to add a shortcut"
+ * when [WebAppHost.onScreen] is false, and with the host's reason (a
+ * launcher that can't pin). The menu's Apps list ends with "Add to home
+ * screen…", which lists the apps and runs `mynx app shortcut NAME`.
+ *
+ * [appShortcut] decides what it shows: id [webAppShortcutId] (`app-NAME`),
+ * the label, and the icon:
+ * - with `app.conf`'s `icon`: that file (host path), made adaptive by
+ *   the app: scaled to fit [SHORTCUT_SAFE_ZONE] of the 108 dp square
+ *   (the safe zone's 66 dp) keeping its proportions, centred, on
+ *   [AppShortcut.background], the theme's background;
+ * - else a generated one: [AppShortcut.letter], the label's first letter
+ *   or digit in upper case (none: the name's first character), drawn in
+ *   [AppShortcut.foreground] on [AppShortcut.background]. The background
+ *   is one of the theme's chromatic colours, `color1`-`color6` and
+ *   `color9`-`color14` in that order, picked by the name's
+ *   `String.hashCode()` (stable by Kotlin's and Java's spec) mod 12, made
+ *   non-negative (`Math.floorMod`); the foreground is the theme's
+ *   `background` or `foreground`, whichever has the higher [contrast]
+ *   with it (the background on ties). The theme is the user's colours
+ *   (`colors.properties` over Neon) at the time it's made.
+ * The intent opens `WebAppActivity` for `mynx-app://NAME` with the
+ * extra [WEB_APP_FROM_SHORTCUT]: it starts and binds the service if
+ * mynx isn't running, opens `MainActivity` instead when Debian isn't
+ * set up yet, then runs [WebAppLauncher.openStep] itself, showing
+ * "Starting LABEL…" and any error as text on the screen (and in the
+ * log). Changed labels and icons update a pinned shortcut at the next
+ * open ([WebAppHost.updateShortcut], `updateShortcuts`); a shortcut for
+ * an app that's gone shows "no app named NAME (mynx app list shows
+ * them)" on its screen.
+ *
+ * THE OPEN STEP ([WebAppLauncher.openStep])
+ *
+ * What `app-open` does after its on-screen check, shared with the
+ * shortcut's start: the app looked up, its service started if needed
+ * and remembered, the port waited for, then [show] (the host's
+ * [WebAppHost.open] for `app-open`; the activity loading itself for a
+ * shortcut); refusals worded as `app-open`'s and a service it started
+ * stopped again on failure or cancel. `app-open` keeps its answer.
  */
 
 /** The folder of the user's apps, in root's home. */
@@ -232,7 +303,7 @@ const val WEB_APP_OPEN_SECONDS = 30
 const val WEB_APP_FINGERPRINT_FILES = 5000
 
 /** Every request [webAppRequests] answers. */
-val WEB_APP_REQUEST_NAMES = listOf("app-list", "app-open", "app-reload")
+val WEB_APP_REQUEST_NAMES = listOf("app-list", "app-open", "app-reload", "app-shortcut")
 
 private val WEB_APP_NAME = Regex("[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?")
 
@@ -289,7 +360,18 @@ data class AppConf(
     val icon: String? = null,
     val url: String? = null,
     val service: String? = null,
+    val fullscreen: Fullscreen = Fullscreen.NO,
+    val screenAwake: Boolean = false,
 )
+
+/** `app.conf`'s `fullscreen` (see APP.CONF, PART 2): [word] as written there and in `app-list`. */
+enum class Fullscreen(val word: String) {
+    NO("no"), YES("yes"), EDGE("edge");
+
+    companion object {
+        fun of(word: String): Fullscreen? = entries.firstOrNull { it.word == word }
+    }
+}
 
 data class ParsedAppConf(val conf: AppConf, val problems: List<String>)
 
@@ -335,6 +417,15 @@ fun parseAppConf(text: String): ParsedAppConf {
                 set { copy(url = value) }
             }
             "service" -> if (isServiceName(value)) set { copy(service = value) } else problem(badServiceName(value))
+            "fullscreen" -> {
+                val fullscreen = Fullscreen.of(value)
+                if (fullscreen == null) problem("fullscreen is no, yes or edge") else set { copy(fullscreen = fullscreen) }
+            }
+            "screen-awake" -> when (value) {
+                "yes" -> set { copy(screenAwake = true) }
+                "no" -> set { copy(screenAwake = false) }
+                else -> problem("screen-awake is yes or no")
+            }
         }
     }
     if (conf.service != null && conf.url == null) {
@@ -344,7 +435,7 @@ fun parseAppConf(text: String): ParsedAppConf {
     return ParsedAppConf(conf, problems)
 }
 
-private val APP_CONF_KEYS = setOf("name", "icon", "url", "service")
+private val APP_CONF_KEYS = setOf("name", "icon", "url", "service", "fullscreen", "screen-awake")
 private val ICON_TYPES = setOf("image/png", "image/jpeg", "image/webp")
 private val SERVED_URL = Regex("""http://(127\.0\.0\.1|localhost):([0-9]{1,5})(/[^\s?#]*)?(\?[^\s#]*)?""")
 
@@ -401,6 +492,8 @@ data class WebApp(
     val service: String?,
     val icon: String?,
     val problems: List<String>,
+    val fullscreen: Fullscreen = Fullscreen.NO,
+    val screenAwake: Boolean = false,
 )
 
 /** What [WebApps.respond] answers: [file] to send for 200 (a host file), else [body]. */
@@ -494,7 +587,7 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
             WebApp(name, label, path, root, WebAppKind.SERVED, servedOrigin(served), served, servedPort(served), conf.service, icon, problems)
         } else {
             WebApp(name, label, path, root, WebAppKind.STATIC, webAppOrigin(name), webAppOrigin(name) + "/", null, null, icon, problems)
-        }
+        }.copy(fullscreen = conf.fullscreen, screenAwake = conf.screenAwake)
         return Inspected(app, problems)
     }
 
@@ -579,6 +672,20 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
         val file = host(guest)?.takeIf { it.isFile } ?: return notFound()
         val mime = webAppMimeType(segments.last())
         return WebAppResponse(200, "OK", mime, if (isTextMime(mime)) "utf-8" else null, NO_STORE, file = file)
+    }
+
+    /**
+     * The answer for a request to [BRIDGE_SCRIPT_URL]'s host (part 2):
+     * `/mynx.js` is the tools' [BRIDGE_SCRIPT_FILE] (`text/javascript`,
+     * utf-8, no-store); GET and HEAD only (else 405); any other path 404.
+     */
+    fun bridgeScript(method: String, encodedPath: String): WebAppResponse {
+        if (method != "GET" && method != "HEAD") {
+            return plain(405, "Method Not Allowed", "only GET and HEAD\n", mapOf("Allow" to "GET, HEAD"))
+        }
+        if (encodedPath != "/mynx.js") return notFound()
+        val file = File(toolsDir, BRIDGE_SCRIPT_FILE).takeIf { it.isFile } ?: return notFound()
+        return WebAppResponse(200, "OK", "text/javascript", "utf-8", NO_STORE, file = file)
     }
 
     /** A value that changes when any file under [app]'s root does: see AUTO-RELOAD. */
@@ -809,7 +916,55 @@ interface WebAppHost {
     fun portAnswers(port: Int, done: (Boolean) -> Unit)
     /** Runs [block] after [delayMs]. */
     fun schedule(delayMs: Long, block: () -> Unit)
+    /** Asks Android to pin [shortcut] (`requestPinShortcut`); null once asked, or why not. */
+    fun pinShortcut(shortcut: AppShortcut): String? = "shortcuts aren't available here"
+    /** Updates [shortcut] if it's pinned (`updateShortcuts`), at each open. */
+    fun updateShortcut(shortcut: AppShortcut) {}
 }
+
+/** How long `mynx` waits for `app-shortcut`. */
+const val WEB_APP_SHORTCUT_SECONDS = 10
+/** The intent extra (a boolean) a shortcut's intent carries: the screen opens the app itself. */
+const val WEB_APP_FROM_SHORTCUT = "from-shortcut"
+/** The share of an adaptive icon's 108 dp an `app.conf` icon is scaled to fit: the 66 dp safe zone. */
+const val SHORTCUT_SAFE_ZONE = 66.0 / 108.0
+
+/** `app-NAME`, an app's shortcut id. */
+fun webAppShortcutId(name: String): String = "app-$name"
+
+/**
+ * What an app's shortcut shows (see HOME SCREEN SHORTCUTS): [icon], the
+ * host file of `app.conf`'s `icon`, or null for the generated [letter];
+ * colours are 0xRRGGBB with full alpha (as [ColorScheme]'s).
+ */
+data class AppShortcut(
+    val id: String,
+    val name: String,
+    val label: String,
+    val icon: File?,
+    val letter: String,
+    val background: Int,
+    val foreground: Int,
+)
+
+/** [app]'s shortcut under the theme [colors]; [iconFile] is its icon's host file, if it has one. */
+fun appShortcut(app: WebApp, iconFile: File?, colors: ColorScheme): AppShortcut {
+    val letter = (app.label.firstOrNull { it.isLetterOrDigit() } ?: app.name.first()).uppercase()
+    val index = SHORTCUT_COLORS[Math.floorMod(app.name.hashCode(), SHORTCUT_COLORS.size)]
+    val background = colors.palette[index] ?: colors.foreground
+    val foreground = if (contrast(background, colors.background) >= contrast(background, colors.foreground)) {
+        colors.background
+    } else {
+        colors.foreground
+    }
+    return AppShortcut(webAppShortcutId(app.name), app.name, app.label, iconFile, letter, background, foreground)
+}
+
+// The theme's chromatic colours, normal then bright.
+private val SHORTCUT_COLORS = listOf(1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14)
+
+/** What [WebAppLauncher.openStep] did: the [app] shown, and whether it started its service. */
+data class WebAppOpened(val app: WebApp, val startedService: Boolean)
 
 /**
  * Opens apps and keeps their services' lifecycle (see the contract
@@ -835,6 +990,7 @@ class WebAppLauncher(
             val app = named(args, "app-reload", reply) ?: return@Later
             if (host.reload(app.name)) reply.answer(ok("name" to json(app.name))) else reply.refuse("${app.name} isn't open")
         },
+        "app-shortcut" to Later(WEB_APP_SHORTCUT_SECONDS) { args, reply -> shortcut(args, reply) },
     ).mapValues { (name, later) ->
         // Anything thrown would leave the request to fail again at every poll.
         Later(later.seconds, later.change) { args, reply ->
@@ -857,37 +1013,97 @@ class WebAppLauncher(
         if (!host.onScreen) {
             return reply.refuse("mynx must be on screen to open an app: bring it to the front and try again")
         }
+        val cancel = openStep(app.name, host::open) { result ->
+            result.fold(
+                { opened ->
+                    reply.ok(
+                        "name" to json(opened.app.name),
+                        "opened" to "true",
+                        "origin" to json(opened.app.origin),
+                        "url" to json(opened.app.url),
+                        "started_service" to opened.startedService.toString(),
+                    )
+                },
+                { reply.refuse(it.message ?: "couldn't open ${app.name}") },
+            )
+        }
+        reply.onCancel { cancel() }
+    }
+
+    private fun shortcut(args: List<String>, reply: PendingReply) {
+        val app = named(args, "app-shortcut", reply) ?: return
+        if (!host.onScreen) return reply.refuse("mynx must be on screen to add a shortcut")
+        val shortcut = shortcutOf(app)
+        host.pinShortcut(shortcut)?.let { return reply.refuse(it) }
+        reply.ok("name" to json(app.name), "id" to json(shortcut.id))
+    }
+
+    private fun shortcutOf(app: WebApp) = appShortcut(
+        app,
+        app.icon?.let(apps::host),
+        loadColorScheme(File(apps.home, "$CONFIG_DIR/colors.properties")).scheme,
+    )
+
+    private class Started(val service: String, val autostart: Boolean)
+
+    /**
+     * THE OPEN STEP: opens app [name] (looked up, its service started
+     * and waited for), then calls [show] with it (null: shown, else why
+     * not). [done] gets the result, or the refusal as `app-open` words
+     * it; once, on the main thread. The handle cancels it (a service it
+     * started is stopped; [done] isn't called). Once shown, the app's
+     * pinned shortcut is updated ([WebAppHost.updateShortcut]).
+     */
+    fun openStep(name: String, show: (WebApp) -> String?, done: (Result<WebAppOpened>) -> Unit): () -> Unit {
+        var cancelled = false
+        val handle = { cancelled = true }
+        fun fail(message: String) = done(Result.failure(Exception(message)))
+        val app = apps.find(name) ?: return handle.also { fail("no app named $name (mynx app list shows them)") }
+
+        // Shows the screen; [started] is the service this step started, if any.
+        fun finish(started: Started?) {
+            show(app)?.let { error ->
+                started?.let { services.stop(it.service) }
+                return fail(error)
+            }
+            if (started != null && !started.autostart) startedFor[app.name] = started.service
+            runCatching { host.updateShortcut(shortcutOf(app)) }
+            done(Result.success(WebAppOpened(app, started != null)))
+        }
+
         val port = app.port
-        if (app.kind == WebAppKind.STATIC || port == null) return show(app, null, reply)
+        if (app.kind == WebAppKind.STATIC || port == null) return handle.also { finish(null) }
         val service = app.service
         if (service == null) {
             host.portAnswers(port) { answered ->
-                if (answered) show(app, null, reply) else reply.refuse("nothing answers on 127.0.0.1:$port (app.conf's url)")
+                when {
+                    cancelled -> {}
+                    answered -> finish(null)
+                    else -> fail("nothing answers on 127.0.0.1:$port (app.conf's url)")
+                }
             }
-            return
+            return handle
         }
         val status = services.status(service)
-            ?: return reply.refuse("no service named $service (app.conf's service; mynx service list shows them)")
+            ?: return handle.also { fail("no service named $service (app.conf's service; mynx service list shows them)") }
         var started: Started? = null
         when (status.state) {
-            ServiceState.STOPPING -> return reply.refuse("$service is stopping: try again in a moment")
+            ServiceState.STOPPING -> return handle.also { fail("$service is stopping: try again in a moment") }
             ServiceState.STOPPED, ServiceState.FAILED -> {
-                services.start(service)?.let { return reply.refuse(it) }
+                services.start(service)?.let { return handle.also { _ -> fail(it) } }
                 started = Started(service, status.autostart)
             }
             ServiceState.RUNNING -> {}
         }
-        var cancelled = false
-        reply.onCancel { cancelled = true }
         val deadline = now() + WEB_APP_PORT_WAIT_MS
         fun probe() {
             host.portAnswers(port) { answered ->
                 when {
                     cancelled -> started?.let { services.stop(it.service) }
-                    answered -> show(app, started, reply)
+                    answered -> finish(started)
                     now() >= deadline -> {
                         started?.let { services.stop(it.service) }
-                        reply.refuse(
+                        fail(
                             "$service didn't answer on 127.0.0.1:$port within ${WEB_APP_PORT_WAIT_MS / 1000} s " +
                                 "(mynx service log $service shows its output)",
                         )
@@ -897,24 +1113,7 @@ class WebAppLauncher(
             }
         }
         probe()
-    }
-
-    private class Started(val service: String, val autostart: Boolean)
-
-    // Opens the screen; [started] is the service this request started, if any.
-    private fun show(app: WebApp, started: Started?, reply: PendingReply) {
-        host.open(app)?.let { error ->
-            started?.let { services.stop(it.service) }
-            return reply.refuse(error)
-        }
-        if (started != null && !started.autostart) startedFor[app.name] = started.service
-        reply.ok(
-            "name" to json(app.name),
-            "opened" to "true",
-            "origin" to json(app.origin),
-            "url" to json(app.url),
-            "started_service" to (started != null).toString(),
-        )
+        return handle
     }
 
     /** App [name]'s screen finished: stops the service opening it started, if nothing else needs it. */
@@ -940,6 +1139,8 @@ class WebAppLauncher(
         "service" to (app.service?.let(::json) ?: "null"),
         "icon" to (app.icon?.let(::json) ?: "null"),
         "problems" to array(app.problems.map(::json)),
+        "fullscreen" to json(app.fullscreen.word),
+        "screen_awake" to app.screenAwake.toString(),
     )
 
     private companion object {

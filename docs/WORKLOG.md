@@ -87,6 +87,10 @@ are in git history: the full log up to entry 92 is
 - **Web apps, part 1** (`~/apps/NAME/`, `mynx app`, terminal apps
   in `~/terminal-apps`): all 13 phone tests passed (entry 164); PR
   #59.
+- **Web apps, part 2** (the bridge, `mynx.js`, permissions per app,
+  shortcuts, `fullscreen`, `screen-awake`): 22 phone tests passed
+  (entry 169); PR #64. The plan and its tests: `git show
+  044f80f:docs/WORKLOG.md`.
 - **Services count in the launcher menu** (`Services ● 2`): all 4
   phone tests passed (entry 161); merged (PR #58).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
@@ -95,22 +99,6 @@ are in git history: the full log up to entry 92 is
 
 
 ## Next
-
-### 0. Web apps: part 1 done; part 2 next (the maintainer picks)
-
-Part 1 passed all 13 phone tests (entry 164) and merges with PR #59.
-The plan, design and tests: `git show 345d224:docs/WORKLOG.md`; the
-decisions are in AGENTS.md ("Apps (web apps, part 1)") and
-`WebApps.kt`'s KDoc. (The refusal now says "mynx must be on screen
-to open an app"; the extra reloads in test 6 were by hand.)
-
-**No top bar** (entry 166, PR #62): passed on the phone. Not
-checked: the keyboard over a focused text field (no app here has
-one); try it with the first app that does.
-
-**Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
-permissions per app, home screen shortcuts. Plan it with the
-maintainer first.
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -243,6 +231,61 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (169): Web apps part 2 passed on the phone
+
+All 22 phone tests passed in mynx dev (test pages, not in the repo:
+a static `bridge` app and served `served8`/`noserv8`). BLE and USB
+serial used the C3, with a new MicroPython `main.py` (`mynx-ble`:
+battery level, Nordic UART echo and counter, USB REPL left free).
+Not tried: test 13's DTR reset on the Nano and a Bluetooth port
+(`rfcomm0`), so `set()` and opening `rfcomm0` from a page are
+unproven on the phone. The plan said `mynx usb monitor` "says busy",
+but it opened and waited silently; it now prints `ttyACM0 is busy:
+another program has it; waiting`, then `ttyACM0 is free` (044f80f,
+from `serial-port`'s `.NAME.waiting` mark).
+Shortcuts only appear on the home screen, not the app drawer:
+Android's pinned shortcuts can't add a launcher entry. Noise left as
+it is: another site's `favicon.ico` 404 is logged, on purpose
+(`WebAppsTest`). Build CI 42524100077.
+
+### 2026-11-08 (168): Web apps part 2 built by subagents
+
+Part 0 (the contract: `Bridge.kt`, `AppPermissions.kt`, the
+`ReplySink` seam, `mynx.js`'s JSDoc), then A (core), B (the app:
+the channel, `FrontActivity`, the prompt, shortcuts, `fullscreen`
+yes/edge, `screen-awake`), C (`mynx.js` tested under node against the
+CLI's argument lines, `mynx app permissions`/`shortcut`, the menu's
+"Add to home screen…", the `gadgets` example, the guide) and D (serial
+from JavaScript: `Rfc2217Client`, `bridgeSerial`) in worktrees,
+merged into `webapps-2`. The contract changed once during the build:
+the two ports per page load became one per `mynx.invalid/hello`
+(dropped calls during loading; late scripts got none). D also made
+the bridge's log lines match the KDoc. Decisions where the contract
+was open are in its KDoc. AGENTS.md has the Architecture entry. Known
+unrelated test failures here: `test_undo_list` (time zone), and the
+serial-port busy test once (flaky; passes alone). Not yet compiled:
+`app/` (CI).
+
+### 2026-11-08 (167): Web apps part 2 planned
+
+The maintainer decided part 2's scope: the bridge offers everything
+mynx has for the phone (BLE, serial ports and services too; not
+config, raw USB or UF2), to static and served apps on their own
+origin only; private features are asked once per app, the answers in
+a plain-text file with `mynx app permissions`; home screen shortcuts;
+`app.conf` keys for full screen and screen awake. The agent's design
+(a `mynx.js` with promises and async-iterator streams, a
+`WebMessageChannel` posted to the app's origin, a `ReplySink` seam so
+bridge calls reach the same core handlers in-process,
+`app-permissions.conf`, serial as an RFC 2217 client of the port's
+own server) and the parts for subagents are "Next", 0. Roadmap
+updated. No code.
+Then the maintainer answered the plan's questions: services only the
+app's own (no prompt), quick photos first, base64 up to 16 MB, an
+"Add to home screen…" item in the menu's Apps, `fullscreen = yes`
+(cutout kept clear) and `= edge` (covering it), no "only this time", and served apps get the bridge only
+while their own service runs.
 
 ### 2026-11-08 (166): No top bar on an app's screen
 
