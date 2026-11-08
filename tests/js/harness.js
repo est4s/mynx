@@ -75,10 +75,18 @@ function bridgeCalls() {
  */
 function load({ origin = 'https://gadgets.mynx.invalid', fetch } = {}) {
   const listeners = [];
+  const hellos = []; // [url, options] of each request for the port
   const window = {
     location: new URL(origin + '/index.html'),
     addEventListener(type, listener) { if (type === 'message') listeners.push(listener); },
-    fetch,
+    fetch(url, options) {
+      if (String(url) === 'https://mynx.invalid/hello') {
+        // The listener must already hear the port the app posts now.
+        hellos.push([String(url), options, listeners.length]);
+        return Promise.resolve({ ok: false, status: 0, type: 'opaque' });
+      }
+      return fetch ? fetch(url, options) : Promise.reject(new Error('no network here'));
+    },
   };
   globalThis.window = window;
   vm.runInThisContext(fs.readFileSync(SCRIPT, 'utf8'), { filename: SCRIPT });
@@ -87,8 +95,10 @@ function load({ origin = 'https://gadgets.mynx.invalid', fetch } = {}) {
   return {
     mynx,
     window,
-    /** Posts a new port to the window, as the app does at each page event. */
+    hellos,
+    /** Posts a port to the window, as the app does when the page asks (only then). */
     port(calls = bridgeCalls()) {
+      if (!hellos.length) throw new Error('a port before mynx.js asked for one');
       const port = new FakePort();
       listeners.forEach((l) => l({ data: 'mynx-bridge', ports: [port] }));
       if (calls) port.hello(calls);

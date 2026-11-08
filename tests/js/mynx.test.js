@@ -18,6 +18,15 @@ test('ready resolves with the hello, and app and can follow it', async () => {
   assert.deepEqual([...page.mynx.can], ['battery', 'torch']);
 });
 
+test('it asks for the port once, no-cors and uncached, after its listener is on', () => {
+  const page = load();
+  assert.equal(page.hellos.length, 1);
+  const [url, options, listeners] = page.hellos[0];
+  assert.equal(url, 'https://mynx.invalid/hello');
+  assert.deepEqual(options, { mode: 'no-cors', cache: 'no-store' });
+  assert.ok(listeners >= 1);
+});
+
 test('messages that are not the bridge are ignored', async () => {
   const page = load();
   page.other('hello');
@@ -109,7 +118,7 @@ test('the first port is kept: a later one is closed and calls keep going on the 
   assert.equal(second.sent.length, 0);
 });
 
-test('a port that comes after a late load is the first one', async () => {
+test('calls made before the port came wait for it', async () => {
   const page = load();
   const answer = page.mynx.torch.off();
   const port = page.port();

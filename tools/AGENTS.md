@@ -532,7 +532,8 @@ one back.
 #### The phone from JavaScript
 
 An app's page reaches the phone through `mynx.js`, which mynx serves
-to every page. Load it in the head, before your own scripts:
+to every page (it asks mynx for its connection when it loads, so one
+added later works too). Load it in the head, before your own scripts:
 
 ```html
 <script src="https://mynx.invalid/mynx.js"></script>

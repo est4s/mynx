@@ -14,12 +14,14 @@
 //
 // HOW IT TALKS TO MYNX
 //
-// The app posts a MessagePort to the window with the message data
-// 'mynx-bridge' (window 'message' event, event.ports[0]), at
-// onPageCommitVisible and again at onPageFinished. mynx.js keeps the
-// FIRST port it receives for the page and closes any later one, so
-// calls started while the page loads keep going (a script loaded late
-// takes whichever comes first for it). On the port:
+// Once its 'message' listener is attached, mynx.js asks for the port:
+// fetch('https://mynx.invalid/hello', {mode: 'no-cors', cache:
+// 'no-store'}). The app intercepts that request, checks the page's
+// origin and posts one MessagePort to the main frame with the message
+// data 'mynx-bridge' (window 'message' event, event.ports[0]). A script
+// loaded late works the same way: it asks when it loads. mynx.js keeps
+// the FIRST port it gets and closes any later one; with none within
+// 5 s, mynx.ready rejects 'no-bridge'. On the port:
 //   app → page {"hello":{"app","label","calls":[…]}} first,
 //              {"id":N,"line":{…}} a stream's reading,
 //              {"id":N,"reply":{"ok":true,…}} or
@@ -68,6 +70,7 @@
   const MAX_BYTES = 16 * 1024 * 1024;
   const NO_BRIDGE = "no bridge: this page isn't an app's own page in mynx";
   const page = window;
+  const HELLO_URL = 'https://mynx.invalid/hello';
 
   /**
    * A refusal. `code` is 'denied', 'refused', 'closed' or 'no-bridge'
@@ -119,6 +122,14 @@
     next.onmessage = (e) => received(e.data);
     if (typeof next.start === 'function') next.start();
   });
+
+  // Ask for the port, now that the listener hears it. The answer is
+  // opaque (no-cors): the port is what counts, or no-bridge in 5 s.
+  try {
+    Promise.resolve(page.fetch(HELLO_URL, { mode: 'no-cors', cache: 'no-store' })).catch(() => {});
+  } catch (e) {
+    // No fetch (not a browser): no port, so no-bridge in 5 s.
+  }
 
   function received(text) {
     let message;
