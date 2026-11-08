@@ -76,11 +76,12 @@ private const val APP_NOTICE_ID_BASE = 5000
  * (which file a request gets, when to reload, the log's lines, the
  * bridge) is core's.
  *
- * The bridge: at each page load's commit and finish the screen offers a
- * new message channel's port to the app's origin, once core's
- * [Bridge.refusal] says go; each is a [BridgeSession] (mynx.js keeps the
- * first), and all of a load's stay open until the next page load starts
- * or the screen finishes.
+ * The bridge: mynx.js asks for a port with a request for
+ * `https://mynx.invalid/hello` once it listens; the screen answers 204
+ * and posts a new message channel's port to the app's origin, if the
+ * view is on it and core's [Bridge.refusal] says go. Each port is a
+ * [BridgeSession]; all of a page's stay open until the next page load
+ * starts or the screen finishes.
  *
  * From a home screen shortcut ([WEB_APP_FROM_SHORTCUT]) it starts and
  * binds the service itself and runs core's open step, showing progress
@@ -572,9 +573,10 @@ class WebAppActivity : Activity(), FrontActivity {
         current.forEach { it.close() }
     }
 
-    // A new channel for this page load, posted to the app's origin only (Android delivers it only there).
-    // Earlier ones of the same load stay open: mynx.js keeps the first port it gets.
+    // A new channel for a hello, posted to the app's origin only (Android delivers it only there).
+    // Earlier ones of the same page stay open: each script that asked has its own.
     private fun offerBridge() {
+        if (isDestroyed) return
         val bridge = Companion.bridge ?: return
         val current = app ?: return
         val origin = originOf(webView.url) ?: return
@@ -626,6 +628,14 @@ class WebAppActivity : Activity(), FrontActivity {
             return try {
                 // mynx.js, for any page: alone it has no power (the bridge's port does).
                 if (host.equals(WEB_APP_DOMAIN, ignoreCase = true)) {
+                    // mynx.js listens and asks for its port.
+                    if (url.encodedPath == "/hello" && url.encodedQuery == null) {
+                        main.post { offerBridge() }
+                        return WebResourceResponse(
+                            "text/plain", null, 204, "No Content", mapOf("Cache-Control" to "no-store"),
+                            ByteArrayInputStream(ByteArray(0)),
+                        )
+                    }
                     return response(apps.bridgeScript(req.method ?: "GET", url.encodedPath ?: "/"))
                 }
                 val target = webAppNameOfHost(host) ?: return null
@@ -643,14 +653,6 @@ class WebAppActivity : Activity(), FrontActivity {
         // A new page load: the last one's bridge ends (navigation, reload, auto-reload).
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             closeBridge()
-        }
-
-        override fun onPageCommitVisible(view: WebView?, url: String?) {
-            offerBridge()
-        }
-
-        override fun onPageFinished(view: WebView?, url: String?) {
-            offerBridge()
         }
 
         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
