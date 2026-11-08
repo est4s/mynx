@@ -94,20 +94,35 @@ test('a call the app does not offer is refused without asking it', async () => {
   assert.equal(port.sent.length, 0);
 });
 
-test('a new port closes the calls on the old one, and calls go to the new one', async () => {
+test('the first port is kept: a later one is closed and calls keep going on the first', async () => {
   const page = load();
   const first = page.port();
   const answer = page.mynx.battery();
+  const sent = await first.call();
+  const second = page.port(null);
+  assert.equal(second.closed, true);
+  assert.equal(second.onmessage, null);
+  first.reply(sent.id, { ok: true, battery: { percent: 5 } });
+  assert.deepEqual(await answer, { battery: { percent: 5 } });
+  page.mynx.battery();
   await first.call();
-  const second = page.port();
-  const error = await answer.catch((e) => e);
-  assert.equal(error.code, 'closed');
-  const again = page.mynx.battery();
-  const sent = await second.call();
-  second.reply(sent.id, { ok: true, battery: {} });
-  assert.deepEqual(await again, { battery: {} });
-  // Late answers on the old port are dropped.
-  first.reply(1, { ok: true });
+  assert.equal(second.sent.length, 0);
+});
+
+test('a port that comes after a late load is the first one', async () => {
+  const page = load();
+  const answer = page.mynx.torch.off();
+  const port = page.port();
+  port.reply((await port.call()).id, { ok: true });
+  assert.deepEqual(await answer, {});
+});
+
+test('a call the session closed under rejects closed', async () => {
+  const page = load();
+  const port = page.port();
+  const answer = page.mynx.location();
+  port.reply((await port.call()).id, { ok: false, error: 'the page closed', code: 'closed' });
+  assert.equal((await answer.catch((e) => e)).code, 'closed');
 });
 
 test('clipboard.get gives the text; set and share percent-encode as mynx does', async () => {
@@ -194,10 +209,13 @@ test('a refused stream rejects done and throws from the iterator', async () => {
 
 test('a stream whose session closed rejects closed', async () => {
   const page = load();
-  page.port();
+  const port = page.port();
   const stream = page.mynx.battery.stream();
-  await new Promise((resolve) => setImmediate(resolve));
-  page.port();
+  const sent = await port.call();
+  page.port(null); // closed, and the stream goes on
+  port.line(sent.id, { percent: 9 });
+  assert.deepEqual((await stream.next()).value, { percent: 9 });
+  port.reply(sent.id, { ok: false, error: 'the page closed', code: 'closed' });
   await assert.rejects(stream.done, (e) => e.code === 'closed');
 });
 

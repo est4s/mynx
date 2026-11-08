@@ -15,9 +15,11 @@
 // HOW IT TALKS TO MYNX
 //
 // The app posts a MessagePort to the window with the message data
-// 'mynx-bridge' (window 'message' event, event.ports[0]); a new one may
-// come for the same page (mynx.js keeps the latest; calls in flight on
-// an older port reject 'closed'). On the port:
+// 'mynx-bridge' (window 'message' event, event.ports[0]), at
+// onPageCommitVisible and again at onPageFinished. mynx.js keeps the
+// FIRST port it receives for the page and closes any later one, so
+// calls started while the page loads keep going (a script loaded late
+// takes whichever comes first for it). On the port:
 //   app → page {"hello":{"app","label","calls":[…]}} first,
 //              {"id":N,"line":{…}} a stream's reading,
 //              {"id":N,"reply":{"ok":true,…}} or
@@ -42,7 +44,7 @@
 //   'refused'   anything else mynx refused: a setting off
 //               (android-location), Android's permission refused, bad
 //               options, no such sensor or device, a timeout, …
-//   'closed'    the page's session ended under it (a new port, the
+//   'closed'    the page's session ended under it (a reload, the
 //               screen closing), or the permission dialog closed with
 //               no answer
 //   'no-bridge' not in mynx, not on the app's origin, a served app
@@ -87,7 +89,7 @@
 
   // --- the channel ----------------------------------------------------
 
-  let port = null; // the port whose hello came last
+  let port = null; // the first port the page got: the one it keeps
   let hello = null;
   let nextId = 1;
   const open = new Map(); // id → {call, line(object), reply(object), fail(MynxError)}
@@ -108,11 +110,17 @@
   page.addEventListener('message', (event) => {
     if (event.data !== 'mynx-bridge' || !event.ports || !event.ports[0]) return;
     const next = event.ports[0];
-    next.onmessage = (e) => received(next, e.data);
+    if (port) {
+      // The page has its bridge: the app's later port isn't needed.
+      if (typeof next.close === 'function') next.close();
+      return;
+    }
+    port = next;
+    next.onmessage = (e) => received(e.data);
     if (typeof next.start === 'function') next.start();
   });
 
-  function received(from, text) {
+  function received(text) {
     let message;
     try {
       message = typeof text === 'string' ? JSON.parse(text) : text;
@@ -121,13 +129,6 @@
     }
     if (!message || typeof message !== 'object') return;
     if (message.hello) {
-      if (from !== port) {
-        // A new session: what ran on the old port ended with it.
-        const calls = [...open.values()];
-        open.clear();
-        calls.forEach((c) => c.fail(new MynxError("the page's bridge was renewed, which ended the call", 'closed', c.call)));
-        port = from;
-      }
       hello = message.hello;
       mynx.app = hello.app;
       mynx.label = hello.label;
@@ -137,7 +138,6 @@
       waiters.splice(0).forEach((w) => w.resolve());
       return;
     }
-    if (from !== port) return;
     const call = open.get(message.id);
     if (!call) return;
     if (message.line !== undefined) {
@@ -173,11 +173,10 @@
     }
     const id = nextId++;
     const entry = Object.assign({ call }, handlers);
-    const on = port;
     open.set(id, entry);
-    on.postMessage(JSON.stringify({ id, call, args: lines }));
+    port.postMessage(JSON.stringify({ id, call, args: lines }));
     return () => {
-      if (open.get(id) === entry && port === on) on.postMessage(JSON.stringify({ id, cancel: true }));
+      if (open.get(id) === entry) port.postMessage(JSON.stringify({ id, cancel: true }));
     };
   }
 
