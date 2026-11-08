@@ -84,26 +84,14 @@ are in git history: the full log up to entry 92 is
   subagents (entry 155); all 10 phone tests passed with the C3
   (entry 156), and the re-bind check (entry 157). Merged (PR #54).
   The plan and its tests: `git show 3539809:docs/WORKLOG.md`.
-- **Services count in the launcher menu** (`Services ● 2`): built
-  (entry 161, branch `menu-services-count`); not yet on the phone.
+- **Services count in the launcher menu** (`Services ● 2`): all 4
+  phone tests passed (entry 161); merged (PR #58).
 - **Workflow:** trunk-based, `main` protected (PRs only, entry 83).
   CI builds PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`.
 
 
 ## Next
-
-### 0. Services count in the menu (branch `menu-services-count`)
-
-Phone tests on its mynx dev build, then merge:
-1. No service running: the launcher menu shows plain **Services**.
-2. Start one (`mynx service add t -- sleep 600`, then `mynx service
-   start t`), go back to the menu (any key from a submenu redraws
-   it): **Services ● 1**, the same number as the strip's `● 1`.
-3. A second one: `● 2`; stop both: plain **Services** again.
-4. Exit from the notification with one running, open the app: no
-   stale count (`/tmp/.mynx/services-active` gone, or the autostart
-   ones' count).
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -254,8 +242,10 @@ status, Play's item gone from "Smaller things" (Play left the
 roadmap, entry 160). CI's runner moved to Ubuntu 26.04, whose
 coreutils is one multicall binary, so the sound tests' copy of
 `sleep` named `pulseaudio` refused to run; they now fake Pulse with
-a script of that name (the scripts only check its comm). Build run
-42423781994.
+a script of that name (the scripts only check its comm). On build
+run 42423781994 the maintainer passed all 4 phone tests (no count,
+`● 1` as the strip, `● 2` and back, no stale count after Exit);
+merged as PR #58.
 
 ### 2026-11-08 (160): Roadmap trimmed
 
