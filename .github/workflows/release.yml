@@ -133,7 +133,16 @@ jobs:
       - name: Add the app's tools (mynx, editors, themes, release notes)
         run: PRELOAD=build/libmynx-serial.so scripts/pack-tools.sh app/src/main/assets build/release-notes.json
 
+      # Cached so a GitHub release download outage (504s, 2026-11-08)
+      # can't block builds; the key changes with the pinned version.
+      - uses: actions/cache@v6
+        id: font-cache
+        with:
+          path: app/src/main/assets/fonts
+          key: font-${{ hashFiles('scripts/fetch-font.sh') }}
+
       - name: Add the terminal font
+        if: steps.font-cache.outputs.cache-hit != 'true'
         run: scripts/fetch-font.sh app/src/main/assets/fonts
 
       - name: Build the signed release APK

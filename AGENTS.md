@@ -189,6 +189,8 @@ See `docs/ROADMAP.md` "How it works". The details:
 - **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
   in CI by `scripts/fetch-font.sh` (release pinned by hash) into
   `app/src/main/assets/fonts/` with its `OFL.txt`; never committed.
+  CI caches that folder (keyed on the script), so a GitHub download
+  outage only matters when the version changes.
 - **Colours:** Termux's `colors.properties` format, parsed in `core`
   (`ColorScheme.kt`). Built-in themes are
   `core/src/main/resources/.../themes/NAME.colors.properties`, listed in
