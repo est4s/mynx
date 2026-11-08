@@ -497,7 +497,7 @@ class BridgeSessionTest {
     }
 
     @Test
-    fun `serial ports aren't there until part D`() {
+    fun `with no serial calls, serial ports aren't available`() {
         allow(AppPermission.SERIAL)
         call(1, "serial-list")
         assertEquals(refusal("serial ports aren't available here"), reply(1))

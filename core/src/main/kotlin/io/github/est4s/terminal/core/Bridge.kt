@@ -17,7 +17,7 @@ import java.util.Base64
  * - part C (tools) builds `tools/web/mynx.js` (whose JSDoc is the JS
  *   side of this contract), `mynx app permissions`/`shortcut`, the
  *   example and the guide;
- * - part D builds the `serial-*` calls ([BridgeSerial], `Rfc2217Client`).
+ * - part D builds the `serial-*` calls ([bridgeSerial], [Rfc2217Client]).
  * Change the shapes here first, then everything else.
  *
  * THE CHANNEL
@@ -188,24 +188,31 @@ import java.util.Base64
  *
  * THE SERIAL CALLS (part D, [BridgeSerial])
  *
- * The bridge is an RFC 2217 client of the port's own server
- * (`127.0.0.1:TCPPORT`, [BridgeHost.connectSerial]), as `serial-port`
- * is, so the rules stay: one user at a time (refused "PORT is busy"
- * while a program or the path has it), a Bluetooth link opens when it
- * arrives and closes when it leaves, RTS dropped before DTR on close,
- * raised DTR first.
+ * The bridge is an RFC 2217 client ([Rfc2217Client]) of the port's own
+ * server (`127.0.0.1:TCPPORT`, [BridgeHost.connectSerial]), as
+ * `serial-port` is, so the rules stay: one user at a time (refused "PORT
+ * is busy: another program has it" while a program or the path has it:
+ * listed `in_use`, or the server closing without a greeting), a
+ * Bluetooth link opens when it arrives and closes when it leaves, RTS
+ * dropped before DTR on close, raised DTR first. A server that greets
+ * and closes before answering our setup: refused "PORT didn't open:
+ * ERROR" (the port's `error` from `bt-list`, when it has one); no answer
+ * within [SERIAL_OPEN_SECONDS]: "PORT didn't open within 30 s".
  * - `serial-list` → `{"ports":[{"name","kind":"usb"|"bluetooth"|
  *   "ble-uart","path","url","in_use":BOOL,"device":TEXT}]}` from
- *   `usb-list`'s ports and `bt-list no-ask`'s bound ports (Bluetooth
- *   left out, not refused, when it can't be asked).
+ *   `usb-list`'s ports and `bt-list --no-ask`'s bound ports (Bluetooth
+ *   left out, not refused, when it can't be asked). `device`: a USB
+ *   device's product, maker or ids; a Bluetooth port's paired name or
+ *   address. `url` is null for a bound port not served now.
  * - `serial-open PORT [baud=N] [data=5..8] [parity=none|even|odd|mark|
  *   space] [stop=1|1.5|2] [lower]` (baud 115200, 8N1 unless given;
  *   `lower`: DTR and RTS down on open, DTR first, as the monitor's
  *   `--lower`; else both raised): a stream. First line
  *   `{"open":{"port":PORT,"handle":H,"baud":N}}` (H: an integer, per
- *   session), then `{"data":BASE64}` for what the port sends. Stopping
- *   it closes the port; a port that goes away (unplugged, the link
- *   dropped) answers a refusal with why.
+ *   session), then `{"data":BASE64}` for what the port sends (what came
+ *   before the open line follows it). Stopping it closes the port
+ *   (answer `{"ok":true}`); a port that goes away (unplugged, the link
+ *   dropped) answers a refusal, "PORT went away (WHY)".
  * - `serial-write H BASE64` → `{"bytes":N}` once handed to the socket.
  * - `serial-set H baud=N | dtr=0|1 | rts=0|1 | data=… | parity=… |
  *   stop=…` (any of them, in one call) → `{"ok":true}` once sent.
@@ -350,8 +357,8 @@ interface BridgeHost {
     fun serviceRunning(name: String): Boolean
 
     /**
-     * Connects to 127.0.0.1:[tcpPort] off the main thread (part D;
-     * `app/.../BridgeSerial.kt`, a thread of its own). [ready] gets the
+     * Connects to 127.0.0.1:[tcpPort] off the main thread
+     * (`app/.../BridgeSockets.kt`, threads of its own). [ready] gets the
      * socket or why not; then [received] gets what comes in, and
      * [closed] once when the other side closed or failed (null: closed
      * cleanly).
@@ -368,8 +375,8 @@ interface BridgeHost {
 }
 
 /**
- * Part D's serial calls for one session ([bridgeSerial] makes one per
- * session; until D lands, [NO_BRIDGE_SERIAL]). [calls] are the
+ * The serial calls for one session ([bridgeSerial] makes one per
+ * session; with none, [NO_BRIDGE_SERIAL]). [calls] are the
  * `serial-*` [Later]s (see THE SERIAL CALLS); [close] lets go of every
  * port the session opened (RTS, then DTR down).
  */
@@ -395,8 +402,8 @@ val BRIDGE_SERIAL_CALLS = listOf("serial-list", "serial-open", "serial-write", "
 /**
  * The bridge: one per service, on the main thread. [calls] runs the
  * requests; [apps] finds apps and paths; [permissions] decides; [host]
- * is the app; [serial] makes a session's [BridgeSerial] (part D's
- * `bridgeSerial`); [rootfs] is the rootfs's host folder (temp files).
+ * is the app; [serial] makes a session's [BridgeSerial] ([bridgeSerial]
+ * in the app); [rootfs] is the rootfs's host folder (temp files).
  */
 class Bridge(
     private val calls: MynxRequests,
