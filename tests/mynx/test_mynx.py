@@ -2632,7 +2632,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertIn("closing the app stops it", run.stdout)
 
     def test_app_open_refused(self):
-        error = "the app must be on screen to open an app: bring mynx to the front and try again"
+        error = "mynx must be on screen to open an app: bring it to the front and try again"
         self.start_app({"app-open": {"ok": False, "error": error}})
         run = self.mynx("app", "open", "hello")
         self.assertEqual(run.returncode, 2)

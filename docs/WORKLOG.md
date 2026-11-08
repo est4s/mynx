@@ -101,14 +101,10 @@ are in git history: the full log up to entry 92 is
 Part 1 passed all 13 phone tests (entry 164) and merges with PR #59.
 The plan, design and tests: `git show 345d224:docs/WORKLOG.md`; the
 decisions are in AGENTS.md ("Apps (web apps, part 1)") and
-`WebApps.kt`'s KDoc. **Small follow-ups** (from the phone tests):
-- the WebView's own `/favicon.ico` request logs a 404 at every open
-  of an app without one: don't log that one;
-- "the app must be on screen to open an app" reads badly now that
-  web apps are "apps": "mynx must be on screen to open an app";
-- one `sed -i` on `index.html` may have reloaded Probe more than once
-  (three `probe loaded` lines in 12 s; unconfirmed: the maintainer
-  may have reloaded by hand).
+`WebApps.kt`'s KDoc. **Small follow-up** (from the phone tests): the WebView's own
+`/favicon.ico` request logs a 404 at every open of an app without
+one: don't log that one. (The refusal now says "mynx must be on
+screen to open an app"; the extra reloads in test 6 were by hand.)
 
 **Part 2** (the roadmap's "Web apps"): the `mynx` JavaScript bridge,
 permissions per app, home screen shortcuts. Plan it with the

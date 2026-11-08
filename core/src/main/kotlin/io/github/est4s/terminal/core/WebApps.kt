@@ -843,7 +843,7 @@ class WebAppLauncher(
     private fun open(args: List<String>, reply: PendingReply) {
         val app = named(args, "app-open", reply) ?: return
         if (!host.onScreen) {
-            return reply.refuse("the app must be on screen to open an app: bring mynx to the front and try again")
+            return reply.refuse("mynx must be on screen to open an app: bring it to the front and try again")
         }
         val port = app.port
         if (app.kind == WebAppKind.STATIC || port == null) return show(app, null, reply)

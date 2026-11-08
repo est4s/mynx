@@ -811,7 +811,7 @@ class WebAppLauncherTest {
         assertEquals(refused("no app named Bad_Name (mynx app list shows them)"), ask("app-open", "Bad_Name"))
         host.onScreen = false
         assertEquals(
-            refused("the app must be on screen to open an app: bring mynx to the front and try again"),
+            refused("mynx must be on screen to open an app: bring it to the front and try again"),
             ask("app-open", "hello"),
         )
         host.onScreen = true
