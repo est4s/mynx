@@ -96,7 +96,16 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
-### 0. Web apps, part 2: planned for subagents (branch `webapps-2`)
+### 0. Web apps, part 2: built, awaiting CI and the phone tests (branch `webapps-2`)
+
+**Status (entry 168):** parts 0, A, B, C and D are built and merged
+into `webapps-2`; the suites pass here. Left: CI green (B's and D's
+Kotlin has never compiled), `scripts/deliver.sh`, the 22 phone tests
+below, the README, then merging the PR. **Changed during the build
+(main agent's decision):** no ports posted at page commit/finish;
+mynx.js asks with a `fetch` of `https://mynx.invalid/hello` and gets
+one port per ask (posting at commit/finish dropped calls made while
+loading, and missed scripts loaded late).
 
 **Part 1** passed all 13 phone tests (entry 164) and merged (PR #59).
 The plan, design and tests: `git show 345d224:docs/WORKLOG.md`; the
@@ -624,6 +633,24 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-08 (168): Web apps part 2 built by subagents
+
+Part 0 (the contract: `Bridge.kt`, `AppPermissions.kt`, the
+`ReplySink` seam, `mynx.js`'s JSDoc), then A (core), B (the app:
+the channel, `FrontActivity`, the prompt, shortcuts, `fullscreen`
+yes/edge, `screen-awake`), C (`mynx.js` tested under node against the
+CLI's argument lines, `mynx app permissions`/`shortcut`, the menu's
+"Add to home screen…", the `gadgets` example, the guide) and D (serial
+from JavaScript: `Rfc2217Client`, `bridgeSerial`) in worktrees,
+merged into `webapps-2`. The contract changed once during the build:
+the two ports per page load became one per `mynx.invalid/hello`
+(dropped calls during loading; late scripts got none). D also made
+the bridge's log lines match the KDoc. Decisions where the contract
+was open are in its KDoc. AGENTS.md has the Architecture entry. Known
+unrelated test failures here: `test_undo_list` (time zone), and the
+serial-port busy test once (flaky; passes alone). Not yet compiled:
+`app/` (CI).
 
 ### 2026-11-08 (167): Web apps part 2 planned
 

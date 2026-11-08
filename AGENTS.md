@@ -691,10 +691,41 @@ See `docs/ROADMAP.md` "How it works". The details:
   Static apps reload when core's folder fingerprint changes (polled
   once a second off the main thread while on screen). Console, load
   and HTTP errors go to `/tmp/.mynx/apps/NAME.log` (`WebAppLog`).
-  No JavaScript bridge yet (part 2). Today's programs in a tab are
+  The bridge is part 2 (below). Today's programs in a tab are
   **terminal apps** (`tools/terminal-apps/`, `~/terminal-apps`, and
   old Debians' executables in `~/apps`); the menu's bash scan of apps
   must give core's labels (both tested on `tests/fixtures/apps/`).
+- **Apps (web apps, part 2): the bridge** (`core/.../Bridge.kt`,
+  `AppPermissions.kt`, `BridgeSerial.kt`, `Rfc2217Client.kt`, whose
+  KDoc is the contract; `app/.../WebAppActivity.kt`,
+  `FrontActivity.kt`, `AppShortcuts.kt`, `BridgeSockets.kt`;
+  `tools/web/mynx.js`; maintainer's decisions, 2026-11-08, entry 167):
+  pages load `https://mynx.invalid/mynx.js` (served by the intercept)
+  and call `mynx.location()` and the rest, named like the commands.
+  **Getting a port:** mynx.js asks with a `fetch` of
+  `https://mynx.invalid/hello`; the intercept answers 204 and, if the
+  view's current origin is the app's and `Bridge.refusal()` says go
+  (a served app only while its own service runs: its origin is just a
+  localhost port), posts one `createWebMessageChannel` port to that
+  origin, a `BridgeSession`; not `addJavascriptInterface`, which every
+  frame and origin sees. Posting at page commit/finish lost scripts
+  loaded late. Every message is checked against the current origin
+  again; all of a page's sessions close when it goes, cancelling what
+  they started. **The seam:** `PendingReply` writes to a `ReplySink`
+  (the file one is `mynx`'s, pinned byte for byte);
+  `MynxRequests.call()` runs a request in-process, and `BRIDGE_CALLS`
+  is the allow-list (no config requests). **Permissions:**
+  `~/.config/mynx/app-permissions.conf` (`[app]`, `perm =
+  allow|deny`), asked once on the app's screen for location, camera,
+  microphone, clipboard reading, notifications, Bluetooth and serial;
+  services are only the app's own, with no prompt. Android's
+  permission dialogs and the camera's result go through whichever
+  `FrontActivity` is in front, so they work from an app's screen.
+  **Serial:** the bridge is an RFC 2217 client of the port's own
+  server, so one user at a time stays as it is. Also `fullscreen =
+  no|yes|edge` (edge runs under the cutout), `screen-awake`, and
+  pinned shortcuts (`mynx app shortcut`, the menu's "Add to home
+  screen…") that start mynx and the app's service.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's
