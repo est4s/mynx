@@ -354,11 +354,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   `MainActivity`, which refreshes the bridge), and `mynx usb allow`
   asks with `requestPermission` (a mutable, explicit PendingIntent).
   Requests: `usb-list`, `usb-allow` (`usbRequests()`).
-  **Serial monitor** (`tools/apps/serial`, `mynx usb monitor`, bar
-  `serial`): an app like the others, so the menu's Apps lists it; it
+  **Serial monitor** (`tools/terminal-apps/serial`, `mynx usb monitor`,
+  bar `serial`): a terminal app like the others, so the menu's
+  Terminal apps lists it; it
   opens the `/dev/serial` path and sets DTR/RTS with plain
   `TIOCMBIS`/`TIOCMBIC`, which the preload passes to the helper. No
-  new-tab request: open a tab and run it (or Apps). Its resets follow
+  new-tab request: open a tab and run it (or Terminal apps). Its resets follow
   esptool's sequences (`reset()`); the plain reset pulses RTS (an
   ESP32's EN) and then DTR (an Arduino's reset capacitor).
 - **Serial preload** (`tools/src/libmynx-serial.c`,

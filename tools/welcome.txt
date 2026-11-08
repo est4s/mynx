@@ -12,8 +12,10 @@ Settings  menu → Settings: theme, font, key
           bars, the menu.
 Files     menu → Files, or type files. Phone
           storage is /storage/emulated/0.
-Apps      menu → Apps: a compass, a spirit
-          level, a guitar tuner and more.
+Apps      menu → Apps: pages in HTML that open
+          on a screen of their own: a sketch.
+          menu → Terminal apps: a compass, a
+          spirit level, a guitar tuner and more.
 AI agents menu → AI agents installs Claude Code,
           Codex or Gemini CLI. Ask one to change
           your setup; it reads ~/AGENTS.md.

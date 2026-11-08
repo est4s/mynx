@@ -76,7 +76,8 @@ and applies them. See "Changing settings" below.
 | Shell setup: eza aliases, prompt, tab titles, menu hook | `~/.bashrc` |
 | Prompt (starship) | `~/.config/starship.toml` |
 | Menu state (last choices) | `~/.local/state/mynx/menu` |
-| Apps | `/opt/mynx/apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`, `serial`), yours in `~/apps` |
+| Apps (HTML and JavaScript, on a screen of their own) | `/opt/mynx/apps` (`sketch`), yours in `~/apps` (see "Apps") |
+| Terminal apps | `/opt/mynx/terminal-apps` (`compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner`, `metronome`, `serial`), yours in `~/terminal-apps` (and `~/apps`, from before) |
 | Games | `/opt/neon-games` (`rogue`, `drive`, `flap`), yours in `~/games`; `play` runs one with its key bar |
 | The app's tools: `mynx`, `menu`, `files`, `keybar`, `play`, the editors | `/opt/mynx/bin` |
 | Built-in key bars and themes, to read or copy | `/opt/mynx/keybars`, `/opt/mynx/themes` |
@@ -140,6 +141,10 @@ their own.
 | `mynx audio play FILE` | play a sound file through the phone's speaker, until it ends |
 | `mynx audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
 | `mynx sound` | whether the sound device is on; `mynx sound start` starts it again, `mynx sound install` installs it (see "The phone") |
+| `mynx app [list]` | the apps: name, label, static or served, and their `app.conf` problems (see "Apps") |
+| `mynx app open NAME` | open an app on its own screen (the app must be on screen); a served one's service is started first |
+| `mynx app reload NAME` | reload an app's open screen |
+| `mynx app log NAME [-n N]` | the last N lines (100) of an app's log: its console, errors and failed loads |
 | `mynx service [list]` | the background services: state, uptime, restarts (see "Background services") |
 | `mynx service add NAME [OPTIONS] -- COMMAND…` | add a service to `services.conf`; `--autostart`, `--restart no\|on-failure\|always`, `--cwd DIR`, `--restart-limit N`, `--restart-delay S`, `--stop-timeout S` |
 | `mynx service start\|stop\|restart NAME` | start, stop (TERM, then force after `stop-timeout`) or restart a service |
@@ -408,6 +413,89 @@ see `MYNX_SERVICE=NAME`.
 - **Wakelock:** with `wakelock = auto` (the default), the app keeps
   the CPU awake while any service runs, so servers answer with the
   screen off.
+
+### Apps
+
+Apps are pages in HTML, CSS and JavaScript that open on a screen of
+their own, not in a tab, with no build and no install. The menu's
+**Apps** lists them; `mynx app open NAME` opens one. Each app is its
+own entry in Android's recent apps, and opening it again brings that
+one back.
+
+- **An app is a folder:** `~/apps/NAME/` with an `index.html`, and
+  whatever it loads (scripts, styles, images, sounds) beside it.
+  NAME is `a-z`, `0-9` and `-`, up to 40 characters, not starting or
+  ending with `-` (it's the host name in the app's address). A link
+  to a folder elsewhere works too: `ln -s ~/pixel-hero/assets
+  ~/apps/pixel-hero`. The built-in ones are in `/opt/mynx/apps`; one
+  in `~/apps` with the same name wins. Executable files in `~/apps`
+  aren't apps: they're terminal apps from before (see "Terminal
+  apps" under "More of the setup").
+- **Its name in the menu:** `app.conf`'s `name`, else the `<title>`
+  of `index.html`, else the folder's name (`pixel-hero` → "Pixel
+  Hero"), up to 20 characters.
+- **`app.conf`** (optional): one `key = value` per line, `#`
+  comments. Bad lines are skipped; `mynx check` lists them.
+
+  | Key | Means |
+  |---|---|
+  | `name` | its name in the menu and on its screen (up to 20 characters) |
+  | `icon` | a PNG, JPEG or WebP file in the folder (for home-screen shortcuts, later) |
+  | `url` | `http://127.0.0.1:PORT/…` or `http://localhost:PORT/…`: a served app (below) |
+  | `service` | the background service that serves `url` |
+
+- **Where it runs:** at `https://NAME.mynx.invalid/`, an address of
+  its own, so its `localStorage`, IndexedDB and cookies are its own
+  and stay. It reads only the files in its folder: a link out of it,
+  or `..`, is "not found". The internet works as in a browser
+  (`fetch` to other sites, with their CORS rules). Sound starts after
+  a tap, as in a browser.
+- **No phone features yet:** JavaScript can't reach the sensors, the
+  camera, notifications or `mynx` commands. For those, make a
+  terminal app or an Android app (see "Making an app").
+- **The screen:** a slim bar with the app's name, back, reload, and ⋮
+  (Open in browser, Close). The back key goes back in the page's
+  history; at its first page it closes the screen.
+- **Auto-reload:** while its screen shows, an app reloads by itself
+  when a file in its folder changes: edit `index.html` and the phone
+  shows the change within a second or two. `mynx app reload NAME`
+  reloads it by hand.
+- **Errors, for agents** (there's no browser console here): the
+  page's `console.log`, `console.warn` and `console.error`, uncaught
+  errors, failed loads and HTTP errors go to
+  `/tmp/.mynx/apps/NAME.log`; `mynx app log NAME` prints the last 100
+  lines (`-n N` for more). Each opening adds a `--- opened` line, then
+  one line per message: `[HH:MM:SS.mmm] LEVEL SOURCE:LINE MESSAGE`. It
+  keeps the last 1000 lines.
+- **Served apps:** an app can come from a server running here instead,
+  a Python backend say, run as a background service (see "Background
+  services"). Its `app.conf`:
+
+  ```
+  name = Notes
+  url = http://127.0.0.1:8090/
+  service = notes
+  ```
+
+  with `mynx service add notes --cwd ~/apps/notes -- python3
+  server.py 8090` (listening on 127.0.0.1). Opening the app starts the
+  service if it isn't running and waits up to 15 s for the port;
+  closing the app's screen (closing it, not just leaving it) stops the
+  service again, **only if opening it started it**: one that was
+  already running, or has `autostart = yes`, is left alone. Plain
+  `http` works for 127.0.0.1 and localhost only. A served app's
+  `index.html`, if any, isn't used; it isn't kept to its folder (its
+  server decides) and doesn't reload by itself (`mynx app reload
+  NAME`). Without `service`, something must already answer on the
+  port.
+- **The example:** `/opt/mynx/apps/sketch`, a finger-drawing pad that
+  keeps the drawing in `localStorage` (`index.html`, `sketch.js`,
+  `sketch.css`). To start one of your own from it: `cp -r
+  /opt/mynx/apps/sketch ~/apps/my-pad`.
+- `mynx app` lists them; `--json` gives `apps`: `name`, `label`,
+  `path`, `kind` (`static` or `served`), `origin`, `url`, `service`,
+  `icon` and `problems`. `mynx app open NAME` needs the app on screen:
+  Android doesn't let it open a screen from the background.
 
 ### The phone
 
@@ -678,7 +766,7 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - The URL is on localhost: other apps on the phone could reach it
   too, while mynx runs and the device is plugged in.
 - **Serial monitor:** `mynx usb monitor [PORT] [--baud N]` (the
-  `serial` command, the menu's Apps → Serial monitor) shows what the
+  `serial` command, the menu's Terminal apps → Serial monitor) shows what the
   board sends and sends what you type, Enter as CR, at 115200 baud
   unless given. With several ports it asks which. Its key bar,
   `serial`, has Esc, Ctrl, Tab, the arrows, Ctrl+C, Ctrl+D (a
@@ -1003,7 +1091,8 @@ line, in order; labels up to 20 characters. Actions:
 |---|---|
 | `shell` | leave the menu for the shell |
 | `files` | the file manager |
-| `apps` | the Apps menu (see "Apps") |
+| `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps") |
+| `terminal-apps` | the Terminal apps menu (see "Terminal apps" under "More of the setup") |
 | `games` | the Games menu |
 | `settings` | the Settings menu: App settings, System, Help |
 | `app-settings` | the settings editors (`mynx edit`) |
@@ -1022,9 +1111,12 @@ AI agents item), whatever the menu file says.
 To change it: `mynx menu edit`, edit the file, `mynx check` (it
 checks the menu file too). Any executable file in `~/games` shows up
 under Games, named after the file: `ln -s /path/to/game ~/games/my-game`
-shows "My Game". The menu starts games with `play`. Apps work the same
-way from `/opt/mynx/apps` and `~/apps`, named by a `# label: Name` line
-near the top of the file.
+shows "My Game". The menu starts games with `play`. Terminal apps work
+the same way from `/opt/mynx/terminal-apps`, `~/terminal-apps` and
+`~/apps`, named by a `# label: Name` line near the top of the file.
+Apps are folders instead (see "Apps"). A menu file from before
+terminal apps (with `apps` but no `terminal-apps`) shows "Terminal
+apps" at the end of the Apps list.
 
 ### Key bars
 
@@ -1100,9 +1192,9 @@ shows the generic game bar until `my-tool.conf` exists.
   its keys). Quick places on `b`: `h` home, `d` Download, `p` Pictures,
   `c` DCIM, `r` `/`; set `NNN_BMS` in `~/.bashrc` for your own (format
   `key:path;key:path`). Text files open in `$EDITOR` (nano).
-- **Apps:** example programs that use the phone, in Python, to run,
-  read and copy. Each is a command and an item in the menu's Apps,
-  shown with its own key bar; `--help` lists its keys.
+- **Terminal apps:** example programs that use the phone, in Python,
+  to run, read and copy. Each is a command and an item in the menu's
+  Terminal apps, shown with its own key bar; `--help` lists its keys.
 
   | Command | What it is | Uses |
   |---|---|---|
@@ -1116,13 +1208,15 @@ shows the generic game bar until `my-tool.conf` exists.
   | `serial` | a serial monitor for a USB or Bluetooth board (`mynx usb monitor`) | a `/dev/serial` port |
 
   The microphone apps read it through the sound device with `parec`
-  (`/opt/mynx/apps/mic.py`). `tuner` and `metronome` need numpy and
-  offer to install it (`apt install python3-numpy`) the first time.
-  Settings they keep go in `~/.config/NAME/`. **Your own app:** put an
-  executable in `~/apps` (or link one there) with a `# label: Name`
-  line near the top, and give it a bar: `mynx keybar edit NAME`; the
-  menu runs it as `keybar NAME,shell FILE`. For an Android app (an
-  APK, a home-screen widget) instead, see "Making an app".
+  (`/opt/mynx/terminal-apps/mic.py`). `tuner` and `metronome` need
+  numpy and offer to install it (`apt install python3-numpy`) the
+  first time. Settings they keep go in `~/.config/NAME/`. **Your own
+  terminal app:** put an executable in `~/terminal-apps` (or link one
+  there) with a `# label: Name` line near the top, and give it a bar:
+  `mynx keybar edit NAME`; the menu runs it as `keybar NAME,shell
+  FILE`. Executable files in `~/apps`, from before, show up too. For
+  an app in HTML (see "Apps") or an Android app (an APK, a home-screen
+  widget) instead, see "Making an app".
 - **Games:** `play GAME [args]` runs a game with the bar named after its
   file (`my-game.py` → `my-game`), else the generic `game` bar. `rogue`,
   `drive` and `flap` use it.
@@ -1188,21 +1282,30 @@ shows the generic game bar until `my-tool.conf` exists.
 
 **When someone asks for an app, ask which kind**, unless they said:
 
-- **A terminal app** that lives in mynx: a program in `~/apps` with
-  its own key bar, in the menu's Apps (see "Apps" above). Quick to
-  write and change, in Python, bash or anything Debian runs, and it
-  reaches the phone through `mynx`: sensors, location, camera,
-  microphone, flashlight, vibration, notifications. It runs only
-  inside mynx.
+- **An app** in HTML, CSS and JavaScript: a folder in `~/apps` that
+  opens on a screen of its own from the menu's Apps (see "Apps"). No
+  build and no install: edit a file and the open screen reloads, so
+  it's the quickest to try on the phone. Touch, drawing, Web Audio and
+  `localStorage` work as in a browser, and a Python backend can serve
+  it as a background service. No phone features from JavaScript yet
+  (sensors, camera, notifications). It runs only inside mynx.
+- **A terminal app** that lives in mynx: a program in
+  `~/terminal-apps` with its own key bar, in the menu's Terminal apps
+  (see "Terminal apps" under "More of the setup"). Quick to write and
+  change, in Python, bash or anything Debian runs, and it reaches the
+  phone through `mynx`: sensors, location, camera, microphone,
+  flashlight, vibration, notifications. It runs only inside mynx.
 - **An Android app** (an APK), installed on the phone like any other:
   its own icon, home-screen widgets, the whole Android API, and it
   runs without mynx. Each change is a build and an install, in plain
   Java (no Kotlin, Gradle or AndroidX libraries).
 
-Hints: "widget", "on my home screen", "give it to a friend" → an
-Android app. "Script", "tool", "uses my files or commands here",
-"quick" → a terminal app. Both at once works too: an Android widget
-can show what a terminal program serves (see below).
+Hints: "game", "page", "like an artifact", "quick to try on the
+phone", something to tap and draw on → an app. "Script", "tool",
+"uses my files or commands here", "needs the sensors" → a terminal
+app. "Widget", "on my home screen", "give it to a friend" → an
+Android app. Mixes work too: an app or an Android widget can show
+what a program here serves (see "Apps" and below).
 
 ### Building an Android app
 

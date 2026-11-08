@@ -38,6 +38,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         "~/games" \
         "~/apps" \
         "/opt/mynx/apps" \
+        "~/terminal-apps" \
+        "/opt/mynx/terminal-apps" \
         "/opt/mynx/bin" \
         "\`menu\`" "\`files\`" "\`keybar\`" "\`play\`" \
         "NNN_BMS" \
@@ -176,7 +178,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide says to ask which kind of app, and how to build an Android one" {
-    for text in "## Making an app" "ask which kind" "~/apps" \
+    for text in "## Making an app" "ask which kind" "~/apps" "~/terminal-apps" "**An app** in HTML" \
         "apt install aapt zipalign apksigner openjdk-21-jdk-headless" \
         "https://dl.google.com/android/maven2/com/android/tools/r8/" \
         "https://dl.google.com/android/repository/platform-34-" \
@@ -231,5 +233,14 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         "riscv:rv32" "probe-rs-tools-aarch64-unknown-linux-gnu" "ESP JTAG" \
         "interface is busy (errno 16)"; do
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+}
+
+@test "the guide explains apps: the folder, app.conf, where they run, the log, served apps" {
+    for text in "### Apps" "\`~/apps/NAME/\`" "\`app.conf\`" "https://NAME.mynx.invalid/" \
+        "/tmp/.mynx/apps/NAME.log" "mynx app log NAME" "\`--- opened\`" "/opt/mynx/apps/sketch" \
+        "**only if opening it started it**" "\`autostart = yes\`" "No phone features yet" \
+        "reloads by itself" "\`terminal-apps\`" "Terminal apps → Serial monitor"; do
+        grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }

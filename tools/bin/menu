@@ -8,9 +8,15 @@
 # Games: every executable in /opt/neon-games and ~/games shows up under
 #   Games, named after the file (neon-flap.py → "Neon Flap"). Add your own:
 #   ln -s /path/to/game ~/games/my-game
-# Apps: the same for /opt/mynx/apps and ~/apps; a "# label: Name" line near
-#   the top of the file names it in the menu. Each runs with its own key bar
-#   (the file's name without its ending), else the shell's.
+# Terminal apps: the same for /opt/mynx/terminal-apps, ~/terminal-apps and
+#   (old Debians) ~/apps; a "# label: Name" line near the top of the file
+#   names it in the menu. Each runs with its own key bar (the file's name
+#   without its ending), else the shell's.
+# Apps (web apps): folders in ~/apps and /opt/mynx/apps with an index.html,
+#   or an app.conf with a url, labelled as core labels them
+#   (core/.../WebApps.kt; both are tested on tests/fixtures/apps). Picking
+#   one runs mynx app open. A menu file from before terminal apps (apps, no
+#   terminal-apps) gets a "Terminal apps" entry at the end of Apps.
 # menu --boot plays the boot splash first (the app does this on a fresh start),
 #   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
 # menu services starts at the Services list; leaving it leaves the menu (the
@@ -25,7 +31,8 @@
 # GitHub setup: in the main menu (after AI agents) until gh is signed in and
 #   git's email is set, then in Settings → System (mynx github).
 # MENU_DRYRUN=1 prints commands instead of running them, MENU_GAME_DIRS and
-# MENU_APP_DIRS (colon-separated) override where games and apps are found,
+# MENU_APP_DIRS, MENU_TERMINAL_APP_DIRS (colon-separated) override where
+# games, apps and terminal apps are found,
 # MENU_UPDATE_FILE the app's update notice, MENU_SERVICES_FILE its count, MENU_ART the boot splash's title
 # art (all for testing).
 
@@ -39,7 +46,8 @@ ART_W=52                  # the art's width in columns, with a margin
 IFS=: read -r -a GAME_DIRS <<<"${MENU_GAME_DIRS:-/opt/neon-games:$HOME/games}"
 UPDATE_FILE=${MENU_UPDATE_FILE:-/tmp/.mynx/update-available}
 SERVICES_FILE=${MENU_SERVICES_FILE:-/tmp/.mynx/services-active}
-IFS=: read -r -a APP_DIRS <<<"${MENU_APP_DIRS:-${DEFAULT_MENU%/*}/apps:$HOME/apps}"
+IFS=: read -r -a APP_DIRS <<<"${MENU_APP_DIRS:-$HOME/apps:${DEFAULT_MENU%/*}/apps}"   # the first wins
+IFS=: read -r -a TERMINAL_APP_DIRS <<<"${MENU_TERMINAL_APP_DIRS:-${DEFAULT_MENU%/*}/terminal-apps:$HOME/terminal-apps:$HOME/apps}"
 export LC_CTYPE=C.UTF-8  # so ${#str} counts characters, not bytes
 export LC_COLLATE=C       # games in the same order whatever the locale
 ITEM_W=26                 # width of a menu row (" ▶ 1. " + 20-char label)
@@ -90,7 +98,7 @@ theme_name() { # the theme the colours file was set from (see mynx theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -113,6 +121,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       shell) action=exit ;;
       files) action=files ;;
       apps) action=menu:apps ;;
+      terminal-apps) action=menu:terminal-apps ;;
       games) action=menu:games ;;
       settings) action=menu:settings ;;
       app-settings) action=settings ;;
@@ -175,7 +184,7 @@ update_status() { # refresh STATUS/STATUS_LEN once a minute
 }
 
 # --- menus -----------------------------------------------------------------
-declare -A TITLE=([main]=Main [apps]=Apps [games]=Games [agents]="AI agents" [services]=Services [settings]=Settings
+declare -A TITLE=([main]=Main [apps]=Apps [terminal-apps]="Terminal apps" [games]=Games [agents]="AI agents" [services]=Services [settings]=Settings
   [system]=System [help]=Help)
 
 game_label() { # game_label <file>: neon-flap.py → "Neon Flap" (max 20 chars)
@@ -196,6 +205,98 @@ app_label() { # app_label <file>: its "# label:" line, else named like a game
     fi
   done <"$1"
   game_label "$1"
+}
+
+trim() { # trim <text>: without spaces at either end
+  local t=$1
+  t=${t#"${t%%[![:space:]]*}"}
+  printf '%s' "${t%"${t##*[![:space:]]}"}"
+}
+
+web_app_url() { # web_app_url <url>: http://127.0.0.1:PORT… or http://localhost:PORT…, PORT 1024-65535
+  [[ $1 =~ ^http://(127\.0\.0\.1|localhost):([0-9]{1,5})([/?].*)?$ ]] || return 1
+  ((10#${BASH_REMATCH[2]} >= 1024 && 10#${BASH_REMATCH[2]} <= 65535))
+}
+
+web_app_conf() { # web_app_conf <app.conf>: sets CONF_NAME and CONF_URL (the last good one of each)
+  local line key value
+  CONF_NAME= CONF_URL=
+  [[ -f $1 ]] || return 0
+  while IFS= read -r line || [[ -n $line ]]; do
+    line=$(trim "$line")
+    [[ -z $line || $line == \#* || $line != *=* ]] && continue
+    key=$(trim "${line%%=*}") value=$(trim "${line#*=}")
+    case $key in
+      name) [[ -n $value ]] && CONF_NAME=$value ;;   # an empty one is a problem, skipped
+      url) web_app_url "$value" && CONF_URL=$value ;;
+    esac
+  done <"$1"
+  return 0
+}
+
+web_app_title() { # web_app_title <index.html>: its <title>, decoded, spaces squeezed (may be empty)
+  local text lower open='<title([[:space:]][^>]*)?>' before rest words
+  text=$(head -c 4096 "$1" 2>/dev/null | tr -d '\0')
+  lower=${text,,}
+  [[ $lower =~ $open ]] || return 0
+  before=${lower%%"${BASH_REMATCH[0]}"*}
+  rest=${lower:${#before}+${#BASH_REMATCH[0]}}
+  [[ $rest == *"</title>"* ]] || return 0
+  rest=${rest%%"</title>"*}
+  text=${text:${#before}+${#BASH_REMATCH[0]}:${#rest}}
+  text=${text//"&lt;"/<} text=${text//"&gt;"/>} text=${text//"&quot;"/\"} text=${text//"&#39;"/\'}
+  text=${text//"&amp;"/"&"}   # last, so "&amp;lt;" stays "&lt;"
+  IFS=$' \t\n\r\f\v' read -r -d '' -a words <<<"$text" || :   # read -d '' ends at the end: 1
+  printf '%s' "${words[*]}"
+}
+
+web_app_label() { # web_app_label <folder>: app.conf's name, else the <title>, else the folder's name
+  local dir=$1 label w name
+  web_app_conf "$dir/app.conf"
+  label=$CONF_NAME
+  # A served app's index.html, if any, is ignored.
+  [[ -n $label || -n $CONF_URL ]] || label=$(web_app_title "$dir/index.html")
+  if [[ -z $label ]]; then   # pixel-hero → "Pixel Hero"
+    name=${dir##*/}
+    for w in ${name//-/ }; do label+="${label:+ }${w^}"; done
+  fi
+  printf '%s' "${label:0:20}"
+}
+
+web_apps() { # "label<TAB>name" per app; the first folder's wins, if it is one
+  local dir d name
+  local -A seen=()
+  for dir in "${APP_DIRS[@]}"; do
+    for d in "$dir"/*; do
+      [[ -d $d ]] || continue   # links to folders count; files are terminal apps
+      name=${d##*/}
+      [[ $name =~ ^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$ && -z ${seen[$name]} ]] || continue
+      web_app_conf "$d/app.conf"
+      [[ -n $CONF_URL || -f $d/index.html ]] || continue
+      seen[$name]=1
+      printf '%s\t%s\n' "$(web_app_label "$d")" "$name"
+    done
+  done
+}
+
+main_menu_file() { # fills ITEMS and ACTS: the user's file, else the built-in one, else these
+  local file
+  for file in "$CONFIG_DIR/menu.conf" "$DEFAULT_MENU"; do
+    [[ -r $file ]] || continue
+    read_menu_file "$file"
+    ((${#ITEMS[@]})) && return
+  done
+  ITEMS=(Shell "AI agents" Services Apps "Terminal apps" Games Files Settings Exit)
+  ACTS=(exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session)
+}
+
+main_menu_has() { # main_menu_has <action>: whether the main menu's items have it
+  local -a items=("${ITEMS[@]}") acts=("${ACTS[@]}")
+  local a found=1
+  main_menu_file
+  for a in "${ACTS[@]}"; do [[ $a == "$1" ]] && found=0; done
+  ITEMS=("${items[@]}") ACTS=("${acts[@]}")
+  return $found
 }
 
 github_ready() { # gh signed in (offline: its hosts file) and git's email set
@@ -239,33 +340,33 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
   ITEMS=() ACTS=()
   case $1 in
     main)
-      # The user's file, else the built-in one, else these (no file at all).
-      local file
-      for file in "$CONFIG_DIR/menu.conf" "$DEFAULT_MENU"; do
-        [[ -r $file ]] || continue
-        read_menu_file "$file"
-        ((${#ITEMS[@]})) && break
-      done
-      if ! ((${#ITEMS[@]})); then
-        ITEMS=(Shell "AI agents" Services Apps Games Files Settings Exit)
-        ACTS=(exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session)
-      fi
+      main_menu_file
       github_ready || offer_github
       count_services
       if [[ -s $UPDATE_FILE ]]; then   # whatever menu.conf says
         ITEMS=("Update available" "${ITEMS[@]}") ACTS=(appupdate "${ACTS[@]}")
       fi ;;
     apps)
+      local label name
+      while IFS=$'\t' read -r label name; do   # by label, wherever they are
+        ITEMS+=("$label") ACTS+=("webapp:$name")
+      done < <(web_apps | LC_ALL=C sort -f -t $'\t' -k1,1)
+      ((${#ITEMS[@]})) || { ITEMS=("(no apps yet)"); ACTS=(none); }
+      # A menu file from before terminal apps: they stay a pick away.
+      if ! main_menu_has menu:terminal-apps; then
+        ITEMS+=("Terminal apps") ACTS+=(menu:terminal-apps)
+      fi ;;
+    terminal-apps)
       local dir f label
       while IFS=$'\t' read -r label f; do   # by label, wherever they are
         ITEMS+=("$label") ACTS+=("app:$f")
-      done < <(for dir in "${APP_DIRS[@]}"; do
+      done < <(for dir in "${TERMINAL_APP_DIRS[@]}"; do
         for f in "$dir"/*; do
-          [[ -f $f && -x $f ]] || continue   # skips shared modules and data files
+          [[ -f $f && -x $f ]] || continue   # skips shared modules, data files and app folders
           printf '%s\t%s\n' "$(app_label "$f")" "$f"
         done
       done | LC_ALL=C sort -f -t $'\t' -k1,1)
-      ((${#ITEMS[@]})) || { ITEMS=("(no apps yet)"); ACTS=(none); } ;;
+      ((${#ITEMS[@]})) || { ITEMS=("(no terminal apps yet)"); ACTS=(none); } ;;
     games)
       local dir f
       for dir in "${GAME_DIRS[@]}"; do
@@ -524,6 +625,7 @@ act_app() { # under the bar named after the file (tuner, my-tool), else the shel
   local name=${1##*/}
   run keybar "${name%.*},shell" "$1"
 }
+act_webapp() { run mynx app open "$1" || pause; }  # its error stays on screen
 act_agent() { # starts the agent, or offers to install it; keeps what went wrong on screen
   run mynx agent start "$1" || pause
 }

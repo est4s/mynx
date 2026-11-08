@@ -35,7 +35,7 @@ from collections import deque
 
 import needs
 
-# the app's own library, next to the apps folder (/opt/mynx/lib)
+# the app's own library, next to the terminal-apps folder (/opt/mynx/lib)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "lib"))
 try:
     from mynx.client import request  # noqa: E402
