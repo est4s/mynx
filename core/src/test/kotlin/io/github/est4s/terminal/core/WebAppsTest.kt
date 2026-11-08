@@ -582,4 +582,377 @@ class WebAppRulesTest {
         assertEquals("App 2", folderLabel("app-2"))
         assertEquals("Aaaaaaaaaa Bbbbbbbbb", folderLabel("aaaaaaaaaa-bbbbbbbbbbbb"))
     }
+
+    @Test
+    fun `auto-reload waits for the files to settle`() {
+        val reload = AutoReload(1)
+        assertEquals(ReloadStep(false, 1000), reload.check(1))
+        assertEquals(ReloadStep(false, 300), reload.check(2))
+        assertEquals(ReloadStep(false, 300), reload.check(3))
+        assertEquals(ReloadStep(true, 1000), reload.check(3))
+        assertEquals(ReloadStep(false, 1000), reload.check(3))
+        assertEquals(ReloadStep(false, 300), reload.check(1))
+        assertEquals(ReloadStep(true, 1000), reload.check(1))
+    }
+}
+
+class WebAppLogTest {
+    private val dir = createTempDirectory("applog").toFile()
+    private val file = File(dir, "tmp/.mynx/apps/hello.log")
+    // 2026-11-08 09:12:15.123 UTC
+    private var time = 1_794_129_135_123L
+    private val log = WebAppLog(file, "https://hello.mynx.invalid", now = { time }, zone = java.time.ZoneOffset.UTC)
+
+    @AfterTest
+    fun cleanUp() {
+        dir.deleteRecursively()
+    }
+
+    private fun lines() = file.readLines()
+
+    @Test
+    fun `writes opens and entries`() {
+        log.opened("https://hello.mynx.invalid/")
+        log.entry(WebAppLogLevel.LOG, "hello", "https://hello.mynx.invalid/app.js", 3)
+        log.entry(WebAppLogLevel.ERROR, "HTTP 404", "https://cdn.example.com/lib.js", 0)
+        log.entry(WebAppLogLevel.WARN, "no source", null, 0)
+        log.entry(WebAppLogLevel.DEBUG, "lookalike", "https://hello.mynx.invalid.example.com/x.js", 7)
+        log.entry(WebAppLogLevel.LOG, "the page", "https://hello.mynx.invalid", 0)
+        assertEquals(
+            listOf(
+                "--- opened 2026-11-08 09:12:15 https://hello.mynx.invalid/",
+                "[09:12:15.123] log /app.js:3 hello",
+                "[09:12:15.123] error https://cdn.example.com/lib.js HTTP 404",
+                "[09:12:15.123] warn no source",
+                "[09:12:15.123] debug https://hello.mynx.invalid.example.com/x.js:7 lookalike",
+                "[09:12:15.123] log / the page",
+            ),
+            lines(),
+        )
+    }
+
+    @Test
+    fun `further lines are indented`() {
+        log.entry(WebAppLogLevel.ERROR, "Uncaught TypeError: x\n  at f (app.js:1)\r\n  at g\n", "https://hello.mynx.invalid/app.js", 1)
+        assertEquals(
+            listOf("[09:12:15.123] error /app.js:1 Uncaught TypeError: x", "      at f (app.js:1)", "      at g"),
+            lines(),
+        )
+    }
+
+    @Test
+    fun `keeps the last thousand lines`() {
+        repeat(WEB_APP_LOG_LINES + 5) { log.entry(WebAppLogLevel.LOG, "n$it", null, 0) }
+        val lines = lines()
+        assertEquals(WEB_APP_LOG_LINES, lines.size)
+        assertEquals("[09:12:15.123] log n5", lines.first())
+        assertEquals("[09:12:15.123] log n${WEB_APP_LOG_LINES + 4}", lines.last())
+    }
+
+    @Test
+    fun `local time in the zone given`() {
+        val istanbul = WebAppLog(file, "https://hello.mynx.invalid", now = { time }, zone = java.time.ZoneId.of("Europe/Istanbul"))
+        istanbul.opened("https://hello.mynx.invalid/")
+        assertEquals("--- opened 2026-11-08 12:12:15 https://hello.mynx.invalid/", lines().single())
+    }
+}
+
+private class WebAppServiceHost : ServiceHost<String> {
+    val events = mutableListOf<String>()
+    private var count = 0
+    override fun start(def: ServiceDef, saved: Boolean): String = "${def.name}#${++count}".also { events += "start ${def.name}" }
+    override fun pid(session: String) = 100
+    override fun stop(session: String, group: Int?, timeoutSeconds: Int) { events += "stop $session" }
+    override fun transcript(session: String) = ""
+    override fun open(name: String, session: String): String? = null
+    override fun started(name: String, session: String) {}
+    override fun adopt(name: String, shell: Int): Result<AdoptedTab<String>> = Result.failure(Exception("no"))
+    override fun foreground(session: String): Foreground? = null
+    override fun schedule(delayMs: Long, block: () -> Unit) {}
+    override fun gaveUp(name: String, exitCode: Int?) {}
+    override fun changed() {}
+}
+
+class WebAppServicesTest {
+    private val base = createTempDirectory("webappservices").toFile()
+    private val home = File(base, "root")
+    private val host = WebAppServiceHost()
+    private val manager = ServiceManager(home, File(base, "services").apply { mkdirs() }, host)
+    private val services = manager.forWebApps()
+
+    @AfterTest
+    fun cleanUp() {
+        base.deleteRecursively()
+    }
+
+    private fun conf(text: String) = File(home, "$CONFIG_DIR/$SERVICES_CONF").apply { parentFile.mkdirs() }.writeText(text)
+
+    @Test
+    fun `the service manager as the launcher sees it`() {
+        assertNull(services.status("web"))
+        conf("[web]\ncommand = run\n[db]\ncommand = run\nautostart = yes\n")
+        assertEquals(WebAppServiceStatus(ServiceState.STOPPED, false), services.status("web"))
+        assertEquals(WebAppServiceStatus(ServiceState.STOPPED, true), services.status("db"))
+
+        assertNull(services.start("web"))
+        assertEquals(WebAppServiceStatus(ServiceState.RUNNING, false), services.status("web"))
+        assertEquals("web is already running", services.start("web"))
+        assertNull(services.stop("web"))
+        assertEquals(WebAppServiceStatus(ServiceState.STOPPING, false), services.status("web"))
+        assertEquals(listOf("start web", "stop web#1"), host.events)
+        assertTrue(services.stop("nope")!!.startsWith("no service named nope"))
+    }
+}
+
+class WebAppLauncherTest {
+    private val base = createTempDirectory("launcher").toFile()
+    private val rootfs = File(base, "rootfs")
+    private val home = File(rootfs, "root").also { copyTree(fixturesDir(), it) }
+    private val dir = File(base, "requests").apply { mkdirs() }
+    private val host = FakeWebAppHost()
+    private val services = FakeWebAppServices()
+    private var time = 0L
+    private val launcher = WebAppLauncher(WebApps(home, rootfs.path, File(base, "tools")), host, services, now = { time })
+    private val requests = MynxRequests(dir, home, later = webAppRequests(launcher), alive = { true })
+
+    @AfterTest
+    fun cleanUp() {
+        base.deleteRecursively()
+    }
+
+    private fun ask(vararg lines: String): String {
+        File(dir, "q.reply").delete()
+        File(dir, "q.req").writeText(lines.joinToString("\n", postfix = "\n"))
+        requests.processPending()
+        return reply()
+    }
+
+    private fun reply() = File(dir, "q.reply").takeIf { it.isFile }?.readText() ?: "(no answer yet)"
+
+    private fun runClock() = host.runScheduled { time += it }
+
+    private fun backend(state: ServiceState, autostart: Boolean = false) {
+        services.services["served-backend"] = WebAppServiceStatus(state, autostart)
+    }
+
+    private fun refused(message: String) = """{"ok":false,"error":${json(message)}}"""
+
+    @Test
+    fun `the requests it answers`() {
+        assertEquals(WEB_APP_REQUEST_NAMES.toSet(), launcher.requests().keys)
+        assertTrue(launcher.requests().values.all { it.seconds != null })
+        assertEquals(WEB_APP_OPEN_SECONDS, launcher.requests()["app-open"]!!.seconds)
+    }
+
+    @Test
+    fun `lists the apps`() {
+        @Suppress("UNCHECKED_CAST")
+        val answer = parseJson(ask("app-list")) as Map<String, Any?>
+        assertEquals(true, answer["ok"])
+        @Suppress("UNCHECKED_CAST")
+        val apps = answer["apps"] as List<Map<String, Any?>>
+        assertEquals(listOf("escape", "hello", "notes", "served"), apps.map { it["name"] })
+        assertEquals(
+            mapOf(
+                "name" to "hello", "label" to "Hello & Welcome", "path" to "/root/apps/hello", "kind" to "static",
+                "origin" to "https://hello.mynx.invalid", "url" to "https://hello.mynx.invalid/",
+                "service" to null, "icon" to null, "problems" to emptyList<String>(),
+            ),
+            apps[1],
+        )
+        assertEquals("/root/apps/notes/icon.png", apps[2]["icon"])
+        assertEquals("served", apps[3]["kind"])
+        assertEquals("served-backend", apps[3]["service"])
+        assertEquals("http://127.0.0.1:8765/", apps[3]["url"])
+        assertEquals(listOf("service: no service named served-backend in ~/.config/mynx/services.conf"), apps[3]["problems"])
+    }
+
+    @Test
+    fun `opens a static app`() {
+        assertEquals(
+            """{"ok":true,"name":"hello","opened":true,"origin":"https://hello.mynx.invalid",""" +
+                """"url":"https://hello.mynx.invalid/","started_service":false}""",
+            ask("app-open", "hello"),
+        )
+        assertEquals(listOf("hello"), host.opened)
+        assertEquals(emptyList(), host.probes)
+    }
+
+    @Test
+    fun `app-open refusals`() {
+        assertEquals(refused("app-open needs a name"), ask("app-open"))
+        assertEquals(refused("no app named nope (mynx app list shows them)"), ask("app-open", "nope"))
+        assertEquals(refused("no app named Bad_Name (mynx app list shows them)"), ask("app-open", "Bad_Name"))
+        host.onScreen = false
+        assertEquals(
+            refused("the app must be on screen to open an app: bring mynx to the front and try again"),
+            ask("app-open", "hello"),
+        )
+        host.onScreen = true
+        host.openFails = "no activity"
+        assertEquals(refused("no activity"), ask("app-open", "hello"))
+        assertEquals(emptyList(), host.opened)
+    }
+
+    @Test
+    fun `opening a served app starts its stopped service and waits for the port`() {
+        backend(ServiceState.STOPPED)
+        ask("app-open", "served")
+        assertEquals("(no answer yet)", reply())
+        assertEquals(listOf("start served-backend"), services.events)
+        assertEquals(listOf(8765), host.probes)
+
+        repeat(3) { host.runScheduled(limit = 1) { time += it } }
+        assertEquals(listOf(8765, 8765, 8765, 8765), host.probes)
+        assertEquals(listOf(250L), host.scheduled.map { it.first })
+        host.answering += 8765
+        runClock()
+        assertEquals(
+            """{"ok":true,"name":"served","opened":true,"origin":"http://127.0.0.1:8765",""" +
+                """"url":"http://127.0.0.1:8765/","started_service":true}""",
+            reply(),
+        )
+        assertEquals(listOf("served"), host.opened)
+
+        host.open -= "served"
+        launcher.screenClosed("served")
+        assertEquals(listOf("start served-backend", "stop served-backend"), services.events)
+    }
+
+    @Test
+    fun `a failed service is started too`() {
+        backend(ServiceState.FAILED)
+        host.answering += 8765
+        assertTrue(""""started_service":true""" in ask("app-open", "served"))
+        assertEquals(listOf("start served-backend"), services.events)
+    }
+
+    @Test
+    fun `a service already running is left alone`() {
+        backend(ServiceState.RUNNING)
+        host.answering += 8765
+        assertTrue(""""started_service":false""" in ask("app-open", "served"))
+        launcher.screenClosed("served")
+        assertEquals(emptyList(), services.events)
+    }
+
+    @Test
+    fun `an autostart service is started but never stopped`() {
+        backend(ServiceState.STOPPED, autostart = true)
+        host.answering += 8765
+        assertTrue(""""started_service":true""" in ask("app-open", "served"))
+        launcher.screenClosed("served")
+        assertEquals(listOf("start served-backend"), services.events)
+    }
+
+    @Test
+    fun `a port that never answers`() {
+        backend(ServiceState.STOPPED)
+        ask("app-open", "served")
+        runClock()
+        assertEquals(
+            refused("served-backend didn't answer on 127.0.0.1:8765 within 15 s (mynx service log served-backend shows its output)"),
+            reply(),
+        )
+        assertTrue(time >= WEB_APP_PORT_WAIT_MS)
+        assertTrue(time < WEB_APP_PORT_WAIT_MS + 2 * WEB_APP_PORT_PROBE_MS)
+        assertEquals(listOf("start served-backend", "stop served-backend"), services.events)
+        assertEquals(emptyList(), host.opened)
+        launcher.screenClosed("served")
+        assertEquals(2, services.events.size)
+    }
+
+    @Test
+    fun `a running service whose port never answers stays running`() {
+        backend(ServiceState.RUNNING)
+        ask("app-open", "served")
+        runClock()
+        assertTrue("didn't answer" in reply())
+        assertEquals(emptyList(), services.events)
+    }
+
+    @Test
+    fun `service refusals`() {
+        assertEquals(
+            refused("no service named served-backend (app.conf's service; mynx service list shows them)"),
+            ask("app-open", "served"),
+        )
+        backend(ServiceState.STOPPING)
+        assertEquals(refused("served-backend is stopping: try again in a moment"), ask("app-open", "served"))
+        backend(ServiceState.STOPPED)
+        services.startFails = "couldn't start served-backend: boom"
+        assertEquals(refused("couldn't start served-backend: boom"), ask("app-open", "served"))
+        assertEquals(emptyList(), host.probes)
+    }
+
+    @Test
+    fun `a screen that won't open stops the service it started`() {
+        backend(ServiceState.STOPPED)
+        host.answering += 8765
+        host.openFails = "no activity"
+        assertEquals(refused("no activity"), ask("app-open", "served"))
+        assertEquals(listOf("start served-backend", "stop served-backend"), services.events)
+    }
+
+    @Test
+    fun `a served app without a service needs its port answering`() {
+        File(home, "apps/served/app.conf").writeText("url = http://localhost:9000/\n")
+        assertEquals(refused("nothing answers on 127.0.0.1:9000 (app.conf's url)"), ask("app-open", "served"))
+        assertEquals(listOf(9000), host.probes)
+        host.answering += 9000
+        assertTrue(""""started_service":false""" in ask("app-open", "served"))
+    }
+
+    @Test
+    fun `opening it again keeps the service it started remembered`() {
+        backend(ServiceState.STOPPED)
+        host.answering += 8765
+        ask("app-open", "served")
+        assertTrue(""""started_service":false""" in ask("app-open", "served"))
+        launcher.screenClosed("served")
+        assertEquals(listOf("start served-backend", "stop served-backend"), services.events)
+    }
+
+    @Test
+    fun `another open app using the service inherits it`() {
+        File(home, "apps/twin").mkdirs()
+        File(home, "apps/twin/app.conf").writeText("url = http://127.0.0.1:8765/twin\nservice = served-backend\n")
+        backend(ServiceState.STOPPED)
+        host.answering += 8765
+        ask("app-open", "served")
+        ask("app-open", "twin")
+        host.open -= "served"
+        launcher.screenClosed("served")
+        assertEquals(listOf("start served-backend"), services.events)
+        host.open -= "twin"
+        launcher.screenClosed("twin")
+        assertEquals(listOf("start served-backend", "stop served-backend"), services.events)
+    }
+
+    @Test
+    fun `a service that isn't running any more isn't stopped`() {
+        backend(ServiceState.STOPPED)
+        host.answering += 8765
+        ask("app-open", "served")
+        backend(ServiceState.STOPPED)
+        launcher.screenClosed("served")
+        assertEquals(listOf("start served-backend"), services.events)
+    }
+
+    @Test
+    fun `closing an app it started nothing for does nothing`() {
+        launcher.screenClosed("hello")
+        launcher.screenClosed("nope")
+        assertEquals(emptyList(), services.events)
+    }
+
+    @Test
+    fun `reloads an open app`() {
+        assertEquals(refused("app-reload needs a name"), ask("app-reload"))
+        assertEquals(refused("no app named nope (mynx app list shows them)"), ask("app-reload", "nope"))
+        assertEquals(refused("hello isn't open"), ask("app-reload", "hello"))
+        ask("app-open", "hello")
+        assertEquals("""{"ok":true,"name":"hello"}""", ask("app-reload", "hello"))
+        assertEquals(listOf("hello"), host.reloaded)
+    }
 }

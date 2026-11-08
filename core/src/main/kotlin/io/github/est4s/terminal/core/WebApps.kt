@@ -664,7 +664,24 @@ data class ReloadStep(val reload: Boolean, val nextMs: Long)
  * 1000 ms). Not thread-safe: one poller.
  */
 class AutoReload(first: Long) {
-    fun check(fingerprint: Long): ReloadStep = TODO()
+    private var last = first
+    private var settling = false
+
+    fun check(fingerprint: Long): ReloadStep {
+        if (fingerprint != last) {
+            last = fingerprint
+            settling = true
+            return ReloadStep(false, SETTLE_MS)
+        }
+        val reload = settling
+        settling = false
+        return ReloadStep(reload, POLL_MS)
+    }
+
+    private companion object {
+        const val POLL_MS = 1000L
+        const val SETTLE_MS = 300L
+    }
 }
 
 /** A log entry's level, as the log writes it. */
@@ -683,10 +700,45 @@ class WebAppLog(
     private val zone: java.time.ZoneId = java.time.ZoneId.systemDefault(),
 ) {
     /** The screen opened [url]: `--- opened …`. */
-    fun opened(url: String): Unit = TODO()
+    fun opened(url: String) {
+        append(listOf("--- opened ${time("yyyy-MM-dd HH:mm:ss")} $url"))
+    }
 
     /** One entry; [source] a URL or null, [line] 0 when unknown. */
-    fun entry(level: WebAppLogLevel, message: String, source: String?, line: Int): Unit = TODO()
+    fun entry(level: WebAppLogLevel, message: String, source: String?, line: Int) {
+        val where = when {
+            source.isNullOrEmpty() -> ""
+            source == origin -> "/"
+            source.startsWith("$origin/") -> source.removePrefix(origin)
+            else -> source
+        }
+        val at = when {
+            where.isEmpty() -> ""
+            line > 0 -> "$where:$line "
+            else -> "$where "
+        }
+        val parts = message.trimEnd('\n', '\r').split(Regex("\r?\n"))
+        append(listOf("[${time("HH:mm:ss.SSS")}] ${level.word} $at${parts.first()}") + parts.drop(1).map { "    $it" })
+    }
+
+    private fun time(pattern: String) =
+        java.time.format.DateTimeFormatter.ofPattern(pattern).format(java.time.Instant.ofEpochMilli(now()).atZone(zone))
+
+    private fun append(lines: List<String>) = synchronized(LOG_LOCK) {
+        runCatching {
+            file.parentFile?.mkdirs()
+            val kept = (if (file.isFile) file.readLines() else emptyList()) + lines
+            val tmp = File(file.path + ".tmp")
+            tmp.writeText(kept.takeLast(WEB_APP_LOG_LINES).joinToString("\n", postfix = "\n"))
+            if (!tmp.renameTo(file)) tmp.delete()
+        }
+        Unit
+    }
+
+    private companion object {
+        // One lock for every log: the activity and the service may each have one for the same app.
+        val LOG_LOCK = Any()
+    }
 }
 
 /** A service as the launcher needs it. */
@@ -706,7 +758,20 @@ interface WebAppServices {
 }
 
 /** [ServiceManager] as the launcher's [WebAppServices]: `reload()` and `services[name]`, `start`, `stop`. */
-fun <S> ServiceManager<S>.forWebApps(): WebAppServices = TODO()
+fun <S> ServiceManager<S>.forWebApps(): WebAppServices {
+    val manager = this
+    return object : WebAppServices {
+        override fun status(name: String): WebAppServiceStatus? {
+            manager.reload()
+            val service = manager.services[name] ?: return null
+            return WebAppServiceStatus(service.state, service.def.autostart)
+        }
+
+        override fun start(name: String) = manager.start(name)
+
+        override fun stop(name: String) = manager.stop(name)
+    }
+}
 
 /**
  * What the app does for the launcher. All of it is called on the main
@@ -739,10 +804,128 @@ class WebAppLauncher(
     private val services: WebAppServices,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
-    fun requests(): Map<String, Later> = TODO()
+    // App name → the service opening it started (and may stop when it closes).
+    private val startedFor = mutableMapOf<String, String>()
+
+    fun requests(): Map<String, Later> = mapOf(
+        "app-list" to Later(QUICK_SECONDS) { _, reply ->
+            reply.answer(ok("apps" to array(apps.list().map(::appJson))))
+        },
+        "app-open" to Later(WEB_APP_OPEN_SECONDS) { args, reply -> open(args, reply) },
+        "app-reload" to Later(QUICK_SECONDS) { args, reply ->
+            val app = named(args, "app-reload", reply) ?: return@Later
+            if (host.reload(app.name)) reply.answer(ok("name" to json(app.name))) else reply.refuse("${app.name} isn't open")
+        },
+    ).mapValues { (name, later) ->
+        // Anything thrown would leave the request to fail again at every poll.
+        Later(later.seconds, later.change) { args, reply ->
+            try {
+                later.start(args, reply)
+            } catch (e: Exception) {
+                reply.refuse("$name failed: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun named(args: List<String>, request: String, reply: PendingReply): WebApp? {
+        val name = args.firstOrNull()?.trim().orEmpty()
+        if (name.isEmpty()) return null.also { reply.refuse("$request needs a name") }
+        return apps.find(name) ?: null.also { reply.refuse("no app named $name (mynx app list shows them)") }
+    }
+
+    private fun open(args: List<String>, reply: PendingReply) {
+        val app = named(args, "app-open", reply) ?: return
+        if (!host.onScreen) {
+            return reply.refuse("the app must be on screen to open an app: bring mynx to the front and try again")
+        }
+        val port = app.port
+        if (app.kind == WebAppKind.STATIC || port == null) return show(app, null, reply)
+        val service = app.service
+        if (service == null) {
+            host.portAnswers(port) { answered ->
+                if (answered) show(app, null, reply) else reply.refuse("nothing answers on 127.0.0.1:$port (app.conf's url)")
+            }
+            return
+        }
+        val status = services.status(service)
+            ?: return reply.refuse("no service named $service (app.conf's service; mynx service list shows them)")
+        var started: Started? = null
+        when (status.state) {
+            ServiceState.STOPPING -> return reply.refuse("$service is stopping: try again in a moment")
+            ServiceState.STOPPED, ServiceState.FAILED -> {
+                services.start(service)?.let { return reply.refuse(it) }
+                started = Started(service, status.autostart)
+            }
+            ServiceState.RUNNING -> {}
+        }
+        var cancelled = false
+        reply.onCancel { cancelled = true }
+        val deadline = now() + WEB_APP_PORT_WAIT_MS
+        fun probe() {
+            host.portAnswers(port) { answered ->
+                when {
+                    cancelled -> started?.let { services.stop(it.service) }
+                    answered -> show(app, started, reply)
+                    now() >= deadline -> {
+                        started?.let { services.stop(it.service) }
+                        reply.refuse(
+                            "$service didn't answer on 127.0.0.1:$port within ${WEB_APP_PORT_WAIT_MS / 1000} s " +
+                                "(mynx service log $service shows its output)",
+                        )
+                    }
+                    else -> host.schedule(WEB_APP_PORT_PROBE_MS, ::probe)
+                }
+            }
+        }
+        probe()
+    }
+
+    private class Started(val service: String, val autostart: Boolean)
+
+    // Opens the screen; [started] is the service this request started, if any.
+    private fun show(app: WebApp, started: Started?, reply: PendingReply) {
+        host.open(app)?.let { error ->
+            started?.let { services.stop(it.service) }
+            return reply.refuse(error)
+        }
+        if (started != null && !started.autostart) startedFor[app.name] = started.service
+        reply.ok(
+            "name" to json(app.name),
+            "opened" to "true",
+            "origin" to json(app.origin),
+            "url" to json(app.url),
+            "started_service" to (started != null).toString(),
+        )
+    }
 
     /** App [name]'s screen finished: stops the service opening it started, if nothing else needs it. */
-    fun screenClosed(name: String): Unit = TODO()
+    fun screenClosed(name: String) {
+        val service = startedFor.remove(name) ?: return
+        val heir = apps.list().firstOrNull { it.name != name && it.service == service && host.isOpen(it.name) }
+        if (heir != null) {
+            startedFor.putIfAbsent(heir.name, service)
+            return
+        }
+        val status = services.status(service) ?: return
+        if (status.state != ServiceState.RUNNING || status.autostart) return
+        services.stop(service)
+    }
+
+    private fun appJson(app: WebApp) = obj(
+        "name" to json(app.name),
+        "label" to json(app.label),
+        "path" to json(app.path),
+        "kind" to json(app.kind.word),
+        "origin" to json(app.origin),
+        "url" to json(app.url),
+        "service" to (app.service?.let(::json) ?: "null"),
+        "icon" to (app.icon?.let(::json) ?: "null"),
+        "problems" to array(app.problems.map(::json)),
+    )
+
+    private companion object {
+        const val QUICK_SECONDS = 10
+    }
 }
 
 /** The `app-*` requests ([WEB_APP_REQUEST_NAMES]), for [MynxRequests]'s `later`. */
