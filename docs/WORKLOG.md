@@ -188,12 +188,29 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode (when the maintainer picks it)
+### 3. Touch mode: spike done, waiting on the maintainer
 
-Planned in `docs/ROADMAP.md` ("Touch mode"), entry 159. It starts
-with a spike on a branch: ACP (or Claude Code's stream-json) under
-proot, sign-in and resume. Web apps (0. above) come first; their
-screen gives touch mode's cards something to open.
+Findings: `docs/spikes/touch-mode/` (entry 170). Native stream-json
+and the ACP adapter both work under proot.
+
+**The maintainer decides first:**
+1. **Policy:** may Chat run on a user's own Claude login? The Agent
+   SDK docs forbid third-party products offering claude.ai login;
+   they don't mention a user's own install driven by a host app. If
+   not: API keys for Chat, or Chat without Claude. Terminal tabs and
+   Home aren't affected.
+2. **Protocol (recommended):** `AgentSession` in `core` with ACP's
+   vocabulary, Claude's native stream-json first, then Codex's
+   `app-server` and an ACP client for Gemini.
+
+**Order after that** (about 6-8 PRs, test-first in `core`, fixtures
+from the spike's samples): a short phone spike starting the agent
+from the app (and SIGQUIT, phantom kills); Home (needs neither
+decision, so it can start any time); `AgentSession` and the Claude
+backend; the Chat screen; Allow/Deny and question screens; hand-off
+(wait for the process to exit; handle the trust screen); cards (a
+`mynx` command plus a folder snapshot); other agents. Chats cost
+250 MB each: end the process when off screen and `--resume`.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -231,6 +248,19 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-09 (170): Touch mode spike
+
+The maintainer picked the spike for overnight. Three subagents, from
+a tab: Claude's native stream-json run in full (about 40 Haiku runs,
+$0.10), the ACP adapter run in full with the maintainer's permission
+to install it (Node and the adapter in a scratch folder, since
+removed), and ACP's docs read. Findings and the recommendation:
+`docs/spikes/touch-mode/README.md`. No app code. Left in Debian:
+test transcripts under `~/.claude/projects/-tmp-claude-0-…touch-spike…`,
+a trust entry for one scratch folder in `~/.claude.json`, and
+`~/.claude/plans/plan-how-to-create-peppy-widget.md`. PR #64 merged
+before this (f22da23).
 
 ### 2026-11-08 (169): Web apps part 2 passed on the phone
 

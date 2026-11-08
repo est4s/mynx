@@ -1,0 +1,44 @@
+
+### initialize request and response
+IN {"type": "control_request", "request_id": "h1", "request": {"subtype": "initialize", "hooks": null}}
+OUT {"type": "control_response", "response": {"subtype": "success", "request_id": "h1", "response": {"commands": [{"name": "design", "description": "Grant or revoke Claude agent access to your Design projects", "argumentHint": "consent | revoke", "builtin": true}, {"name": "design-sync", "description": "Push a React design system to claude.ai/design. This runs a converter that bundles the real compone …[trimmed]
+
+### user message in
+IN {"type": "user", "message": {"role": "user", "content": "Remember the number 47. Reply with just OK."}}
+
+### system/init (once per turn)
+OUT {"type": "system", "subtype": "init", "cwd": "$SPIKE/work", "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "tools": ["Task", "AskUserQuestion", "Bash", "CronCreate", "CronDelete", "CronList", "DesignSync", "Edit", "EnterPlanMode", "EnterWorktree", "ExitPlanMode", "ExitWorktree", "ListAgents", "Monitor", "NotebookEdit", "PushNotification", "Read", "RemoteTrigger", "ReportFindings", "Schedule …[trimmed]
+
+### stream_event
+OUT {"type": "stream_event", "event": {"type": "message_start", "message": {"model": "claude-haiku-5-5", "id": "msg_011CgrCbHHJXYk9Mtj9526xm", "type": "message", "role": "assistant", "content": [], "container": null, "stop_reason": null, "stop_sequence": null, "stop_details": null, "usage": {"input_tokens": 2, "cache_creation_input_tokens": 7197, "cache_read_input_tokens": 10624, "cache_creation": {"e …[trimmed]
+OUT {"type": "stream_event", "event": {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}}, "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "parent_tool_use_id": null, "uuid": "5a38f87d-9e2c-44aa-bb8c-9409860dfea6", "api_message_id": "msg_011CgrCbHHJXYk9Mtj9526xm"}
+OUT {"type": "stream_event", "event": {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "OK"}}, "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "parent_tool_use_id": null, "uuid": "1a574774-6abb-4701-b1fa-043680444fae", "api_message_id": "msg_011CgrCbHHJXYk9Mtj9526xm"}
+OUT {"type": "stream_event", "event": {"type": "message_stop"}, "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "parent_tool_use_id": null, "uuid": "c02b9a14-16c9-480f-ad76-4c1718ea6d8a", "api_message_id": "msg_011CgrCbHHJXYk9Mtj9526xm"}
+
+### assistant (final message, one per content block)
+OUT {"type": "assistant", "message": {"model": "claude-haiku-5-5", "id": "msg_011CgrCbHHJXYk9Mtj9526xm", "type": "message", "role": "assistant", "content": [{"type": "text", "text": "OK"}], "container": null, "stop_reason": null, "stop_sequence": null, "stop_details": null, "usage": {"input_tokens": 2, "cache_creation_input_tokens": 7197, "cache_read_input_tokens": 10624, "cache_creation": {"ephemeral …[trimmed]
+
+### result
+OUT {"duration_api_ms": 657, "stop_reason": "end_turn", "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "total_cost_usd": 0.0015478400000000002, "usage": {"input_tokens": 2, "cache_creation_input_tokens": 7197, "cache_read_input_tokens": 10624, "output_tokens": 4, "output_tokens_details": {"thinking_tokens": 0}, "server_tool_use": {"web_search_requests": 0, "web_fetch_requests": 0}, "service_tie …[trimmed]
+
+### can_use_tool request
+OUT {"type": "control_request", "request_id": "8f6b4ea2-7682-43dc-9a03-64781cf57fc0", "request": {"subtype": "can_use_tool", "tool_name": "Bash", "display_name": "Bash", "input": {"command": "echo spike-hello > spike_bash.txt", "description": "Write spike-hello into spike_bash.txt"}, "description": "Write spike-hello into spike_bash.txt", "permission_suggestions": [{"type": "addRules", "rules": [{"too …[trimmed]
+
+### allow
+IN {"type": "control_response", "response": {"subtype": "success", "request_id": "8f6b4ea2-7682-43dc-9a03-64781cf57fc0", "response": {"behavior": "allow", "updatedInput": {"command": "echo spike-hello > spike_bash.txt", "description": "Write spike-hello into spike_bash.txt"}}}}
+
+### deny
+IN {"type": "control_response", "response": {"subtype": "success", "request_id": "e6128edd-696f-4aa5-abc2-1e356e53d60d", "response": {"behavior": "deny", "message": "The user tapped Deny."}}}
+
+### tool_result
+OUT {"type": "user", "message": {"role": "user", "content": [{"tool_use_id": "toolu_01W3ZustRRdZurpRe2Wpvc9b", "type": "tool_result", "content": "(Bash completed with no output)", "is_error": false}]}, "parent_tool_use_id": null, "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "uuid": "c053bf46-c276-4b5b-9671-683dbcc0ac2d", "timestamp": "2026-11-08T21:51:04.684Z", "tool_use_result": {"stdout": " …[trimmed]
+OUT {"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "content": "The user tapped Deny.", "is_error": true, "tool_use_id": "toolu_01CxkMfFejv7pR1p1M77TJb8"}]}, "parent_tool_use_id": null, "session_id": "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef", "uuid": "87980ff7-3750-4f5e-993b-c11988954e5f", "timestamp": "2026-11-08T21:51:06.302Z", "tool_use_result": "Error: The user tapped …[trimmed]
+
+### interrupt in, cancel out, aborted result
+IN {"type": "control_request", "request_id": "i1", "request": {"subtype": "interrupt"}}
+IN {"type": "control_request", "request_id": "i2", "request": {"subtype": "interrupt"}}
+OUT {"duration_api_ms": 6514, "stop_reason": "tool_use", "session_id": "b4a4ce11-b893-427a-a8b2-ff213bdd6d1e", "total_cost_usd": 0.0025710699999999995, "usage": {"input_tokens": 2, "cache_creation_input_tokens": 102, "cache_read_input_tokens": 20424, "output_tokens": 90, "output_tokens_details": {"thinking_tokens": 0}, "server_tool_use": {"web_search_requests": 0, "web_fetch_requests": 0}, "service_ti …[trimmed]
+
+### not signed in
+OUT {"type": "control_response", "response": {"subtype": "success", "request_id": "h1", "response": {"commands": [{"name": "deep-research", "description": "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report. (dynamic workflow)", "argumentHint": "", "builtin": true}, {"name": "design", "description": "Grant or revoke Claude agent access t …[trimmed]
+OUT {"duration_api_ms": 0, "stop_reason": "stop_sequence", "session_id": "28f8696c-d0b0-4814-bd5e-313447c4a9d9", "total_cost_usd": 0, "usage": {"output_tokens_details": {"thinking_tokens": 0}, "input_tokens": 0, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0, "output_tokens": 0, "server_tool_use": {"web_search_requests": 0, "web_fetch_requests": 0}, "service_tier": "standard", "cache_c …[trimmed]

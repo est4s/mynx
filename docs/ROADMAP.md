@@ -70,6 +70,9 @@ and either view switches to the other.
   and the other agents. The protocol and transcript logic go in
   `core`, test-first. Screenshots in CI (Robolectric or an emulator)
   would save phone rounds, so they may come first.
+- **Spike done** (2026-11-09, `docs/spikes/touch-mode/`): Claude's
+  stream-json and the ACP adapter both work under proot; native first
+  is recommended. Whether Chat may use a subscription login is open.
 
 ### Web apps
 **Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what
