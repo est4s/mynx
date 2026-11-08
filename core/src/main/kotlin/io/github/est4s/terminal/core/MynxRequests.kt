@@ -131,6 +131,23 @@ class MynxRequests(
         if (change != null && answered) runCatching { history.observe(change, undoKeep()) }
     }
 
+    /**
+     * Runs request [name] in-process (the bridge; work log "Next", 0,
+     * part A builds it), answering through [sink] instead of files:
+     * a `later` handler as [processPending] runs one (the same undo
+     * steps, [hasOpen] and [sweep] see it, but its id, `bridge-N`, has
+     * no pid, so [sweep] never cancels it), or a plain request's answer
+     * at once (unknown names refused as from `mynx`). Main thread, as
+     * [processPending]. The [Call] stops or cancels it.
+     */
+    fun call(name: String, args: List<String>, sink: ReplySink): Call = TODO("part A")
+
+    /** Runs [handler], a [Later] that isn't in `later` (the bridge's own calls), as [call] runs one. */
+    fun call(handler: Later, args: List<String>, sink: ReplySink): Call = TODO("part A")
+
+    /** Records a change to the config files made outside a request (an app's permission answered in its dialog) as an undo step named [name]. */
+    fun recordChange(name: String): Unit = TODO("part A")
+
     /** Whether a [Later] request is still running: while one is, call [sweep] now and then. */
     fun hasOpen(): Boolean = synchronized(open) { open.isNotEmpty() }
 

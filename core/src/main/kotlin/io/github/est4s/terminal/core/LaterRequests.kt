@@ -92,6 +92,56 @@ class PendingReply internal constructor(
     }
 }
 
+/**
+ * Where a request's answer goes (the seam between [MynxRequests] and
+ * its callers; work log "Next", 0, part A builds it). [PendingReply]
+ * writes through one: [FileReplySink] for `mynx`'s files (today's
+ * behaviour, unchanged), the bridge's own for a page. Any thread may
+ * call it; [PendingReply] makes sure only the first answer counts and
+ * nothing comes after it.
+ * - [waiting]: once, before the handler starts: the seconds the caller
+ *   waits ([Later.seconds]), or null for a stream.
+ * - [line]: one reading of a stream, a JSON object.
+ * - [answer]: the answer, a JSON object with `ok`; the request is over.
+ * - [discard]: the request ended with nobody listening (`mynx` gone, a
+ *   page closed): leave nothing behind, send nothing.
+ */
+interface ReplySink {
+    fun waiting(seconds: Int?)
+    fun line(json: String)
+    fun answer(json: String)
+    fun discard()
+}
+
+/**
+ * `mynx`'s files in [dir] for request [id]: [waiting] writes `ID.wait`
+ * (renamed into place: the seconds, or `stream`), [line] appends to
+ * `ID.stream`, [answer] writes `ID.reply` (renamed into place) and
+ * removes `ID.wait` (and `ID.cancel`), [discard] removes every `ID.*`.
+ */
+class FileReplySink(private val dir: File, private val id: String) : ReplySink {
+    override fun waiting(seconds: Int?): Unit = TODO("part A")
+    override fun line(json: String): Unit = TODO("part A")
+    override fun answer(json: String): Unit = TODO("part A")
+    override fun discard(): Unit = TODO("part A")
+}
+
+/**
+ * A request run in-process by [MynxRequests.call]. [seconds] is its
+ * [Later.seconds] (null: a stream; a plain request is answered before
+ * `call` returns, with [done] true). [stop]: the caller stopped it, as
+ * `mynx`'s `ID.cancel` (Ctrl+C): `onCancel` runs and an answer always
+ * follows (the handler's, else `{"ok":true}`). [cancel]: nobody listens
+ * any more, as `mynx` gone: `onCancel` runs, then the sink's
+ * [ReplySink.discard]. Both are harmless once it's done, or twice.
+ */
+interface Call {
+    val seconds: Int?
+    val done: Boolean
+    fun stop()
+    fun cancel()
+}
+
 private val PID_OF_ID = Regex("^(\\d+)-")
 
 /** The process number `mynx` puts at the start of a request's id, if any. */

@@ -205,6 +205,77 @@ import java.nio.file.Files
  * the app opened, or with `autostart = yes`, is never stopped. What the
  * launcher remembers is in memory only: lost when Android kills the
  * app, which is fine (services come back as they do today).
+ *
+ * PART 2 (work log "Next", 0): the bridge is `Bridge.kt`, permissions
+ * `AppPermissions.kt`; this file gets the keys, shortcuts and the open
+ * step below (part A builds them, part B the Android side).
+ *
+ * APP.CONF, PART 2: two more keys, checked as the others (the line
+ * skipped on a bad value), both in `app-list`'s APP
+ * (`"fullscreen":"no"|"yes"|"edge","screen_awake":BOOL`) and [WebApp]:
+ * - `fullscreen = no|yes|edge` ([Fullscreen], default no; maintainer's
+ *   decision, 2026-11-08, over the plan's first answer; other values:
+ *   "line N: fullscreen is no, yes or edge"):
+ *   - `yes`: the status and navigation bars hidden (API 30+:
+ *     `WindowInsetsController`, swipe to show them for a moment; 26-29:
+ *     the immersive-sticky flags), hidden again after the keyboard or
+ *     a rotation; the page is kept clear of the camera cutout (padded
+ *     for it, as for the keyboard).
+ *   - `edge`: bars hidden as for `yes`, and the page runs under the
+ *     cutout too (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`, ALWAYS
+ *     on API 30+); only the keyboard is padded for. The guide tells
+ *     games to keep controls clear of the corners
+ *     (`env(safe-area-inset-*)`).
+ * - `screen-awake = yes|no` (default no; else "line N: screen-awake is
+ *   yes or no"): `FLAG_KEEP_SCREEN_ON` on the app's window, which
+ *   Android honours only while it's visible.
+ *
+ * HOME SCREEN SHORTCUTS
+ *
+ * `app-shortcut NAME` (a [Later], [WEB_APP_SHORTCUT_SECONDS]; part A
+ * adds it to [WEB_APP_REQUEST_NAMES]) → `{"ok":true,"name","id"}` once
+ * Android was asked ([WebAppHost.pinShortcut]: `ShortcutManager.
+ * requestPinShortcut`, which shows Android's own "Add to home screen"
+ * dialog; the answer doesn't wait for it). Refused as `app-open` for no
+ * name or an unknown app, "mynx must be on screen to add a shortcut"
+ * when [WebAppHost.onScreen] is false, and with the host's reason (a
+ * launcher that can't pin). The menu's Apps list ends with "Add to home
+ * screen…", which lists the apps and runs `mynx app shortcut NAME`.
+ *
+ * [appShortcut] decides what it shows: id [webAppShortcutId] (`app-NAME`),
+ * the label, and the icon:
+ * - with `app.conf`'s `icon`: that file (host path), made adaptive by
+ *   the app: scaled to fit [SHORTCUT_SAFE_ZONE] of the 108 dp square
+ *   (the safe zone's 66 dp) keeping its proportions, centred, on
+ *   [AppShortcut.background], the theme's background;
+ * - else a generated one: [AppShortcut.letter], the label's first letter
+ *   or digit in upper case (none: the name's first character), drawn in
+ *   [AppShortcut.foreground] on [AppShortcut.background]. The background
+ *   is one of the theme's chromatic colours, `color1`-`color6` and
+ *   `color9`-`color14` in that order, picked by the name's
+ *   `String.hashCode()` (stable by Kotlin's and Java's spec) mod 12, made
+ *   non-negative (`Math.floorMod`); the foreground is the theme's
+ *   `background` or `foreground`, whichever has the higher [contrast]
+ *   with it (the background on ties). The theme is the user's colours
+ *   (`colors.properties` over Neon) at the time it's made.
+ * The intent opens `WebAppActivity` for `mynx-app://NAME` with the
+ * extra [WEB_APP_FROM_SHORTCUT]: it starts and binds the service if
+ * mynx isn't running, opens `MainActivity` instead when Debian isn't
+ * set up yet, then runs [WebAppLauncher.openStep] itself, showing
+ * "Starting LABEL…" and any error as text on the screen (and in the
+ * log). Changed labels and icons update a pinned shortcut at the next
+ * open ([WebAppHost.updateShortcut], `updateShortcuts`); a shortcut for
+ * an app that's gone shows "no app named NAME (mynx app list shows
+ * them)" on its screen.
+ *
+ * THE OPEN STEP ([WebAppLauncher.openStep])
+ *
+ * What `app-open` does after its on-screen check, shared with the
+ * shortcut's start: the app looked up, its service started if needed
+ * and remembered, the port waited for, then [show] (the host's
+ * [WebAppHost.open] for `app-open`; the activity loading itself for a
+ * shortcut); refusals worded as `app-open`'s and a service it started
+ * stopped again on failure or cancel. `app-open` keeps its answer.
  */
 
 /** The folder of the user's apps, in root's home. */
@@ -289,7 +360,18 @@ data class AppConf(
     val icon: String? = null,
     val url: String? = null,
     val service: String? = null,
+    val fullscreen: Fullscreen = Fullscreen.NO,
+    val screenAwake: Boolean = false,
 )
+
+/** `app.conf`'s `fullscreen` (see APP.CONF, PART 2): [word] as written there and in `app-list`. */
+enum class Fullscreen(val word: String) {
+    NO("no"), YES("yes"), EDGE("edge");
+
+    companion object {
+        fun of(word: String): Fullscreen? = entries.firstOrNull { it.word == word }
+    }
+}
 
 data class ParsedAppConf(val conf: AppConf, val problems: List<String>)
 
@@ -401,6 +483,8 @@ data class WebApp(
     val service: String?,
     val icon: String?,
     val problems: List<String>,
+    val fullscreen: Fullscreen = Fullscreen.NO,
+    val screenAwake: Boolean = false,
 )
 
 /** What [WebApps.respond] answers: [file] to send for 200 (a host file), else [body]. */
@@ -580,6 +664,13 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
         val mime = webAppMimeType(segments.last())
         return WebAppResponse(200, "OK", mime, if (isTextMime(mime)) "utf-8" else null, NO_STORE, file = file)
     }
+
+    /**
+     * The answer for a request to [BRIDGE_SCRIPT_URL]'s host (part 2):
+     * `/mynx.js` is the tools' [BRIDGE_SCRIPT_FILE] (`text/javascript`,
+     * utf-8, no-store); GET and HEAD only (else 405); any other path 404.
+     */
+    fun bridgeScript(method: String, encodedPath: String): WebAppResponse = TODO("part A")
 
     /** A value that changes when any file under [app]'s root does: see AUTO-RELOAD. */
     fun fingerprint(app: WebApp): Long {
@@ -809,7 +900,42 @@ interface WebAppHost {
     fun portAnswers(port: Int, done: (Boolean) -> Unit)
     /** Runs [block] after [delayMs]. */
     fun schedule(delayMs: Long, block: () -> Unit)
+    /** Asks Android to pin [shortcut] (`requestPinShortcut`); null once asked, or why not. */
+    fun pinShortcut(shortcut: AppShortcut): String? = "shortcuts aren't available here"
+    /** Updates [shortcut] if it's pinned (`updateShortcuts`), at each open. */
+    fun updateShortcut(shortcut: AppShortcut) {}
 }
+
+/** How long `mynx` waits for `app-shortcut`. */
+const val WEB_APP_SHORTCUT_SECONDS = 10
+/** The intent extra (a boolean) a shortcut's intent carries: the screen opens the app itself. */
+const val WEB_APP_FROM_SHORTCUT = "from-shortcut"
+/** The share of an adaptive icon's 108 dp an `app.conf` icon is scaled to fit: the 66 dp safe zone. */
+const val SHORTCUT_SAFE_ZONE = 66.0 / 108.0
+
+/** `app-NAME`, an app's shortcut id. */
+fun webAppShortcutId(name: String): String = "app-$name"
+
+/**
+ * What an app's shortcut shows (see HOME SCREEN SHORTCUTS): [icon], the
+ * host file of `app.conf`'s `icon`, or null for the generated [letter];
+ * colours are 0xRRGGBB with full alpha (as [ColorScheme]'s).
+ */
+data class AppShortcut(
+    val id: String,
+    val name: String,
+    val label: String,
+    val icon: File?,
+    val letter: String,
+    val background: Int,
+    val foreground: Int,
+)
+
+/** [app]'s shortcut under the theme [colors]; [iconFile] is its icon's host file, if it has one. */
+fun appShortcut(app: WebApp, iconFile: File?, colors: ColorScheme): AppShortcut = TODO("part A")
+
+/** What [WebAppLauncher.openStep] did: the [app] shown, and whether it started its service. */
+data class WebAppOpened(val app: WebApp, val startedService: Boolean)
 
 /**
  * Opens apps and keeps their services' lifecycle (see the contract
@@ -916,6 +1042,16 @@ class WebAppLauncher(
             "started_service" to (started != null).toString(),
         )
     }
+
+    /**
+     * THE OPEN STEP: opens app [name] (looked up, its service started
+     * and waited for), then calls [show] with it (null: shown, else why
+     * not). [done] gets the result, or the refusal as `app-open` words
+     * it; once, on the main thread. The handle cancels it (a service it
+     * started is stopped; [done] isn't called).
+     */
+    fun openStep(name: String, show: (WebApp) -> String?, done: (Result<WebAppOpened>) -> Unit): () -> Unit =
+        TODO("part A")
 
     /** App [name]'s screen finished: stops the service opening it started, if nothing else needs it. */
     fun screenClosed(name: String) {
