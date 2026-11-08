@@ -50,6 +50,7 @@ Commands:
   ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
   uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
+  app        app [list] | open NAME | reload NAME | log NAME [-n N]: apps (HTML and JavaScript)
   service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
   hook       hook claude|codex|gemini: run by an agent's hooks to notify you
   welcome    the welcome page: what's here and how to get around
@@ -766,7 +767,74 @@ def uptime_text(seconds):
     return f"{seconds // 86400}d {seconds % 86400 // 3600}h"
 
 
-USB_USAGE = "usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT] | monitor [PORT] [--baud N]"
+APP_USAGE = "usage: mynx app [list] | open NAME | reload NAME | log NAME [-n N]"
+WEB_APP_NAME = re.compile(r"[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?")  # a DNS label (core's isWebAppName)
+
+
+def app_log_dir():
+    """/tmp/.mynx/apps, beside the requests folder (/tmp/.mynx/requests)."""
+    requests = os.environ.get("MYNX_REQUESTS") or "/tmp/.mynx/requests"
+    return os.path.join(os.path.dirname(os.path.normpath(requests)), "apps")
+
+
+def cmd_app(args, as_json):
+    sub, rest = (args[0], list(args[1:])) if args else ("list", [])
+    if sub == "list" and not rest:
+        answer = request("app-list")
+        out(as_json, answer, apps_table(answer["apps"]))
+        return 0
+    if sub == "open" and len(rest) == 1:
+        answer = request("app-open", rest[0])
+        text = f"Opened {rest[0]}"
+        if answer.get("started_service"):
+            text += "\n(and started its service: closing the app stops it)"
+        out(as_json, answer, text)
+        return 0
+    if sub == "reload" and len(rest) == 1:
+        out(as_json, request("app-reload", rest[0]), f"Reloaded {rest[0]}")
+        return 0
+    if sub == "log" and len(rest) in (1, 3):
+        name, count = rest[0], 100
+        if len(rest) == 3:
+            if rest[1] != "-n" or not rest[2].isdigit():
+                raise Usage(APP_USAGE)
+            count = int(rest[2])
+        return app_log(name, count, as_json)
+    raise Usage(APP_USAGE)
+
+
+def apps_table(apps):
+    """NAME LABEL KIND in 56 columns, each app's app.conf problems under it."""
+    if not apps:
+        return ("No apps yet. Make one: a folder in ~/apps with an\n"
+                "index.html (see \"Apps\" in /opt/mynx/AGENTS.md).")
+    lines = [f"{'NAME':<16} {'LABEL':<20} KIND"]
+    for app in apps:
+        lines.append(f"{app['name']:<16} {app['label']:<20} {app['kind']}")
+        lines += ["  " + problem for problem in app.get("problems") or []]
+    return "\n".join(lines)
+
+
+def app_log(name, count, as_json):
+    """The app writes the log; nothing asks it (the screen may be closed)."""
+    if not WEB_APP_NAME.fullmatch(name):
+        raise Failure(f"'{name}' can't be an app's name (a-z, 0-9 and -)")
+    path = os.path.join(app_log_dir(), name + ".log")
+    try:
+        with open(path, errors="replace") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        raise Failure(f"no log for {name} yet ({path}): it starts when the app opens "
+                      f"(mynx app open {name})") from None
+    text = "".join(lines[-count:] if count else [])
+    if as_json:
+        out(as_json, {"ok": True, "name": name, "log": text}, None)
+    else:
+        sys.stdout.write(text if not text or text.endswith("\n") else text + "\n")
+    return 0
+
+
+USB_USAGE ="usage: mynx usb [list] | allow [DEVICE] | url [PORT] | path [PORT] | monitor [PORT] [--baud N]"
 # The serial monitor's command (tools/bin/serial), next to this library.
 SERIAL_MONITOR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", "bin", "serial")
 
@@ -2250,7 +2318,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation,
-    "audio": cmd_audio, "sound": cmd_sound, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
+    "audio": cmd_audio, "sound": cmd_sound, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
