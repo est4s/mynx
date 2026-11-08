@@ -3,17 +3,13 @@ package io.github.est4s.terminal
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
-import android.content.ActivityNotFoundException
 import android.content.Intent
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.Looper
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowInsets
@@ -24,13 +20,10 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.LinearLayout
-import android.widget.PopupMenu
-import android.widget.TextView
+import android.widget.FrameLayout
 import android.window.OnBackInvokedDispatcher
 import io.github.est4s.terminal.core.AutoReload
 import io.github.est4s.terminal.core.RootfsInstaller
-import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.ToolsInstaller
 import io.github.est4s.terminal.core.WEB_APP_LOG_DIR
 import io.github.est4s.terminal.core.WEB_APP_TASK_SCHEME
@@ -48,12 +41,11 @@ import java.io.FileInputStream
 import java.util.concurrent.Executors
 
 private const val COLORS_FILE = "root/.config/mynx/colors.properties"
-private const val BAR_HEIGHT_DP = 40
-private const val MENU_OPEN_IN_BROWSER = 1
-private const val MENU_CLOSE = 2
 
 /**
- * One app's screen (`mynx app open NAME`): a WebView under a slim bar.
+ * One app's screen (`mynx app open NAME`): a WebView filling the screen
+ * between the system bars, with no bar of its own, like an installed PWA.
+ * Recents shows its name; back goes back in the page, then closes it.
  * Started with the data URI `mynx-app://NAME`, so Android keeps one task
  * per app (`documentLaunchMode="intoExisting"`). Everything it decides
  * (which file a request gets, when to reload, the log's lines) is core's.
@@ -66,7 +58,6 @@ class WebAppActivity : Activity() {
     @Volatile private var app: WebApp? = null
     @Volatile private var log: WebAppLog? = null
     private lateinit var webView: WebView
-    private lateinit var titleView: TextView
     private val main by lazy { Handler(Looper.getMainLooper()) }
     // Log writes leave the main thread, in order.
     private val logWriter = Executors.newSingleThreadExecutor()
@@ -114,10 +105,9 @@ class WebAppActivity : Activity() {
             webViewClient = Client()
             webChromeClient = Chrome()
         }
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(bar(colors), LinearLayout.LayoutParams(MATCH_PARENT, dp(BAR_HEIGHT_DP)))
-            addView(webView, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        // The root pads for the system bars, the cutout and the keyboard; the page fills the rest.
+        val root = FrameLayout(this).apply {
+            addView(webView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
         colors?.let {
             window.decorView.setBackgroundColor(it.background)
@@ -153,7 +143,7 @@ class WebAppActivity : Activity() {
         super.onStop()
     }
 
-    // Finishing (Close, back at the first page, swiped from recents), not just leaving the screen.
+    // Finishing (back at the first page, swiped from recents), not just leaving the screen.
     override fun onDestroy() {
         poller.removeCallbacks(poll)
         pollThread.quitSafely()
@@ -178,7 +168,6 @@ class WebAppActivity : Activity() {
             val file = File(rootfs, "$WEB_APP_LOG_DIR/$name.log")
             runCatching { logWriter.execute { file.parentFile?.mkdirs() } }
             log = WebAppLog(file, found.origin)
-            titleView.text = found.label
             describeTask(found.label)
         }
     }
@@ -187,7 +176,6 @@ class WebAppActivity : Activity() {
         findApp()
         val found = app
         if (found == null) {
-            titleView.text = name
             describeTask(name)
             webView.loadDataWithBaseURL(null, "<p style=\"font-family:sans-serif\">There's no app named $name any more.</p>", "text/html", "utf-8", null)
             return
@@ -196,7 +184,7 @@ class WebAppActivity : Activity() {
         webView.loadUrl(found.url)
     }
 
-    /** `mynx app reload` and the bar's button: reads the app again, then reloads the page. */
+    /** `mynx app reload`: reads the app again, then reloads the page. */
     fun reload() {
         findApp()
         webView.reload()
@@ -210,64 +198,6 @@ class WebAppActivity : Activity() {
             ActivityManager.TaskDescription(label)
         }
         setTaskDescription(description)
-    }
-
-    private fun bar(colors: StripColors?): View = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        colors?.let { setBackgroundColor(it.background) }
-        val ink = colors?.text
-        addView(button("←", ink) { goBack() })
-        titleView = TextView(this@WebAppActivity).apply {
-            textSize = 16f
-            typeface = Typeface.DEFAULT_BOLD
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(dp(4), 0, dp(4), 0)
-            (colors?.accent ?: ink)?.let { setTextColor(it) }
-        }
-        addView(titleView, LinearLayout.LayoutParams(0, MATCH_PARENT, 1f).apply { gravity = Gravity.CENTER_VERTICAL })
-        titleView.gravity = Gravity.CENTER_VERTICAL
-        addView(button("↻", ink) { reload() })
-        addView(button("⋮", ink) { showMenu(it) })
-    }
-
-    private fun button(label: String, color: Int?, onClick: (View) -> Unit) = TextView(this).apply {
-        text = label
-        textSize = 20f
-        gravity = Gravity.CENTER
-        color?.let { setTextColor(it) }
-        minWidth = dp(BAR_HEIGHT_DP + 4)
-        val ripple = TypedValue()
-        if (theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)) {
-            setBackgroundResource(ripple.resourceId)
-        }
-        isClickable = true
-        setOnClickListener { onClick(it) }
-    }.also { it.layoutParams = LinearLayout.LayoutParams(dp(BAR_HEIGHT_DP + 4), MATCH_PARENT) }
-
-    // Open in browser only for served apps: a static app's origin exists only in this view.
-    private fun showMenu(anchor: View) {
-        val menu = PopupMenu(this, anchor)
-        if (app?.kind == WebAppKind.SERVED) menu.menu.add(0, MENU_OPEN_IN_BROWSER, 0, "Open in browser")
-        menu.menu.add(0, MENU_CLOSE, 1, "Close")
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_OPEN_IN_BROWSER -> openInBrowser()
-                MENU_CLOSE -> finishAndRemoveTask()
-            }
-            true
-        }
-        menu.show()
-    }
-
-    private fun openInBrowser() {
-        val url = webView.url ?: app?.url ?: return
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        } catch (e: ActivityNotFoundException) {
-            android.widget.Toast.makeText(this, "No app on the phone opens links", android.widget.Toast.LENGTH_SHORT).show()
-        }
     }
 
     // Back in the page's history; at its start the screen closes.
@@ -360,9 +290,6 @@ class WebAppActivity : Activity() {
             return true
         }
     }
-
-    private fun dp(value: Int) = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()
 
     companion object {
         // The screens that exist, by app name. Main thread only.

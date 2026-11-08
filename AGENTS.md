@@ -684,6 +684,10 @@ See `docs/ROADMAP.md` "How it works". The details:
   autostart one), so `wakelock = auto` doesn't hold the CPU for a
   forgotten backend. Each app is an activity task of its own
   (`documentLaunchMode="intoExisting"`, data `mynx-app://NAME`).
+  The screen has no bar of its own (maintainer's decision,
+  2026-11-08): the page fills it inside the root's insets padding
+  (system bars, cutout, keyboard), recents shows the name, back
+  goes back then closes, `mynx app reload` reloads it.
   Static apps reload when core's folder fingerprint changes (polled
   once a second off the main thread while on screen). Console, load
   and HTTP errors go to `/tmp/.mynx/apps/NAME.log` (`WebAppLog`).

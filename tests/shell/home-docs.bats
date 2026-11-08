@@ -244,3 +244,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
         grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
     done
 }
+
+@test "the guide says an app's screen has no bar: back and recents close it, mynx app reload reloads it" {
+    for text in "with no bar" "swiping it away in recents" "Reload it with \`mynx app reload NAME\`"; do
+        grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
+    done
+    for text in "slim bar" "Open in browser"; do
+        ! grep -qF -- "$text" "$GUIDE" || { echo "still in the guide: $text"; false; }
+    done
+}
