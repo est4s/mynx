@@ -207,6 +207,16 @@ class BridgeSessionTest {
     }
 
     @Test
+    fun `a refusal with no call name is logged without a doubled prefix`() {
+        // The host's line is `warn bridge MESSAGE`: the message names no "bridge" itself.
+        call(1, "sensor-stream", "light")
+        call(1, "vibrate")
+        assertEquals("weather warn call 1 is already open", host.logged.last())
+        receive("""{"id":2}""")
+        assertEquals("weather warn a call needs a name", host.logged.last())
+    }
+
+    @Test
     fun `messages from another origin are ignored, logged once`() {
         val before = sent.size
         receive("""{"id":1,"call":"vibrate"}""", "https://example.com")

@@ -25,26 +25,32 @@ import java.util.Base64
  * The page's script, `mynx.js`, is in the tools (`web/mynx.js`,
  * [BRIDGE_SCRIPT_FILE]) and the view serves it to any page at
  * `https://mynx.invalid/mynx.js` ([BRIDGE_SCRIPT_URL], through
- * [WebApps.bridgeScript]); alone it has no power. The app makes a
- * `WebView.createWebMessageChannel()` per port it posts and posts one end
- * with `postWebMessage(WebMessage(BRIDGE_PORT_MESSAGE, [port]),
- * Uri.parse(app.origin))`, so Android hands it over only when the main
- * frame is on the app's origin; at `onPageCommitVisible` and again at
- * `onPageFinished` (each a new channel and a new [BridgeSession]).
- * mynx.js keeps the FIRST port it receives and closes later ones, so a
- * later session doesn't close an earlier one: a page load may have two
- * sessions, both closed when the page goes (the next page starting, a
- * reload, the screen finishing), or each when its port closes. Sessions
- * know nothing of each other; the app keeps the page's. Before posting,
- * the view asks [Bridge.refusal] (the page's origin; a served app's
- * service must be running): when it refuses, no port, and it was logged
- * (`warn bridge: no bridge for ORIGIN: WHY`).
+ * [WebApps.bridgeScript]); alone it has no power. No port is posted at
+ * page commit or finish: once mynx.js listens, it asks for one with
+ * `fetch('https://mynx.invalid/hello', {mode: 'no-cors'})`. The view
+ * answers that 204 and, if it is on the app's origin and
+ * [Bridge.refusal] says go, makes a `WebView.createWebMessageChannel()`
+ * and posts one end with `postWebMessage(WebMessage(BRIDGE_PORT_MESSAGE,
+ * [port]), Uri.parse(app.origin))`, so Android hands it over only when
+ * the main frame is on the app's origin. One port, and one
+ * [BridgeSession], per hello: each script that asked has its own.
+ * Sessions know nothing of each other; the app keeps the page's, and
+ * closes them all when the page goes (the next page starting, a reload,
+ * the screen finishing), or each when its port closes. When
+ * [Bridge.refusal] refuses, no port, and it was logged (`warn bridge no
+ * bridge for ORIGIN: WHY`).
  *
  * As a second fence, the app passes each message with the view's
  * current URL's origin to [BridgeSession.receive], which ignores (and
- * logs, once per session: `warn bridge: message from ORIGIN ignored`)
+ * logs, once per session: `warn bridge message from ORIGIN ignored`)
  * any whose origin isn't the app's. A page's own third-party scripts
  * share its origin and so its bridge: the guide says so.
+ *
+ * The log: the host writes each of the bridge's messages to the app's
+ * log with source `bridge` ([BridgeHost.log]), so a line reads `LEVEL
+ * bridge MESSAGE`. A call's refusal is `warn bridge CALL: MESSAGE`;
+ * the rest name no call: `warn bridge bad message: WHY`, `warn bridge
+ * call N is already open`.
  *
  * MESSAGES (JSON text, one object per WebMessage)
  *
@@ -78,7 +84,7 @@ import java.util.Base64
  *
  * Bad messages: text that isn't a JSON object, over
  * [MAX_BRIDGE_MESSAGE_CHARS], or without a usable `id`: ignored and
- * logged (`warn bridge: bad message: WHY`). With an id: a repeated id
+ * logged (`warn bridge bad message: WHY`). With an id: a repeated id
  * still open, a missing or non-string `call`, `args` not a list of
  * strings → refused at once. A call not offered: refused "CALL isn't
  * offered to apps" (so config requests can't be reached by mistake). A
@@ -95,7 +101,8 @@ import java.util.Base64
  * same handler, rules and answers as from `mynx`; the `android-*`
  * settings are the handlers' checks), and a [BridgeRoute.OWN] call runs
  * the bridge's own [Later] the same way ([MynxRequests.call]'s handler
- * overload). Every refusal is logged (`warn bridge CALL: MESSAGE`).
+ * overload). Every refusal is logged (`warn bridge CALL: MESSAGE`, or
+ * `warn bridge MESSAGE` before a call has a name).
  *
  * TIMEOUTS: a call whose [Call.seconds] isn't null is refused
  * "CALL timed out after N s" after that long ([BridgeHost.schedule]),
@@ -417,7 +424,7 @@ class Bridge(
      * Why [app]'s page on [origin] gets no bridge, or null when it
      * does: [origin] must be the app's (scheme and host in any case,
      * port as given); a served app needs a `service`, and it must be
-     * running. A refusal is logged (`warn bridge: no bridge for ORIGIN:
+     * running. A refusal is logged (`warn bridge no bridge for ORIGIN:
      * WHY`) before it's returned.
      */
     fun refusal(app: WebApp, origin: String): String? {
@@ -436,8 +443,8 @@ class Bridge(
      * A new session for one port posted to a page of [app] (after
      * [refusal] said null). [send] takes each message to post on the
      * port (any thread; the app posts it on the port); the hello is sent
-     * before this returns. A page load may have two (see THE CHANNEL):
-     * sessions know nothing of each other.
+     * before this returns. A page load has one per hello (see THE
+     * CHANNEL): sessions know nothing of each other.
      */
     fun session(app: WebApp, send: (String) -> Unit): BridgeSession =
         BridgeSession(this, app, send).also { it.hello() }
@@ -530,7 +537,7 @@ private class InnerSink(private val onLine: (String) -> Unit = {}, private val o
 
 private class BridgeRefused(message: String) : Exception(message)
 
-/** One posted port's bridge; a page load may have two (see SESSIONS AND CANCELLATION). Main thread. */
+/** One posted port's bridge; a page load has one per hello (see THE CHANNEL). Main thread. */
 class BridgeSession internal constructor(
     private val bridge: Bridge,
     private val app: WebApp,
@@ -666,7 +673,7 @@ class BridgeSession internal constructor(
         var out = answer
         if (parsed != null && parsed["ok"] == false) {
             if ("code" !in parsed) out = answer.trimEnd().removeSuffix("}") + ""","code":"${BridgeError.REFUSED.word}"}"""
-            log("${call ?: "bridge"}: ${parsed["error"]}")
+            log(if (call != null) "$call: ${parsed["error"]}" else "${parsed["error"]}")
         }
         post("""{"id":$id,"reply":$out}""")
     }
