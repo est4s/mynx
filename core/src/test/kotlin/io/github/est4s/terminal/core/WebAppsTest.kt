@@ -95,6 +95,18 @@ fun fixturesDir(): File {
     error("no tests/fixtures/apps above ${System.getProperty("user.dir")}")
 }
 
+/**
+ * Deletes [dir] without following links: these tests link to real
+ * paths like `/root/pixel-hero/assets`, and `deleteRecursively()`
+ * empties a linked folder (it did, on the phone).
+ */
+fun deleteTree(dir: File) {
+    if (!Files.exists(dir.toPath(), LinkOption.NOFOLLOW_LINKS)) return
+    Files.walk(dir.toPath()).use { paths ->
+        paths.sorted(Comparator.reverseOrder()).forEach { Files.delete(it) }
+    }
+}
+
 /** Copies [from] into [to], links as links. */
 fun copyTree(from: File, to: File) {
     val source = from.toPath()
@@ -110,6 +122,20 @@ fun copyTree(from: File, to: File) {
     }
 }
 
+class DeleteTreeTest {
+    @Test
+    fun `leaves a linked folder's files alone`() {
+        val outside = createTempDirectory("outside").toFile()
+        val keep = File(outside, "keep.txt").apply { writeText("x") }
+        val base = createTempDirectory("tree").toFile()
+        Files.createSymbolicLink(File(base, "link").toPath(), outside.toPath())
+        deleteTree(base)
+        assertTrue(keep.exists())
+        assertFalse(base.exists())
+        outside.deleteRecursively()
+    }
+}
+
 class WebAppsTest {
     private val base = createTempDirectory("webapps").toFile()
     private val rootfs = File(base, "rootfs")
@@ -121,7 +147,7 @@ class WebAppsTest {
 
     @AfterTest
     fun cleanUp() {
-        base.deleteRecursively()
+        deleteTree(base)
     }
 
     @Test
@@ -605,7 +631,7 @@ class WebAppLogTest {
 
     @AfterTest
     fun cleanUp() {
-        dir.deleteRecursively()
+        deleteTree(dir)
     }
 
     private fun lines() = file.readLines()
@@ -682,7 +708,7 @@ class WebAppServicesTest {
 
     @AfterTest
     fun cleanUp() {
-        base.deleteRecursively()
+        deleteTree(base)
     }
 
     private fun conf(text: String) = File(home, "$CONFIG_DIR/$SERVICES_CONF").apply { parentFile.mkdirs() }.writeText(text)
@@ -717,7 +743,7 @@ class WebAppLauncherTest {
 
     @AfterTest
     fun cleanUp() {
-        base.deleteRecursively()
+        deleteTree(base)
     }
 
     private fun ask(vararg lines: String): String {
