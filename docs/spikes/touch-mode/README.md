@@ -29,7 +29,7 @@ JSON-RPC over stdio, no adapter) and a small ACP client for Gemini
 | RSS | 225-267 MB | about 335 MB, peak about 480 MB |
 | Cold start | about 1.6 s less | about 1.6 s more (noisy, other agents ran too) |
 | Allow / Deny, cancel, resume | verified | verified |
-| Bash output while it runs | stream of the tool call | only when the command ends |
+| Bash output while it runs | not checked | only when the command ends |
 | A denial's reason reaches the model | yes | no |
 | Asks by default | when `--permission-prompt-tool stdio` is set | not until the client sets `default` mode |
 | Stability | the SDK's private protocol, and Claude Code auto-updates | versioned spec, but the adapter pins its own CLI |
