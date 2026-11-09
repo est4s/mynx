@@ -13,10 +13,17 @@ class ChatControllerTest {
         val launches = mutableListOf<AgentLaunch>()
         val transports = mutableListOf<FakeTransport>()
         var ids = 0
+        var binary: String? = "/root/.local/bin/claude"
+        var ends = 0
 
-        override fun check(done: (ChatAccess) -> Unit) {
-            checks += done
-            if (answering) done(access)
+        override fun check(done: (ChatCheck) -> Unit) {
+            val answer: (ChatAccess) -> Unit = { done(ChatCheck(it, binary)) }
+            checks += answer
+            if (answering) answer(access)
+        }
+
+        override fun ended() {
+            ends++
         }
 
         override fun transport(launch: AgentLaunch): AgentTransport {
@@ -253,5 +260,109 @@ class ChatControllerTest {
         var got: ChatState? = null
         chat.listener = { got = it }
         assertEquals(ChatAccess.READY, got?.access)
+    }
+
+    @Test
+    fun `a live chat is one with a process, and its end is told once`() {
+        ready()
+        assertFalse(chat.live)
+        chat.send("hello")
+        assertTrue(chat.live)
+        drain()
+        exit()
+        assertFalse(chat.live)
+        assertEquals(1, host.ends)
+    }
+
+    @Test
+    fun `shutting down isn't live and leaves nothing running`() {
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        line("""{"type":"stream_event","event":{"type":"content_block_start","index":0,"content_block":{"type":"thinking"}},"api_message_id":"m1","parent_tool_use_id":null}""")
+        assertTrue(chat.state.conversation.thinking)
+        chat.shutdown()
+        assertFalse(chat.live)
+        assertFalse(chat.state.conversation.running)
+        assertFalse(chat.state.conversation.thinking)
+        assertFalse(states.last().conversation.running, "the screen is told")
+    }
+
+    @Test
+    fun `the path the check found is the one run`() {
+        host.binary = "/usr/local/bin/claude"
+        ready()
+        chat.send("hello")
+        assertEquals("/usr/local/bin/claude", host.launches.single().argv.first())
+    }
+
+    @Test
+    fun `Stop before the first init leaves nothing to resume`() {
+        ready()
+        chat.send("hello")
+        drain()
+        assertTrue(chat.cancel())
+        val interrupt = (parseJson(process.written.last()) as Map<*, *>)["request_id"]
+        line("""{"type":"control_response","response":{"subtype":"success","request_id":"$interrupt"}}""")
+        assertFalse(chat.state.conversation.running)
+        exit(143, "")
+        assertTrue(chat.state.canRestart)
+        chat.restart()
+        assertEquals(null, argFlag("--resume"))
+        assertEquals("00000000-0000-0000-0000-000000000002", argFlag("--session-id"))
+    }
+
+    @Test
+    fun `a resume that finds no conversation starts afresh next, from a real run`() {
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        done()
+        exit()
+        chat.send("more")
+        drain()
+        assertEquals("11111111-1111-1111-1111-111111111111", argFlag("--resume"))
+        chatFixture("claude-bad-session.txt").forEach { line(it) }
+        exit(1, "")
+        chat.restart()
+        assertEquals(null, argFlag("--resume"))
+        assertEquals("00000000-0000-0000-0000-000000000002", argFlag("--session-id"))
+    }
+
+    @Test
+    fun `a Restart that finds no conversation starts afresh next too`() {
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        done()
+        exit()
+        chat.restart()
+        assertEquals("11111111-1111-1111-1111-111111111111", argFlag("--resume"))
+        chatFixture("claude-bad-session.txt").forEach { line(it) }
+        exit(1, "")
+        chat.restart()
+        assertEquals(null, argFlag("--resume"))
+    }
+
+    @Test
+    fun `opening again while the old process is ending keeps the chat closed`() {
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        notSignedIn()
+        chat.opened()
+        assertEquals(ChatAccess.CHECKING, chat.state.access)
+        val checks = host.checks.size
+        chat.opened()
+        assertEquals(ChatAccess.CHECKING, chat.state.access, "not ready while it stops")
+        assertEquals(checks, host.checks.size)
+        assertFalse(chat.send("too early"))
+        exit(0)
+        assertEquals(ChatAccess.READY, chat.state.access)
+        assertTrue(chat.send("now"))
     }
 }

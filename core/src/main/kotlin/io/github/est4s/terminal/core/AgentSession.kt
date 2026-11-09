@@ -88,6 +88,9 @@ interface AgentTransport {
     /** Starts the process, with [listener] for what it says. Must not throw: failures go to [Listener.onExit]. */
     fun start(listener: Listener)
 
+    /** Whether a line written now would reach a live process: false once it has died, before [Listener.onExit]. */
+    val accepting: Boolean get() = true
+
     /** Queues [line] (no line break in it) for the process's stdin. */
     fun writeLine(line: String)
 
@@ -111,9 +114,8 @@ data class PermissionOption(val id: String, val name: String, val kind: Permissi
 /**
  * A tool call as it stands; each event carries the whole of it.
  *
- * A permission card must show [title]: it comes from the tool's real input
- * (the command, the path). [detail] may be the model's own description of
- * the call, so it can't stand in for [title].
+ * [detail] may be the model's own description of the call: a permission
+ * card shows [AgentEvent.PermissionRequest.review], the tool's real input.
  */
 data class ToolCallInfo(
     val id: String,
@@ -171,7 +173,8 @@ sealed interface AgentEvent {
 
     data class ToolCallUpdate(val call: ToolCallInfo) : AgentEvent
 
-    data class PermissionRequest(val requestId: String, val call: ToolCallInfo, val options: List<PermissionOption>) : AgentEvent
+    /** [review] is what's being approved, from the tool's real input: all a card needs to show. */
+    data class PermissionRequest(val requestId: String, val call: ToolCallInfo, val options: List<PermissionOption>, val review: String = "") : AgentEvent
 
     /** The agent asks the user (Claude's `AskUserQuestion`). */
     data class QuestionRequest(val requestId: String, val toolCallId: String?, val questions: List<AgentQuestion>) : AgentEvent

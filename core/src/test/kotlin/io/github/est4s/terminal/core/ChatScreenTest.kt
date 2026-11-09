@@ -101,4 +101,46 @@ class ChatScreenTest {
         assertTrue(picks.complete)
         assertEquals(mapOf("One?" to "red", "Two?" to "green"), picks.answers())
     }
+
+    @Test
+    fun `a short review shows whole`() {
+        assertEquals(ChatReviewCut("ls -l", 0), chatReviewCut("ls -l"))
+    }
+
+    @Test
+    fun `a long review is cut with a visible mark and says how much is left`() {
+        val cut = chatReviewCut("a".repeat(250), max = 100)
+        assertEquals("a".repeat(100) + "\n…", cut.text)
+        assertEquals(150, cut.hidden)
+    }
+
+    @Test
+    fun `a tall review is cut by lines too`() {
+        val review = (1..10).joinToString("\n") { "line$it" }
+        val cut = chatReviewCut(review, maxLines = 3)
+        assertEquals("line1\nline2\nline3\n…", cut.text)
+        assertEquals(review.length - "line1\nline2\nline3".length, cut.hidden)
+    }
+
+    @Test
+    fun `everything fits when there's room`() {
+        assertEquals(ChatFit(header = true, status = true, gate = true), chatFit(1000, 100, 50, 100, 40, 80))
+    }
+
+    @Test
+    fun `when height is short the header goes first, then the status, then the gate`() {
+        assertEquals(ChatFit(header = false, status = true, gate = true), chatFit(280, 100, 50, 100, 40, 80))
+        assertEquals(ChatFit(header = false, status = false, gate = true), chatFit(240, 100, 50, 100, 40, 80))
+        assertEquals(ChatFit(header = false, status = false, gate = false), chatFit(170, 100, 50, 100, 40, 80))
+    }
+
+    @Test
+    fun `a row that isn't there takes no room`() {
+        assertEquals(ChatFit(header = true, status = true, gate = true), chatFit(250, 100, 50, 100, 0, 0))
+    }
+
+    @Test
+    fun `with less height than the input needs, every optional row goes`() {
+        assertEquals(ChatFit(header = false, status = false, gate = false), chatFit(60, 100, 50, 100, 40, 80))
+    }
 }

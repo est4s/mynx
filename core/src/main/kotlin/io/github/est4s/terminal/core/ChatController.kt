@@ -6,10 +6,16 @@ enum class ChatAccess { CHECKING, READY, NOT_INSTALLED, NOT_SIGNED_IN }
 /** What the Chat screen draws. [canRestart]: the process ended by itself and a chat can go on with `--resume`. */
 data class ChatState(val conversation: Conversation, val access: ChatAccess, val canRestart: Boolean)
 
+/** [check][ChatHost.check]'s answer: [binary] is the path to run when [access] is ready, as Debian sees it. */
+data class ChatCheck(val access: ChatAccess, val binary: String? = null)
+
 /** What [ChatController] needs from the app. */
 interface ChatHost {
     /** Whether the agent can run (off the main thread, in the app); [done] is called on the main thread. */
-    fun check(done: (ChatAccess) -> Unit)
+    fun check(done: (ChatCheck) -> Unit)
+
+    /** The process ended by itself and [ChatController.live] is now false. */
+    fun ended() {}
 
     fun transport(launch: AgentLaunch): AgentTransport
 
@@ -26,7 +32,8 @@ interface ChatHost {
  * The first prompt starts the process, with a new `--session-id`. After
  * that a process that ended is started with `--resume`, so that one chat
  * is never driven by two processes; if no turn ever finished there is
- * nothing to resume, so a new id it is.
+ * nothing to resume, so a new id it is, as after a resume that found no
+ * conversation.
  */
 class ChatController(
     private val host: ChatHost,
@@ -41,11 +48,16 @@ class ChatController(
     private var generation = 0
     private var chatId: String? = null
     private var resumable = false
+    private var initSeen = false
+    private var binary: String? = null
     private var canRestart = false
     private var signInLost = false
     private var waitingForExit = false
 
     val state: ChatState get() = ChatState(conversation, access, canRestart)
+
+    /** A process is running, so the app mustn't exit by itself. */
+    val live: Boolean get() = session != null
 
     /** Told of every change. Setting it tells it at once how things stand. */
     var listener: ((ChatState) -> Unit)? = null
@@ -56,15 +68,17 @@ class ChatController(
 
     /** The screen is on show: checks whether the chat can run, unless that's known or being found out. */
     fun opened() {
-        if (access == ChatAccess.READY || checking) return
+        if (access == ChatAccess.READY || checking || waitingForExit) return
         access = ChatAccess.CHECKING
         checking = true
         changed()
         host.check(::checked)
     }
 
-    private fun checked(result: ChatAccess) {
+    private fun checked(check: ChatCheck) {
+        val result = check.access
         checking = false
+        check.binary?.let { binary = it }
         val current = session
         if (result == ChatAccess.READY && signInLost && current != null) {
             // Signed in afresh: don't count on a running process noticing.
@@ -122,13 +136,16 @@ class ChatController(
         generation++
         session = null
         old?.stop()
+        conversation = conversation.copy(running = false, thinking = false)
+        changed()
     }
 
     private fun launch(): AgentSession {
         val resume = chatId.takeIf { resumable }
         val fresh = if (resume == null) host.newSessionId().also { chatId = it } else null
-        val options = ClaudeLaunchOptions(cwd = cwd, home = home, resume = resume, sessionId = fresh)
+        val options = ClaudeLaunchOptions(cwd = cwd, home = home, resume = resume, sessionId = fresh, binary = binary)
         canRestart = false
+        initSeen = false
         conversation = conversation.copy(processEnded = false)
         generation++
         val own = generation
@@ -145,8 +162,16 @@ class ChatController(
         if (own != generation) return
         conversation = conversation.reduce(event)
         when (event) {
-            is AgentEvent.SessionStarted -> chatId = event.sessionId
-            is AgentEvent.TurnEnded -> if (event.stopReason != StopReason.ERROR) resumable = true
+            is AgentEvent.SessionStarted -> {
+                chatId = event.sessionId
+                initSeen = true
+            }
+            is AgentEvent.TurnEnded -> when {
+                isNoConversationResult(event.message) -> resumable = false
+                // Without an init, this is a Stop that beat the process: there's no conversation yet.
+                initSeen && event.stopReason != StopReason.ERROR -> resumable = true
+            }
+            is AgentEvent.Notice -> if (isNoConversationResult(event.text)) resumable = false
             is AgentEvent.NotSignedIn -> {
                 signInLost = true
                 access = ChatAccess.NOT_SIGNED_IN
@@ -159,6 +184,9 @@ class ChatController(
                 } else {
                     canRestart = !event.stopped
                 }
+                changed()
+                host.ended()
+                return
             }
             else -> Unit
         }

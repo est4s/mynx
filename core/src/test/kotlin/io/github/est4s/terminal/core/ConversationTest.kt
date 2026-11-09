@@ -191,4 +191,10 @@ class ConversationTest {
         assertTrue(state.items.any { it is ChatItem.Tool && it.call.name == "Agent" })
         assertTrue(state.items.filterIsInstance<ChatItem.Tool>().all { it.call.status != ToolStatus.PENDING }, "no card left spinning")
     }
+
+    @Test
+    fun `a permission row keeps what's being approved`() {
+        val state = fold(AgentEvent.PermissionRequest("r1", call(), listOf(allow), review = "rm -rf build"))
+        assertEquals("rm -rf build", (state.items.single() as ChatItem.Permission).review)
+    }
 }

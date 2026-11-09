@@ -10,6 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ClaudeLaunchTest {
+    private val LOGIN = listOf("/bin/bash", "--login", "-c", "exec \"\$@\"", "bash")
     private val uuid = "737a8011-89d5-4e7f-a7ce-41bcea8fe1ef"
     private val base = listOf(
         "/root/.local/bin/claude", "-p",
@@ -55,8 +56,27 @@ class ClaudeLaunchTest {
     }
 
     @Test
-    fun `auth status runs the real binary`() {
-        assertEquals(listOf("/root/.local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand())
+    fun `auth status runs the real binary in a login shell`() {
+        assertEquals(LOGIN + listOf("/root/.local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand())
+        assertEquals(LOGIN + listOf("/usr/local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand("/usr/local/bin/claude"))
+    }
+
+    @Test
+    fun `the launch runs the binary it's given`() {
+        assertEquals("/usr/local/bin/claude", claudeLaunch(ClaudeLaunchOptions(cwd = "/", binary = "/usr/local/bin/claude")).argv[0])
+    }
+
+    @Test
+    fun `noise around auth status's JSON doesn't change the answer`() {
+        assertEquals(SignInState.SIGNED_IN, parseClaudeAuthStatus(0, "Hello {you}\n{\"loggedIn\":true}\nbye {now}\n"))
+        assertEquals(SignInState.NOT_SIGNED_IN, parseClaudeAuthStatus(1, "{not json\n{\n  \"loggedIn\": false\n}\n"))
+    }
+
+    @Test
+    fun `resuming a conversation that isn't there is recognised`() {
+        assertTrue(isNoConversationResult("No conversation found with session ID: 00000000-0000-4000-8000-000000000000"))
+        assertFalse(isNoConversationResult("API Error: 500"))
+        assertFalse(isNoConversationResult(null))
     }
 
     @Test
@@ -77,7 +97,9 @@ class ClaudeLaunchTest {
     @Test
     fun `a not-signed-in result is recognised`() {
         assertTrue(isNotSignedInResult(true, "Not logged in · Please run /login"))
-        assertTrue(isNotSignedInResult(true, "Invalid API key · Please run /login"))
+        assertFalse(isNotSignedInResult(true, "Invalid API key · Please run /login"), "only the known message")
+        assertFalse(isNotSignedInResult(true, "The tool said: run /login to continue"))
+        assertFalse(isNotSignedInResult(true, "The server said the user is not logged in"))
         assertFalse(isNotSignedInResult(false, "Not logged in · Please run /login"), "the agent may say so itself")
         assertFalse(isNotSignedInResult(true, "API Error: 500"))
         assertFalse(isNotSignedInResult(true, null))
@@ -116,6 +138,27 @@ class ClaudeLaunchTest {
     @Test
     fun `an agent's env goes before its command, for proot's env -i`() {
         val launch = AgentLaunch(listOf("/root/.local/bin/claude", "-p"), mapOf("HOME" to "/root", "MYNX_CHAT" to "1"), "/root")
-        assertEquals(listOf("HOME=/root", "MYNX_CHAT=1", "/root/.local/bin/claude", "-p"), agentProotCommand(launch))
+        assertEquals(listOf("HOME=/root", "MYNX_CHAT=1") + LOGIN + listOf("/root/.local/bin/claude", "-p"), agentProotCommand(launch))
+    }
+
+    @Test
+    fun `a chat runs through a login shell, as itself, with its env, past the profile's noise`() {
+        File(top, ".profile").writeText("export FROM_PROFILE=yes\necho 'Welcome {to} the login'\necho '{not json'\n")
+        val line = "echo \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\",\\\"session_id\\\":\\\"\${FROM_PROFILE}-\${MYNX_CHAT}-\$\$\\\"}\""
+        val command = listOf("/usr/bin/env", "-i", "HOME=$top", "PATH=/usr/bin:/bin") +
+            agentProotCommand(AgentLaunch(listOf("/bin/sh", "-c", line), mapOf("MYNX_CHAT" to "1"), "/"))
+        var pid = 0L
+        val transport = ProcessAgentTransport(
+            spawn = { ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start().also { pid = it.pid() } },
+            stop = { it.destroy() },
+        )
+        val events = java.util.concurrent.CopyOnWriteArrayList<AgentEvent>()
+        val exited = java.util.concurrent.CountDownLatch(1)
+        ClaudeSession(transport) { event ->
+            events.add(event)
+            if (event is AgentEvent.ProcessEnded) exited.countDown()
+        }.start()
+        assertTrue(exited.await(20, java.util.concurrent.TimeUnit.SECONDS), "no exit: $events")
+        assertEquals("yes-1-$pid", events.filterIsInstance<AgentEvent.SessionStarted>().single().sessionId)
     }
 }

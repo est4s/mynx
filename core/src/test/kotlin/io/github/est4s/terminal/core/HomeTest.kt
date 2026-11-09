@@ -206,12 +206,21 @@ class HomeTest {
     @Test
     fun `claude counts as installed through its real binary's link`() {
         val apps = WebApps(home, rootfs.path, tools)
-        assertFalse(claudeInstalled(apps))
+        assertEquals(null, agentBinary(apps, "claude"))
         write(File(home, ".local/share/claude/v1/claude"), "x", executable = true)
         File(home, ".local/bin").mkdirs()
         // A link with Debian's absolute path: only Debian can follow it.
         java.nio.file.Files.createSymbolicLink(File(home, ".local/bin/claude").toPath(), File("/root/.local/share/claude/v1/claude").toPath())
-        assertTrue(claudeInstalled(apps))
+        assertEquals("/root/.local/bin/claude", agentBinary(apps, "claude"))
+    }
+
+    @Test
+    fun `an agent found anywhere the menu looks is found at that path, the home folder first`() {
+        val apps = WebApps(home, rootfs.path, tools)
+        write(File(rootfs, "usr/local/bin/claude"), "x", executable = true)
+        assertEquals("/usr/local/bin/claude", agentBinary(apps, "claude"))
+        write(File(home, ".local/bin/claude"), "x", executable = true)
+        assertEquals("/root/.local/bin/claude", agentBinary(apps, "claude"))
     }
 
     @Test

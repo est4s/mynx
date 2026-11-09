@@ -50,13 +50,14 @@ import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.AgentLaunch
 import io.github.est4s.terminal.core.AgentTransport
 import io.github.est4s.terminal.core.ChatAccess
+import io.github.est4s.terminal.core.ChatCheck
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatHost
 import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
 import io.github.est4s.terminal.core.claudeAuthStatusCommand
-import io.github.est4s.terminal.core.claudeInstalled
+import io.github.est4s.terminal.core.agentBinary
 import io.github.est4s.terminal.core.CONFIG_DIR
 import io.github.est4s.terminal.core.SOUND_DIR
 import io.github.est4s.terminal.core.SOUND_OUT
@@ -141,6 +142,7 @@ import java.util.TimeZone
 import java.util.concurrent.Executors
 import java.util.WeakHashMap
 import java.util.concurrent.CountDownLatch
+import kotlin.concurrent.thread
 
 private const val CHANNEL_ID = "terminals"
 private const val NOTIFICATION_ID = 1
@@ -212,16 +214,23 @@ class TerminalService : Service() {
     /** Whether the Chat screen was showing, for a recreated activity. */
     var chatOnScreen = false
     private val chatHost: ChatHost = object : ChatHost {
-        override fun check(done: (ChatAccess) -> Unit) {
-            val onMain: (ChatAccess) -> Unit = { access -> mainHandler.post { done(access) } }
-            if (!claudeInstalled(webAppFiles)) {
-                onMain(ChatAccess.NOT_INSTALLED)
+        override fun check(done: (ChatCheck) -> Unit) {
+            // The lookup reads Debian's folders; the proot it needs is set up as a new tab's is, on the main thread.
+            thread(name = "chat-check", isDaemon = true) {
+                val binary = agentBinary(webAppFiles, "claude")
+                mainHandler.post { checkSignIn(binary, done) }
+            }
+        }
+
+        private fun checkSignIn(binary: String?, done: (ChatCheck) -> Unit) {
+            if (binary == null) {
+                done(ChatCheck(ChatAccess.NOT_INSTALLED))
                 return
             }
             claudeAccessCheck(
-                AgentProcess(debianLaunch("/root", claudeAuthStatusCommand()), filesDir),
+                AgentProcess(debianLaunch("/root", claudeAuthStatusCommand(binary)), filesDir),
                 schedule = { ms, action -> mainHandler.postDelayed(action, ms) },
-                done = onMain,
+                done = { access -> mainHandler.post { done(ChatCheck(access, binary)) } },
             )
         }
 
@@ -229,6 +238,11 @@ class TerminalService : Service() {
             AgentProcess(debianLaunch(launch.cwd, agentProotCommand(launch)), filesDir)
 
         override fun newSessionId(): String = UUID.randomUUID().toString()
+
+        // A chat kept the app up with no tabs; with it over and nothing else running, it goes.
+        override fun ended() {
+            if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
+        }
     }
     /** Why the app's tools couldn't be updated, for the activity to show. */
     var toolsError: String? = null
@@ -805,9 +819,9 @@ class TerminalService : Service() {
         if (tabs.isEmpty) lastTabClosed()
     }
 
-    // With services running the app stays, with no tabs; opening it again opens a fresh one.
+    // With services or a chat running the app stays, with no tabs; opening it again opens a fresh one.
     private fun lastTabClosed() {
-        if (serviceManager.active == 0) {
+        if (serviceManager.active == 0 && !chat.live) {
             exit()
             return
         }
@@ -861,7 +875,7 @@ class TerminalService : Service() {
         syncServiceTabs()
         activity?.onServicesChanged()
         if (hadTabs && tabs.isEmpty) lastTabClosed()
-        else if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
+        else if (tabsClosed && tabs.isEmpty && serviceManager.active == 0 && !chat.live) exit()
     }
 
     // Removed services' tabs close; the others' titles say how they are.

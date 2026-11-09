@@ -148,4 +148,29 @@ class ProcessAgentTransportTest {
         stuck.listener!!.onExit(143, "")
         assertEquals(1, answers, "answered once")
     }
+
+    @Test
+    fun `a process that has died accepts nothing, even before its exit is reported`() {
+        val rec = Recorder()
+        val agent = transport("sleep 4 & exit 0")
+        agent.start(rec)
+        val limit = System.currentTimeMillis() + 1800
+        while (agent.accepting && System.currentTimeMillis() < limit) Thread.sleep(20)
+        assertTrue(!agent.accepting, "still accepting after the process ended")
+        assertTrue(rec.exits.isEmpty(), "the exit came first, so this proves nothing")
+        rec.awaitExit()
+    }
+
+    @Test
+    fun `a running process accepts lines, and a closing one doesn't`() {
+        val rec = Recorder()
+        val agent = transport("cat")
+        assertTrue(agent.accepting, "before it starts, lines wait in the queue")
+        agent.start(rec)
+        Thread.sleep(200)
+        assertTrue(agent.accepting)
+        agent.close()
+        assertTrue(!agent.accepting)
+        rec.awaitExit()
+    }
 }

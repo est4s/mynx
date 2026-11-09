@@ -59,6 +59,46 @@ fun chatToolBody(call: ToolCallInfo, max: Int = CHAT_TOOL_BODY_MAX): String {
     return if (text.length <= max) text else text.take(max) + "\n… ${text.length - max} more characters"
 }
 
+/** How much of a permission card's review shows before "Show all". */
+const val CHAT_REVIEW_MAX = 1500
+const val CHAT_REVIEW_MAX_LINES = 24
+
+/** A review as a card shows it: [text] ends in "…" when [hidden] characters are left out. */
+data class ChatReviewCut(val text: String, val hidden: Int)
+
+fun chatReviewCut(review: String, max: Int = CHAT_REVIEW_MAX, maxLines: Int = CHAT_REVIEW_MAX_LINES): ChatReviewCut {
+    var end = minOf(review.length, max)
+    var newline = -1
+    for (line in 1..maxLines) {
+        newline = review.indexOf('\n', newline + 1)
+        if (newline < 0) break
+        if (line == maxLines) end = minOf(end, newline)
+    }
+    return if (end >= review.length) ChatReviewCut(review, 0) else ChatReviewCut(review.substring(0, end) + "\n…", review.length - end)
+}
+
+/** Which of the Chat screen's optional rows stay. */
+data class ChatFit(val header: Boolean, val status: Boolean, val gate: Boolean)
+
+/**
+ * Makes room for the input box (e.g. in landscape with the keyboard up), all
+ * sizes in pixels, 0 for a row that isn't there: the box must never get no
+ * height, or it loses the keyboard. It and [conversation], the least the
+ * rows should have, come first; the header gives way first, then the
+ * status, then the gate.
+ */
+fun chatFit(available: Int, input: Int, conversation: Int, header: Int, status: Int, gate: Int): ChatFit {
+    var room = available - input - conversation
+    fun fits(height: Int): Boolean {
+        if (height > room) return false
+        room -= height
+        return true
+    }
+    val keepGate = fits(gate)
+    val keepStatus = fits(status)
+    return ChatFit(header = fits(header), status = keepStatus, gate = keepGate)
+}
+
 /** The choices made so far on a question card, before they are sent. */
 class QuestionPicks(val questions: List<AgentQuestion>) {
     private val picks = questions.map { TreeSet<Int>() }

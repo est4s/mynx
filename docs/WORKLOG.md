@@ -256,10 +256,14 @@ The Android side on 173's core. `AgentProcess` (a proot over pipes),
 Home is, entry through a new `HomeAction.Chat`. Stopping is
 `stopAgentProot`: TERM the agent (the tracee whose parent is proot),
 5 s later QUIT through proot, then the force. Sign-in/Install open a
-tab and Back returns to the chat to check again. Running in a tab's
-environment, but no login shell (nothing between proot and the agent),
-so `~/.bashrc`'s variables don't reach it. `app/` compiles only in CI;
-it hasn't been compiled yet. No wakelock for a running chat.
+tab and Back returns to the chat to check again. It runs in a tab's
+environment through a login shell that execs the agent. `app/`
+compiles only in CI; it hasn't been compiled yet. No wakelock for a
+running chat. A review's 12 fixes followed, still unbuilt: permission
+cards show the real input (`review`, capped, "Show all"), selection
+gives the focus back to the box, the input keeps its height
+(`chatFit`), picks and expansion survive redraws, a running chat keeps
+the app up, one binary lookup, only an init-backed turn is resumable.
 
 ### 2026-11-10 (173): Chat's protocol layer in core (not yet on the phone)
 

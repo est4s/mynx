@@ -758,6 +758,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`stopAgentProot`): off the main thread, SIGTERM to the agent itself
   (the tracee whose parent is proot, so it can end its children: KILL
   leaves them running), then after 5 s `stopProot`'s QUIT and its force.
+  The agent and `claude auth status` run through a login shell
+  (`bash --login -c 'exec "$@"'`): it gets what tabs and services get,
+  and `exec` keeps it proot's direct child; what a profile prints is
+  ignored (`agentBinary()` finds the path, the same lookup as Home's).
+  A permission card shows `PermissionRequest.review`, built from the
+  input sent back as `updatedInput`, never just the model's
+  description. A running chat keeps the app up like a service
+  (`ChatController.live`).
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

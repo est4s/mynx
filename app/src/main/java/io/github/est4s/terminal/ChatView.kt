@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
@@ -12,7 +13,11 @@ import android.text.InputType
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.ActionMode
 import android.view.KeyEvent
+import android.view.Menu
+import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -32,7 +37,9 @@ import io.github.est4s.terminal.core.PermissionOptionKind
 import io.github.est4s.terminal.core.QuestionPicks
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.ToolCallInfo
+import io.github.est4s.terminal.core.chatFit
 import io.github.est4s.terminal.core.chatOutcomeText
+import io.github.est4s.terminal.core.chatReviewCut
 import io.github.est4s.terminal.core.chatRowChanges
 import io.github.est4s.terminal.core.chatToolBody
 import io.github.est4s.terminal.core.chatToolStatus
@@ -40,6 +47,14 @@ import io.github.est4s.terminal.core.runThenShell
 
 // Streaming text comes faster than the screen needs: changes are drawn together.
 private const val RENDER_DELAY_MS = 33L
+// What the rows keep of the height when it's short (see chatFit).
+private const val CONVERSATION_MIN_DP = 48
+
+// The box is outside it, so nothing here needs scrolling to when it takes the focus:
+// a tall selectable row that did would make the rows jump.
+private class ChatScroll(context: Context) : ScrollView(context) {
+    override fun computeScrollDeltaToGetChildRectOnScreen(rect: Rect): Int = 0
+}
 
 /**
  * Touch mode's Chat: the service's [ChatController] as rows over the
@@ -48,7 +63,7 @@ private const val RENDER_DELAY_MS = 33L
  * one row. [back] is ‹ and [showTerminal] the Terminal button, as on Home;
  * [openTab] runs a command in a new tab (signing in, installing).
  */
-@SuppressLint("ViewConstructor")
+@SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ChatView(
     context: Context,
     private val controller: () -> ChatController?,
@@ -62,7 +77,7 @@ class ChatView(
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(4), 0, dp(4))
     }
-    private val scroll = ScrollView(context).apply { addView(rows) }
+    private val scroll = ChatScroll(context).apply { addView(rows) }
     private val backButton = headerText("‹").apply {
         setOnClickListener { back() }
         setPadding(dp(16), dp(12), dp(16), dp(12))
@@ -144,9 +159,18 @@ class ChatView(
     }
     // Keeps to the bottom only while the user is there; scrolling up stops it.
     private var stick = true
+    // Whether these rows are wanted; onMeasure decides whether they fit.
+    private var statusWanted = false
+    private var gateWanted = false
+    // Outside the cells, by item id: rows drawn again (new colours) keep them.
+    private val expandedTools = HashSet<String>()
+    private val expandedReviews = HashSet<String>()
+    private val questionPicks = HashMap<String, QuestionPicks>()
 
     var colors: StripColors? = null
         set(value) {
+            // Set again each time the app comes on screen: most times nothing changed.
+            if (value == field) return
             field = value
             value ?: return
             setBackgroundColor(value.background)
@@ -187,6 +211,33 @@ class ChatView(
         scroll.addOnLayoutChangeListener(follow)
     }
 
+    // With no height the box would lose the keyboard for good: see chatFit.
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        fitRows(widthMeasureSpec, heightMeasureSpec)
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+
+    private fun fitRows(widthSpec: Int, heightSpec: Int) {
+        if (View.MeasureSpec.getMode(heightSpec) == View.MeasureSpec.UNSPECIFIED) return
+        val natural = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        fun height(view: View, wanted: Boolean): Int {
+            if (!wanted) return 0
+            view.measure(widthSpec, natural)
+            return view.measuredHeight
+        }
+        val fit = chatFit(
+            available = View.MeasureSpec.getSize(heightSpec),
+            input = height(inputRow, true),
+            conversation = dp(CONVERSATION_MIN_DP),
+            header = height(header, true),
+            status = height(statusText, statusWanted),
+            gate = height(gateCard, gateWanted),
+        )
+        header.visibility = if (fit.header) View.VISIBLE else View.GONE
+        statusText.visibility = if (statusWanted && fit.status) View.VISIBLE else View.GONE
+        gateCard.visibility = if (gateWanted && fit.gate) View.VISIBLE else View.GONE
+    }
+
     // fullScroll() would move the focus out of the box.
     private fun scrollToEnd() {
         scroll.scrollTo(0, (rows.height - scroll.height).coerceAtLeast(0))
@@ -225,6 +276,10 @@ class ChatView(
             rows.removeAllViews()
             items.forEach { addCell(it, colors) }
             stick = true
+            val ids = items.mapTo(HashSet()) { it.id }
+            expandedTools.retainAll(ids)
+            expandedReviews.retainAll(ids)
+            questionPicks.keys.retainAll(ids)
         } else {
             changes.changed.forEach { i ->
                 val cell = cells.getOrNull(i)
@@ -260,7 +315,9 @@ class ChatView(
             else -> ""
         }
         statusText.text = status
-        statusText.visibility = if (status.isEmpty()) View.GONE else View.VISIBLE
+        val hadStatus = statusWanted
+        val hadGate = gateWanted
+        statusWanted = status.isNotEmpty()
         when {
             state.access == ChatAccess.NOT_INSTALLED ->
                 showGate("Claude Code isn't installed.", "Install") { openTab(runThenShell(CLAUDE_INSTALL_COMMAND)) }
@@ -268,8 +325,9 @@ class ChatView(
                 showGate("Claude Code needs you to sign in.", "Sign in") { openTab(runThenShell(CLAUDE_SIGN_IN_COMMAND)) }
             state.canRestart ->
                 showGate("The chat has stopped.", "Restart") { controller()?.restart() }
-            else -> gateCard.visibility = View.GONE
+            else -> gateWanted = false
         }
+        if (statusWanted != hadStatus || gateWanted != hadGate) requestLayout()
         stopButton.visibility = if (conversation.running) View.VISIBLE else View.GONE
         val canSend = state.access == ChatAccess.READY
         sendButton.isEnabled = canSend
@@ -280,7 +338,7 @@ class ChatView(
         gateText.text = text
         gateButton.text = action
         gateButton.setOnClickListener { onTap() }
-        gateCard.visibility = View.VISIBLE
+        gateWanted = true
     }
 
     private fun sendInput() {
@@ -320,7 +378,6 @@ class ChatView(
     }
 
     private fun toolCell(colors: StripColors): Cell {
-        var expanded = false
         var call: ToolCallInfo? = null
         val title = plainText(colors.text, 14f).apply {
             typeface = Typeface.MONOSPACE
@@ -335,6 +392,7 @@ class ChatView(
         }
         fun refresh() {
             val current = call ?: return
+            val expanded = current.id in expandedTools
             title.text = current.title
             status.text = chatToolStatus(current) + if (expanded) "  ▾" else "  ▸"
             title.maxLines = if (expanded) Int.MAX_VALUE else 2
@@ -347,7 +405,8 @@ class ChatView(
             addView(title)
             addView(status)
             setOnClickListener {
-                expanded = !expanded
+                val id = call?.id
+                if (id != null && !expandedTools.remove(id)) expandedTools.add(id)
                 refresh()
             }
         }
@@ -361,15 +420,23 @@ class ChatView(
 
     private fun permissionCell(colors: StripColors): Cell {
         val card = cardColumn(colors)
-        return Cell(card) { item ->
-            val request = item as ChatItem.Permission
+        fun draw(request: ChatItem.Permission) {
             card.removeAllViews()
             card.addView(plainText(colors.accent, 13f).apply { text = "Permission needed · " + request.call.name })
-            card.addView(plainText(colors.text, 14f).apply {
+            val cut = chatReviewCut(request.review)
+            val whole = request.id in expandedReviews
+            card.addView(selectableText(colors.text, 14f).apply {
                 typeface = Typeface.MONOSPACE
-                text = request.call.title
+                text = if (whole) request.review else cut.text
                 setPadding(0, dp(4), 0, dp(4))
             })
+            if (cut.hidden > 0) {
+                val label = if (whole) "Show less" else "Show all (${cut.hidden} more characters)"
+                card.addView(cardButton(label, colors.accent, colors) {
+                    if (!expandedReviews.remove(request.id)) expandedReviews.add(request.id)
+                    draw(request)
+                })
+            }
             val outcome = request.outcome
             if (outcome != null) {
                 card.addView(answeredText(chatOutcomeText(outcome), colors))
@@ -382,14 +449,14 @@ class ChatView(
                 }
             }
         }
+        return Cell(card) { item -> draw(item as ChatItem.Permission) }
     }
 
     private fun questionCell(colors: StripColors): Cell {
         val card = cardColumn(colors)
-        var picks: QuestionPicks? = null
         fun draw(request: ChatItem.Question) {
             card.removeAllViews()
-            val current = picks ?: QuestionPicks(request.questions).also { picks = it }
+            val current = questionPicks.getOrPut(request.id) { QuestionPicks(request.questions) }
             request.questions.forEachIndexed { q, question ->
                 question.header?.let { head -> card.addView(plainText(colors.accent, 13f).apply { text = head }) }
                 card.addView(plainText(colors.text, 16f).apply {
@@ -482,7 +549,26 @@ class ChatView(
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
     }
 
-    private fun selectableText(color: Int, sp: Float) = plainText(color, sp).apply { setTextIsSelectable(true) }
+    // Selectable text takes the focus, which leaves the keyboard typing nowhere:
+    // it goes back to the box when a tap ends, or the selection does.
+    private fun selectableText(color: Int, sp: Float): TextView = plainText(color, sp).also { row ->
+        row.setTextIsSelectable(true)
+        row.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) focusBoxAfter(row)
+            false
+        }
+        row.setCustomSelectionActionModeCallback(object : ActionMode.Callback {
+            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean = true
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean = false
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean = false
+            override fun onDestroyActionMode(mode: ActionMode) = focusBoxAfter(row)
+        })
+    }
+
+    // Posted: the touch hasn't given the row the focus yet, nor ended the selection.
+    private fun focusBoxAfter(row: TextView) {
+        row.post { if (row.isFocused && !row.hasSelection()) input.requestFocus() }
+    }
 
     private fun answeredText(text: String, colors: StripColors) = plainText(colors.accent, 14f).apply {
         this.text = text

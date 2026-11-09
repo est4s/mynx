@@ -34,6 +34,9 @@ class ProcessAgentTransport(
         thread(name = "agent-process", isDaemon = true) { run() }
     }
 
+    override val accepting: Boolean
+        get() = !ended && synchronized(stateLock) { !closing && process?.isAlive != false }
+
     override fun writeLine(line: String) {
         if (!ended) queue.offer(line)
     }
