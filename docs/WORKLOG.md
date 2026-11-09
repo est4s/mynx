@@ -188,7 +188,7 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode: Home built, waiting on the phone
+### 3. Touch mode: Home passed on the phone
 
 Home is on PR `touch-home` (entry 171). The spike's findings are in
 draft PR #65 (`docs/spikes/touch-mode/`).
@@ -201,7 +201,8 @@ subscription login (the Agent SDK docs forbid third-party products
 offering claude.ai login or rate limits). Raise it again before Chat
 ships.
 
-**Next:** phone-test Home; a native Services list; then a short spike
+**Next:** phone-test Back in Pixel Hero (entry 171), merge Home; a native
+Services list; then a short spike
 starting the agent from the app, `AgentSession` and the Claude backend,
 the Chat screen, Allow/Deny, hand-off, cards, other agents.
 
@@ -242,7 +243,14 @@ Ctrl+Shift).
 
 ## Log
 
-### 2026-11-09 (171): Touch mode's Home (not yet on the phone)
+### 2026-11-09 (171): Touch mode's Home (passed on the phone)
+
+The maintainer's phone test passed every step. It found one bug, not
+Home's: Back in an app with screens of its own (Pixel Hero) closed the
+screen, since a canvas game has no page history. `WebAppActivity` now
+asks `window.androidBack` first, the hook Pixel Hero's APK already
+calls, so the game needs no change. Android-side only, no unit test:
+not yet checked on the phone.
 
 The `view` setting (`terminal`, default, or `touch`) and Home:
 `HomeMenus` in core builds the launcher menu's lists from the same

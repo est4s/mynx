@@ -470,7 +470,10 @@ one back.
 - **The screen:** the page fills it below the status bar, with no bar
   of its own, like an installed web app; recents shows the app's
   name. The back key goes back in the page's history; at its first
-  page it closes the screen, as swiping it away in recents does.
+  page it closes the screen, as swiping it away in recents does. A
+  page with screens of its own (a game on a canvas) can take it
+  first: define `window.androidBack`, and return `true` when it
+  handled the key (anything else goes on to the history).
   Reload it with `mynx app reload NAME`.
 - **Full screen** (`fullscreen` in `app.conf`, for games): `yes` hides
   the status and navigation bars (a swipe from the edge shows them

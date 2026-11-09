@@ -70,7 +70,7 @@ private const val APP_NOTICE_ID_BASE = 5000
 /**
  * One app's screen (`mynx app open NAME`): a WebView filling the screen
  * between the system bars, with no bar of its own, like an installed PWA.
- * Recents shows its name; back goes back in the page, then closes it.
+ * Recents shows its name; back asks the page, goes back in it, then closes it.
  * Started with the data URI `mynx-app://NAME`, so Android keeps one task
  * per app (`documentLaunchMode="intoExisting"`). Everything it decides
  * (which file a request gets, when to reload, the log's lines, the
@@ -435,9 +435,17 @@ class WebAppActivity : Activity(), FrontActivity {
         setTaskDescription(description)
     }
 
-    // Back in the page's history; at its start the screen closes.
+    // A page with screens of its own (a game on a canvas) has no history to
+    // go back through, so it gets the first say. Then the page's history;
+    // at its start the screen closes.
     private fun goBack() {
-        if (webView.canGoBack()) webView.goBack() else finishAndRemoveTask()
+        webView.evaluateJavascript("window.androidBack ? window.androidBack() : false") { handled ->
+            when {
+                handled == "true" -> Unit
+                webView.canGoBack() -> webView.goBack()
+                else -> finishAndRemoveTask()
+            }
+        }
     }
 
     private fun handleBack() {
