@@ -1,6 +1,7 @@
 package io.github.est4s.terminal.core
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** How to run an agent: [argv] and [cwd] as Debian sees them, [env] on top of a tab's. */
 data class AgentLaunch(val argv: List<String>, val env: Map<String, String>, val cwd: String)
@@ -90,6 +91,46 @@ fun isNotSignedInResult(isError: Boolean, text: String?): Boolean =
 
 /** What to run in a tab when [AgentEvent.NotSignedIn] comes: the terminal's own sign-in. */
 const val CLAUDE_SIGN_IN_COMMAND = "claude auth login"
+
+/** What to run in a tab when Claude Code's binary is missing. */
+const val CLAUDE_INSTALL_COMMAND = "mynx agent install claude"
+
+/** How long the sign-in check may take before the chat goes ahead without an answer. */
+const val CLAUDE_CHECK_TIMEOUT_MS = 30_000L
+
+/** `claude`'s real binary is in Debian, where [claudeLaunch] runs it from. */
+fun claudeInstalled(apps: WebApps): Boolean =
+    apps.resolve(claudeBinary(apps.guestHome))?.let(apps::host)?.isFile == true
+
+/**
+ * Runs `claude auth status` through [transport], [done] getting the answer
+ * once, from the transport's thread. A status that says nothing goes
+ * ahead, and so does one that's stuck past [schedule]'s timeout, closed.
+ */
+fun claudeAccessCheck(transport: AgentTransport, schedule: (Long, () -> Unit) -> Unit, done: (ChatAccess) -> Unit) {
+    val answered = AtomicBoolean(false)
+    val output = StringBuilder()
+    transport.start(object : AgentTransport.Listener {
+        override fun onLine(line: String) {
+            synchronized(output) { output.append(line).append('\n') }
+        }
+
+        override fun onExit(exitCode: Int?, detail: String) {
+            if (!answered.compareAndSet(false, true)) return
+            val status = parseClaudeAuthStatus(exitCode, synchronized(output) { output.toString() })
+            done(if (status == SignInState.NOT_SIGNED_IN) ChatAccess.NOT_SIGNED_IN else ChatAccess.READY)
+        }
+    })
+    schedule(CLAUDE_CHECK_TIMEOUT_MS) {
+        if (answered.compareAndSet(false, true)) {
+            transport.close()
+            done(ChatAccess.READY)
+        }
+    }
+}
+
+/** A [prootLaunch] command for [launch]: its env goes in with the rest of `env -i`'s. */
+fun agentProotCommand(launch: AgentLaunch): List<String> = launch.env.map { (key, value) -> "$key=$value" } + launch.argv
 
 /**
  * Where Claude keeps a folder's sessions. [home] and [cwd] are Debian's

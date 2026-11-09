@@ -112,4 +112,10 @@ class ClaudeLaunchTest {
     fun `no transcripts folder means none`() {
         assertEquals(emptyList(), listClaudeTranscripts(File(top, "absent")))
     }
+
+    @Test
+    fun `an agent's env goes before its command, for proot's env -i`() {
+        val launch = AgentLaunch(listOf("/root/.local/bin/claude", "-p"), mapOf("HOME" to "/root", "MYNX_CHAT" to "1"), "/root")
+        assertEquals(listOf("HOME=/root", "MYNX_CHAT=1", "/root/.local/bin/claude", "-p"), agentProotCommand(launch))
+    }
 }

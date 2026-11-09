@@ -13,6 +13,8 @@ private const val LABEL_LINES = 5
 private const val LABEL_BYTES = 4096
 private val GAME_DIRS = listOf("/opt/neon-games", "games")
 private val AGENTS = listOf("claude" to "Claude Code", "codex" to "Codex", "gemini" to "Gemini CLI")
+// The one agent touch mode opens as a chat; the others run in a tab.
+private const val CHAT_AGENT = "claude"
 private val AGENT_DIRS = listOf(".local/bin", "/usr/local/bin", "/usr/bin", "/bin")
 private val LABEL_LINE = Regex("""^#\s*label:\s*(.*\S)""")
 private val BUILT_IN_MENU = listOf(
@@ -29,6 +31,8 @@ sealed interface HomeAction {
     data class Menu(val name: String) : HomeAction
     /** A new tab running [command]. */
     data class Tab(val command: List<String>) : HomeAction
+    /** The Chat screen, with the agent [agent]. */
+    data class Chat(val agent: String) : HomeAction
     /** The web app [name]'s screen. */
     data class App(val name: String) : HomeAction
     /** A new tab with a shell. */
@@ -74,7 +78,11 @@ class HomeMenus(
         "terminal-apps" -> terminalApps()
         "games" -> games()
         "agents" -> AGENTS.map { (name, title) ->
-            HomeItem(if (installed(name)) title else "$title (install)", act("agent:$name"))
+            when {
+                !installed(name) -> HomeItem("$title (install)", act("agent:$name"))
+                name == CHAT_AGENT -> HomeItem(title, HomeAction.Chat(name))
+                else -> HomeItem(title, act("agent:$name"))
+            }
         }
         "settings" -> listOf(
             HomeItem("App settings", act("settings")),

@@ -747,7 +747,17 @@ See `docs/ROADMAP.md` "How it works". The details:
   of `AgentSession`, `AgentTransport`, `claudeLaunch` and
   `Conversation.reduce` is the contract (threads, process lifetime,
   stopping); tests replay real scrubbed lines from
-  `core/src/test/resources/chat/`. Not on the phone yet.
+  `core/src/test/resources/chat/`. The app side (not on the phone yet):
+  `app/.../AgentProcess.kt` is an `AgentTransport` over pipes (core's
+  `ProcessAgentTransport`, tested with real shells); core's
+  `ChatController`, held by `TerminalService` (`chat`), is the one chat:
+  checks `claude auth status` before the first prompt, starts the
+  process on it (`--session-id`, then `--resume`), survives the
+  activity; `app/.../ChatView.kt` draws it (one row per `ChatItem`,
+  only changed rows are touched, `core/.../ChatScreen.kt`). **Stopping**
+  (`stopAgentProot`): off the main thread, SIGTERM to the agent itself
+  (the tracee whose parent is proot, so it can end its children: KILL
+  leaves them running), then after 5 s `stopProot`'s QUIT and its force.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

@@ -5,6 +5,8 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class HomeTest {
     private val top = Files.createTempDirectory("home").toFile()
@@ -183,17 +185,33 @@ class HomeTest {
     }
 
     @Test
-    fun `agents say which still need installing`() {
+    fun `installed Claude Code opens the Chat screen, other agents stay terminal`() {
         write(File(home, ".local/bin/claude"), "x", executable = true)
         write(File(rootfs, "usr/local/bin/gemini"), "x", executable = true)
         assertEquals(
             listOf(
-                HomeItem("Claude Code", act("agent:claude")),
+                HomeItem("Claude Code", HomeAction.Chat("claude")),
                 HomeItem("Codex (install)", act("agent:codex")),
                 HomeItem("Gemini CLI", act("agent:gemini")),
             ),
             menus().items("agents"),
         )
+    }
+
+    @Test
+    fun `Claude Code not installed stays the install row`() {
+        assertEquals(HomeItem("Claude Code (install)", act("agent:claude")), menus().items("agents").first())
+    }
+
+    @Test
+    fun `claude counts as installed through its real binary's link`() {
+        val apps = WebApps(home, rootfs.path, tools)
+        assertFalse(claudeInstalled(apps))
+        write(File(home, ".local/share/claude/v1/claude"), "x", executable = true)
+        File(home, ".local/bin").mkdirs()
+        // A link with Debian's absolute path: only Debian can follow it.
+        java.nio.file.Files.createSymbolicLink(File(home, ".local/bin/claude").toPath(), File("/root/.local/share/claude/v1/claude").toPath())
+        assertTrue(claudeInstalled(apps))
     }
 
     @Test

@@ -47,6 +47,16 @@ import io.github.est4s.terminal.core.Vibrations
 import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
 import io.github.est4s.terminal.core.ProotPaths
+import io.github.est4s.terminal.core.AgentLaunch
+import io.github.est4s.terminal.core.AgentTransport
+import io.github.est4s.terminal.core.ChatAccess
+import io.github.est4s.terminal.core.ChatController
+import io.github.est4s.terminal.core.ChatHost
+import io.github.est4s.terminal.core.Launch
+import io.github.est4s.terminal.core.agentProotCommand
+import io.github.est4s.terminal.core.claudeAccessCheck
+import io.github.est4s.terminal.core.claudeAuthStatusCommand
+import io.github.est4s.terminal.core.claudeInstalled
 import io.github.est4s.terminal.core.CONFIG_DIR
 import io.github.est4s.terminal.core.SOUND_DIR
 import io.github.est4s.terminal.core.SOUND_OUT
@@ -124,6 +134,7 @@ import io.github.est4s.terminal.core.WebApps
 import io.github.est4s.terminal.core.forWebApps
 import io.github.est4s.terminal.core.webAppRequests
 import java.io.File
+import java.util.UUID
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.TimeZone
@@ -196,6 +207,29 @@ class TerminalService : Service() {
     private val keyBarFiles = WeakHashMap<TerminalSession, File>()
     private var nextShellId = 1
     private val tools by lazy { ToolsInstaller(filesDir) }
+    /** Touch mode's Chat: kept here so it outlives the activity. */
+    val chat: ChatController by lazy { ChatController(chatHost, post = { action -> mainHandler.post(action) }) }
+    /** Whether the Chat screen was showing, for a recreated activity. */
+    var chatOnScreen = false
+    private val chatHost: ChatHost = object : ChatHost {
+        override fun check(done: (ChatAccess) -> Unit) {
+            val onMain: (ChatAccess) -> Unit = { access -> mainHandler.post { done(access) } }
+            if (!claudeInstalled(webAppFiles)) {
+                onMain(ChatAccess.NOT_INSTALLED)
+                return
+            }
+            claudeAccessCheck(
+                AgentProcess(debianLaunch("/root", claudeAuthStatusCommand()), filesDir),
+                schedule = { ms, action -> mainHandler.postDelayed(action, ms) },
+                done = onMain,
+            )
+        }
+
+        override fun transport(launch: AgentLaunch): AgentTransport =
+            AgentProcess(debianLaunch(launch.cwd, agentProotCommand(launch)), filesDir)
+
+        override fun newSessionId(): String = UUID.randomUUID().toString()
+    }
     /** Why the app's tools couldn't be updated, for the activity to show. */
     var toolsError: String? = null
         private set
@@ -718,6 +752,7 @@ class TerminalService : Service() {
         runCatching { usbFds.stop() }
         runCatching { bluetooth.stop() }
         runCatching { ble.closeAll() }
+        chat.shutdown()
         killAll()
         stopServices()
         releaseWakeLock()
@@ -794,6 +829,7 @@ class TerminalService : Service() {
 
     /** Kills every session, stops the services and the service, and closes the app. The next start is fresh. */
     fun exit() {
+        chat.shutdown()
         val stopping = serviceManager.active > 0
         serviceHost.exiting = true
         serviceManager.stopAll()
@@ -992,9 +1028,7 @@ class TerminalService : Service() {
         val cwdName = "cwd-$shellId"
         val keyBarFileName = "keybar-$shellId"
         cwdDir.mkdirs()
-        val launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = "$CWD_DIR/$cwdName", openMenu = openMenu, keyBarFile = "$CWD_DIR/$keyBarFileName", toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, ownDev = ownDev(), preload = serialPreload(tools.tools, currentSettings()?.serialPreload ?: true), service = service, command = command ?: listOf("/bin/bash", "--login"), fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
-            runCatching { File(path).inputStream().use { it.read() } }.isSuccess
-        })
+        val launch = debianLaunch(workDir, command ?: listOf("/bin/bash", "--login"), shellId, "$CWD_DIR/$cwdName", openMenu, "$CWD_DIR/$keyBarFileName", service)
         return TerminalSession(
             launch.argv.first(),
             filesDir.absolutePath,
@@ -1009,6 +1043,19 @@ class TerminalService : Service() {
             keyBarFiles[it] = File(cwdDir, keyBarFileName)
         }
     }
+
+    // A proot with what a tab has: the chat's agent gets the same, for its own commands.
+    private fun debianLaunch(
+        workDir: String,
+        command: List<String>,
+        shellId: Int? = null,
+        cwdFile: String? = null,
+        openMenu: Boolean = false,
+        keyBarFile: String? = null,
+        service: String? = null,
+    ): Launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = cwdFile, openMenu = openMenu, keyBarFile = keyBarFile, toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, ownDev = ownDev(), preload = serialPreload(tools.tools, currentSettings()?.serialPreload ?: true), service = service, command = command, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+        runCatching { File(path).inputStream().use { it.read() } }.isSuccess
+    })
 
     // Each new tab's, so a changed setting reaches new tabs. Without it (or if
     // it can't be set up), Debian sees Android's /dev as before.

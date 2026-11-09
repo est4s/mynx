@@ -40,6 +40,7 @@ import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
+import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.ColorScheme
 import io.github.est4s.terminal.core.fitAroundTerminal
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
@@ -128,6 +129,10 @@ class MainActivity : Activity(), FrontActivity {
     // (`mynx update`): a new tab running it, once the service is connected.
     private var tabToOpen: List<String>? = null
     private var home: HomeView? = null
+    private var chat: ChatView? = null
+    // After Chat's Sign in or Install opens a tab: Back returns to the chat, to check again.
+    private var chatAfterTab = false
+    private val chatListener: (ChatState) -> Unit = { state -> chat?.show(state) }
     private var touchView = false
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
@@ -139,7 +144,10 @@ class MainActivity : Activity(), FrontActivity {
             s.activity = this@MainActivity
             applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
-            if (touchView && shellToShow == null && tabToOpen == null) showHome()
+            s.chat.listener = chatListener
+            if (touchView && shellToShow == null && tabToOpen == null) {
+                if (s.chatOnScreen) showChat() else showHome()
+            }
             showShellFromNotification()
             openCommandTab()
             s.toolsError?.let { showToolsError(it) }
@@ -220,6 +228,7 @@ class MainActivity : Activity(), FrontActivity {
         val service = service ?: return
         tabToOpen = null
         service.newSession(command)
+        hideChat()
         hideHome()
     }
 
@@ -231,6 +240,7 @@ class MainActivity : Activity(), FrontActivity {
         val service = service ?: return
         shellToShow = null
         service.selectShell(id)
+        hideChat()
         hideHome()
     }
 
@@ -243,6 +253,7 @@ class MainActivity : Activity(), FrontActivity {
             refreshKeyBar(force = true) // bar files may have been edited
             applySettings()
             if (homeShown) home?.refresh() // apps and games may have changed
+            if (chatShown) service?.chat?.opened() // signed in or installed meanwhile?
         }
         root.post(keyBarPoll)
         service?.cameOnScreen()
@@ -267,7 +278,10 @@ class MainActivity : Activity(), FrontActivity {
     override fun onDestroy() {
         asks.clear()
         FrontActivities.gone(this)
-        service?.let { if (it.activity === this) it.activity = null }
+        service?.let {
+            if (it.activity === this) it.activity = null
+            if (it.chat.listener === chatListener) it.chat.listener = null
+        }
         service = null
         if (bound) unbindService(connection)
         bound = false
@@ -298,8 +312,12 @@ class MainActivity : Activity(), FrontActivity {
     // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left.
     private fun goBack() {
         when {
+            chatShown -> {
+                hideChat()
+                showHome()
+            }
             homeShown && home?.back() == true -> Unit
-            !homeShown && touchView -> showHome()
+            !homeShown && touchView -> if (chatAfterTab) showChat() else showHome()
             else -> moveTaskToBack(true)
         }
     }
@@ -307,6 +325,7 @@ class MainActivity : Activity(), FrontActivity {
     /** Touch mode's Home, over the terminal, which keeps its size so tabs start as usual. */
     private fun showHome() {
         val view = home ?: return
+        chatAfterTab = false
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
         view.visibility = View.VISIBLE
         view.refresh()
@@ -321,6 +340,39 @@ class MainActivity : Activity(), FrontActivity {
 
     private val homeShown get() = home?.visibility == View.VISIBLE
 
+    private val chatShown get() = chat?.visibility == View.VISIBLE
+
+    /** Touch mode's Chat, over the terminal, as Home is; the chat itself lives in the service. */
+    private fun showChat() {
+        val view = chat ?: return
+        val service = service ?: return
+        hideHome()
+        chatAfterTab = false
+        service.chatOnScreen = true
+        view.visibility = View.VISIBLE
+        service.chat.opened()
+        view.focusInput()
+    }
+
+    private fun hideChat() {
+        service?.chatOnScreen = false
+        if (!chatShown) return
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
+        chat?.visibility = View.GONE
+    }
+
+    private fun chatToTerminal() {
+        hideChat()
+        terminalView.requestFocus()
+    }
+
+    // Signing in or installing happens in a tab; Back comes back here and checks again.
+    private fun openTabFromChat(command: List<String>) {
+        service?.newSession(command)
+        chatAfterTab = true
+        chatToTerminal()
+    }
+
     private fun homeMenus(): HomeMenus {
         // The list first: reading it can pick up a hand edit, which changes the count.
         val services = service?.homeServices ?: emptyList()
@@ -332,6 +384,7 @@ class MainActivity : Activity(), FrontActivity {
         when (action) {
             is HomeAction.Tab -> service.newSession(action.command)
             HomeAction.Shell -> service.newSession()
+            is HomeAction.Chat -> return showChat()
             is HomeAction.App -> return startActivity(WebAppActivity.shortcutIntent(this, action.name))
             is HomeAction.Service -> {
                 val refusal = service.serviceAct(action.name, action.op)
@@ -391,7 +444,7 @@ class MainActivity : Activity(), FrontActivity {
             // A view with no height loses focus, and Android doesn't give it back:
             // the keyboard would type into nothing until the terminal is tapped.
             addOnLayoutChangeListener { view, _, top, _, bottom, _, oldTop, _, oldBottom ->
-                if (oldBottom == oldTop && bottom > top) view.post { if (currentFocus == null) view.requestFocus() }
+                if (oldBottom == oldTop && bottom > top) view.post { if (currentFocus == null && !chatShown) view.requestFocus() }
             }
         }
         // Before attaching: the size decides the first rows and columns.
@@ -422,6 +475,12 @@ class MainActivity : Activity(), FrontActivity {
         })
 
         home = HomeView(this, ::homeMenus, ::onHomeAction, ::hideHome).also {
+            it.colors = strip
+            it.visibility = View.GONE
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
+        chat = ChatView(this, { service?.chat }, { goBack() }, ::chatToTerminal, ::openTabFromChat).also {
             it.colors = strip
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -654,6 +713,7 @@ class MainActivity : Activity(), FrontActivity {
         stripScroll.setBackgroundColor(strip.background)
         keyBar.colors = strip
         home?.colors = strip
+        chat?.colors = strip
         renderStrip()
         terminalView.onScreenUpdated()
     }
@@ -846,7 +906,12 @@ class MainActivity : Activity(), FrontActivity {
         if (touch == touchView) return
         touchView = touch
         if (home == null) return
-        if (touch) showHome() else hideHome()
+        if (touch) {
+            showHome()
+        } else {
+            hideChat()
+            hideHome()
+        }
         renderStrip()
     }
 
@@ -873,8 +938,11 @@ class MainActivity : Activity(), FrontActivity {
     fun takeCtrlLatch() = ::keyBar.isInitialized && keyBar.takeCtrlLatch()
 
     // Before any view: the volume keys work whatever has focus, keyboard up or down.
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        (::keyBar.isInitialized && !homeShown && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // A hardware keyboard must reach Chat's box, not the terminal under it.
+        if (chatShown && chat?.hasFocus() != true) chat?.focusInput()
+        return (::keyBar.isInitialized && !homeShown && !chatShown && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
+    }
 
     /** A tap on a link opens it; anywhere else brings up the keyboard. */
     fun onTap(e: MotionEvent) {
