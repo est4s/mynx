@@ -740,6 +740,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
   thread; `ServiceHost.changed` refreshes it while it shows, and in
   touch view the strip's `● N` opens it.
+- **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
+  `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
+  2026-11-10: Claude's stream-json first, behind a thin session with
+  ACP's vocabulary): plain-Kotlin layer for the Chat screen. The KDoc
+  of `AgentSession`, `AgentTransport`, `claudeLaunch` and
+  `Conversation.reduce` is the contract (threads, process lifetime,
+  stopping); tests replay real scrubbed lines from
+  `core/src/test/resources/chat/`. Not on the phone yet.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

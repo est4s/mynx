@@ -243,6 +243,18 @@ Ctrl+Shift).
 
 ## Log
 
+### 2026-11-10 (173): Chat's protocol layer in core (not yet on the phone)
+
+The plain-Kotlin layer the Chat screen will sit on: `AgentSession` and
+`AgentTransport` with ACP's vocabulary, `ClaudeSession` over Claude's
+stream-json, `claudeLaunch` and `parseClaudeAuthStatus`, and the
+`Conversation` reducer. Tests replay real scrubbed lines of the spike's
+runs (`core/src/test/resources/chat/`); the real `claude` wasn't run.
+No Android yet. A chat keeps the user's Claude settings (leaving them
+out to silence mynx's hooks would drop their permission rules and
+`CLAUDE.md`); `MYNX_CHAT=1` makes `mynx hook` stay quiet instead. The
+spike's policy question about subscription sign-in is still open.
+
 ### 2026-11-09 (172): Touch mode's native Services list (not yet on the phone)
 
 Home's Services is now a list of its own, not a terminal tab: each

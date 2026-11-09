@@ -1507,7 +1507,9 @@ def cmd_hook(args, as_json):
         raise Usage("usage: mynx hook claude|codex|gemini (reads the hook's JSON on stdin)")
     agent = agents.AGENTS[args[0]]
     try:
-        agent_hook(agent, json.load(sys.stdin))
+        # A chat is on screen in the app already; its own hooks mustn't notify.
+        if not os.environ.get("MYNX_CHAT"):
+            agent_hook(agent, json.load(sys.stdin))
     except Exception:
         pass
     if agent.name == "gemini":
