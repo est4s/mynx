@@ -49,6 +49,11 @@ import io.github.est4s.terminal.core.TabSwipe
 import io.github.est4s.terminal.core.swipeTarget
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.AppView
+import io.github.est4s.terminal.core.HomeAction
+import io.github.est4s.terminal.core.HomeMenus
+import io.github.est4s.terminal.core.ToolsInstaller
+import io.github.est4s.terminal.core.WebApps
 import io.github.est4s.terminal.core.SETTINGS_TAB_COMMAND
 import io.github.est4s.terminal.core.SERVICES_TAB_COMMAND
 import io.github.est4s.terminal.core.SERVICE_KEY_BAR
@@ -121,6 +126,8 @@ class MainActivity : Activity(), FrontActivity {
     // The launcher shortcut "Settings" (the editors) or the update notification
     // (`mynx update`): a new tab running it, once the service is connected.
     private var tabToOpen: List<String>? = null
+    private var home: HomeView? = null
+    private var touchView = false
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
 
@@ -131,6 +138,7 @@ class MainActivity : Activity(), FrontActivity {
             s.activity = this@MainActivity
             applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
+            if (touchView && shellToShow == null && tabToOpen == null) showHome()
             showShellFromNotification()
             openCommandTab()
             s.toolsError?.let { showToolsError(it) }
@@ -211,6 +219,7 @@ class MainActivity : Activity(), FrontActivity {
         val service = service ?: return
         tabToOpen = null
         service.newSession(command)
+        hideHome()
     }
 
     private fun shellOf(intent: Intent?): Int? =
@@ -221,6 +230,7 @@ class MainActivity : Activity(), FrontActivity {
         val service = service ?: return
         shellToShow = null
         service.selectShell(id)
+        hideHome()
     }
 
     // Picks up edits to the colours file when the user comes back to the app.
@@ -231,6 +241,7 @@ class MainActivity : Activity(), FrontActivity {
             applyColors()
             refreshKeyBar(force = true) // bar files may have been edited
             applySettings()
+            if (homeShown) home?.refresh() // apps and games may have changed
         }
         root.post(keyBarPoll)
         service?.cameOnScreen()
@@ -274,13 +285,52 @@ class MainActivity : Activity(), FrontActivity {
     private fun leaveOnBack() {
         if (Build.VERSION.SDK_INT >= 33) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(
-                OnBackInvokedDispatcher.PRIORITY_DEFAULT) { moveTaskToBack(true) }
+                OnBackInvokedDispatcher.PRIORITY_DEFAULT) { goBack() }
         }
     }
 
     @Deprecated("Replaced by OnBackInvokedDispatcher on API 33+")
     override fun onBackPressed() {
-        moveTaskToBack(true)
+        goBack()
+    }
+
+    // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left.
+    private fun goBack() {
+        when {
+            homeShown && home?.back() == true -> Unit
+            !homeShown && touchView -> showHome()
+            else -> moveTaskToBack(true)
+        }
+    }
+
+    /** Touch mode's Home, over the terminal, which keeps its size so tabs start as usual. */
+    private fun showHome() {
+        val view = home ?: return
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
+        view.visibility = View.VISIBLE
+        view.refresh()
+        view.requestFocus()
+    }
+
+    private fun hideHome() {
+        if (!homeShown) return
+        home?.visibility = View.GONE
+        terminalView.requestFocus()
+    }
+
+    private val homeShown get() = home?.visibility == View.VISIBLE
+
+    private fun homeMenus() = HomeMenus(WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools), service?.servicesActive ?: 0)
+
+    private fun onHomeAction(action: HomeAction) {
+        val service = service ?: return
+        when (action) {
+            is HomeAction.Tab -> service.newSession(action.command)
+            HomeAction.Shell -> service.newSession()
+            is HomeAction.App -> return startActivity(WebAppActivity.shortcutIntent(this, action.name))
+            is HomeAction.Menu, HomeAction.None -> return
+        }
+        hideHome()
     }
 
     // Only for the "terminals running" notification; everything works without it.
@@ -360,6 +410,12 @@ class MainActivity : Activity(), FrontActivity {
             addView(keyBar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
 
+        home = HomeView(this, ::homeMenus, ::onHomeAction, ::hideHome).also {
+            it.colors = strip
+            it.visibility = View.GONE
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
         terminalView.attachSession(session)
         terminalView.requestFocus()
         renderStrip()
@@ -371,6 +427,10 @@ class MainActivity : Activity(), FrontActivity {
     private fun renderStrip() {
         val tabs = service?.tabs ?: return
         stripRow.removeAllViews()
+        if (touchView) stripRow.addView(stripText("⌂", strip.accent).apply {
+            setPadding(dp(14), dp(8), dp(10), dp(8))
+            setOnClickListener { showHome() }
+        })
         tabs.tabs.forEachIndexed { i, tab ->
             stripRow.addView(tabView(tab, selected = i == tabs.selectedIndex))
         }
@@ -394,6 +454,7 @@ class MainActivity : Activity(), FrontActivity {
     /** The services changed: the strip's mark follows. */
     fun onServicesChanged() {
         if (::terminalView.isInitialized) renderStrip()
+        if (homeShown) home?.refresh()
     }
 
     private fun tabView(tab: Tab<TerminalSession>, selected: Boolean) = LinearLayout(this).apply {
@@ -576,6 +637,7 @@ class MainActivity : Activity(), FrontActivity {
         terminalView.setBackgroundColor(next.background)
         stripScroll.setBackgroundColor(strip.background)
         keyBar.colors = strip
+        home?.colors = strip
         renderStrip()
         terminalView.onScreenUpdated()
     }
@@ -750,6 +812,7 @@ class MainActivity : Activity(), FrontActivity {
         service?.setCursorStyle(settings.cursorStyle)
         terminalView.setTerminalCursorBlinkerRate(if (settings.cursorBlink) CURSOR_BLINK_MS else 0)
         tabSwipeOn = settings.tabSwipe
+        applyView(settings.view == AppView.TOUCH)
         setCursorBlinking(true)
         terminalView.onScreenUpdated()
         if (!quiet && problems.isNotEmpty() && problems != shownSettingsProblems) {
@@ -760,6 +823,15 @@ class MainActivity : Activity(), FrontActivity {
                 .show()
         }
         shownSettingsProblems = problems
+    }
+
+    // `mynx set view …` takes effect at once; the first read only records it.
+    private fun applyView(touch: Boolean) {
+        if (touch == touchView) return
+        touchView = touch
+        if (home == null) return
+        if (touch) showHome() else hideHome()
+        renderStrip()
     }
 
     /** Shows the bar the selected tab's program asked for; problems in its file show once. */
@@ -786,7 +858,7 @@ class MainActivity : Activity(), FrontActivity {
 
     // Before any view: the volume keys work whatever has focus, keyboard up or down.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean =
-        (::keyBar.isInitialized && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
+        (::keyBar.isInitialized && !homeShown && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
 
     /** A tap on a link opens it; anywhere else brings up the keyboard. */
     fun onTap(e: MotionEvent) {

@@ -41,6 +41,8 @@ data class Settings(
     val serialPreload: Boolean = true,
     /** Whether USB serial ports also get the names Linux tools look for, in a `/dev` of Debian's own (new tabs and services). */
     val serialNames: Boolean = true,
+    /** What the app shows: the terminal, or touch mode's Home. */
+    val view: AppView = AppView.TERMINAL,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -64,8 +66,12 @@ data class Settings(
         "update-check" to if (updateCheck) "on" else "off",
         "serial-preload" to if (serialPreload) "on" else "off",
         "serial-names" to if (serialNames) "on" else "off",
+        "view" to view.word,
     )
 }
+
+/** The `view` setting: what the app shows. */
+enum class AppView(val word: String) { TERMINAL("terminal"), TOUCH("touch") }
 
 /** The `wakelock` setting: when the app keeps the phone's CPU awake. */
 enum class Wakelock(val word: String) {
@@ -226,6 +232,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "on", listOf("on", "off"),
         oneOf("serial-names", listOf("on", "off")),
         { copy(serialNames = it == "on") },
+    ),
+    SettingDef(
+        "view", "What the app shows when it starts: the terminal, or touch mode's Home, lists to tap.",
+        "terminal", AppView.entries.map { it.word },
+        oneOf("view", AppView.entries.map { it.word }),
+        { v -> copy(view = AppView.entries.first { it.word == v }) },
     ),
 )
 

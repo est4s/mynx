@@ -836,6 +836,7 @@ class TerminalService : Service() {
 
     /** How many services run or wait to restart, for the strip's mark. */
     val stripServicesMark: String? get() = servicesMark(serviceManager.active)
+    val servicesActive: Int get() = serviceManager.active
 
     // ServiceHost.open: `mynx service open`, from a tab on screen.
     private fun openServiceTab(name: String, session: TerminalSession): String? {

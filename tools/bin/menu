@@ -23,6 +23,8 @@
 #   then, the first time ever, the welcome page (welcome.txt next to menu.conf).
 # menu services starts at the Services list; leaving it leaves the menu (the
 #   app opens it from the strip's services mark and its notification).
+# menu --act ACTION runs one item's action ("game:FILE", "info", …) and leaves:
+#   touch mode's Home (core/.../Home.kt) lists the items and runs them this way.
 # Exit closes the tab: the menu exits with 10 and ~/.bashrc exits the shell.
 # Update available: the app writes the version of a newer release to
 #   /tmp/.mynx/update-available; while it's there, the main menu starts with
@@ -784,6 +786,16 @@ fi
 load_state
 trap 'cursor_show; printf "\e[0m"' EXIT
 printf '\e]0;Menu\a'  # tab title
+
+if [[ $1 == --act ]]; then
+    act=${2:?usage: menu --act ACTION}
+    declare -F "act_${act%%:*}" >/dev/null || { echo "menu: no action ${act%%:*}" >&2; exit 2; }
+    case $act in
+        *:*) "act_${act%%:*}" "${act#*:}" ;;
+        *) "act_$act" ;;
+    esac
+    exit 0
+fi
 
 [[ $1 == --boot ]] && { boot; first_welcome; }
 if [[ $1 == services ]]; then   # the app's services mark and notification button

@@ -270,6 +270,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide says a page can take the back key first: window.androidBack" {
+    grep -qF -- "window.androidBack" "$GUIDE"
+    grep -qF -- "window.androidBack" "$BATS_TEST_DIRNAME/../../app/src/main/java/io/github/est4s/terminal/WebAppActivity.kt"
+}
+
 @test "the guide says an app's screen has no bar: back and recents close it, mynx app reload reloads it" {
     for text in "with no bar" "swiping it away in recents" "Reload it with \`mynx app reload NAME\`"; do
         grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
