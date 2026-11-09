@@ -201,8 +201,7 @@ subscription login (the Agent SDK docs forbid third-party products
 offering claude.ai login or rate limits). Raise it again before Chat
 ships.
 
-**Next:** phone-test Back in Pixel Hero (entry 171), merge Home; a native
-Services list; then a short spike
+**Next:** a native Services list; then a short spike
 starting the agent from the app, `AgentSession` and the Claude backend,
 the Chat screen, Allow/Deny, hand-off, cards, other agents.
 
@@ -249,8 +248,10 @@ The maintainer's phone test passed every step. It found one bug, not
 Home's: Back in an app with screens of its own (Pixel Hero) closed the
 screen, since a canvas game has no page history. `WebAppActivity` now
 asks `window.androidBack` first, the hook Pixel Hero's APK already
-calls, so the game needs no change. Android-side only, no unit test:
-not yet checked on the phone.
+calls, so the game needs no change. Android-side only, no unit test;
+its phone checks passed too (run 42694512941). Pixel Hero's menu taps
+now count on finger-up, so a back swipe no longer taps what's under it
+(in `~/pixel-hero`, not this repo).
 
 The `view` setting (`terminal`, default, or `touch`) and Home:
 `HomeMenus` in core builds the launcher menu's lists from the same
