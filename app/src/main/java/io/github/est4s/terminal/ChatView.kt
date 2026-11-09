@@ -111,7 +111,7 @@ class ChatView(
         addView(gateButton)
     }
     private val input = EditText(context).apply {
-        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTILINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         imeOptions = EditorInfo.IME_FLAG_NO_ENTER_ACTION
         maxLines = 6
         hint = "Message"
