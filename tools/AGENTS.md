@@ -394,7 +394,8 @@ the app: the services come back, hidden.
 
 **Seeing them from anywhere:** while any service runs, the tab strip
 shows `● N` (how many) right of **+**; tapping it opens a tab with the
-menu's Services list (`menu services` does the same in a shell). The
+menu's Services list (`menu services` does the same in a shell), or
+Home's Services list when `view` is `touch`. The
 launcher menu's Services item shows the count too (`Services ● 2`),
 and the app's notification has a **Services** button.
 

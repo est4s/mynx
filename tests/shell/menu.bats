@@ -747,6 +747,25 @@ no_services_mynx() {
     [[ $output == *PAUSED* ]]
 }
 
+@test "menu --act svclog names its service, for touch mode's Home" {
+    services_mynx
+    source "$MENU"
+    run() { cat; }   # what would go to the pager
+    SERVICE=
+    output=$(act_svclog web)
+    [[ $output == *"Serving HTTP"* ]]
+}
+
+@test "menu --act svclog says why a log can't be read" {
+    services_mynx
+    source "$MENU"
+    pause() { echo PAUSED; }
+    SERVICE=
+    output=$(act_svclog db)
+    [[ $output == *"no service named db"* ]]
+    [[ $output == *PAUSED* ]]
+}
+
 @test "a run item runs its command in bash" {
     mkdir -p "$HOME/.config/mynx"
     printf 'Top = run htop -d 10\n' >"$HOME/.config/mynx/menu.conf"

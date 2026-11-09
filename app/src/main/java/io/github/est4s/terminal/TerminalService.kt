@@ -83,6 +83,8 @@ import io.github.est4s.terminal.core.writeToolsProfile
 import io.github.est4s.terminal.core.SERVICES_DIR
 import io.github.est4s.terminal.core.ServiceDef
 import io.github.est4s.terminal.core.ServiceManager
+import io.github.est4s.terminal.core.ServiceOp
+import io.github.est4s.terminal.core.HomeService
 import io.github.est4s.terminal.core.Wakelock
 import io.github.est4s.terminal.core.parseSavedServices
 import io.github.est4s.terminal.core.serialPreload
@@ -879,6 +881,13 @@ class TerminalService : Service() {
     fun stopService(name: String): String? = serviceManager.stop(name)
     fun startService(name: String): String? = serviceManager.start(name)
     fun restartService(name: String): String? = serviceManager.restart(name)
+
+    /** The services as Home lists them. Main thread only. */
+    val homeServices: List<HomeService> get() = serviceManager.homeServices()
+
+    /** Home's [op] on service [name]: null, or why not. Main thread only. */
+    fun serviceAct(name: String, op: ServiceOp): String? = serviceManager.act(name, op, requests::recordChange)
+
     fun serviceRunning(name: String): Boolean = serviceManager.services[name]?.isRunning == true
 
     /** An app's screen opened from its shortcut: core's open step (the app's service started as needed). */

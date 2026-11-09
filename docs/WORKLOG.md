@@ -201,7 +201,8 @@ subscription login (the Agent SDK docs forbid third-party products
 offering claude.ai login or rate limits). Raise it again before Chat
 ships.
 
-**Next:** a native Services list; then a short spike
+**Next:** the native Services list (entry 172) waits on the phone;
+then a short spike
 starting the agent from the app, `AgentSession` and the Claude backend,
 the Chat screen, Allow/Deny, hand-off, cards, other agents.
 
@@ -241,6 +242,17 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-09 (172): Touch mode's native Services list (not yet on the phone)
+
+Home's Services is now a list of its own, not a terminal tab: each
+service with its state, a page per service (Open, Start or Stop,
+Restart, Log, Autostart), updating live. Core: `HomeMenus`' snapshot,
+`ServiceManager.homeServices()` and `act()`, with tests; "(no services
+yet)" opens the how-to, as the terminal's does. In touch view the
+strip's `● N` opens this list (Back goes to the main one); terminal
+view and the notification's button are as they were. `HomeView`,
+`MainActivity` and `TerminalService` only compile in CI.
 
 ### 2026-11-09 (171): Touch mode's Home (passed on the phone)
 

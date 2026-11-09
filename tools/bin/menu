@@ -647,12 +647,12 @@ act_svc() { # svc <open|start|stop|restart>: on $SERVICE; its answer stays on sc
 act_svcauto() { # svcauto <on|off>: $SERVICE's autostart; the item shows the change
   run mynx service autostart "$SERVICE" "$1" || pause
 }
-act_svclog() { # the transcript in the pager, at its end
-  local log
-  if log=$(mynx service log "$SERVICE" -n 1000 2>&1); then
+act_svclog() { # svclog [NAME]: the transcript in the pager, at its end (NAME: $SERVICE)
+  local name=${1:-$SERVICE} log
+  if log=$(mynx service log "$name" -n 1000 2>&1); then
     run keybar pager,shell less +G <<<"$log"
   else
-    message "$SERVICE" "${log#mynx: }"
+    message "$name" "${log#mynx: }"
   fi
 }
 act_svchelp() {

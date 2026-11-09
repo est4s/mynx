@@ -7,6 +7,7 @@ import java.nio.file.attribute.PosixFilePermission
 /** Which menu [HomeMenus.items] starts at. */
 const val HOME_MAIN = "main"
 
+private const val SERVICE_MENU = "service:"
 private const val LABEL_MAX = 20
 private const val LABEL_LINES = 5
 private const val LABEL_BYTES = 4096
@@ -34,7 +35,17 @@ sealed interface HomeAction {
     data object Shell : HomeAction
     /** A line that says something, like "(no apps yet)". */
     data object None : HomeAction
+    /** [op] on the background service [name]: [ServiceManager.act]. */
+    data class Service(val name: String, val op: ServiceOp) : HomeAction
 }
+
+/**
+ * A background service as Home lists it, from [ServiceManager.homeServices].
+ * [state] is `mynx service list`'s word (so one waiting to restart is
+ * "stopped", as in the terminal's list); [saved] is false for an unsaved
+ * one, whose [autostart] means nothing.
+ */
+data class HomeService(val name: String, val state: String, val saved: Boolean, val autostart: Boolean)
 
 data class HomeItem(val label: String, val action: HomeAction)
 
@@ -43,10 +54,16 @@ data class HomeItem(val label: String, val action: HomeAction)
  * `menu_items`), from the same files, and what each item does. What runs a
  * program goes through `menu --act`, so both views run the same thing.
  * The main list leaves out Exit: closing the menu's tab means nothing here.
- * [servicesActive] is how many background services run. Reads files only:
- * any thread may use it.
+ * [servicesActive] is how many background services run and [services] is
+ * the list as it was when this was made, so a change needs a new one
+ * (the snapshot is what lets it leave the main thread, unlike [Services]).
+ * Reads files only: any thread may use it.
  */
-class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) {
+class HomeMenus(
+    private val apps: WebApps,
+    private val servicesActive: Int = 0,
+    private val services: List<HomeService> = emptyList(),
+) {
     private val guestHome get() = apps.guestHome
 
     /** The list called [menu] ([HOME_MAIN], or a [HomeAction.Menu]'s name); empty if there's none. */
@@ -72,10 +89,33 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
             HomeItem("Report a bug", act("report")),
             HomeItem("About", act("about")),
         )
-        else -> emptyList()
+        "services" -> serviceRows()
+        else -> if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
     }
 
     private fun act(action: String) = HomeAction.Tab(runThenShell("keybar menu menu --act " + shellQuote(action)))
+
+    private fun serviceRows(): List<HomeItem> =
+        services.map { HomeItem("${it.name}${if (it.saved) "" else "*"} ${it.state}", HomeAction.Menu(SERVICE_MENU + it.name)) }
+            .ifEmpty { listOf(HomeItem("(no services yet)", act("svchelp"))) }
+
+    private fun serviceItems(name: String): List<HomeItem> {
+        val service = services.find { it.name == name }
+            ?: return listOf(HomeItem("(no service named $name)", HomeAction.None))
+        fun item(label: String, op: ServiceOp) = HomeItem(label, HomeAction.Service(name, op))
+        val running = service.state == ServiceState.RUNNING.word || service.state == ServiceState.STOPPING.word
+        return listOfNotNull(
+            item("Open", ServiceOp.OPEN),
+            if (running) item("Stop", ServiceOp.STOP) else item("Start", ServiceOp.START),
+            item("Restart", ServiceOp.RESTART),
+            HomeItem("Log", act("svclog:$name")),
+            when {
+                !service.saved -> null
+                service.autostart -> item("Autostart: on", ServiceOp.AUTOSTART_OFF)
+                else -> item("Autostart: off", ServiceOp.AUTOSTART_ON)
+            },
+        )
+    }
 
     private fun mainEntries(): List<Pair<String, String>> {
         for (guest in listOf("$guestHome/.config/mynx/menu.conf", "$TOOLS_MOUNT/menu.conf")) {
@@ -102,7 +142,7 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
         "exit" -> null
         "services" -> HomeItem(
             if (servicesActive > 0) "$label ● $servicesActive" else label,
-            HomeAction.Tab(SERVICES_TAB_COMMAND),
+            HomeAction.Menu("services"),
         )
         "apps", "terminal-apps", "games", "settings", "agents", "system", "help" -> HomeItem(label, HomeAction.Menu(action))
         "app-settings" -> HomeItem(label, act("settings"))
