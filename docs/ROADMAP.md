@@ -62,6 +62,10 @@ and either view switches to the other.
 - **Open in terminal:** hands the conversation to a tab that resumes
   it (`claude --resume ID` and the others' equivalents); the chat lets
   go of it first, so two programs never drive one session.
+- **Home built** (2026-11-09, on its PR): `view = touch`, waiting on
+  the phone. Services is still the terminal's list.
+- Sign-in is the terminal's: Chat opens a tab when it's needed
+  (maintainer's decision, 2026-11-09).
 - The agent widget could open straight into a chat.
 - **Size:** the biggest feature yet, and mostly in `app/`, which only
   the phone can check: about 6-8 PRs. Order: a spike (does ACP or

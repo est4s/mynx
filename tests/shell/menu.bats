@@ -851,3 +851,24 @@ no_services_mynx() {
     run bash -c "(sleep 2; printf q) | bash '$MENU' --boot"
     [[ $output != *"A real Debian on your phone"* ]]
 }
+
+@test "the menu file both views read parses to the same items" {
+    source "$MENU"
+    read_menu_file "$BATS_TEST_DIRNAME/../fixtures/menu.conf"
+    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Leave" ]
+    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files quit_session" ]
+}
+
+@test "--act runs one action and leaves" {
+    run bash -c "MENU_DRYRUN=1 bash '$MENU' --act game:/x/my-game 2>&1 </dev/null"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RUN: play /x/my-game"* ]]
+    run bash -c "MENU_DRYRUN=1 bash '$MENU' --act files 2>&1 </dev/null"
+    [[ "$output" == *"RUN: files"* ]]
+}
+
+@test "--act refuses what isn't an action" {
+    run bash -c "MENU_DRYRUN=1 bash '$MENU' --act nope:1 2>&1 </dev/null"
+    [ "$status" -eq 2 ]
+    [[ "$output" == *"no action nope"* ]]
+}

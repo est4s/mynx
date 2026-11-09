@@ -515,7 +515,8 @@ data class WebAppResponse(
  * thread may use it, and the activity makes its own.
  */
 class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
-    private val guestHome = home.absoluteFile.relativeToOrNull(File(rootfs).absoluteFile)
+    /** Root's home as Debian sees it. */
+    val guestHome = home.absoluteFile.relativeToOrNull(File(rootfs).absoluteFile)
         ?.invariantSeparatorsPath?.let { "/$it" } ?: "/root"
     private val rootfsCanonical by lazy { runCatching { File(rootfs).canonicalPath }.getOrDefault(rootfs) }
 

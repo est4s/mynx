@@ -246,6 +246,11 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
+- `view`: `terminal` (default) or `touch`: what the app shows. `touch`
+  opens on Home, the launcher menu's items as lists to tap, from the
+  same `menu.conf` and app folders; programs open in a tab. Terminal
+  (top right) shows the tabs, and ⌂ on the tab strip or Back comes
+  back to Home.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a

@@ -726,6 +726,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   no|yes|edge` (edge runs under the cutout), `screen-awake`, and
   pinned shortcuts (`mynx app shortcut`, the menu's "Add to home
   screen…") that start mynx and the app's service.
+- **Touch mode's Home** (`core/.../Home.kt`, `app/.../HomeView.kt`;
+  the `view` setting): `HomeMenus` builds the launcher menu's lists
+  from the same files, with the same rules as `menu_items` in
+  `tools/bin/menu` (`tests/fixtures/menu.conf` is read by both test
+  suites). Anything that runs a program is a tab running `menu --act
+  ACTION`, so both views run the same code; apps open their own screen.
+  `HomeView` lies over the terminal, which keeps its size so tabs start
+  as usual. Exit isn't listed. Services is still the terminal's list.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

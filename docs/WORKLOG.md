@@ -188,12 +188,22 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode (when the maintainer picks it)
+### 3. Touch mode: Home built, waiting on the phone
 
-Planned in `docs/ROADMAP.md` ("Touch mode"), entry 159. It starts
-with a spike on a branch: ACP (or Claude Code's stream-json) under
-proot, sign-in and resume. Web apps (0. above) come first; their
-screen gives touch mode's cards something to open.
+Home is on PR `touch-home` (entry 171). The spike's findings are in
+draft PR #65 (`docs/spikes/touch-mode/`).
+
+**Maintainer's decisions (2026-11-09):** Chat uses Claude's stream-json
+first, behind an `AgentSession` in `core` with ACP's vocabulary. Users
+sign in through the terminal: Chat opens a tab when sign-in is needed.
+**Still open:** that doesn't settle whether Chat may run on a
+subscription login (the Agent SDK docs forbid third-party products
+offering claude.ai login or rate limits). Raise it again before Chat
+ships.
+
+**Next:** phone-test Home; a native Services list; then a short spike
+starting the agent from the app, `AgentSession` and the Claude backend,
+the Chat screen, Allow/Deny, hand-off, cards, other agents.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -231,6 +241,17 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-09 (171): Touch mode's Home (not yet on the phone)
+
+The `view` setting (`terminal`, default, or `touch`) and Home:
+`HomeMenus` in core builds the launcher menu's lists from the same
+files, `HomeView` draws them over the terminal. `menu --act ACTION`
+is new, so tabs Home opens run the menu's own code. Core and menu
+tests pass; `HomeView` and `MainActivity` only compile in CI.
+Agent's choices, for the maintainer to change: Exit isn't listed,
+Services is still the terminal's list, a finished program's tab stays
+at a shell, lists use the phone's font.
 
 ### 2026-11-08 (169): Web apps part 2 passed on the phone
 
