@@ -303,7 +303,8 @@ class ChatControllerTest {
         assertTrue(chat.send("more"))
         assertEquals(1, host.launches.size)
         drain()
-        assertEquals(listOf("hello", "more"), chat.state.conversation.items.filterIsInstance<ChatItem.User>().map { it.text })
+        assertEquals(listOf("hello"), chat.state.conversation.items.filterIsInstance<ChatItem.User>().map { it.text })
+        assertEquals(listOf("more"), chat.state.conversation.queued.map { it.text }, "sent during the turn: queued")
     }
 
     @Test

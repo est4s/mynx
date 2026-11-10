@@ -209,6 +209,12 @@ it.
 - the agent's Home is its chat history, with a New chat button;
 - Back from a chat goes to that history, Back again to Home's menu.
 
+**Built** (entry 183, PR #79 with #78 merged in): waiting on the
+phone. Test: queue a prompt during a Bash `sleep` (Queued, then in
+place); Stop with one queued (it runs next); start a second chat while
+one works, switch between them; Back chat → history → menu; a
+notification per chat opens that chat; rotate on the history.
+
 Left after that: other agents (Codex's `app-server`, Gemini's ACP),
 which need accounts to test.
 
@@ -248,6 +254,38 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (183): Several chats at once, history as home, queued prompts (not yet on the phone)
+
+The maintainer's asks after the phone test (entry 182), built by two
+subagents in parallel and merged here (draft PRs #78 and #79, one
+branch):
+- **Queued prompts** (#78): Claude runs with `--replay-user-messages`,
+  so it echoes each prompt when it takes it in. One sent during a turn
+  is `PromptQueued`, drawn dimmed under "Queued" after the rows, and
+  becomes a user row where the echo comes. Tried on the real CLI
+  (2.1.321, Haiku): queued during a tool call, it's echoed after the
+  tool's result in the same turn; after `result`, as a turn of its
+  own, several joined by line breaks. Stop doesn't drop them: the
+  interrupt answers `still_queued: []`, then Claude runs them as the
+  next turn. A process that ends first leaves them "Not sent".
+  Transcripts keep mid-turn ones as `queued_command` attachments, now
+  read back.
+- **Parallel chats** (#79, `core/.../ChatHub.kt`, its KDoc the
+  contract): a `ChatController` is one chat for life; the hub keeps
+  several. New chat or opening another never stops a busy one; a chat
+  not shown and idle has its process stopped (memory), resumed on its
+  next prompt. Never two controllers on one session. Shared: tab holds,
+  the models list, the last good sign-in check.
+- **History as home:** Home → AI agents → Claude Code opens
+  `ChatHistoryView` (New chat, then live chats marked Working / Waiting
+  for you, then past ones). Back: chat → history → Home's list. ⋮ keeps
+  Model…, Mode…, To tab. One notification per chat (6000-6015).
+- Also: AGENTS.md's proot notes say why `killProot` skips pid 0 and -1
+  (the fix came in with the stack; its own PR, #73, was closed).
+
+Left: an idle chat left for Terminal (not the history) keeps its
+process; a dropped idle chat loses unsent text in its box.
 
 ### 2026-11-10 (182): The Chat stack passed on the phone, merged
 
