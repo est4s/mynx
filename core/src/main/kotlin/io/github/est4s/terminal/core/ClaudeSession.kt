@@ -53,6 +53,9 @@ class ClaudeSession(
     private var initializeId: String? = null
     private val interrupts = HashSet<String>()
     private var session: AgentEvent.SessionStarted? = null
+    // The mode last told, and the mode and model changes asked, by request id, till answered.
+    private var mode: String? = null
+    private val changes = HashMap<String, AgentEvent>()
 
     private val messages = HashMap<String, MessageBlocks>()
     private var currentMessage: String? = null
@@ -176,14 +179,25 @@ class ClaudeSession(
         true
     }
 
-    override fun setMode(mode: String) = control(linkedMapOf("subtype" to "set_permission_mode", "mode" to mode))
+    override fun setMode(mode: String) =
+        control(linkedMapOf("subtype" to "set_permission_mode", "mode" to mode), AgentEvent.ModeChanged(mode))
 
-    override fun setModel(model: String) = control(linkedMapOf("subtype" to "set_model", "model" to model))
+    override fun setModel(model: String) =
+        control(linkedMapOf("subtype" to "set_model", "model" to model), AgentEvent.ModelChanged(model))
 
-    private fun control(request: Map<String, Any?>): Boolean = synchronized(lock) {
+    // [change] is told once the agent accepts.
+    private fun control(request: Map<String, Any?>, change: AgentEvent): Boolean = synchronized(lock) {
         if (!isOpen) return false
-        sendRequest(nextRequest(), request)
+        val id = nextRequest()
+        changes[id] = change
+        sendRequest(id, request)
         true
+    }
+
+    private fun modeIs(value: String) {
+        if (value == mode) return
+        mode = value
+        listener(AgentEvent.ModeChanged(value))
     }
 
     override fun stop() {
@@ -232,7 +246,11 @@ class ClaudeSession(
         synchronized(lock) {
             if (exited) return
             when (message["type"]) {
-                "system" -> if (message["subtype"] == "init") onInit(message)
+                "system" -> when (message["subtype"]) {
+                    "init" -> onInit(message)
+                    // The SDK's status message may carry the mode (not seen in a run yet).
+                    "status" -> (message["permissionMode"] as? String)?.let(::modeIs)
+                }
                 "stream_event" -> onStream(message)
                 "assistant" -> onAssistant(message)
                 "user" -> onToolResults(message)
@@ -251,6 +269,7 @@ class ClaudeSession(
             session = info
             listener(info)
         }
+        info.mode?.let { mode = it }
         awaitingInit = false
         if (!running) {
             running = true
@@ -531,6 +550,7 @@ class ClaudeSession(
         val response = message["response"] as? Map<*, *> ?: return
         val id = response["request_id"] as? String
         val interrupted = interrupts.remove(id)
+        val change = changes.remove(id)
         if (response["subtype"] == "error") {
             (response["error"] as? String)?.let { listener(AgentEvent.Notice(it)) }
             return
@@ -541,6 +561,12 @@ class ClaudeSession(
                 AgentModel(value, model["displayName"] as? String ?: value, model["description"] as? String)
             }
             if (models.isNotEmpty()) listener(AgentEvent.AvailableModels(models))
+            ((response["response"] as? Map<*, *>)?.get("current_permission_mode") as? String)?.let(::modeIs)
+        }
+        when (change) {
+            is AgentEvent.ModeChanged -> modeIs(change.mode)
+            is AgentEvent.ModelChanged -> listener(change)
+            else -> Unit
         }
         // No turn began for a prompt interrupted first, so no `result` will come.
         if (interrupted && running && awaitingInit) endTurn(AgentEvent.TurnEnded(StopReason.CANCELLED))

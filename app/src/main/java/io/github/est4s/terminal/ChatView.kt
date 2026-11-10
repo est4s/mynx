@@ -54,12 +54,14 @@ import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import io.github.est4s.terminal.core.ArtifactAction
+import io.github.est4s.terminal.core.CHAT_MODES
 import io.github.est4s.terminal.core.CLAUDE_INSTALL_COMMAND
 import io.github.est4s.terminal.core.CLAUDE_SIGN_IN_COMMAND
 import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatItem
 import io.github.est4s.terminal.core.ChatState
+import io.github.est4s.terminal.core.ChatStatusLine
 import io.github.est4s.terminal.core.ChatTabHold
 import io.github.est4s.terminal.core.ClaudeSessionSummary
 import io.github.est4s.terminal.core.IncrementalMarkdown
@@ -98,6 +100,8 @@ private const val CHAT_HOME = "/root"
 private const val MORE_CHATS = 1
 private const val MORE_NEW = 2
 private const val MORE_TO_TAB = 3
+private const val MORE_MODEL = 4
+private const val MORE_MODE = 5
 private const val MORE_GREYED = 0x80808080.toInt()
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
@@ -220,10 +224,23 @@ class ChatView(
     }
     private val titleText = headerText(CHAT_TITLE).apply {
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
-        setPadding(0, dp(12), dp(8), dp(12))
+        setPadding(0, dp(8), dp(8), 0)
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
+    // The model and permission mode, under the title: ChatState.line.
+    private val subtitleText = headerText("").apply {
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        setPadding(0, 0, dp(8), dp(8))
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
+    }
+    private val titleColumn = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(titleText)
+        addView(subtitleText)
+    }
+    private var drawnLine: ChatStatusLine? = null
     // Chats, New and To tab: a narrow phone has room for ‹, the title and Terminal only, as Home.
     private val moreButton = headerText("⋮").apply {
         contentDescription = "More"
@@ -239,7 +256,7 @@ class ChatView(
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(56)
         addView(backButton)
-        addView(titleText, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        addView(titleColumn, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         addView(moreButton)
         addView(terminalButton)
     }
@@ -325,6 +342,8 @@ class ChatView(
             setBackgroundColor(value.background)
             listOf(backButton, titleText, moreButton, terminalButton).forEach { it.setTextColor(value.accent) }
             statusText.setTextColor(value.accent)
+            subtitleText.setTextColor(faded(value.text, 0xB0))
+            drawnLine = null
             gateText.setTextColor(value.text)
             styleButton(gateButton, true, value)
             styleButton(gateSecond, false, value)
@@ -472,6 +491,10 @@ class ChatView(
             else -> ""
         }
         statusText.text = status
+        if (state.line != drawnLine) {
+            drawnLine = state.line
+            subtitleText.text = statusLineText(state.line, colors)
+        }
         val hadStatus = statusWanted
         val hadGate = gateWanted
         statusWanted = status.isNotEmpty()
@@ -496,6 +519,16 @@ class ChatView(
         sendButton.alpha = if (canSend) 1f else 0.4f
     }
 
+    // The mode stands out when it isn't the default: edits happen without asking, or none at all.
+    private fun statusLineText(line: ChatStatusLine, colors: StripColors): CharSequence {
+        if (!line.highlighted) return line.text
+        val text = SpannableString(line.text)
+        val start = line.text.length - line.mode.length
+        text.setSpan(ForegroundColorSpan(colors.mark), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.setSpan(StyleSpan(Typeface.BOLD), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return text
+    }
+
     private fun showGate(text: String, action: String?, second: String? = null, onSecond: () -> Unit = {}, onTap: () -> Unit) {
         gateText.text = text
         gateButton.text = action.orEmpty()
@@ -512,6 +545,8 @@ class ChatView(
         val popup = PopupMenu(context, moreButton)
         popup.menu.add(Menu.NONE, MORE_CHATS, Menu.NONE, "Chats")
         popup.menu.add(Menu.NONE, MORE_NEW, Menu.NONE, "New chat")
+        popup.menu.add(Menu.NONE, MORE_MODEL, Menu.NONE, "Model…")
+        popup.menu.add(Menu.NONE, MORE_MODE, Menu.NONE, "Mode…")
         // Greyed when it can't go, but still tappable, to say why.
         val toTab: CharSequence = if (chat.state.handOffBlock == null) {
             "To tab"
@@ -524,10 +559,43 @@ class ChatView(
                 MORE_CHATS -> showList()
                 MORE_NEW -> askNewChat()
                 MORE_TO_TAB -> handOff()
+                MORE_MODEL -> pickModel()
+                MORE_MODE -> pickMode()
             }
             true
         }
         popup.show()
+    }
+
+    // The models the session reported, or Default and the aliases before it has; the current one checked.
+    private fun pickModel() {
+        val chat = controller() ?: return
+        val state = chat.state
+        val names = state.models.map { model ->
+            model.description?.let { "${model.name}\n$it" } ?: model.name
+        }.toTypedArray<CharSequence>()
+        AlertDialog.Builder(context)
+            .setTitle("Model")
+            .setSingleChoiceItems(names, state.models.indexOfFirst { it.value == state.model }) { dialog, which ->
+                state.models.getOrNull(which)?.let { chat.setModel(it.value) }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    // No bypass here: CHAT_MODES leaves it out.
+    private fun pickMode() {
+        val chat = controller() ?: return
+        val names = CHAT_MODES.map { it.name }.toTypedArray<CharSequence>()
+        AlertDialog.Builder(context)
+            .setTitle("Permission mode")
+            .setSingleChoiceItems(names, CHAT_MODES.indexOfFirst { it.value == chat.state.mode }) { dialog, which ->
+                CHAT_MODES.getOrNull(which)?.let { chat.setMode(it.value) }
+                dialog.dismiss()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // Says why when it can't go now (a turn running, nothing to resume yet).
@@ -559,6 +627,7 @@ class ChatView(
         gateCard.visibility = View.GONE
         inputRow.visibility = View.GONE
         moreButton.visibility = View.GONE
+        subtitleText.visibility = View.GONE
         titleText.text = "Chats"
         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
             .hideSoftInputFromWindow(windowToken, 0)
@@ -574,6 +643,7 @@ class ChatView(
         scroll.visibility = View.VISIBLE
         inputRow.visibility = View.VISIBLE
         moreButton.visibility = View.VISIBLE
+        subtitleText.visibility = View.VISIBLE
         titleText.text = CHAT_TITLE
         requestLayout()
         render()

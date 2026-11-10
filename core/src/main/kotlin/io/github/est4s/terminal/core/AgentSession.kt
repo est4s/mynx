@@ -153,6 +153,12 @@ sealed interface AgentEvent {
 
     data class AvailableModels(val models: List<AgentModel>) : AgentEvent
 
+    /** The permission mode is now [mode]: the agent accepted [AgentSession.setMode], or changed it itself. */
+    data class ModeChanged(val mode: String) : AgentEvent
+
+    /** The agent accepted [AgentSession.setModel]: [model] is the value it was given. */
+    data class ModelChanged(val model: String) : AgentEvent
+
     /** The user's own message, once sent. */
     data class UserMessage(val id: String, val text: String) : AgentEvent
 

@@ -20,6 +20,13 @@ data class ChatState(
     val tabHold: ChatTabHold = ChatTabHold.NONE,
     val handOffBlock: String? = null,
     val busy: Boolean = false,
+    /** Model…'s choices, [model] the one marked (an [AgentModel.value]). */
+    val models: List<AgentModel> = chatModelChoices(conversation.models),
+    val model: String = "default",
+    /** The permission mode, as Claude names it: Mode… marks it if it's one of [CHAT_MODES]. */
+    val mode: String = conversation.mode ?: "default",
+    /** The line under the title. */
+    val line: ChatStatusLine = chatStatusLine(null, conversation.model, conversation.mode, models),
 )
 
 /** A tab may still run this chat's session: [ASKING] whether to take it back, [TAKING_BACK] while its tab closes. */
@@ -99,6 +106,12 @@ interface ChatHost {
  * on its behalf, and a session handed to a tab isn't run here again while
  * that tab may still run it ([ChatTabHold]). A resumed chat shows its
  * transcript ([readClaudeHistory]): `--resume` doesn't replay it.
+ *
+ * The model and permission mode picked ([setModel], [setMode]) go to the
+ * running process, and are the flags of every launch of this chat, as
+ * `--resume` keeps neither. The mode follows what Claude reports, so a mode
+ * it changed itself is the one a relaunch gets. A new or another chat
+ * starts from the defaults again.
  */
 class ChatController(
     private val host: ChatHost,
@@ -136,8 +149,24 @@ class ChatController(
     private var cards = 0
     private var conversations = 0
     private var toldWorking = false
+    // Picked in this chat (the mode also as Claude reports it); null: never said, so no flag.
+    private var model: String? = null
+    private var mode: String? = null
+    // The last list the agent gave, kept for chats before their process says.
+    private var knownModels: List<AgentModel> = emptyList()
 
-    val state: ChatState get() = ChatState(conversation, access, canRestart, exiting != null, tabHold, handOffBlock(), busy())
+    val state: ChatState
+        get() {
+            val models = chatModelChoices(knownModels)
+            val mode = mode ?: conversation.mode
+            return ChatState(
+                conversation, access, canRestart, exiting != null, tabHold, handOffBlock(), busy(),
+                models = models,
+                model = model ?: "default",
+                mode = mode ?: "default",
+                line = chatStatusLine(model, conversation.model, mode, models),
+            )
+        }
 
     /** A turn runs and no card waits for the user: the app keeps the CPU awake for it ([Wakelock]). */
     val working: Boolean get() = session != null && conversation.running && !cardWaiting()
@@ -222,6 +251,8 @@ class ChatController(
         stopThen(null)
         conversation = Conversation(sessionId = id)
         conversations++
+        model = null
+        mode = null
         turnStart = null
         chatId = id
         resumable = true
@@ -339,6 +370,21 @@ class ChatController(
 
     fun cancel(): Boolean = session?.cancel() ?: false
 
+    /** Model…: to the running process, if any, and the flag of the next launch. */
+    fun setModel(value: String) {
+        model = value
+        session?.setModel(value)
+        changed()
+    }
+
+    /** Mode…: as [setModel]; only [CHAT_MODES]. */
+    fun setMode(value: String) {
+        if (!chatModeOffered(value)) return
+        mode = value
+        session?.setMode(value)
+        changed()
+    }
+
     fun answerPermission(requestId: String, optionId: String): Boolean = session?.answerPermission(requestId, optionId) ?: false
 
     fun answerQuestion(requestId: String, answers: Map<String, String>): Boolean = session?.answerQuestion(requestId, answers) ?: false
@@ -354,6 +400,8 @@ class ChatController(
         stopThen(null)
         conversation = Conversation()
         conversations++
+        model = null
+        mode = null
         turnStart = null
         chatId = null
         resumable = false
@@ -383,7 +431,9 @@ class ChatController(
     private fun launch(): AgentSession {
         val resume = chatId.takeIf { resumable }
         val fresh = if (resume == null) host.newSessionId().also { chatId = it } else null
-        val options = ClaudeLaunchOptions(cwd = cwd, home = home, resume = resume, sessionId = fresh, binary = binary)
+        val options = ClaudeLaunchOptions(
+            cwd = cwd, home = home, resume = resume, sessionId = fresh, binary = binary, model = model, permissionMode = mode,
+        )
         canRestart = false
         initSeen = false
         conversation = conversation.copy(processEnded = false)
@@ -424,7 +474,10 @@ class ChatController(
             is AgentEvent.SessionStarted -> {
                 chatId = event.sessionId
                 initSeen = true
+                event.mode?.let { mode = it }
             }
+            is AgentEvent.ModeChanged -> mode = event.mode
+            is AgentEvent.AvailableModels -> knownModels = event.models
             is AgentEvent.TurnEnded -> {
                 checkArtifacts(null)
                 when {

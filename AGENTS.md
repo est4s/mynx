@@ -788,7 +788,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   **Chats** lists `claudeTranscriptDir`'s sessions (the 50 newest,
   first 16 KB each for the title). Claude names that folder by turning
   every character but ASCII letters and digits into `-` (read in its
-  binary). **One session, one program:** nothing stops two programs
+  binary). **Model and mode** (`core/.../ChatSettings.kt`): Model…
+  and Mode… in ⋮ go to a running process (`set_model`,
+  `set_permission_mode`) and are every launch's `--model` and
+  `--permission-mode` for that chat; the mode follows what Claude
+  reports (init, control answers); `CHAT_MODES` never offers
+  `bypassPermissions`. **One session, one program:** nothing stops two programs
   driving one session (the transcript forks), so `ChatController`
   stops its process and waits for `ProcessEnded` before New, a resume
   or "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:

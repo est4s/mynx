@@ -130,6 +130,93 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `a model and mode chosen before the process are its flags`() {
+        ready()
+        assertEquals(listOf("default", "opus", "sonnet", "haiku"), chat.state.models.map { it.value })
+        assertEquals("default", chat.state.model)
+        assertEquals("default", chat.state.mode)
+        chat.setModel("sonnet")
+        chat.setMode("plan")
+        assertEquals("sonnet", chat.state.model)
+        assertEquals(ChatStatusLine("Sonnet", "Plan", highlighted = true), chat.state.line)
+        assertTrue(chat.send("hello"))
+        assertEquals("sonnet", argFlag("--model"))
+        assertEquals("plan", argFlag("--permission-mode"))
+    }
+
+    @Test
+    fun `nothing chosen adds no flags`() {
+        ready()
+        chat.send("hello")
+        assertEquals(null, argFlag("--model"))
+        assertEquals(null, argFlag("--permission-mode"))
+    }
+
+    @Test
+    fun `a choice while the process runs goes to it, and to the next launch`() {
+        ready()
+        chat.send("hello")
+        init()
+        chat.setMode("acceptEdits")
+        val request = (parseJson(process.written.last()) as Map<*, *>)["request"]
+        assertEquals(mapOf("subtype" to "set_permission_mode", "mode" to "acceptEdits"), request)
+        assertEquals("acceptEdits", chat.state.mode)
+        chat.setModel("haiku")
+        assertEquals(mapOf("subtype" to "set_model", "model" to "haiku"), (parseJson(process.written.last()) as Map<*, *>)["request"])
+        done()
+        exit()
+        chat.restart()
+        assertEquals("acceptEdits", argFlag("--permission-mode"))
+        assertEquals("haiku", argFlag("--model"))
+    }
+
+    @Test
+    fun `the mode Claude reports is followed`() {
+        ready()
+        chat.setMode("plan")
+        chat.send("hello")
+        line("""{"type":"system","subtype":"init","session_id":"11111111-1111-1111-1111-111111111111","model":"claude-haiku-5-5","permissionMode":"plan"}""")
+        line("""{"type":"system","subtype":"status","status":null,"permissionMode":"default"}""")
+        assertEquals("default", chat.state.mode)
+        assertEquals(ChatStatusLine("Haiku 5.5", "Asks first", highlighted = false), chat.state.line)
+        done()
+        exit()
+        chat.restart()
+        assertEquals("default", argFlag("--permission-mode"))
+    }
+
+    @Test
+    fun `the models the agent lists are offered, also in the next chat`() {
+        ready()
+        chat.send("hello")
+        line("""{"type":"control_response","response":{"subtype":"success","request_id":"chat-1","response":{"models":[{"value":"default","displayName":"Default (recommended)"},{"value":"opus","displayName":"Opus 5.5"}]}}}""")
+        assertEquals(listOf("default", "opus"), chat.state.models.map { it.value })
+        chat.newChat()
+        assertEquals(listOf("default", "opus"), chat.state.models.map { it.value })
+    }
+
+    @Test
+    fun `bypassing permissions can't be chosen here`() {
+        ready()
+        chat.setMode("bypassPermissions")
+        assertEquals("default", chat.state.mode)
+        chat.send("hello")
+        assertEquals(null, argFlag("--permission-mode"))
+    }
+
+    @Test
+    fun `a new chat starts from the defaults again`() {
+        ready()
+        chat.setModel("opus")
+        chat.setMode("plan")
+        chat.newChat()
+        assertEquals("default", chat.state.model)
+        assertEquals("default", chat.state.mode)
+        chat.send("hello")
+        assertEquals(null, argFlag("--model"))
+    }
+
+    @Test
     fun `opening checks once and a prompt starts the process in root's home`() {
         ready()
         assertEquals(1, host.checks.size)

@@ -222,9 +222,12 @@ agent makes.
 **Built too (entry 180):** the wakelock during a turn, and Chat's
 notifications.
 
+**Built too (entry 181):** Model… and Mode… in Chat's ⋮, and the line
+under the title.
+
 **Next:** the phone test (Chat, then Chats and To tab, then cards:
-a web app, a terminal app, an APK, a resumed chat, then entry 180's
-checks), then what's
+a web app, a terminal app, an APK, a resumed chat, then entries 180's
+and 181's checks), then what's
 left: other agents (Codex's `app-server`, Gemini's ACP).
 
 ### Regression checks (steps 4-6)
@@ -263,6 +266,45 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (181): Chat: model and permission mode (not yet on the phone)
+
+Chat's ⋮ has **Model…** and **Mode…** (single-choice dialogs, the
+current one checked), and a line under the title says both ("Opus 5.5
+· Accept edits"), the mode in the mark colour and bold when it isn't
+the default. `core/.../ChatSettings.kt`: `CHAT_MODES` (Default (asks),
+Plan (plan first), Accept edits: never `bypassPermissions`, which
+`setMode` also refuses), `chatModelChoices()` (the `initialize`
+answer's models, kept across chats; before any process, Default and
+the aliases `opus`, `sonnet`, `haiku`), `chatStatusLine()` (names ids
+like `claude-haiku-5-5` "Haiku 5.5"). `ChatController.setModel`/
+`setMode` send `set_model`/`set_permission_mode` to a running process
+and are the `--model`/`--permission-mode` flags of every launch of
+that chat (nothing chosen: no flags); a new or another chat starts
+from the defaults. `ClaudeSession` tells `ModeChanged`/`ModelChanged`
+once a control request is answered with success, the mode from the
+`initialize` answer's `current_permission_mode` and each init's
+`permissionMode`, and from a `system`/`status` line's `permissionMode`
+(the SDK's shape, not seen in a run). The controller's mode follows
+them, so a relaunch gets the mode Claude is in.
+
+From real runs: `initialize`'s `models` (`value` `default`, `opus`)
+and `current_permission_mode`, init's `permissionMode`. Assumed:
+`--model sonnet`/`haiku`/`default` (Claude Code's documented
+aliases), a success `control_response` to the two requests, and the
+status line's mode. **Not followed:** an approved plan's switch out of
+plan mode: no line says so in the spike (the next turn's init will,
+so the line can say Plan until then). Sending `setMode` with the
+approval would fix it; left for the maintainer. `--resume` keeps
+neither model nor mode as far as we know, hence the flags. No commits
+yet.
+
+Phone checks: before the first prompt, Model… lists Default, Opus,
+Sonnet, Haiku and Mode… three modes; pick Sonnet and Plan, send: the
+line says "Sonnet · Plan" and Claude plans; after the first turn
+Model… lists what Claude reported; switching mode mid-chat changes
+the line and Claude's behaviour next turn; Restart keeps both; an
+approved plan: what the line says during and after that turn.
 
 ### 2026-11-10 (180): Chat: wakelock during a turn, and notifications (not yet on the phone)
 

@@ -787,6 +787,51 @@ class ClaudeSessionTest {
     }
 
     @Test
+    fun `an accepted mode or model change is told`() {
+        started()
+        session.setMode("plan")
+        val mode = lastWritten()["request_id"]
+        session.setModel("sonnet")
+        val model = lastWritten()["request_id"]
+        transport.say("""{"type":"control_response","response":{"subtype":"success","request_id":"$model","response":{}}}""")
+        transport.say("""{"type":"control_response","response":{"subtype":"success","request_id":"$mode"}}""")
+        assertEquals(listOf(AgentEvent.ModelChanged("sonnet"), AgentEvent.ModeChanged("plan")), events)
+    }
+
+    @Test
+    fun `a refused mode change isn't told as a change`() {
+        started()
+        session.setMode("plan")
+        val id = lastWritten()["request_id"]
+        transport.say("""{"type":"control_response","response":{"subtype":"error","request_id":"$id","error":"No"}}""")
+        assertEquals(listOf<AgentEvent>(AgentEvent.Notice("No")), events)
+    }
+
+    @Test
+    fun `the initialize answer says the mode it starts in`() {
+        started()
+        val lines = chatFixture("claude-plan.txt")
+        val initialize = parsed(lines.first())
+        transport.say(toJson(initialize + ("response" to (initialize["response"] as Map<*, *> + ("request_id" to "chat-1")))))
+        assertEquals(listOf(AgentEvent.ModeChanged("plan")), all<AgentEvent.ModeChanged>())
+        // The turns' inits say the same: no second change.
+        lines.drop(1).forEach(transport::say)
+        assertEquals(1, all<AgentEvent.ModeChanged>().size)
+        assertEquals("plan", all<AgentEvent.SessionStarted>().last().mode)
+    }
+
+    @Test
+    fun `a status line with a mode is followed, once`() {
+        started()
+        transport.say(init)
+        val status = """{"type":"system","subtype":"status","status":null,"permissionMode":"acceptEdits","session_id":"s1"}"""
+        transport.say(status)
+        transport.say(status)
+        transport.say("""{"type":"system","subtype":"status","status":"requesting","session_id":"s1"}""")
+        assertEquals(listOf(AgentEvent.ModeChanged("acceptEdits")), all<AgentEvent.ModeChanged>())
+    }
+
+    @Test
     fun `a refused request becomes a notice`() {
         started()
         session.setModel("nope")

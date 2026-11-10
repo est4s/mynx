@@ -57,6 +57,8 @@ data class Conversation(
 fun Conversation.reduce(event: AgentEvent): Conversation = when (event) {
     is AgentEvent.SessionStarted -> copy(sessionId = event.sessionId, model = event.model, mode = event.mode)
     is AgentEvent.AvailableModels -> copy(models = event.models)
+    is AgentEvent.ModeChanged -> copy(mode = event.mode)
+    is AgentEvent.ModelChanged -> copy(model = event.model)
     is AgentEvent.UserMessage -> copy(items = items + ChatItem.User(event.id, event.text))
     AgentEvent.TurnStarted -> copy(running = true)
     is AgentEvent.AgentMessageChunk -> agentText(event)

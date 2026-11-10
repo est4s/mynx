@@ -127,6 +127,14 @@ class ConversationTest {
         assertEquals(listOf(AgentModel("v", "n", null)), state.models)
     }
 
+    @Test
+    fun `a changed mode or model replaces the one the session started with`() {
+        val state = fold(AgentEvent.SessionStarted("s1", "m1", "plan"), AgentEvent.ModeChanged("default"), AgentEvent.ModelChanged("sonnet"))
+        assertEquals("default", state.mode)
+        assertEquals("sonnet", state.model)
+        assertEquals("s1", state.sessionId)
+    }
+
     private fun notice(state: Conversation) = state.items.last() as ChatItem.Notice
 
     @Test

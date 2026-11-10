@@ -158,7 +158,16 @@ private val CARDS = listOf(
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], application = Application::class, qualifiers = PHONE_QUALIFIERS)
 class ChatScreenshotTest {
-    private fun shoot(w: Int, h: Int, name: String, items: List<ChatItem>, running: Boolean, access: ChatAccess = ChatAccess.READY) {
+    private fun shoot(
+        w: Int,
+        h: Int,
+        name: String,
+        items: List<ChatItem>,
+        running: Boolean,
+        access: ChatAccess = ChatAccess.READY,
+        model: String? = null,
+        mode: String? = null,
+    ) {
         val view = Screenshots.open(w, h) { activity ->
             ChatView(
                 activity,
@@ -171,7 +180,7 @@ class ChatScreenshotTest {
                 installApk = {},
             ).apply { colors = Screenshots.colors }
         }
-        view.show(ChatState(Conversation(items, running = running), access, canRestart = false, busy = running))
+        view.show(ChatState(Conversation(items, running = running, model = model, mode = mode), access, canRestart = false, busy = running))
         Screenshots.settle()
         Screenshots.save(view, name)
     }
@@ -184,9 +193,10 @@ class ChatScreenshotTest {
     @Test
     fun wholeConversation() = shoot(1080, 7000, "chat-whole", FULL, running = true)
 
+    /** Also the line under the title, with a mode that isn't the default. */
     @Test
     @Config(qualifiers = NARROW_QUALIFIERS)
-    fun narrow() = shoot(945, 2100, "chat-360dp", SHORT, running = false)
+    fun narrow() = shoot(945, 2100, "chat-360dp", SHORT, running = false, model = "claude-opus-5-5", mode = "acceptEdits")
 
     @Test
     @Config(qualifiers = LANDSCAPE_QUALIFIERS)
