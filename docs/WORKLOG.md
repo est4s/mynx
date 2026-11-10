@@ -242,6 +242,15 @@ Ctrl+Shift).
 
 ## Log
 
+### 2026-11-10 (178): killProot does nothing for a tab that never started
+
+Found while reviewing Chat (draft PR #72): closing a tab whose shell
+never started (pid 0, e.g. a restored tab never shown) reached
+`killProot(0)` after the grace, and `prootTracees(0)` matches every
+untraced process, the app itself and other tabs' proots included, then
+`kill(0)`, the app's process group. It now returns for pid <= 0. Not
+seen on the phone; the test reproduces it.
+
 ### 2026-11-09 (171): Touch mode's Home (passed on the phone)
 
 The maintainer's phone test passed every step. It found one bug, not

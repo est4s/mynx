@@ -192,9 +192,11 @@ fun prootTracees(pid: Int, proc: File = File("/proc")): List<Int> =
 /**
  * Kills proot [pid] outright, after what it traces: a hung proot can
  * block QUIT while a program it traces sits stopped, and a program
- * outliving its proot runs untraced and spins (see [stopProot]).
+ * outliving its proot runs untraced and spins (see [stopProot]). Nothing
+ * for a session that never started (pid 0) or has ended (-1).
  */
 fun killProot(pid: Int, proc: File = File("/proc"), kill: (Int) -> Unit) {
+    if (pid <= 0) return
     prootTracees(pid, proc).forEach { runCatching { kill(it) } }
     runCatching { kill(pid) }
 }
