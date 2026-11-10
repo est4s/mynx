@@ -13,7 +13,7 @@ const val CLAUDE_TITLE_MAX = 120
 /** How many past chats the list reads. */
 const val CLAUDE_SESSIONS_MAX = 50
 
-/** A past chat for the Chats list: [title] is its first prompt, on one line. */
+/** A past chat for the chat history: [title] is its first prompt, on one line. */
 data class ClaudeSessionSummary(val sessionId: String, val title: String, val modifiedMs: Long)
 
 // User lines Claude writes itself: slash commands and their output, `!`
@@ -203,7 +203,7 @@ fun listClaudeSessions(dir: File, max: Int = CLAUDE_SESSIONS_MAX): List<ClaudeSe
         title?.let { ClaudeSessionSummary(transcript.sessionId, it, transcript.modifiedMs) }
     }
 
-/** How long ago [then] was, for the Chats list. */
+/** How long ago [then] was, for the chat history. */
 fun chatRelativeTime(now: Long, then: Long): String {
     val minutes = (now - then) / 60_000
     val hours = minutes / 60
