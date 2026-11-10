@@ -42,6 +42,7 @@ import io.github.est4s.terminal.core.isNusName
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
+import io.github.est4s.terminal.core.setSetting
 import io.github.est4s.terminal.core.MynxRequests
 import io.github.est4s.terminal.core.Vibrations
 import io.github.est4s.terminal.core.Share
@@ -229,7 +230,10 @@ class TerminalService : Service() {
     private val tools by lazy { ToolsInstaller(filesDir) }
     /** Touch mode's chats: kept here so they outlive the activity. */
     val chats: ChatHub by lazy {
-        ChatHub(chatHost, post = { action -> mainHandler.post(action) }, artifacts = ArtifactFinder(webAppFiles))
+        ChatHub(
+            chatHost, post = { action -> mainHandler.post(action) }, artifacts = ArtifactFinder(webAppFiles),
+            picksFile = File(filesDir, "state/chat-picks"),
+        )
     }
     /** Which chat screen was showing, for a recreated activity: the history, the hub's shown chat, or neither. */
     var chatPlace = ChatPlace.NONE
@@ -321,6 +325,17 @@ class TerminalService : Service() {
         override fun workingChanged(working: Boolean) {
             chatWorking = working
             if (!destroyed) applyWakelockSetting()
+        }
+
+        override fun chatDefaultMode(): String = currentSettings()?.chatMode ?: "auto"
+
+        // As pinching writes font-size: undo records it at the next check.
+        override fun setChatDefaultMode(value: String) {
+            val file = File(rootfs, "root/$CONFIG_DIR/settings.conf")
+            runCatching {
+                file.parentFile?.mkdirs()
+                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "chat-mode", value).getOrThrow())
+            }
         }
 
         // A chat kept the app up with no tabs; with it over and nothing else running, it goes.

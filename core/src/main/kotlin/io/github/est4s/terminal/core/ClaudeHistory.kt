@@ -71,12 +71,19 @@ private fun parseLine(line: String): Map<*, *>? = try {
 fun readClaudeHistory(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
     readClaudeTranscript(lines, max).items
 
-/** A transcript's rows ([readClaudeHistory]) and the [model] its last answer came from (`message.model`), if any. */
-data class ClaudeHistory(val items: List<ChatItem>, val model: String?)
+/**
+ * A transcript's rows ([readClaudeHistory]), the [model] its last answer
+ * came from (`message.model`), its [title] (the first prompt, on one line,
+ * as [claudeSessionTitle] has it) and the [context] its last answer used
+ * (input, cache read and cache written), each null when there's none.
+ */
+data class ClaudeHistory(val items: List<ChatItem>, val model: String?, val title: String? = null, val context: Long? = null)
 
 /** [readClaudeHistory], with the model: `--resume` runs the chat on it again. */
 fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): ClaudeHistory {
     var model: String? = null
+    var title: String? = null
+    var context: Long? = null
     // In order of first appearance; a tool's result replaces its row in place.
     val rows = LinkedHashMap<String, ChatItem>()
     var dropped = false
@@ -99,7 +106,10 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
         when (line["type"]) {
             "attachment" -> queuedPrompt(line)?.let { add(ChatItem.User("$HISTORY_ID$uuid", it)) }
             "user" -> {
-                promptText(line)?.let { add(ChatItem.User("$HISTORY_ID$uuid", it)) }
+                promptText(line)?.let {
+                    if (title == null) title = oneLine(promptTitleText(it))
+                    add(ChatItem.User("$HISTORY_ID$uuid", it))
+                }
                 if (aside(line)) continue
                 val content = (line["message"] as? Map<*, *>)?.get("content") as? List<*> ?: continue
                 for (block in content.filterIsInstance<Map<*, *>>()) {
@@ -115,6 +125,7 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
                 val message = line["message"] as? Map<*, *> ?: continue
                 if (message["model"] == "<synthetic>") continue
                 (message["model"] as? String)?.let { model = it }
+                (message["usage"] as? Map<*, *>)?.let { usage -> contextTokens(usage)?.let { context = it } }
                 val content = message["content"] as? List<*> ?: continue
                 content.forEachIndexed { index, item ->
                     val block = item as? Map<*, *> ?: return@forEachIndexed
@@ -143,7 +154,7 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
     }
     val items = rows.values.toList()
     val shown = if (dropped) listOf(ChatItem.Notice("history-earlier", NoticeKind.INFO, CHAT_HISTORY_EARLIER)) + items else items
-    return ClaudeHistory(shown, model)
+    return ClaudeHistory(shown, model, title, context)
 }
 
 /** [readClaudeHistory] of a file; call it off the main thread. */
@@ -154,7 +165,7 @@ fun readClaudeHistory(file: File, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
 fun readClaudeTranscript(file: File, max: Int = CHAT_HISTORY_MAX): ClaudeHistory =
     file.useLines { readClaudeTranscript(it, max) }
 
-private fun oneLine(text: String): String =
+internal fun oneLine(text: String): String =
     text.take(CLAUDE_TITLE_MAX * 4).trim().replace(Regex("\\s+"), " ").take(CLAUDE_TITLE_MAX)
 
 /**
@@ -175,7 +186,7 @@ fun claudeSessionTitle(file: File, head: Int = CLAUDE_TITLE_HEAD_BYTES): String?
     val full = size == head
     for (line in if (full) lines.dropLast(1) else lines) {
         val parsed = parseLine(line) ?: continue
-        promptText(parsed)?.let { return oneLine(it) }
+        promptText(parsed)?.let { return oneLine(promptTitleText(it)) }
     }
     return if (full) cutPrompt(lines.last()) else null
 }

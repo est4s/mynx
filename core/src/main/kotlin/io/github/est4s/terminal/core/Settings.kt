@@ -43,6 +43,8 @@ data class Settings(
     val serialNames: Boolean = true,
     /** What the app shows: the terminal, or touch mode's Home. */
     val view: AppView = AppView.TERMINAL,
+    /** The permission mode new chats of touch mode's Chat start in: one of [CHAT_MODES]. */
+    val chatMode: String = "auto",
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -67,6 +69,7 @@ data class Settings(
         "serial-preload" to if (serialPreload) "on" else "off",
         "serial-names" to if (serialNames) "on" else "off",
         "view" to view.word,
+        "chat-mode" to chatMode,
     )
 }
 
@@ -239,6 +242,12 @@ val SETTINGS: List<SettingDef> = listOf(
         "terminal", AppView.entries.map { it.word },
         oneOf("view", AppView.entries.map { it.word }),
         { v -> copy(view = AppView.entries.first { it.word == v }) },
+    ),
+    SettingDef(
+        "chat-mode", "The permission mode new chats in touch view's Chat start in: auto (Claude decides what to allow, asking less), default (asks first), plan or acceptEdits. A chat's own pick wins for that chat.",
+        "auto", CHAT_MODES.map { it.value },
+        oneOf("chat-mode", CHAT_MODES.map { it.value }),
+        { copy(chatMode = it) },
     ),
 )
 

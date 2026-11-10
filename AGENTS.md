@@ -837,7 +837,23 @@ See `docs/ROADMAP.md` "How it works". The details:
   (init, `initialize`, status lines) is only shown: the mode flag is
   only the user's pick among `CHAT_MODES`, dropped when Claude reports
   another or a plan is approved; `claudeLaunch` refuses any other mode,
-  so `bypassPermissions` is never launched. **One session, one program:** nothing stops two programs
+  so `bypassPermissions` is never launched. The picks are kept per
+  session in `ChatShared` (`filesDir/state/chat-picks`, a line each),
+  so a chat left idle (its controller dropped) and opened again keeps
+  them: `--resume` restores the model, not the mode. A new chat, or a
+  past one with no picks kept, starts in the `chat-mode` setting
+  (default `auto`, read through `ChatHost.chatDefaultMode()`; "Use as
+  default" writes it). **Usage** (`core/.../ChatUsage.kt`): each
+  top-level `assistant` line's usage (input + cache read + cache
+  written) is the chat's context, `result.modelUsage[model].contextWindow`
+  its window (kept per model for resumed chats, whose context comes
+  from the transcript's last answer); `rate_limit_event`'s
+  `unifiedWindows` are the plan's, shared by all chats; `usageRows()`
+  lays out the sheet. **Attachments** (`ChatAttachments.kt`): files
+  the app copies into Debian go as `[Attached image|file: PATH]` lines
+  after the text and a blank line (Claude reads them with Read), so
+  echoes and transcripts keep them; `splitAttachments()` reads them
+  back, and titles leave them out. **One session, one program:** nothing stops two programs
   driving one session (the transcript forks), so a session has one
   controller at a time (the hub's), which stops its process and waits
   for `ProcessEnded` before a new launch or "To tab" runs anything; the

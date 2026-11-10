@@ -13,7 +13,7 @@ class ChatSettingsTest {
 
     @Test
     fun `the modes offered leave out bypassing permissions`() {
-        assertEquals(listOf("default", "plan", "acceptEdits"), CHAT_MODES.map { it.value })
+        assertEquals(listOf("auto", "default", "plan", "acceptEdits"), CHAT_MODES.map { it.value })
         assertFalse(chatModeOffered("bypassPermissions"))
         assertTrue(chatModeOffered("plan"))
     }
@@ -28,6 +28,7 @@ class ChatSettingsTest {
     fun `nothing chosen or known is the default model, asking first`() {
         assertEquals(ChatStatusLine("Default model", "Asks first", highlighted = false), chatStatusLine(null, null, null, emptyList()))
         assertEquals("Default model · Asks first", chatStatusLine(null, null, "default", emptyList()).text)
+        assertEquals(ChatStatusLine("Default model", "Auto", highlighted = true), chatStatusLine(null, null, "auto", emptyList()))
     }
 
     @Test

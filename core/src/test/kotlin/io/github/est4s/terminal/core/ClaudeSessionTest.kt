@@ -1085,4 +1085,56 @@ class ClaudeSessionTest {
         started()
         assertEquals("{\n  \"cmd\": \"ls\"\n}", reviewOf("Bash", """{"cmd":"ls"}"""))
     }
+
+    @Test
+    fun `each call's context and the model's window come from a real run`() {
+        started()
+        replay("claude-usage.txt")
+        assertEquals(
+            listOf(ContextUsed(19_472, null), ContextUsed(21_461, null), ContextUsed(21_461, 1_000_000)),
+            all<ContextUsed>(),
+            "input, cache read and cache written; once per change; the window from the result",
+        )
+    }
+
+    @Test
+    fun `the plan's windows come from a real run's rate limit event`() {
+        started()
+        replay("claude-usage.txt")
+        assertEquals(
+            listOf(
+                AgentEvent.PlanLimits(
+                    listOf(
+                        PlanWindow("five_hour", 0.35, 1_794_309_000, "allowed"),
+                        PlanWindow("seven_day", 0.67, 1_794_369_600, "allowed"),
+                    ),
+                ),
+            ),
+            all<AgentEvent.PlanLimits>(),
+        )
+    }
+
+    @Test
+    fun `a window of another kind is kept, one without numbers left out`() {
+        started()
+        transport.say(
+            """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":""" +
+                """{"seven_day_opus":{"utilization":0.1},"odd":{"status":"allowed"},"bad":3}}}""",
+        )
+        assertEquals(listOf(PlanWindow("seven_day_opus", 0.1, null, null)), all<AgentEvent.PlanLimits>().single().windows)
+        transport.say("""{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}""")
+        assertEquals(1, all<AgentEvent.PlanLimits>().size, "nothing to tell")
+    }
+
+    @Test
+    fun `a subagent's calls don't count as the chat's context`() {
+        started()
+        transport.say(
+            """{"type":"assistant","parent_tool_use_id":"t1","message":{"id":"m1","content":[],""" +
+                """"usage":{"input_tokens":5,"cache_read_input_tokens":500,"cache_creation_input_tokens":0}}}""",
+        )
+        assertEquals(emptyList(), all<ContextUsed>())
+    }
 }
+
+private typealias ContextUsed = AgentEvent.ContextUsed
