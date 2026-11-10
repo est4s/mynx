@@ -193,30 +193,16 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode: Chat, parallel chats next
+### 3. Touch mode: Chat for Claude Code, done
 
-The Chat stack (#67-#76, entries 172-181) passed the maintainer's phone
-test on 2026-11-10 and is merged: the Services list, sign-in, turns,
-permission and question cards, Markdown, Chats and To tab, artifact
-cards, notifications and the wakelock, model and mode. The
-maintainer's call on the stack: "the sign in works really well", merge
-it.
+Passed on the phone and merged (2026-11-10): the Chat stack (#67-#76,
+entries 172-182), then queued prompts, parallel chats with the history
+as the agent's home, picks kept per chat, Auto as the default
+(`chat-mode`), and the Claude-app layout (#78-#81, entries 183-184).
 
-**Asked for next (maintainer, 2026-11-10):**
-- a queued prompt (sent while a turn runs) shows in the chat;
-- several chats at once: a new chat while one works starts an
-  independent session beside it;
-- the agent's Home is its chat history, with a New chat button;
-- Back from a chat goes to that history, Back again to Home's menu.
-
-**Built** (entry 183, PR #79 with #78 merged in): waiting on the
-phone. Test: queue a prompt during a Bash `sleep` (Queued, then in
-place); Stop with one queued (it runs next); start a second chat while
-one works, switch between them; Back chat → history → menu; a
-notification per chat opens that chat; rotate on the history.
-
-Left after that: other agents (Codex's `app-server`, Gemini's ACP),
-which need accounts to test.
+Left: other agents (Codex's `app-server`, Gemini's ACP), which need
+accounts to test; image thumbnails on attachment chips; the Model page
+lists fallback models until a session reports its own.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -255,7 +241,34 @@ Ctrl+Shift).
 
 ## Log
 
-### 2026-11-10 (183): Several chats at once, history as home, queued prompts (not yet on the phone)
+### 2026-11-10 (184): Chat looks like Claude's app; picks kept; Auto by default (passed on the phone)
+
+Asked by the maintainer after testing entry 183 (with screenshots of
+Claude's app): the mode didn't stay after leaving a chat; Auto as the
+default, changeable; the layout of Claude's app, with permission and
+files behind +, Terminal in ⋮, a usage ring and its sheet; a mic; one
+Send/Stop button. Built by two subagents against a contract (core #80,
+app #81 with #80 merged in); every part passed on the phone.
+- **Picks kept** (the bug: leaving an idle chat dropped its controller,
+  and `--resume` restores the model but not the mode): `ChatShared`
+  keeps each session's model and mode in `filesDir/state/chat-picks`.
+- **Auto:** `CHAT_MODES` starts with `auto` (`--permission-mode auto`,
+  checked on 2.1.321); the `chat-mode` setting (default `auto`) is
+  every new chat's mode, also set from + → Permission → Default.
+- **Usage** (`ChatUsage.kt`): context from each top-level assistant
+  line's usage over `result.modelUsage`'s `contextWindow`; plan limits
+  from `rate_limit_event`'s `unifiedWindows` (five_hour, seven_day),
+  shared by all chats.
+- **Attachments** (`ChatAttachments.kt`): Camera, Photos, Files copied
+  into the share folder by `Inbox`, sent as `[Attached file: PATH]`
+  lines that Claude reads with Read.
+- **Layout** (`ChatSheet.kt`, `ChatFiles.kt`, `ChatVoice.kt`): header
+  ← / title over "Claude Code · mode" / ring / ⋮ (Model…, To tab,
+  Terminal); a pill with +, the box, the mic (SpeechRecognizer, else
+  the RECOGNIZE_SPEECH activity), and Send that is Stop while a turn
+  runs and the box is empty.
+
+### 2026-11-10 (183): Several chats at once, history as home, queued prompts (passed on the phone)
 
 The maintainer's asks after the phone test (entry 182), built by two
 subagents in parallel and merged here (draft PRs #78 and #79, one
@@ -285,7 +298,8 @@ branch):
   (the fix came in with the stack; its own PR, #73, was closed).
 
 Left: an idle chat left for Terminal (not the history) keeps its
-process; a dropped idle chat loses unsent text in its box.
+process; a dropped idle chat loses unsent text in its box. The mode
+not staying was fixed in entry 184.
 
 ### 2026-11-10 (182): The Chat stack passed on the phone, merged
 

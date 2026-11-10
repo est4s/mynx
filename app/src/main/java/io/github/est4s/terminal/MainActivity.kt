@@ -291,6 +291,7 @@ class MainActivity : Activity(), FrontActivity {
 
     override fun onStop() {
         root.removeCallbacks(keyBarPoll)
+        dictation.finish()
         visible = false
         setCursorBlinking(false)
         service?.saveTabs()
@@ -337,6 +338,7 @@ class MainActivity : Activity(), FrontActivity {
     // a chat backs out to the chat history, which backs out to Home.
     private fun goBack() {
         when {
+            chatShown && chat?.sheetBack() == true -> Unit
             chatShown -> showChatHistory()
             chatHistoryShown -> {
                 hideChatHistory()
@@ -484,6 +486,10 @@ class MainActivity : Activity(), FrontActivity {
 
     // Android's dialogs and the camera app's result, one at a time (shared with the apps' screens).
     private val asks = ActivityAsks(this)
+    // Chat's + tiles: the camera, photo and file pickers.
+    private val chatFiles by lazy { ChatFiles(this, asks, installer.rootfs) }
+    // Chat's mic.
+    private val dictation by lazy { SpeechDictation(this, asks) }
 
     override val activity: Activity get() = this
 
@@ -497,7 +503,7 @@ class MainActivity : Activity(), FrontActivity {
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        asks.onActivityResult(requestCode, resultCode)
+        asks.onActivityResult(requestCode, resultCode, data)
     }
 
     /** How far the screen is turned, in degrees (Surface's ROTATION_*), for photos taken now. */
@@ -563,6 +569,8 @@ class MainActivity : Activity(), FrontActivity {
             shareFile = { path -> toastError(service?.shareDebianFile(path)) },
             // As `mynx install-apk`: only debug builds install other apps.
             installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
+            attach = { source, done -> chatFiles.pick(source, done) },
+            dictation = dictation,
         ).also {
             it.colors = strip
             it.visibility = View.GONE
