@@ -30,6 +30,8 @@ sealed interface ChatItem {
         val outcome: RequestOutcome? = null,
     ) : ChatItem
     data class Notice(override val id: String, val kind: NoticeKind, val text: String) : ChatItem
+    /** An app or APK the agent made or changed this turn: [withArtifactCards]. */
+    data class Artifact(override val id: String, val artifact: ChatArtifact) : ChatItem
 }
 
 enum class NoticeKind { INFO, ERROR, SIGN_IN }
@@ -55,6 +57,9 @@ data class Conversation(
 fun Conversation.reduce(event: AgentEvent): Conversation = when (event) {
     is AgentEvent.SessionStarted -> copy(sessionId = event.sessionId, model = event.model, mode = event.mode)
     is AgentEvent.AvailableModels -> copy(models = event.models)
+    is AgentEvent.ModeChanged -> copy(mode = event.mode)
+    is AgentEvent.ModelChanged -> copy(model = event.model)
+    is AgentEvent.ModeRefused, is AgentEvent.ModelRefused -> this
     is AgentEvent.UserMessage -> copy(items = items + ChatItem.User(event.id, event.text))
     AgentEvent.TurnStarted -> copy(running = true)
     is AgentEvent.AgentMessageChunk -> agentText(event)

@@ -78,6 +78,19 @@ class ProotStopTest {
         assertEquals(listOf(9358, 9003), killed)
     }
 
+    // A tab that never started has pid 0 (and -1 once it ended): every untraced
+    // process has TracerPid 0, the app itself included, and kill(0) is its group.
+    @Test
+    fun `a proot that never started kills nothing`() {
+        process(9358, tracer = 0)
+        val killed = mutableListOf<Int>()
+
+        killProot(0, proc) { pid -> killed += pid }
+        killProot(-1, proc) { pid -> killed += pid }
+
+        assertEquals(emptyList(), killed)
+    }
+
     private fun child(pid: Int, parent: Int, tracer: Int) {
         File(proc, "$pid").mkdirs()
         File(proc, "$pid/status").writeText("Name:\tclaude\nPPid:\t$parent\nTracerPid:\t$tracer\n")

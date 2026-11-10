@@ -56,6 +56,17 @@ class ClaudeLaunchTest {
     }
 
     @Test
+    fun `only the modes Chat offers can be launched`() {
+        for (mode in listOf("bypassPermissions", "dontAsk", "auto", "manual")) {
+            assertFailsWith<IllegalArgumentException>(mode) { claudeLaunch(ClaudeLaunchOptions(cwd = "/", permissionMode = mode)) }
+            assertFailsWith<IllegalArgumentException>(mode) { claudeHandOffCommand(uuid, "/tmp/f", permissionMode = mode) }
+        }
+        for (mode in CHAT_MODES.map { it.value }) {
+            assertTrue(mode in claudeLaunch(ClaudeLaunchOptions(cwd = "/", permissionMode = mode)).argv)
+        }
+    }
+
+    @Test
     fun `auth status runs the real binary in a login shell`() {
         assertEquals(LOGIN + listOf("/root/.local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand())
         assertEquals(LOGIN + listOf("/usr/local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand("/usr/local/bin/claude"))
@@ -117,6 +128,35 @@ class ClaudeLaunchTest {
         assertEquals("/root/.claude/projects/-root-mynx", claudeTranscriptDir("/root", "/root/mynx"))
         assertEquals("/root/.claude/projects/-root-mynx/$uuid.jsonl", claudeTranscriptPath("/root", "/root/mynx", uuid))
         assertEquals("/root/.claude/projects/-root-mynx", claudeTranscriptDir("/root", "/root/mynx/"))
+    }
+
+    @Test
+    fun `everything but letters and digits becomes a dash in the folder name`() {
+        assertEquals("/root/.claude/projects/-tmp-my-proj-v1-2", claudeTranscriptDir("/root", "/tmp/my_proj.v1 2"))
+        // As JavaScript sees it: an emoji is two UTF-16 units, so two dashes.
+        assertEquals("/root/.claude/projects/-root-caf--", claudeTranscriptDir("/root", "/root/caf\uD83D\uDE00"))
+    }
+
+    @Test
+    fun `the hand-off tab runs claude with the app's flags, then says it's done`() {
+        val command = claudeHandOffCommand(uuid, "/tmp/.mynx/chat-tab-$uuid")
+        assertEquals(listOf("/bin/bash", "--login", "-c"), command.take(3))
+        val script = command[3]
+        assertTrue(script.contains("mynx agent start claude --resume '$uuid';"), script)
+        assertTrue(script.contains(": > '/tmp/.mynx/chat-tab-$uuid'"), script)
+        assertTrue(script.endsWith("exec /bin/bash --login"), script)
+    }
+
+    @Test
+    fun `the hand-off tab gets the chat's model and mode`() {
+        val script = claudeHandOffCommand(uuid, "/tmp/f", model = "claude-haiku-5-5", permissionMode = "plan")[3]
+        assertTrue(script.contains("mynx agent start claude --resume '$uuid' --model 'claude-haiku-5-5' --permission-mode 'plan';"), script)
+        assertFailsWith<IllegalArgumentException> { claudeHandOffCommand(uuid, "/tmp/f", model = "x'; rm -rf /") }
+    }
+
+    @Test
+    fun `the hand-off refuses what isn't a session id`() {
+        assertFailsWith<IllegalArgumentException> { claudeHandOffCommand("x; rm -rf /", "/tmp/f") }
     }
 
     @Test

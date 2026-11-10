@@ -747,7 +747,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   of `AgentSession`, `AgentTransport`, `claudeLaunch` and
   `Conversation.reduce` is the contract (threads, process lifetime,
   stopping); tests replay real scrubbed lines from
-  `core/src/test/resources/chat/`. The app side (not on the phone yet):
+  `core/src/test/resources/chat/`. The app side (passed on the phone, 2026-11-10):
   `app/.../AgentProcess.kt` is an `AgentTransport` over pipes (core's
   `ProcessAgentTransport`, tested with real shells); core's
   `ChatController`, held by `TerminalService` (`chat`), is the one chat:
@@ -765,7 +765,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   A permission card shows `PermissionRequest.review`, built from the
   input sent back as `updatedInput`, never just the model's
   description. A running chat keeps the app up like a service
-  (`ChatController.live`). **Always allow** sends only the suggested
+  (`ChatController.live`); `wakelock = auto` also holds while a turn
+  runs and no card waits (`ChatController.working`, told to the host on
+  change). **Notifications** (`core/.../ChatNotices.kt`): as the hooks
+  (silenced by `MYNX_CHAT=1`) would, unless Chat is on screen: a turn of
+  `agent-notify-after` or more ends, or a card waits; one notification
+  (`CHAT_NOTICE_ID`), cleared by `opened()`; it follows `agent-notify`
+  and Claude's hooks being on (`claudeNotifyHooks`, as `mynx agent
+  list` reads them). **Always allow** sends only the suggested
   `addRules` (`allow`), for the session, and its label names each rule;
   a suggested mode or directory would grant more than the button says,
   and no rule means no Always. **Markdown** (`core/.../Markdown.kt`,
@@ -774,7 +781,39 @@ See `docs/ROADMAP.md` "How it works". The details:
   `mdRows()` flattens them into `ChatView`'s views, one per row, reused
   by index; inline markers show as typed until closed, so a stray `**`
   stays right in the finished text; links are http(s) only. Redraws:
-  at most about 10 a second (`chatRenderDelay`).
+  at most about 10 a second (`chatRenderDelay`). **History**
+  (`core/.../ClaudeHistory.kt`): `--resume` replays nothing, so a
+  resumed chat reads its transcript (`readClaudeHistory`, off the main
+  thread, line by line, last 300 rows) into the same `ChatItem`s.
+  **Chats** lists `claudeTranscriptDir`'s sessions (the 50 newest,
+  first 16 KB each for the title). Claude names that folder by turning
+  every character but ASCII letters and digits into `-` (read in its
+  binary). **Model and mode** (`core/.../ChatSettings.kt`): Model…
+  and Mode… in ⋮ go to a running process (`set_model`,
+  `set_permission_mode`) and are every launch's `--model` and
+  `--permission-mode` for that chat (and its hand-off tab's) once
+  Claude takes them (a refused one is dropped). What Claude reports
+  (init, `initialize`, status lines) is only shown: the mode flag is
+  only the user's pick among `CHAT_MODES`, dropped when Claude reports
+  another or a plan is approved; `claudeLaunch` refuses any other mode,
+  so `bypassPermissions` is never launched. **One session, one program:** nothing stops two programs
+  driving one session (the transcript forks), so `ChatController`
+  stops its process and waits for `ProcessEnded` before New, a resume
+  or "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:
+  `mynx agent start claude --resume ID` with the picks, then a file saying it's
+  done, then the shell) holds the session until that file appears (a
+  FileObserver on the folder sees it) or the tab ends (closed before
+  its shell started counts), and a prompt meanwhile asks to take it
+  back (closing the tab) instead of resuming. A session resumed by
+  hand in that tab afterwards isn't tracked. **Artifact cards**
+  (`core/.../ChatArtifacts.kt`, its top comment is the contract): a
+  turn's completed Write/Edit/NotebookEdit paths, and Bash's paths in
+  the app folders or ending `.apk` (only if changed since the turn
+  started), are checked on disk off the main thread with Home's rules
+  (`WebApps`, `terminalAppLabel`); one `ChatItem.Artifact` per app per
+  turn, changed in place; history gets them too (written files only).
+  Run and Add to home screen are `menu --act` tabs; Install only in
+  debug builds, as `mynx install-apk`.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's
@@ -1081,6 +1120,15 @@ When you add a tested source set, add its `source test` pair to
   Without an Android SDK, Gradle only configures `:core`; that's expected.
 - **In CI:** `./gradlew test` runs every suite before the APK is built. A
   failing test means no APK.
+- **Screenshots:** the app's Robolectric tests (`app/src/test/`,
+  `Screenshots.kt`) draw touch mode's Home and Chat with sample data
+  at phone sizes (412 dp and 360 dp wide, landscape) into
+  `app/build/screenshots/`, which CI uploads as the `screenshots`
+  artifact, even when a test fails: `gh run download RUN -n
+  screenshots -D DIR`, then look at the PNGs. Robolectric renders them
+  (its native graphics, Android 14), not a phone, so fonts and small
+  details may differ; nothing compares them. Add a screen there when
+  you change a view.
 
 ### What enforces it
 - **`.githooks/pre-commit`** blocks a commit that changes `core/src/main/`

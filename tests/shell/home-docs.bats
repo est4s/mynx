@@ -116,6 +116,12 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     [ "$status" -ne 0 ]
 }
 
+@test "the guide says Chat notifies as the hooks do, and holds the wakelock during a turn" {
+    grep -qF "Touch view's Chat notifies the same way" "$GUIDE"
+    grep -qF 'tapping that notification opens Chat' "$GUIDE"
+    grep -qF "a turn of touch view's Chat runs" "$GUIDE"
+}
+
 @test "the guide explains service tabs: the mark, hiding, the strip and notification, Run as service" {
     grep -qF '● NAME' "$GUIDE"
     grep -qF '**Hide**, **Restart** and **Stop**' "$GUIDE"
@@ -272,6 +278,14 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 
 @test "the guide says Claude Code opens as a chat in touch view" {
     grep -qF -- "as a chat" "$GUIDE"
+}
+
+@test "the guide says a chat can go on in a tab, one session in one place" {
+    grep -qF -- "To tab moves the chat to a terminal tab" "$GUIDE"
+}
+
+@test "the guide says the chat shows a card for an app the agent makes" {
+    grep -qF -- "the chat shows a card for it: Open (a web app)" "$GUIDE"
 }
 
 @test "the guide says a page can take the back key first: window.androidBack" {

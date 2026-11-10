@@ -46,6 +46,15 @@ jobs:
       - name: Test
         run: ./gradlew --no-daemon test
 
+      # PNGs of touch mode's Home and Chat, drawn by Robolectric in the app's
+      # tests (Screenshots.kt): for looking at without a phone, never compared.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: screenshots
+          path: app/build/screenshots/
+          if-no-files-found: warn
+
       - name: Shell tests
         run: |
           sudo apt-get install -y -qq bats >/dev/null

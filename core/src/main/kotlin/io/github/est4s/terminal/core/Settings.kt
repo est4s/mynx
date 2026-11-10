@@ -75,12 +75,13 @@ enum class AppView(val word: String) { TERMINAL("terminal"), TOUCH("touch") }
 
 /** The `wakelock` setting: when the app keeps the phone's CPU awake. */
 enum class Wakelock(val word: String) {
-    /** While a background service runs. */
+    /** While a background service runs, or a chat turn does. */
     AUTO("auto"),
     ON("on"),
     OFF("off");
 
-    fun held(servicesRunning: Boolean): Boolean = this == ON || (this == AUTO && servicesRunning)
+    fun held(servicesRunning: Boolean, chatRunning: Boolean = false): Boolean =
+        this == ON || (this == AUTO && (servicesRunning || chatRunning))
 }
 
 data class ParsedSettings(val settings: Settings, val problems: List<String>)
@@ -210,7 +211,7 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(tabSwipe = it == "on") },
     ),
     SettingDef(
-        "wakelock", "Whether the app keeps the phone's CPU awake, so jobs don't pause with the screen off (uses more battery): auto while a background service runs, on while terminals run, or off.",
+        "wakelock", "Whether the app keeps the phone's CPU awake, so jobs don't pause with the screen off (uses more battery): auto while a background service or a chat turn runs, on while terminals run, or off.",
         "auto", Wakelock.entries.map { it.word },
         oneOf("wakelock", Wakelock.entries.map { it.word }),
         { v -> copy(wakelock = Wakelock.entries.first { it.word == v }) },

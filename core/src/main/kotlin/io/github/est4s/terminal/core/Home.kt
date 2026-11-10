@@ -109,7 +109,7 @@ class HomeMenus(
         else -> if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
     }
 
-    private fun act(action: String) = HomeAction.Tab(runThenShell("keybar menu menu --act " + shellQuote(action)))
+    private fun act(action: String) = menuActTab(action)
 
     private fun serviceRows(): List<HomeItem> =
         services.map { HomeItem("${it.name}${if (it.saved) "" else "*"} ${it.state}", HomeAction.Menu(SERVICE_MENU + it.name)) }
@@ -182,20 +182,14 @@ class HomeMenus(
         return names.mapNotNull { name ->
             val guest = "$folder/$name"
             val file = apps.resolve(guest)?.let(apps::host) ?: return@mapNotNull null
-            if (file.isFile && executable(file)) guest to file else null
+            if (file.isFile && isExecutable(file)) guest to file else null
         }
     }
-
-    // By the mode bits: on Android, canExecute() asks the kernel, which
-    // refuses every file in an app's data.
-    private fun executable(file: File) = runCatching {
-        Files.getPosixFilePermissions(file.toPath()).any { it in EXECUTE_BITS }
-    }.getOrDefault(false)
 
     private fun terminalApps(): List<HomeItem> {
         val found = listOf("$TOOLS_MOUNT/terminal-apps", "$guestHome/terminal-apps", "$guestHome/apps")
             .flatMap(::programs)
-            .map { (guest, file) -> HomeItem(appLabel(guest, file), act("app:$guest")) }
+            .map { (guest, file) -> HomeItem(terminalAppLabel(guest, file), act("app:$guest")) }
             .sortedWith(compareBy({ it.label.uppercase() }, { it.label }))
         return found.ifEmpty { listOf(HomeItem("(no terminal apps yet)", HomeAction.None)) }
     }
@@ -214,14 +208,24 @@ class HomeMenus(
         val config = apps.host("$guestHome/.gitconfig")?.takeIf { it.isFile } ?: return false
         return hosts.length() > 0 && gitEmailSet(runCatching { config.readText() }.getOrDefault(""))
     }
+}
 
-    private fun appLabel(guest: String, file: File): String {
-        val head = ByteArray(LABEL_BYTES)
-        val size = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(0).coerceAtLeast(0)
-        return head.decodeToString(0, size).lineSequence().take(LABEL_LINES)
-            .firstNotNullOfOrNull { LABEL_LINE.find(it)?.groupValues?.get(1) }
-            ?.take(LABEL_MAX) ?: gameLabel(guest)
-    }
+/** A tab running the launcher menu's [action] (`menu --act`), so both views run the same code. */
+fun menuActTab(action: String): HomeAction.Tab = HomeAction.Tab(runThenShell("keybar menu menu --act " + shellQuote(action)))
+
+// By the mode bits: on Android, canExecute() asks the kernel, which
+// refuses every file in an app's data.
+internal fun isExecutable(file: File) = runCatching {
+    Files.getPosixFilePermissions(file.toPath()).any { it in EXECUTE_BITS }
+}.getOrDefault(false)
+
+/** A terminal app's label as the menu gives it: its `# label:` line, else its file's name. */
+internal fun terminalAppLabel(guest: String, file: File): String {
+    val head = ByteArray(LABEL_BYTES)
+    val size = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(0).coerceAtLeast(0)
+    return head.decodeToString(0, size).lineSequence().take(LABEL_LINES)
+        .firstNotNullOfOrNull { LABEL_LINE.find(it)?.groupValues?.get(1) }
+        ?.take(LABEL_MAX) ?: gameLabel(guest)
 }
 
 /** `~/.gitconfig` has `email` in its `[user]` section. */

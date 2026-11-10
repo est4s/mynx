@@ -1,8 +1,8 @@
 package io.github.est4s.terminal.core
 
 private const val MAX_TOOL_TEXT = 16_000
-private const val ASK_TOOL = "AskUserQuestion"
-private const val PLAN_TOOL = "ExitPlanMode"
+internal const val ASK_TOOL = "AskUserQuestion"
+internal const val PLAN_TOOL = "ExitPlanMode"
 private const val USER_DENIED = "The user denied this."
 private const val USER_DECLINED = "The user chose not to answer."
 private const val PLAN_REFUSED = "The user refused this plan."
@@ -53,6 +53,9 @@ class ClaudeSession(
     private var initializeId: String? = null
     private val interrupts = HashSet<String>()
     private var session: AgentEvent.SessionStarted? = null
+    // The mode last told, and the mode and model changes asked, by request id, till answered.
+    private var mode: String? = null
+    private val changes = HashMap<String, AgentEvent>()
 
     private val messages = HashMap<String, MessageBlocks>()
     private var currentMessage: String? = null
@@ -176,14 +179,25 @@ class ClaudeSession(
         true
     }
 
-    override fun setMode(mode: String) = control(linkedMapOf("subtype" to "set_permission_mode", "mode" to mode))
+    override fun setMode(mode: String) =
+        control(linkedMapOf("subtype" to "set_permission_mode", "mode" to mode), AgentEvent.ModeChanged(mode))
 
-    override fun setModel(model: String) = control(linkedMapOf("subtype" to "set_model", "model" to model))
+    override fun setModel(model: String) =
+        control(linkedMapOf("subtype" to "set_model", "model" to model), AgentEvent.ModelChanged(model))
 
-    private fun control(request: Map<String, Any?>): Boolean = synchronized(lock) {
+    // [change] is told once the agent accepts.
+    private fun control(request: Map<String, Any?>, change: AgentEvent): Boolean = synchronized(lock) {
         if (!isOpen) return false
-        sendRequest(nextRequest(), request)
+        val id = nextRequest()
+        changes[id] = change
+        sendRequest(id, request)
         true
+    }
+
+    private fun modeIs(value: String) {
+        if (value == mode) return
+        mode = value
+        listener(AgentEvent.ModeChanged(value))
     }
 
     override fun stop() {
@@ -232,7 +246,11 @@ class ClaudeSession(
         synchronized(lock) {
             if (exited) return
             when (message["type"]) {
-                "system" -> if (message["subtype"] == "init") onInit(message)
+                "system" -> when (message["subtype"]) {
+                    "init" -> onInit(message)
+                    // The SDK's status message may carry the mode (not seen in a run yet).
+                    "status" -> (message["permissionMode"] as? String)?.let(::modeIs)
+                }
                 "stream_event" -> onStream(message)
                 "assistant" -> onAssistant(message)
                 "user" -> onToolResults(message)
@@ -251,6 +269,7 @@ class ClaudeSession(
             session = info
             listener(info)
         }
+        info.mode?.let { mode = it }
         awaitingInit = false
         if (!running) {
             running = true
@@ -385,14 +404,8 @@ class ClaudeSession(
             val call = calls.remove(id) ?: continue
             ended.add(id)
             val status = if (block["is_error"] == true) ToolStatus.FAILED else ToolStatus.COMPLETED
-            listener(AgentEvent.ToolCallUpdate(call.copy(status = status, content = cut(resultText(block["content"])))))
+            listener(AgentEvent.ToolCallUpdate(call.copy(status = status, content = cutToolText(resultText(block["content"])))))
         }
-    }
-
-    private fun resultText(content: Any?): String = when (content) {
-        is String -> content
-        is List<*> -> content.mapNotNull { (it as? Map<*, *>)?.get("text") as? String }.joinToString("\n")
-        else -> ""
     }
 
     private fun onResult(message: Map<*, *>) {
@@ -537,8 +550,14 @@ class ClaudeSession(
         val response = message["response"] as? Map<*, *> ?: return
         val id = response["request_id"] as? String
         val interrupted = interrupts.remove(id)
+        val change = changes.remove(id)
         if (response["subtype"] == "error") {
             (response["error"] as? String)?.let { listener(AgentEvent.Notice(it)) }
+            when (change) {
+                is AgentEvent.ModeChanged -> listener(AgentEvent.ModeRefused(change.mode))
+                is AgentEvent.ModelChanged -> listener(AgentEvent.ModelRefused(change.model))
+                else -> Unit
+            }
             return
         }
         if (id == initializeId) {
@@ -547,6 +566,16 @@ class ClaudeSession(
                 AgentModel(value, model["displayName"] as? String ?: value, model["description"] as? String)
             }
             if (models.isNotEmpty()) listener(AgentEvent.AvailableModels(models))
+            ((response["response"] as? Map<*, *>)?.get("current_permission_mode") as? String)?.let(::modeIs)
+        }
+        when (change) {
+            // Told even when it was the mode already: the change asked for is confirmed.
+            is AgentEvent.ModeChanged -> {
+                mode = change.mode
+                listener(change)
+            }
+            is AgentEvent.ModelChanged -> listener(change)
+            else -> Unit
         }
         // No turn began for a prompt interrupted first, so no `result` will come.
         if (interrupted && running && awaitingInit) endTurn(AgentEvent.TurnEnded(StopReason.CANCELLED))
@@ -567,13 +596,20 @@ class ClaudeSession(
     }
 }
 
-private fun cut(text: String) = if (text.length <= MAX_TOOL_TEXT) text else text.take(MAX_TOOL_TEXT) + "\n…"
+/** A `tool_result`'s text: a string, or its text blocks. */
+internal fun resultText(content: Any?): String = when (content) {
+    is String -> content
+    is List<*> -> content.mapNotNull { (it as? Map<*, *>)?.get("text") as? String }.joinToString("\n")
+    else -> ""
+}
 
-private class ToolAbout(val title: String, val detail: String?, val kind: ToolKind)
+internal fun cutToolText(text: String) = if (text.length <= MAX_TOOL_TEXT) text else text.take(MAX_TOOL_TEXT) + "\n…"
 
-private fun describeTool(name: String, input: Map<*, *>?): ToolAbout {
+internal class ToolAbout(val title: String, val detail: String?, val kind: ToolKind)
+
+internal fun describeTool(name: String, input: Map<*, *>?): ToolAbout {
     fun text(key: String) = (input?.get(key) as? String)?.takeIf { it.isNotEmpty() }
-    fun about(title: String?, detail: String? = null, kind: ToolKind) = ToolAbout(title ?: name, detail?.let(::cut), kind)
+    fun about(title: String?, detail: String? = null, kind: ToolKind) = ToolAbout(title ?: name, detail?.let(::cutToolText), kind)
     return when (name) {
         "Bash" -> about(text("command"), text("description"), ToolKind.EXECUTE)
         "Read" -> about(text("file_path"), null, ToolKind.READ)

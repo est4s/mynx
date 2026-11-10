@@ -128,6 +128,8 @@ class MainActivity : Activity(), FrontActivity {
     // The launcher shortcut "Settings" (the editors) or the update notification
     // (`mynx update`): a new tab running it, once the service is connected.
     private var tabToOpen: List<String>? = null
+    // The chat's notification was tapped: Chat, once the service is connected.
+    private var chatToShow = false
     private var home: HomeView? = null
     private var chat: ChatView? = null
     // After Chat's Sign in or Install opens a tab: Back returns to the chat, to check again.
@@ -146,8 +148,9 @@ class MainActivity : Activity(), FrontActivity {
             showTerminal(s.currentSession())
             s.chat.listener = chatListener
             if (touchView && shellToShow == null && tabToOpen == null) {
-                if (s.chatOnScreen) showChat() else showHome()
+                if (s.chatOnScreen || chatToShow) showChat() else showHome()
             }
+            chatToShow = false
             showShellFromNotification()
             openCommandTab()
             s.toolsError?.let { showToolsError(it) }
@@ -199,6 +202,8 @@ class MainActivity : Activity(), FrontActivity {
         applySystemInsets(root)
 
         shellToShow = shellOf(intent)
+        // Once: a recreated activity (rotation) keeps the intent that opened it.
+        chatToShow = savedInstanceState == null && intent?.action == ACTION_CHAT
         // Not when Android recreates the activity: that tab is open already.
         tabToOpen = if (savedInstanceState == null) commandOf(intent) else null
         if (installer.isInstalled) connectService() else installDebian()
@@ -212,6 +217,9 @@ class MainActivity : Activity(), FrontActivity {
         showShellFromNotification()
         tabToOpen = commandOf(intent)
         openCommandTab()
+        if (intent.action == ACTION_CHAT) {
+            if (service == null) chatToShow = true else if (touchView) showChat()
+        }
         // On screen already, so onStart won't look for it.
         if (intent.action == ACTION_USB_ALLOWED) service?.refreshUsb()
     }
@@ -312,6 +320,7 @@ class MainActivity : Activity(), FrontActivity {
     // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left.
     private fun goBack() {
         when {
+            chatShown && chat?.back() == true -> Unit
             chatShown -> {
                 hideChat()
                 showHome()
@@ -364,6 +373,12 @@ class MainActivity : Activity(), FrontActivity {
     private fun chatToTerminal() {
         hideChat()
         terminalView.requestFocus()
+    }
+
+    /** The chat was handed to a tab, which the service has opened: show it; Back comes back to the chat. */
+    fun chatHandedOff() {
+        chatAfterTab = true
+        chatToTerminal()
     }
 
     // Signing in or installing happens in a tab; Back comes back here and checks again.
@@ -480,7 +495,13 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        chat = ChatView(this, { service?.chat }, { goBack() }, ::chatToTerminal, ::openTabFromChat).also {
+        chat = ChatView(
+            this, { service?.chat }, { goBack() }, ::chatToTerminal, ::openTabFromChat,
+            openApp = { name -> startActivity(WebAppActivity.shortcutIntent(this, name)) },
+            shareFile = { path -> toastError(service?.shareDebianFile(path)) },
+            // As `mynx install-apk`: only debug builds install other apps.
+            installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
+        ).also {
             it.colors = strip
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))

@@ -252,6 +252,13 @@ class SettingsTest {
     }
 
     @Test
+    fun `auto also holds the wakelock while a chat turn runs, off never`() {
+        assertTrue(Wakelock.AUTO.held(servicesRunning = false, chatRunning = true))
+        assertFalse(Wakelock.AUTO.held(servicesRunning = false, chatRunning = false))
+        assertFalse(Wakelock.OFF.held(servicesRunning = false, chatRunning = true))
+    }
+
+    @Test
     fun `update checks are on by default and can be turned off`() {
         assertTrue(Settings().updateCheck)
         assertEquals("on", SETTINGS.single { it.key == "update-check" }.default)
