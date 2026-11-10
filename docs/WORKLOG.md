@@ -201,10 +201,15 @@ subscription login (the Agent SDK docs forbid third-party products
 offering claude.ai login or rate limits). Raise it again before Chat
 ships.
 
-**Next:** the native Services list (entry 172) waits on the phone;
-then a short spike
-starting the agent from the app, `AgentSession` and the Claude backend,
-the Chat screen, Allow/Deny, hand-off, cards, other agents.
+**Built, not yet on the phone (entries 173-174, branch `touch-chat`):**
+Chat for Claude Code: Home → AI agents → Claude Code opens it. One chat
+at a time, kept in the service; Allow/Deny, questions and plans, Stop,
+New, Restart (`--resume`), sign-in and install cards that open a tab.
+The native Services list (entry 172) waits on the phone too.
+
+**Next:** the phone test (below), then what's left: hand-off to a tab,
+artifact cards, Markdown, a resume list, other agents (Codex's
+`app-server`, Gemini's ACP).
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -242,6 +247,23 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (174): Chat screen for Claude Code (not yet on the phone)
+
+The Android side on 173's core. `AgentProcess` (a proot over pipes),
+`ChatController` in core (auth check, one chat, `--session-id` then
+`--resume`, rows on the main thread), `ChatView` over the terminal as
+Home is, entry through a new `HomeAction.Chat`. Stopping is
+`stopAgentProot`: TERM the agent (the tracee whose parent is proot),
+5 s later QUIT through proot, then the force. Sign-in/Install open a
+tab and Back returns to the chat to check again. It runs in a tab's
+environment through a login shell that execs the agent. `app/`
+compiles only in CI; it hasn't been compiled yet. No wakelock for a
+running chat. A review's 12 fixes followed, still unbuilt: permission
+cards show the real input (`review`, capped, "Show all"), selection
+gives the focus back to the box, the input keeps its height
+(`chatFit`), picks and expansion survive redraws, a running chat keeps
+the app up, one binary lookup, only an init-backed turn is resumable.
 
 ### 2026-11-10 (173): Chat's protocol layer in core (not yet on the phone)
 

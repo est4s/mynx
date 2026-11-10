@@ -13,7 +13,17 @@ private const val LABEL_LINES = 5
 private const val LABEL_BYTES = 4096
 private val GAME_DIRS = listOf("/opt/neon-games", "games")
 private val AGENTS = listOf("claude" to "Claude Code", "codex" to "Codex", "gemini" to "Gemini CLI")
+// The one agent touch mode opens as a chat; the others run in a tab.
+private const val CHAT_AGENT = "claude"
 private val AGENT_DIRS = listOf(".local/bin", "/usr/local/bin", "/usr/bin", "/bin")
+/**
+ * Where an agent's [command] is in Debian (a Debian path), or null when it
+ * isn't installed: the same lookup for the menus and for running it.
+ */
+fun agentBinary(apps: WebApps, command: String): String? =
+    AGENT_DIRS.map { dir -> (if (dir.startsWith("/")) dir else "${apps.guestHome}/$dir") + "/$command" }
+        .firstOrNull { apps.resolve(it)?.let(apps::host)?.isFile == true }
+
 private val LABEL_LINE = Regex("""^#\s*label:\s*(.*\S)""")
 private val BUILT_IN_MENU = listOf(
     "Shell" to "shell", "AI agents" to "agents", "Services" to "services", "Apps" to "apps",
@@ -29,6 +39,8 @@ sealed interface HomeAction {
     data class Menu(val name: String) : HomeAction
     /** A new tab running [command]. */
     data class Tab(val command: List<String>) : HomeAction
+    /** The Chat screen, with the agent [agent]. */
+    data class Chat(val agent: String) : HomeAction
     /** The web app [name]'s screen. */
     data class App(val name: String) : HomeAction
     /** A new tab with a shell. */
@@ -74,7 +86,11 @@ class HomeMenus(
         "terminal-apps" -> terminalApps()
         "games" -> games()
         "agents" -> AGENTS.map { (name, title) ->
-            HomeItem(if (installed(name)) title else "$title (install)", act("agent:$name"))
+            when {
+                !installed(name) -> HomeItem("$title (install)", act("agent:$name"))
+                name == CHAT_AGENT -> HomeItem(title, HomeAction.Chat(name))
+                else -> HomeItem(title, act("agent:$name"))
+            }
         }
         "settings" -> listOf(
             HomeItem("App settings", act("settings")),
@@ -191,10 +207,7 @@ class HomeMenus(
         return found.ifEmpty { listOf(HomeItem("(no games yet)", HomeAction.None)) }
     }
 
-    private fun installed(command: String) = AGENT_DIRS.any { dir ->
-        val folder = if (dir.startsWith("/")) dir else "$guestHome/$dir"
-        apps.resolve("$folder/$command")?.let(apps::host)?.isFile == true
-    }
+    private fun installed(command: String) = agentBinary(apps, command) != null
 
     private fun gitHubReady(): Boolean {
         val hosts = apps.host("$guestHome/.config/gh/hosts.yml") ?: return false

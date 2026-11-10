@@ -100,8 +100,8 @@ class ClaudeSession(
     }
 
     override fun sendPrompt(text: String): Boolean = synchronized(lock) {
-        if (!isOpen || text.isBlank()) return false
-        send(linkedMapOf("type" to "user", "message" to linkedMapOf("role" to "user", "content" to text)))
+        if (!isOpen || text.isBlank() || !transport.accepting) return false
+        if (!send(linkedMapOf("type" to "user", "message" to linkedMapOf("role" to "user", "content" to text)))) return false
         prompts++
         listener(AgentEvent.UserMessage("user-$prompts", text))
         if (!running) {
@@ -210,13 +210,15 @@ class ClaudeSession(
         )
     }
 
-    private fun send(value: Map<String, Any?>) {
+    private fun send(value: Map<String, Any?>): Boolean {
         // A line reader that also splits on these would cut the JSON in two.
         val line = toJson(value).replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
-        try {
+        return try {
             transport.writeLine(line)
+            true
         } catch (e: Exception) {
             listener(AgentEvent.Notice("Couldn't reach the agent: ${e.message}"))
+            false
         }
     }
 
@@ -491,7 +493,7 @@ class ClaudeSession(
         pending[id] = Pending.Permission(input, toolId, agentId, options, always)
         seeTool(toolId, tool, input, null, ToolStatus.PENDING)
         val call = calls[toolId] ?: ToolCallInfo(toolId, tool, tool, ToolKind.OTHER, ToolStatus.PENDING)
-        listener(AgentEvent.PermissionRequest(id, call, options))
+        listener(AgentEvent.PermissionRequest(id, call, options, permissionReview(tool, input)))
     }
 
     private fun alwaysGrants(suggestions: Any?): List<Map<String, Any?>> =
@@ -577,6 +579,51 @@ private fun describeTool(name: String, input: Map<*, *>?): ToolAbout {
         "Agent", "Task" -> about(text("description"), text("prompt"), ToolKind.THINK)
         "TodoWrite" -> about(null, null, ToolKind.THINK)
         else -> about(null, null, ToolKind.OTHER)
+    }
+}
+
+/**
+ * What a permission card shows: the input as it will run, the same map
+ * sent back as `updatedInput`. Shortened only by the card, and never
+ * replaced by the model's `description`. Tools without a form of their
+ * own, and input that isn't what its tool usually gets, show all of it.
+ */
+private fun permissionReview(name: String, input: Map<*, *>): String {
+    val whole = prettyJson(input)
+    fun text(key: String) = input[key] as? String
+    fun others(vararg known: String): String {
+        val rest = input.filterKeys { it.toString() !in known }
+        return if (rest.isEmpty()) "" else "\n\n" + prettyJson(rest)
+    }
+    return when (name) {
+        "Bash" -> {
+            val command = text("command") ?: return whole
+            command + others("command", "description")
+        }
+        "Write" -> {
+            val path = text("file_path") ?: return whole
+            val content = text("content") ?: return whole
+            "$path\n\n$content" + others("file_path", "content")
+        }
+        "Edit" -> {
+            val path = text("file_path") ?: return whole
+            val old = text("old_string") ?: return whole
+            val new = text("new_string") ?: return whole
+            val label = if (input["replace_all"] == true) "old (every occurrence)" else "old"
+            "$path\n\n$label:\n$old\n\nnew:\n$new" + others("file_path", "old_string", "new_string", "replace_all")
+        }
+        else -> whole
+    }
+}
+
+private fun prettyJson(value: Any?, indent: String = ""): String {
+    val inner = "$indent  "
+    return when {
+        value is Map<*, *> && value.isNotEmpty() ->
+            value.entries.joinToString(",\n", "{\n", "\n$indent}") { (k, v) -> inner + toJson(k.toString()) + ": " + prettyJson(v, inner) }
+        value is List<*> && value.isNotEmpty() ->
+            value.joinToString(",\n", "[\n", "\n$indent]") { inner + prettyJson(it, inner) }
+        else -> toJson(value)
     }
 }
 

@@ -250,7 +250,9 @@ One `key = value` per line; `mynx settings` describes each.
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
-  back to Home.
+  back to Home. In `touch`, Home's AI agents opens an installed Claude
+  Code as a chat (messages, tool cards, Allow/Deny); the other agents
+  run in a tab.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a

@@ -270,6 +270,10 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
+@test "the guide says Claude Code opens as a chat in touch view" {
+    grep -qF -- "as a chat" "$GUIDE"
+}
+
 @test "the guide says a page can take the back key first: window.androidBack" {
     grep -qF -- "window.androidBack" "$GUIDE"
     grep -qF -- "window.androidBack" "$BATS_TEST_DIRNAME/../../app/src/main/java/io/github/est4s/terminal/WebAppActivity.kt"

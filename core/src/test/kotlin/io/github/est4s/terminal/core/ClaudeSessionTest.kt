@@ -25,6 +25,8 @@ internal class FakeTransport : AgentTransport {
         this.listener = listener
     }
 
+    override var accepting = true
+
     override fun writeLine(line: String) {
         if (inside.incrementAndGet() != 1) overlapped = true
         written.add(line)
@@ -799,5 +801,80 @@ class ClaudeSessionTest {
         own.start()
         own.sendPrompt("hi")
         assertTrue(seen.any { it is AgentEvent.Notice && it.text.contains("Broken pipe") })
+    }
+
+    @Test
+    fun `a prompt to a dead process is refused, not swallowed`() {
+        started()
+        transport.accepting = false
+        assertFalse(session.sendPrompt("hello"))
+        assertTrue(transport.written.isEmpty())
+        assertTrue(all<AgentEvent.UserMessage>().isEmpty())
+    }
+
+    private fun reviewOf(tool: String, input: String): String {
+        val n = all<AgentEvent.PermissionRequest>().size
+        transport.say(canUse("r$n", tool, "t$n", input))
+        return all<AgentEvent.PermissionRequest>().last().review
+    }
+
+    @Test
+    fun `a permission's review is Bash's command, not the model's description`() {
+        started()
+        assertEquals("rm -rf build", reviewOf("Bash", """{"command":"rm -rf build","description":"Tidy up"}"""))
+    }
+
+    @Test
+    fun `a Bash review keeps any other input it was given`() {
+        started()
+        val review = reviewOf("Bash", """{"command":"ls","description":"List","run_in_background":true}""")
+        assertTrue(review.startsWith("ls\n\n"), review)
+        assertTrue(""""run_in_background": true""" in review, review)
+        assertFalse("List" in review, review)
+    }
+
+    @Test
+    fun `a Write review has the path and the whole content`() {
+        started()
+        val content = "x".repeat(20_000)
+        assertEquals("/a/b.txt\n\n$content", reviewOf("Write", """{"file_path":"/a/b.txt","content":"$content"}"""))
+    }
+
+    @Test
+    fun `an Edit review has the path and both texts`() {
+        started()
+        assertEquals("/a.kt\n\nold:\nfoo\n\nnew:\nbar", reviewOf("Edit", """{"file_path":"/a.kt","old_string":"foo","new_string":"bar","replace_all":false}"""))
+        assertEquals("/a.kt\n\nold (every occurrence):\nfoo\n\nnew:\nbar", reviewOf("Edit", """{"file_path":"/a.kt","old_string":"foo","new_string":"bar","replace_all":true}"""))
+    }
+
+    @Test
+    fun `other tools' reviews are their input, pretty-printed`() {
+        started()
+        val expected = """
+            {
+              "a": 1,
+              "b": {
+                "c": [
+                  true,
+                  "d"
+                ],
+                "e": []
+              }
+            }
+        """.trimIndent()
+        assertEquals(expected, reviewOf("mcp__server__do", """{"a":1,"b":{"c":[true,"d"],"e":[]}}"""))
+    }
+
+    @Test
+    fun `an Agent review shows the prompt, not only the model's description`() {
+        started()
+        val review = reviewOf("Agent", """{"description":"Small helper","prompt":"delete everything"}""")
+        assertTrue("delete everything" in review, review)
+    }
+
+    @Test
+    fun `a Bash review without a command falls back to the whole input`() {
+        started()
+        assertEquals("{\n  \"cmd\": \"ls\"\n}", reviewOf("Bash", """{"cmd":"ls"}"""))
     }
 }

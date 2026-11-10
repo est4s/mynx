@@ -13,6 +13,8 @@ sealed interface ChatItem {
         val call: ToolCallInfo,
         val options: List<PermissionOption>,
         val outcome: RequestOutcome? = null,
+        /** What's being approved: [AgentEvent.PermissionRequest.review]. */
+        val review: String = "",
     ) : ChatItem
     data class Question(
         override val id: String,
@@ -60,7 +62,7 @@ fun Conversation.reduce(event: AgentEvent): Conversation = when (event) {
     is AgentEvent.ToolCall -> upsert(ChatItem.Tool(event.call.id, event.call))
     is AgentEvent.ToolCallUpdate -> upsert(ChatItem.Tool(event.call.id, event.call))
     is AgentEvent.PermissionRequest ->
-        copy(items = items + ChatItem.Permission(requestItem(event.requestId), event.requestId, event.call, event.options))
+        copy(items = items + ChatItem.Permission(requestItem(event.requestId), event.requestId, event.call, event.options, review = event.review))
     is AgentEvent.QuestionRequest ->
         copy(items = items + ChatItem.Question(requestItem(event.requestId), event.requestId, event.questions))
     is AgentEvent.PlanRequest ->
