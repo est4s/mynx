@@ -7,12 +7,23 @@ import java.nio.file.attribute.PosixFilePermission
 /** Which menu [HomeMenus.items] starts at. */
 const val HOME_MAIN = "main"
 
+private const val SERVICE_MENU = "service:"
 private const val LABEL_MAX = 20
 private const val LABEL_LINES = 5
 private const val LABEL_BYTES = 4096
 private val GAME_DIRS = listOf("/opt/neon-games", "games")
 private val AGENTS = listOf("claude" to "Claude Code", "codex" to "Codex", "gemini" to "Gemini CLI")
+// The one agent touch mode opens as a chat; the others run in a tab.
+private const val CHAT_AGENT = "claude"
 private val AGENT_DIRS = listOf(".local/bin", "/usr/local/bin", "/usr/bin", "/bin")
+/**
+ * Where an agent's [command] is in Debian (a Debian path), or null when it
+ * isn't installed: the same lookup for the menus and for running it.
+ */
+fun agentBinary(apps: WebApps, command: String): String? =
+    AGENT_DIRS.map { dir -> (if (dir.startsWith("/")) dir else "${apps.guestHome}/$dir") + "/$command" }
+        .firstOrNull { apps.resolve(it)?.let(apps::host)?.isFile == true }
+
 private val LABEL_LINE = Regex("""^#\s*label:\s*(.*\S)""")
 private val BUILT_IN_MENU = listOf(
     "Shell" to "shell", "AI agents" to "agents", "Services" to "services", "Apps" to "apps",
@@ -28,13 +39,25 @@ sealed interface HomeAction {
     data class Menu(val name: String) : HomeAction
     /** A new tab running [command]. */
     data class Tab(val command: List<String>) : HomeAction
+    /** The Chat screen, with the agent [agent]. */
+    data class Chat(val agent: String) : HomeAction
     /** The web app [name]'s screen. */
     data class App(val name: String) : HomeAction
     /** A new tab with a shell. */
     data object Shell : HomeAction
     /** A line that says something, like "(no apps yet)". */
     data object None : HomeAction
+    /** [op] on the background service [name]: [ServiceManager.act]. */
+    data class Service(val name: String, val op: ServiceOp) : HomeAction
 }
+
+/**
+ * A background service as Home lists it, from [ServiceManager.homeServices].
+ * [state] is `mynx service list`'s word (so one waiting to restart is
+ * "stopped", as in the terminal's list); [saved] is false for an unsaved
+ * one, whose [autostart] means nothing.
+ */
+data class HomeService(val name: String, val state: String, val saved: Boolean, val autostart: Boolean)
 
 data class HomeItem(val label: String, val action: HomeAction)
 
@@ -43,10 +66,16 @@ data class HomeItem(val label: String, val action: HomeAction)
  * `menu_items`), from the same files, and what each item does. What runs a
  * program goes through `menu --act`, so both views run the same thing.
  * The main list leaves out Exit: closing the menu's tab means nothing here.
- * [servicesActive] is how many background services run. Reads files only:
- * any thread may use it.
+ * [servicesActive] is how many background services run and [services] is
+ * the list as it was when this was made, so a change needs a new one
+ * (the snapshot is what lets it leave the main thread, unlike [Services]).
+ * Reads files only: any thread may use it.
  */
-class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) {
+class HomeMenus(
+    private val apps: WebApps,
+    private val servicesActive: Int = 0,
+    private val services: List<HomeService> = emptyList(),
+) {
     private val guestHome get() = apps.guestHome
 
     /** The list called [menu] ([HOME_MAIN], or a [HomeAction.Menu]'s name); empty if there's none. */
@@ -57,7 +86,11 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
         "terminal-apps" -> terminalApps()
         "games" -> games()
         "agents" -> AGENTS.map { (name, title) ->
-            HomeItem(if (installed(name)) title else "$title (install)", act("agent:$name"))
+            when {
+                !installed(name) -> HomeItem("$title (install)", act("agent:$name"))
+                name == CHAT_AGENT -> HomeItem(title, HomeAction.Chat(name))
+                else -> HomeItem(title, act("agent:$name"))
+            }
         }
         "settings" -> listOf(
             HomeItem("App settings", act("settings")),
@@ -72,10 +105,33 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
             HomeItem("Report a bug", act("report")),
             HomeItem("About", act("about")),
         )
-        else -> emptyList()
+        "services" -> serviceRows()
+        else -> if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
     }
 
-    private fun act(action: String) = HomeAction.Tab(runThenShell("keybar menu menu --act " + shellQuote(action)))
+    private fun act(action: String) = menuActTab(action)
+
+    private fun serviceRows(): List<HomeItem> =
+        services.map { HomeItem("${it.name}${if (it.saved) "" else "*"} ${it.state}", HomeAction.Menu(SERVICE_MENU + it.name)) }
+            .ifEmpty { listOf(HomeItem("(no services yet)", act("svchelp"))) }
+
+    private fun serviceItems(name: String): List<HomeItem> {
+        val service = services.find { it.name == name }
+            ?: return listOf(HomeItem("(no service named $name)", HomeAction.None))
+        fun item(label: String, op: ServiceOp) = HomeItem(label, HomeAction.Service(name, op))
+        val running = service.state == ServiceState.RUNNING.word || service.state == ServiceState.STOPPING.word
+        return listOfNotNull(
+            item("Open", ServiceOp.OPEN),
+            if (running) item("Stop", ServiceOp.STOP) else item("Start", ServiceOp.START),
+            item("Restart", ServiceOp.RESTART),
+            HomeItem("Log", act("svclog:$name")),
+            when {
+                !service.saved -> null
+                service.autostart -> item("Autostart: on", ServiceOp.AUTOSTART_OFF)
+                else -> item("Autostart: off", ServiceOp.AUTOSTART_ON)
+            },
+        )
+    }
 
     private fun mainEntries(): List<Pair<String, String>> {
         for (guest in listOf("$guestHome/.config/mynx/menu.conf", "$TOOLS_MOUNT/menu.conf")) {
@@ -102,7 +158,7 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
         "exit" -> null
         "services" -> HomeItem(
             if (servicesActive > 0) "$label ● $servicesActive" else label,
-            HomeAction.Tab(SERVICES_TAB_COMMAND),
+            HomeAction.Menu("services"),
         )
         "apps", "terminal-apps", "games", "settings", "agents", "system", "help" -> HomeItem(label, HomeAction.Menu(action))
         "app-settings" -> HomeItem(label, act("settings"))
@@ -126,20 +182,14 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
         return names.mapNotNull { name ->
             val guest = "$folder/$name"
             val file = apps.resolve(guest)?.let(apps::host) ?: return@mapNotNull null
-            if (file.isFile && executable(file)) guest to file else null
+            if (file.isFile && isExecutable(file)) guest to file else null
         }
     }
-
-    // By the mode bits: on Android, canExecute() asks the kernel, which
-    // refuses every file in an app's data.
-    private fun executable(file: File) = runCatching {
-        Files.getPosixFilePermissions(file.toPath()).any { it in EXECUTE_BITS }
-    }.getOrDefault(false)
 
     private fun terminalApps(): List<HomeItem> {
         val found = listOf("$TOOLS_MOUNT/terminal-apps", "$guestHome/terminal-apps", "$guestHome/apps")
             .flatMap(::programs)
-            .map { (guest, file) -> HomeItem(appLabel(guest, file), act("app:$guest")) }
+            .map { (guest, file) -> HomeItem(terminalAppLabel(guest, file), act("app:$guest")) }
             .sortedWith(compareBy({ it.label.uppercase() }, { it.label }))
         return found.ifEmpty { listOf(HomeItem("(no terminal apps yet)", HomeAction.None)) }
     }
@@ -151,24 +201,31 @@ class HomeMenus(private val apps: WebApps, private val servicesActive: Int = 0) 
         return found.ifEmpty { listOf(HomeItem("(no games yet)", HomeAction.None)) }
     }
 
-    private fun installed(command: String) = AGENT_DIRS.any { dir ->
-        val folder = if (dir.startsWith("/")) dir else "$guestHome/$dir"
-        apps.resolve("$folder/$command")?.let(apps::host)?.isFile == true
-    }
+    private fun installed(command: String) = agentBinary(apps, command) != null
 
     private fun gitHubReady(): Boolean {
         val hosts = apps.host("$guestHome/.config/gh/hosts.yml") ?: return false
         val config = apps.host("$guestHome/.gitconfig")?.takeIf { it.isFile } ?: return false
         return hosts.length() > 0 && gitEmailSet(runCatching { config.readText() }.getOrDefault(""))
     }
+}
 
-    private fun appLabel(guest: String, file: File): String {
-        val head = ByteArray(LABEL_BYTES)
-        val size = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(0).coerceAtLeast(0)
-        return head.decodeToString(0, size).lineSequence().take(LABEL_LINES)
-            .firstNotNullOfOrNull { LABEL_LINE.find(it)?.groupValues?.get(1) }
-            ?.take(LABEL_MAX) ?: gameLabel(guest)
-    }
+/** A tab running the launcher menu's [action] (`menu --act`), so both views run the same code. */
+fun menuActTab(action: String): HomeAction.Tab = HomeAction.Tab(runThenShell("keybar menu menu --act " + shellQuote(action)))
+
+// By the mode bits: on Android, canExecute() asks the kernel, which
+// refuses every file in an app's data.
+internal fun isExecutable(file: File) = runCatching {
+    Files.getPosixFilePermissions(file.toPath()).any { it in EXECUTE_BITS }
+}.getOrDefault(false)
+
+/** A terminal app's label as the menu gives it: its `# label:` line, else its file's name. */
+internal fun terminalAppLabel(guest: String, file: File): String {
+    val head = ByteArray(LABEL_BYTES)
+    val size = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(0).coerceAtLeast(0)
+    return head.decodeToString(0, size).lineSequence().take(LABEL_LINES)
+        .firstNotNullOfOrNull { LABEL_LINE.find(it)?.groupValues?.get(1) }
+        ?.take(LABEL_MAX) ?: gameLabel(guest)
 }
 
 /** `~/.gitconfig` has `email` in its `[user]` section. */

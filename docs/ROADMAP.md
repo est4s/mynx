@@ -58,12 +58,16 @@ and either view switches to the other.
 - **Artifact cards:** when an agent makes or changes an app in
   `~/apps` or `~/terminal-apps` (seen in its file writes, or declared with a `mynx`
   command), the chat shows a card: Run (a terminal app in a tab),
-  Open (a web app, below), Share, or Install (an APK).
+  Open (a web app, below), Share, or Install (an APK). **Built**
+  for Claude Code's chat (2026-11-10), passed on the phone; Install
+  only in debug builds (release builds offer Share).
 - **Open in terminal:** hands the conversation to a tab that resumes
   it (`claude --resume ID` and the others' equivalents); the chat lets
   go of it first, so two programs never drive one session.
 - **Home built** (2026-11-09): `view = touch`, passed on the phone.
-  Services is still the terminal's list.
+  The native Services list and Chat for Claude Code passed on the
+  phone (2026-11-10). Next: several chats at once, the chat history
+  as the agent's home.
 - Sign-in is the terminal's: Chat opens a tab when it's needed
   (maintainer's decision, 2026-11-09).
 - The agent widget could open straight into a chat.
@@ -72,8 +76,9 @@ and either view switches to the other.
   Claude's stream-json run under proot; do sign-in and resume work?),
   then Home, then Chat for Claude Code, then the cards, the hand-off
   and the other agents. The protocol and transcript logic go in
-  `core`, test-first. Screenshots in CI (Robolectric or an emulator)
-  would save phone rounds, so they may come first.
+  `core`, test-first. Screenshots in CI (Robolectric) save phone
+  rounds: CI uploads PNGs of Home and Chat (`AGENTS.md`, "Running
+  tests").
 
 ### Web apps
 **Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what

@@ -66,6 +66,9 @@ interface ServiceHost<S> {
 
 private class ServiceRefused(message: String) : Exception(message)
 
+/** What [ServiceManager.act] can do to a service. */
+enum class ServiceOp { OPEN, START, STOP, RESTART, AUTOSTART_ON, AUTOSTART_OFF }
+
 /**
  * The background services: `services.conf` in [home] (root's home), the
  * wrapper's files in [dir] (the host path of [SERVICES_DIR]), the
@@ -229,6 +232,43 @@ class ServiceManager<S>(
 
     /** Makes the tab of shell [shell] the unsaved service [name] (the tab's "Run as service"); null, or why not. */
     fun adopt(name: String, shell: Int): String? = refusal { adopt(listOf(name, shell.toString())) }
+
+    /**
+     * The services for [HomeMenus], read from the file as it is now, as
+     * the terminal's list is: if that changed them, [ServiceHost.changed]
+     * comes first (once; asking again inside it finds nothing new). Main
+     * thread only, like the rest of this class.
+     */
+    fun homeServices(): List<HomeService> {
+        runCatching { reload() }
+        return services.all.map { HomeService(it.name, it.state.word, it.saved, it.def.autostart) }
+    }
+
+    /**
+     * Does [op] on [name], what Home's [HomeAction.Service] asks for; null,
+     * or the text saying why not. Never throws. Stop and Restart return
+     * once asked; the end comes through [ServiceHost.changed]. An
+     * autostart change writes `services.conf`, so [recordChange] gets its
+     * undo steps: pass [MynxRequests.recordChange].
+     */
+    fun act(name: String, op: ServiceOp, recordChange: (String) -> Unit): String? = try {
+        when (op) {
+            ServiceOp.OPEN -> refusal { open(named(listOf(name), "open")) }
+            ServiceOp.START -> start(name)
+            ServiceOp.STOP -> stop(name)
+            ServiceOp.RESTART -> restart(name)
+            ServiceOp.AUTOSTART_ON -> autostart(name, "yes", recordChange)
+            ServiceOp.AUTOSTART_OFF -> autostart(name, "no", recordChange)
+        }
+    } catch (e: Exception) {
+        "$name: ${e.message ?: e.javaClass.simpleName}"
+    }
+
+    private fun autostart(name: String, value: String, recordChange: (String) -> Unit): String? {
+        // As a request does: what was edited by hand before is its own step.
+        recordChange(HAND_EDITS)
+        return refusal { set(listOf(name, "autostart=$value")) }.also { if (it == null) recordChange("service set $name") }
+    }
 
     private fun refusal(action: () -> Unit): String? = try {
         action()

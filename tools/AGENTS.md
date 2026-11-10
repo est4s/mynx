@@ -250,11 +250,19 @@ One `key = value` per line; `mynx settings` describes each.
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
-  back to Home.
+  back to Home. In `touch`, Home's AI agents opens an installed Claude
+  Code as a chat (messages, tool cards, Allow/Deny); the other agents
+  run in a tab. The chat's Chats lists past Claude Code sessions of
+  `/root` to go on with, and To tab moves the chat to a terminal tab
+  (`claude --resume`); one session runs in one place at a time. When
+  Claude Code makes or changes an app in `~/apps` or `~/terminal-apps`,
+  or writes an APK, the chat shows a card for it: Open (a web app),
+  Run (a terminal app, in a tab), Share.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a
-  background service runs; `on` whenever the app runs. It uses more
+  background service or a turn of touch view's Chat runs; `on`
+  whenever the app runs. It uses more
   battery; the app's notification says "wakelock held" while it's on.
 - `update-check`: `on` (default) or `off`: whether the app checks
   GitHub about once a day for a new version and tells you (see
@@ -330,7 +338,9 @@ hook never fails, so it can't disturb the agent. `mynx agent notify
 NAME on|off` (or the Settings editor) adds or removes the hook entries
 in the agent's config file and leaves everything else in it alone;
 that file is the only record of whether they're on. `agent-notify off`
-silences all agents at once.
+silences all agents at once. Touch view's Chat notifies the same way
+when it isn't on screen (Claude Code's switch and both settings
+apply), and tapping that notification opens Chat.
 
 Your own scripts can notify too: `long-job && mynx notify "Done" "long-job finished"`.
 
@@ -394,7 +404,8 @@ the app: the services come back, hidden.
 
 **Seeing them from anywhere:** while any service runs, the tab strip
 shows `● N` (how many) right of **+**; tapping it opens a tab with the
-menu's Services list (`menu services` does the same in a shell). The
+menu's Services list (`menu services` does the same in a shell), or
+Home's Services list when `view` is `touch`. The
 launcher menu's Services item shows the count too (`Services ● 2`),
 and the app's notification has a **Services** button.
 

@@ -666,6 +666,11 @@ class MynxTest(unittest.TestCase):
         self.assertEqual(self.app.requests, [["notify", "Claude Code", "Claude needs your permission to use Bash",
                                               "shell=2", "if-away", "agent"]])
 
+    def test_hook_says_nothing_for_a_chat(self):
+        self.notify_app()
+        self.hook("Notification", env={"MYNX_CHAT": "1"}, message="Claude needs your permission to use Bash")
+        self.assertEqual(self.app.requests, [])
+
     def test_hook_never_fails_the_agent(self):
         # No app answering, and garbage input: still exit 0 and say nothing,
         # since an agent may treat a failing hook as a reason to stop or retry.

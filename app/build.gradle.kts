@@ -7,6 +7,11 @@ dependencies {
     implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
     // USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) over Android's USB host API.
     implementation("com.github.mik3y:usb-serial-for-android:3.11.0")
+
+    // Screenshots of touch mode's screens (src/test/…/Screenshots.kt), drawn by
+    // Robolectric's native graphics: for looking at, not compared.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }
 
 android {
@@ -79,6 +84,19 @@ android {
     // The rootfs is already xz-compressed.
     androidResources {
         noCompress += "xz"
+    }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            // Where the screenshot tests save their PNGs (CI uploads the folder).
+            val screenshots = project.layout.buildDirectory.dir("screenshots").get().asFile.path
+            all { test ->
+                test.systemProperty("mynx.screenshots", screenshots)
+                // Robolectric loads a whole Android into the test JVM.
+                test.maxHeapSize = "2g"
+            }
+        }
     }
 
     compileOptions {

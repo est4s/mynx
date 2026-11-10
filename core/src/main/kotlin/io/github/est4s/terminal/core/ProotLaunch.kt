@@ -163,6 +163,8 @@ val SERVICES_TAB_COMMAND: List<String> = runThenShell("keybar menu menu services
 /** How long a proot gets to stop what it runs before it's killed outright. */
 const val PROOT_STOP_GRACE_MS = 2000L
 private const val SIGQUIT = 3
+private const val SIGTERM = 15
+private const val SIGKILL = 9
 
 /**
  * Stops proot [pid] and everything it runs. proot ignores TERM and HUP,
@@ -199,4 +201,41 @@ fun killProot(pid: Int, proc: File = File("/proc"), kill: (Int) -> Unit) {
     if (pid <= 0) return
     prootTracees(pid, proc).forEach { runCatching { kill(it) } }
     runCatching { kill(pid) }
+}
+
+/** How long an agent gets after TERM before its proot is stopped (Claude Code ends in 1-2 s). */
+const val AGENT_STOP_GRACE_MS = 5000L
+
+/**
+ * The agent proot [pid] started, not what the agent itself runs: the
+ * tracees whose parent is proot, or all of them if none says so.
+ */
+fun agentProcesses(pid: Int, proc: File = File("/proc")): List<Int> {
+    val tracees = prootTracees(pid, proc)
+    val own = tracees.filter { tracee ->
+        val status = runCatching { File(proc, "$tracee/status").readText() }.getOrNull() ?: return@filter false
+        Regex("""^PPid:\s*(\d+)""", RegexOption.MULTILINE).find(status)?.groupValues?.get(1) == pid.toString()
+    }
+    return own.ifEmpty { tracees }
+}
+
+/**
+ * Stops an agent running in proot [pid], from a thread of its own (it
+ * blocks through [sleep]). The agent must get TERM itself to end and take
+ * its children with it (KILL leaves them running), but proot ignores TERM.
+ * So: TERM to the agent; after a grace, [stopProot]'s QUIT, then its force.
+ */
+fun stopAgentProot(pid: Int, signal: (Int, Int) -> Unit, alive: () -> Boolean, sleep: (Long) -> Unit, proc: File = File("/proc")) {
+    agentProcesses(pid, proc).forEach { runCatching { signal(it, SIGTERM) } }
+    sleep(AGENT_STOP_GRACE_MS)
+    if (!alive()) return
+    stopProot(
+        pid,
+        signal,
+        later = { ms, action ->
+            sleep(ms)
+            action()
+        },
+        force = { if (alive()) killProot(pid, proc) { signal(it, SIGKILL) } },
+    )
 }
