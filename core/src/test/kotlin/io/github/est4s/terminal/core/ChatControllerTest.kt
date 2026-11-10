@@ -179,7 +179,7 @@ class ChatControllerTest {
         assertEquals("acceptEdits", chat.state.mode)
         chat.setModel("haiku")
         assertEquals(mapOf("subtype" to "set_model", "model" to "haiku"), (parseJson(process.written.last()) as Map<*, *>)["request"])
-        assertEquals("default", chat.state.model)
+        assertEquals("m", chat.state.model, "what Claude reports, not the pick till it takes it")
         answered("chat-3")
         assertEquals("haiku", chat.state.model)
         val next = relaunched()
@@ -198,7 +198,7 @@ class ChatControllerTest {
         chat.setModel("haiku")
         answered("chat-3", ok = false)
         assertEquals("plan", chat.state.mode)
-        assertEquals("default", chat.state.model)
+        assertEquals("m", chat.state.model, "what Claude reports")
         val next = relaunched()
         assertEquals("plan", argFlag("--permission-mode", next), "the last one taken")
         assertEquals(null, argFlag("--model", next))
@@ -1018,5 +1018,54 @@ class ChatControllerTest {
         assertEquals(true, host.working.last())
         chat.shutdown()
         assertEquals(false, host.working.last())
+    }
+
+    private fun transcriptWithModel(id: String, model: String) {
+        File(top, claudeTranscriptPath("/root", "/root", id).removePrefix("/")).apply {
+            parentFile.mkdirs()
+            writeText(
+                """{"type":"user","message":{"role":"user","content":"old prompt"},"uuid":"$id-u"}""" + "\n" +
+                    """{"type":"assistant","message":{"role":"assistant","model":"$model","content":[{"type":"text","text":"old answer"}]},"uuid":"$id-a"}""" + "\n",
+            )
+        }
+    }
+
+    @Test
+    fun `a resumed chat shows and ticks the model its transcript ran, with no flag`() {
+        transcriptWithModel(past, "claude-haiku-5-5")
+        ready()
+        chat.resume(past)
+        assertEquals("", chat.state.line.model, "not known yet: not Default either")
+        work()
+        assertEquals("Haiku 5.5", chat.state.line.model)
+        assertEquals("haiku", chat.state.model)
+        assertTrue(chat.send("more"))
+        assertEquals(null, argFlag("--model"))
+    }
+
+    @Test
+    fun `with nothing picked, Model… ticks what the resumed process reports`() {
+        transcript(past, "old prompt")
+        ready()
+        chat.resume(past)
+        work()
+        assertEquals("", chat.state.line.model)
+        chat.send("more")
+        line("""{"type":"system","subtype":"init","session_id":"$past","model":"claude-haiku-5-5","permissionMode":"default"}""")
+        assertEquals("haiku", chat.state.model)
+        assertEquals("Haiku 5.5", chat.state.line.model)
+        val next = relaunched()
+        assertEquals(null, argFlag("--model", next), "reported, never picked")
+    }
+
+    @Test
+    fun `a new chat shows the default model again`() {
+        transcriptWithModel(past, "claude-haiku-5-5")
+        ready()
+        chat.resume(past)
+        work()
+        chat.newChat()
+        assertEquals("Default model", chat.state.line.model)
+        assertEquals("default", chat.state.model)
     }
 }

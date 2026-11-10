@@ -64,7 +64,15 @@ private fun parseLine(line: String): Map<*, *>? = try {
  * the last [max] rows are kept, after one notice that there were more;
  * the lines are read one at a time, so a big file only costs its rows.
  */
-fun readClaudeHistory(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): List<ChatItem> {
+fun readClaudeHistory(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
+    readClaudeTranscript(lines, max).items
+
+/** A transcript's rows ([readClaudeHistory]) and the [model] its last answer came from (`message.model`), if any. */
+data class ClaudeHistory(val items: List<ChatItem>, val model: String?)
+
+/** [readClaudeHistory], with the model: `--resume` runs the chat on it again. */
+fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): ClaudeHistory {
+    var model: String? = null
     // In order of first appearance; a tool's result replaces its row in place.
     val rows = LinkedHashMap<String, ChatItem>()
     var dropped = false
@@ -101,6 +109,7 @@ fun readClaudeHistory(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): Lis
                 if (aside(line) || line["isApiErrorMessage"] == true) continue
                 val message = line["message"] as? Map<*, *> ?: continue
                 if (message["model"] == "<synthetic>") continue
+                (message["model"] as? String)?.let { model = it }
                 val content = message["content"] as? List<*> ?: continue
                 content.forEachIndexed { index, item ->
                     val block = item as? Map<*, *> ?: return@forEachIndexed
@@ -128,12 +137,17 @@ fun readClaudeHistory(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): Lis
         }
     }
     val items = rows.values.toList()
-    return if (dropped) listOf(ChatItem.Notice("history-earlier", NoticeKind.INFO, CHAT_HISTORY_EARLIER)) + items else items
+    val shown = if (dropped) listOf(ChatItem.Notice("history-earlier", NoticeKind.INFO, CHAT_HISTORY_EARLIER)) + items else items
+    return ClaudeHistory(shown, model)
 }
 
 /** [readClaudeHistory] of a file; call it off the main thread. */
 fun readClaudeHistory(file: File, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
     file.useLines { readClaudeHistory(it, max) }
+
+/** [readClaudeTranscript] of a file; call it off the main thread. */
+fun readClaudeTranscript(file: File, max: Int = CHAT_HISTORY_MAX): ClaudeHistory =
+    file.useLines { readClaudeTranscript(it, max) }
 
 private fun oneLine(text: String): String =
     text.take(CLAUDE_TITLE_MAX * 4).trim().replace(Regex("\\s+"), " ").take(CLAUDE_TITLE_MAX)

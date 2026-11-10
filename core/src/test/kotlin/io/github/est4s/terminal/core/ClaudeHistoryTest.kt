@@ -199,4 +199,19 @@ class ClaudeHistoryTest {
         assertEquals("1 month ago", ago(30 * 86_400_000L))
         assertEquals("3 months ago", ago(95 * 86_400_000L))
     }
+
+    @Test
+    fun `the model is the last one the agent itself answered with`() {
+        val lines = listOf(
+            """{"type":"assistant","message":{"role":"assistant","model":"claude-opus-5-5","content":[{"type":"text","text":"a"}]},"uuid":"a1"}""",
+            """{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"b"}]},"uuid":"a2"}""",
+            """{"type":"assistant","message":{"role":"assistant","model":"claude-sonnet-5","content":[{"type":"text","text":"sub"}]},"isSidechain":true,"uuid":"a3"}""",
+            """{"type":"assistant","message":{"role":"assistant","model":"<synthetic>","content":[{"type":"text","text":"API Error"}]},"isApiErrorMessage":true,"uuid":"a4"}""",
+        )
+        val transcript = readClaudeTranscript(lines.asSequence())
+        assertEquals("claude-haiku-5-5", transcript.model)
+        assertEquals(readClaudeHistory(lines.asSequence()), transcript.items)
+        assertEquals("m", readClaudeTranscript(fixture.lineSequence()).model)
+        assertNull(readClaudeTranscript(sequenceOf(user(1, "hi"))).model)
+    }
 }

@@ -290,9 +290,13 @@ and `current_permission_mode`, init's `permissionMode`. Assumed:
 aliases), a success `control_response` to the two requests, and the
 status line's mode. An approved plan's switch out of plan mode: no
 line says so in the spike, so the controller drops a `plan` pick and
-the shown mode then (no flag on a relaunch). `--resume` keeps
-neither model nor mode as far as we know, hence the flags. No commits
-yet.
+the shown mode then (no flag on a relaunch). A live run showed
+`--resume` restores the session's model (init said `claude-haiku-5-5`
+for a haiku chat) but not its mode, so with no pick Model… ticks the
+reported model (`chatModelMenu()`: by value or alias, else an extra
+entry), and a resumed chat shows its transcript's last
+`message.model` (`readClaudeTranscript()`) until init, else no model
+rather than "Default model"; still only a pick is ever `--model`.
 
 Phone checks: before the first prompt, Model… lists Default, Opus,
 Sonnet, Haiku and Mode… three modes; pick Sonnet and Plan, send: the

@@ -61,4 +61,36 @@ class ChatSettingsTest {
         assertTrue(bypass.highlighted)
         assertEquals("dontAsk", chatStatusLine(null, null, "dontAsk", emptyList()).mode)
     }
+
+    @Test
+    fun `with nothing picked, Model… ticks the model the agent reports, by id or alias`() {
+        val fallback = chatModelChoices(emptyList())
+        assertEquals(ChatModelMenu(fallback, "haiku"), chatModelMenu(null, "claude-haiku-5-5", fallback))
+        assertEquals("opus", chatModelMenu(null, "opus", reported).ticked)
+        assertEquals("opus", chatModelMenu(null, "claude-opus-5-5-20261001", reported).ticked)
+        assertEquals("default", chatModelMenu(null, null, reported).ticked)
+        assertEquals("default", chatModelMenu(null, "default", reported).ticked)
+    }
+
+    @Test
+    fun `a reported model not offered is an extra ticked entry`() {
+        val menu = chatModelMenu(null, "claude-sonnet-4-5[1m]", reported)
+        assertEquals(reported + AgentModel("claude-sonnet-4-5[1m]", "Sonnet 4.5 (1M)", null), menu.models)
+        assertEquals("claude-sonnet-4-5[1m]", menu.ticked)
+    }
+
+    @Test
+    fun `a pick wins over what the agent reports`() {
+        assertEquals(ChatModelMenu(reported, "default"), chatModelMenu("default", "claude-opus-5-5", reported))
+        assertEquals("opus", chatModelMenu("opus", "claude-haiku-5-5", reported).ticked)
+    }
+
+    @Test
+    fun `a past chat whose model isn't known yet shows only the mode`() {
+        val line = chatStatusLine(null, null, "plan", reported, pastChat = true)
+        assertEquals(ChatStatusLine("", "Plan", highlighted = true), line)
+        assertEquals("Plan", line.text)
+        assertEquals("Haiku 5.5", chatStatusLine(null, "claude-haiku-5-5", null, reported, pastChat = true).model)
+        assertEquals("Opus 5.5", chatStatusLine("opus", null, null, reported, pastChat = true).model)
+    }
 }

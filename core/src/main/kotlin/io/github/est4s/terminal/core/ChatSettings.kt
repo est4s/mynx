@@ -30,9 +30,28 @@ private val FALLBACK_MODELS = listOf(
 
 fun chatModelChoices(reported: List<AgentModel>): List<AgentModel> = reported.ifEmpty { FALLBACK_MODELS }
 
-/** The line under Chat's title: the model, and the mode, [highlighted] when it isn't the default. */
+/** Model…'s entries, and the [AgentModel.value] it ticks. */
+data class ChatModelMenu(val models: List<AgentModel>, val ticked: String)
+
+/**
+ * Model… for [choice], the model picked, else the one the agent [reported]
+ * (an id like `claude-haiku-5-5`): `--resume` restores a chat's model, so
+ * the menu ticks what runs, matched by value or by its alias (`haiku`), else
+ * as an extra entry. Only a pick is ever a launch flag.
+ */
+fun chatModelMenu(choice: String?, reported: String?, models: List<AgentModel>): ChatModelMenu {
+    val ticked = choice ?: reported?.takeIf { it != "default" }?.let { id ->
+        models.firstOrNull { it.value == id }?.value
+            ?: modelAlias(id)?.let { alias -> models.firstOrNull { it.value == alias }?.value }
+            ?: id
+    } ?: "default"
+    if (models.any { it.value == ticked }) return ChatModelMenu(models, ticked)
+    return ChatModelMenu(models + AgentModel(ticked, modelName(ticked), null), ticked)
+}
+
+/** The line under Chat's title: the model (blank when not known), and the mode, [highlighted] when it isn't the default. */
 data class ChatStatusLine(val model: String, val mode: String, val highlighted: Boolean) {
-    val text: String get() = "$model · $mode"
+    val text: String get() = if (model.isEmpty()) mode else "$model · $mode"
 }
 
 private const val DEFAULT_MODEL = "Default model"
@@ -41,13 +60,16 @@ private val MODEL_ID = Regex("claude-([a-z]+)-(\\d+)(?:-(\\d{1,2}))?(?:-\\d{8})?
 /**
  * [choice] is the model picked ([AgentModel.value]), [reported] the one the
  * agent says it runs (an id like `claude-haiku-5-5`, or the value it was
- * given), [mode] the permission mode; null for each when not known.
+ * given), [mode] the permission mode; null for each when not known. A
+ * [pastChat] runs the model it ran before, so with neither known the
+ * model is left blank rather than called the default.
  */
-fun chatStatusLine(choice: String?, reported: String?, mode: String?, models: List<AgentModel>): ChatStatusLine {
+fun chatStatusLine(choice: String?, reported: String?, mode: String?, models: List<AgentModel>, pastChat: Boolean = false): ChatStatusLine {
     val model = when {
         choice != null && choice != "default" ->
             models.firstOrNull { it.value == choice }?.name?.let(::plainName) ?: modelName(choice)
         reported != null && reported != "default" -> modelName(reported)
+        pastChat && choice == null -> ""
         else -> DEFAULT_MODEL
     }
     val current = mode ?: "default"
@@ -66,6 +88,10 @@ private fun modelName(id: String): String {
     if (id.all { it in 'a'..'z' }) return id.replaceFirstChar { it.uppercase() }
     return id
 }
+
+// `claude-opus-5-5[1m]` → `opus[1m]`, as `--model` takes it.
+private fun modelAlias(id: String): String? =
+    MODEL_ID.matchEntire(id)?.destructured?.let { (family, _, _, wide) -> family + wide }
 
 private fun modeName(mode: String): String = when (mode) {
     "default" -> "Asks first"

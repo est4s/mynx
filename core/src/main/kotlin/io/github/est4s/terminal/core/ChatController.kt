@@ -110,8 +110,11 @@ interface ChatHost {
  * The model and permission mode picked ([setModel], [setMode]) go to the
  * running process and count once Claude takes them (a refused one is
  * dropped; with no process, a pick waits for the launch). They are the
- * flags of every launch of this chat, as `--resume` keeps neither, and of
- * its hand-off tab. Only a mode the user picked from [CHAT_MODES] is ever a
+ * flags of every launch of this chat, and of its hand-off tab: `--resume`
+ * restores the session's model but not its mode. With no pick, Model…
+ * ticks the model Claude last reported (its init, or before a resumed
+ * process runs, the transcript's last answer), but only a pick is ever a
+ * `--model` flag. Only a mode the user picked from [CHAT_MODES] is ever a
  * flag: what Claude reports (its init, a status line, the user's own
  * settings) is only shown, and once it reports another mode than the pick,
  * or a plan is approved (which leaves plan mode without saying so), the
@@ -162,17 +165,20 @@ class ChatController(
     private var pendingMode: String? = null
     // The last list the agent gave, kept for chats before their process says.
     private var knownModels: List<AgentModel> = emptyList()
+    // A chat picked from Chats: it runs the model it ran before, which isn't the default.
+    private var pastChat = false
 
     val state: ChatState
         get() {
             val models = chatModelChoices(knownModels)
+            val menu = chatModelMenu(model, conversation.model, models)
             val mode = mode ?: conversation.mode
             return ChatState(
                 conversation, access, canRestart, exiting != null, tabHold, handOffBlock(), busy(),
-                models = models,
-                model = model ?: "default",
+                models = menu.models,
+                model = menu.ticked,
                 mode = mode ?: "default",
-                line = chatStatusLine(model, conversation.model, mode, models),
+                line = chatStatusLine(model, conversation.model, mode, models, pastChat),
             )
         }
 
@@ -265,6 +271,7 @@ class ChatController(
         pendingMode = null
         turnStart = null
         chatId = id
+        pastChat = true
         resumable = true
         canRestart = false
         signInLost = false
@@ -367,11 +374,14 @@ class ChatController(
         val before = conversation.items.size
         val file = host.hostFile(claudeTranscriptPath(home, cwd, id))
         host.background {
-            val items = runCatching { readClaudeHistory(file) }.getOrDefault(emptyList())
+            val history = runCatching { readClaudeTranscript(file) }.getOrDefault(ClaudeHistory(emptyList(), null))
+            val items = history.items
                 .let { rows -> artifacts?.let { withHistoryArtifacts(rows, it, cwd, home) } ?: rows }
             post {
                 if (own == historyLoad && chatId == id && items.isNotEmpty()) {
                     conversation = conversation.copy(items = items + conversation.items.drop(before))
+                    // What `--resume` will run, till a process says; a running one knows better.
+                    if (session == null && history.model != null) conversation = conversation.copy(model = history.model)
                     changed()
                 }
             }
@@ -434,6 +444,7 @@ class ChatController(
         pendingMode = null
         turnStart = null
         chatId = null
+        pastChat = false
         resumable = false
         canRestart = false
         signInLost = false
