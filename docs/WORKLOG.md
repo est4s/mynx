@@ -101,10 +101,9 @@ are in git history: the full log up to entry 92 is
 ## Next
 
 ### 0. Screenshots of touch mode (entry 179)
-The first CI run of the screenshot tests: if they fail, see entry
-179's "If CI fails"; if they pass, look at the `screenshots`
-artifact (`gh run download RUN -n screenshots -D DIR`) and check
-the PNGs show real text and cards, not blank screens.
+They render in CI (first run 42743298241) and show real text and
+cards. Fetch them with `gh run download RUN -n screenshots -D DIR`
+to look at a screen change before a phone round.
 
 ### 1. Development boards (leftovers; the maintainer picks)
 
@@ -194,41 +193,31 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode: Home passed on the phone
+### 3. Touch mode: Chat built, waiting on the phone
 
-Home is on PR `touch-home` (entry 171). The spike's findings are in
-draft PR #65 (`docs/spikes/touch-mode/`).
+Home passed on the phone (entry 171). Built overnight 2026-11-10 as a
+stack of draft PRs, each based on the one before:
+#67 Services list (172) → #68 Chat's protocol in core (173) → #69 the
+Chat screen (174) → #70 Markdown, Always allow (175) → #71 history,
+Chats, To tab (176) → #72 artifact cards (177) → #74 CI screenshots
+(179) → #75 wakelock and notifications (180) → #76 model and mode
+(181). #73 (178, on `main`) is a fix of its own. The top branch's
+APK has all of it. `core` ran against the real CLI (2.1.321, Haiku):
+plain turn, allow, deny, cancel, stop, resume, AskUserQuestion.
 
 **Maintainer's decisions (2026-11-09):** Chat uses Claude's stream-json
 first, behind an `AgentSession` in `core` with ACP's vocabulary. Users
 sign in through the terminal: Chat opens a tab when sign-in is needed.
-**Still open:** that doesn't settle whether Chat may run on a
-subscription login (the Agent SDK docs forbid third-party products
-offering claude.ai login or rate limits). Raise it again before Chat
-ships.
+**Still open:** whether Chat may run on a subscription login (the
+Agent SDK docs forbid third-party products offering claude.ai login
+or rate limits). Chat stays in draft PRs until the maintainer decides.
 
-**Built, not yet on the phone (entries 173-174, branch `touch-chat`):**
-Chat for Claude Code: Home → AI agents → Claude Code opens it. One chat
-at a time, kept in the service; Allow/Deny, questions and plans, Stop,
-New, Restart (`--resume`), sign-in and install cards that open a tab.
-The native Services list (entry 172) waits on the phone too.
-
-**Built too (entry 176):** past chats (Chats) with their history, and
-hand-off to a tab (To tab), one process per session.
-
-**Built too (entry 177):** artifact cards for apps and APKs the
-agent makes.
-
-**Built too (entry 180):** the wakelock during a turn, and Chat's
-notifications.
-
-**Built too (entry 181):** Model… and Mode… in Chat's ⋮, and the line
-under the title.
-
-**Next:** the phone test (Chat, then Chats and To tab, then cards:
-a web app, a terminal app, an APK, a resumed chat, then entries 180's
-and 181's checks), then what's
-left: other agents (Codex's `app-server`, Gemini's ACP).
+**Next:** the phone test, in order: the Services list (#67's checks);
+Chat's first turn, permission, Stop, Back and reopen; Markdown; Chats
+and To tab; cards; notifications and the wakelock with the screen
+off; model and mode. Fix what it finds on the branch it belongs to.
+Then merge bottom-up. Left: other agents (Codex's `app-server`,
+Gemini's ACP), which need accounts to test.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
