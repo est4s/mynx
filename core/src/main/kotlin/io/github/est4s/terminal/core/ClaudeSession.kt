@@ -1,8 +1,8 @@
 package io.github.est4s.terminal.core
 
 private const val MAX_TOOL_TEXT = 16_000
-private const val ASK_TOOL = "AskUserQuestion"
-private const val PLAN_TOOL = "ExitPlanMode"
+internal const val ASK_TOOL = "AskUserQuestion"
+internal const val PLAN_TOOL = "ExitPlanMode"
 private const val USER_DENIED = "The user denied this."
 private const val USER_DECLINED = "The user chose not to answer."
 private const val PLAN_REFUSED = "The user refused this plan."
@@ -385,14 +385,8 @@ class ClaudeSession(
             val call = calls.remove(id) ?: continue
             ended.add(id)
             val status = if (block["is_error"] == true) ToolStatus.FAILED else ToolStatus.COMPLETED
-            listener(AgentEvent.ToolCallUpdate(call.copy(status = status, content = cut(resultText(block["content"])))))
+            listener(AgentEvent.ToolCallUpdate(call.copy(status = status, content = cutToolText(resultText(block["content"])))))
         }
-    }
-
-    private fun resultText(content: Any?): String = when (content) {
-        is String -> content
-        is List<*> -> content.mapNotNull { (it as? Map<*, *>)?.get("text") as? String }.joinToString("\n")
-        else -> ""
     }
 
     private fun onResult(message: Map<*, *>) {
@@ -567,13 +561,20 @@ class ClaudeSession(
     }
 }
 
-private fun cut(text: String) = if (text.length <= MAX_TOOL_TEXT) text else text.take(MAX_TOOL_TEXT) + "\n…"
+/** A `tool_result`'s text: a string, or its text blocks. */
+internal fun resultText(content: Any?): String = when (content) {
+    is String -> content
+    is List<*> -> content.mapNotNull { (it as? Map<*, *>)?.get("text") as? String }.joinToString("\n")
+    else -> ""
+}
 
-private class ToolAbout(val title: String, val detail: String?, val kind: ToolKind)
+internal fun cutToolText(text: String) = if (text.length <= MAX_TOOL_TEXT) text else text.take(MAX_TOOL_TEXT) + "\n…"
 
-private fun describeTool(name: String, input: Map<*, *>?): ToolAbout {
+internal class ToolAbout(val title: String, val detail: String?, val kind: ToolKind)
+
+internal fun describeTool(name: String, input: Map<*, *>?): ToolAbout {
     fun text(key: String) = (input?.get(key) as? String)?.takeIf { it.isNotEmpty() }
-    fun about(title: String?, detail: String? = null, kind: ToolKind) = ToolAbout(title ?: name, detail?.let(::cut), kind)
+    fun about(title: String?, detail: String? = null, kind: ToolKind) = ToolAbout(title ?: name, detail?.let(::cutToolText), kind)
     return when (name) {
         "Bash" -> about(text("command"), text("description"), ToolKind.EXECUTE)
         "Read" -> about(text("file_path"), null, ToolKind.READ)

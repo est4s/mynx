@@ -207,8 +207,11 @@ at a time, kept in the service; Allow/Deny, questions and plans, Stop,
 New, Restart (`--resume`), sign-in and install cards that open a tab.
 The native Services list (entry 172) waits on the phone too.
 
-**Next:** the phone test (below), then what's left: hand-off to a tab,
-artifact cards, a resume list, other agents (Codex's `app-server`,
+**Built too (entry 176):** past chats (Chats) with their history, and
+hand-off to a tab (To tab), one process per session.
+
+**Next:** the phone test (Chat, then Chats and To tab), then
+what's left: artifact cards, other agents (Codex's `app-server`,
 Gemini's ACP).
 
 ### Regression checks (steps 4-6)
@@ -247,6 +250,25 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (176): Chat: history, past chats and hand-off to a tab (not yet on the phone)
+
+`--resume` replays no history, so `core/.../ClaudeHistory.kt` reads a
+transcript into the chat's rows (prompts, agent text, tool cards done
+or failed with output; skips meta, sidechain, compaction, thinking,
+Claude's own user lines; last 300 rows after one notice). Header:
+**Chats** lists `/root`'s past sessions (title = first prompt, from
+each file's first 16 KB; the newest 50), tapping one stops the chat's
+process, shows its history and resumes it with the next prompt; **To
+tab** stops the process, waits for its exit, opens a tab running
+`mynx agent start claude --resume ID` and hides Chat. While that tab
+may run it (until its claude exits and writes a done file, or the tab
+ends), a prompt in Chat asks "still open in a tab": Take back (closes
+the tab, then reloads the transcript) / Cancel. Found: Claude names a
+project folder by turning every non-alphanumeric into `-` (not only
+`/`), now `claudeTranscriptDir`'s rule. Restart already kept the
+rows; a test says so. Not tracked: a session the user resumed in a tab
+by hand. `app/` isn't compiled yet.
 
 ### 2026-11-10 (175): Chat: Markdown, and Always allow says what it grants (not yet on the phone)
 

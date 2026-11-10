@@ -146,11 +146,15 @@ fun agentProotCommand(launch: AgentLaunch): List<String> = launch.env.map { (key
 
 /**
  * Where Claude keeps a folder's sessions. [home] and [cwd] are Debian's
- * paths; `/` becoming `-` is all the spike saw of the rule (no folder with
- * other punctuation was tried).
+ * paths. Claude turns every character but ASCII letters and digits into
+ * `-`, per UTF-16 unit as JavaScript counts them (its own code, read in
+ * the binary); names over 200 characters also get a hash we don't
+ * reproduce.
  */
-fun claudeTranscriptDir(home: String, cwd: String): String =
-    "$home/.claude/projects/${cwd.trimEnd('/').replace('/', '-')}"
+fun claudeTranscriptDir(home: String, cwd: String): String {
+    val name = cwd.trimEnd('/').map { if (it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9') it else '-' }.joinToString("")
+    return "$home/.claude/projects/$name"
+}
 
 fun claudeTranscriptPath(home: String, cwd: String, sessionId: String): String =
     "${claudeTranscriptDir(home, cwd)}/$sessionId.jsonl"
@@ -163,3 +167,14 @@ fun listClaudeTranscripts(dir: File): List<ClaudeTranscript> =
         .filter { it.isFile && it.name.endsWith(".jsonl") && UUID.matches(it.name.removeSuffix(".jsonl")) }
         .map { ClaudeTranscript(it.name.removeSuffix(".jsonl"), it.lastModified()) }
         .sortedByDescending { it.modifiedMs }
+
+/**
+ * The tab a chat hands its session to: the terminal's Claude Code (`mynx
+ * agent start` adds what it needs under proot, and its key bar), then the
+ * tab's shell. Once Claude has exited it creates [doneFile] (Debian's
+ * path), so the app knows the session is free again while the tab lives on.
+ */
+fun claudeHandOffCommand(sessionId: String, doneFile: String): List<String> {
+    requireUuid("--resume", sessionId)
+    return runThenShell("mynx agent start claude --resume ${shellQuote(sessionId)}; : > ${shellQuote(doneFile)}")
+}

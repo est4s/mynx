@@ -1,5 +1,7 @@
 package io.github.est4s.terminal.core
 
+import java.io.File
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -32,7 +34,52 @@ class ChatControllerTest {
         }
 
         override fun newSessionId() = "00000000-0000-0000-0000-00000000000${++ids}"
+
+        val background = ArrayDeque<() -> Unit>()
+        override fun background(work: () -> Unit) {
+            background.addLast(work)
+        }
+
+        override fun hostFile(path: String) = File(top, path)
+
+        val tabs = mutableListOf<Pair<String, String>>()
+        val tabHandles = mutableListOf<Tab>()
+        override fun openInTab(sessionId: String, cwd: String): ChatTab {
+            tabs += sessionId to cwd
+            return Tab().also { tabHandles += it }
+        }
     }
+
+    inner class Tab : ChatTab {
+        override var open = true
+        var closes = 0
+        override fun close() {
+            closes++
+        }
+    }
+
+    private val top = kotlin.io.path.createTempDirectory("chat").toFile()
+
+    @AfterTest
+    fun cleanUp() {
+        deleteTree(top)
+    }
+
+    private fun work() {
+        while (host.background.isNotEmpty() || posted.isNotEmpty()) {
+            host.background.removeFirstOrNull()?.invoke()
+            drain()
+        }
+    }
+
+    private fun transcript(id: String, vararg prompts: String) {
+        File(top, claudeTranscriptPath("/root", "/root", id).removePrefix("/")).apply {
+            parentFile.mkdirs()
+            writeText(prompts.mapIndexed { n, p -> """{"type":"user","message":{"role":"user","content":"$p"},"uuid":"$id-$n"}""" }.joinToString("\n") + "\n")
+        }
+    }
+
+    private fun shown() = chat.state.conversation.items.map { (it as? ChatItem.User)?.text ?: it.javaClass.simpleName }
 
     private val host = Host()
     private val posted = ArrayDeque<() -> Unit>()
@@ -364,5 +411,197 @@ class ChatControllerTest {
         exit(0)
         assertEquals(ChatAccess.READY, chat.state.access)
         assertTrue(chat.send("now"))
+    }
+
+    private val past = "22222222-2222-2222-2222-222222222222"
+    private val first = "11111111-1111-1111-1111-111111111111"
+
+    private fun finishedTurn() {
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        done()
+    }
+
+    @Test
+    fun `a past chat shows its history and the next prompt resumes it`() {
+        transcript(past, "old prompt")
+        ready()
+        chat.resume(past)
+        work()
+        assertEquals(listOf("old prompt"), shown())
+        assertTrue(chat.send("more"))
+        assertEquals(past, argFlag("--resume"))
+        drain()
+        assertEquals(listOf("old prompt", "more"), shown())
+    }
+
+    @Test
+    fun `resuming stops the running chat and waits for it to exit before running again`() {
+        transcript(past, "old prompt")
+        finishedTurn()
+        chat.resume(past)
+        assertEquals(1, process.closed)
+        assertTrue(chat.live, "the old process still runs")
+        assertTrue(chat.state.stopping)
+        work()
+        assertEquals(listOf("old prompt"), shown(), "history at once")
+        line("""{"type":"assistant","message":{"id":"m9","role":"assistant","content":[{"type":"text","text":"late"}]}}""")
+        assertEquals(listOf("old prompt"), shown(), "the old chat's words stay out")
+        assertFalse(chat.send("too early"))
+        assertEquals(1, host.launches.size)
+        exit(0)
+        assertFalse(chat.state.stopping)
+        assertEquals(0, host.ends, "a stop asked for isn't an end")
+        assertTrue(chat.send("now"))
+        assertEquals(past, argFlag("--resume"))
+    }
+
+    @Test
+    fun `a prompt sent before the history is read stays after it`() {
+        transcript(past, "old prompt")
+        ready()
+        chat.resume(past)
+        assertTrue(chat.send("quick"))
+        drain()
+        work()
+        assertEquals(listOf("old prompt", "quick"), shown())
+    }
+
+    @Test
+    fun `resuming the chat on screen does nothing`() {
+        finishedTurn()
+        chat.resume(first)
+        assertEquals(0, process.closed)
+        assertEquals(listOf("hello"), shown())
+    }
+
+    @Test
+    fun `a restart keeps what's on screen`() {
+        finishedTurn()
+        exit()
+        val before = shown()
+        chat.restart()
+        drain()
+        assertEquals(before, shown())
+    }
+
+    @Test
+    fun `past chats are read off the main thread`() {
+        transcript(past, "old prompt")
+        var got: List<ClaudeSessionSummary>? = null
+        chat.pastChats { got = it }
+        assertEquals(null, got)
+        work()
+        assertEquals(listOf(past), got!!.map { it.sessionId })
+    }
+
+    @Test
+    fun `nothing to hand off before a turn has finished`() {
+        ready()
+        assertEquals(CHAT_HAND_OFF_NOTHING, chat.state.handOffBlock)
+        assertFalse(chat.handOff())
+        chat.send("hello")
+        drain()
+        init()
+        assertEquals(CHAT_HAND_OFF_RUNNING, chat.state.handOffBlock)
+        assertFalse(chat.handOff())
+        assertTrue(host.tabs.isEmpty())
+    }
+
+    @Test
+    fun `an unanswered card blocks the hand-off`() {
+        finishedTurn()
+        line("""{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"ls"},"tool_use_id":"t1"}}""")
+        assertTrue(chat.state.handOffBlock != null)
+        assertFalse(chat.handOff())
+        assertTrue(host.tabs.isEmpty())
+    }
+
+    @Test
+    fun `the hand-off opens the tab only once the chat's process has exited`() {
+        finishedTurn()
+        assertEquals(null, chat.state.handOffBlock)
+        assertTrue(chat.handOff())
+        assertEquals(1, process.closed)
+        assertTrue(host.tabs.isEmpty(), "never two programs on one session")
+        assertEquals(CHAT_HAND_OFF_STOPPING, chat.state.handOffBlock)
+        exit(0)
+        assertEquals(listOf(first to "/root"), host.tabs)
+        assertEquals(listOf("hello"), shown(), "the chat stays as it was")
+        assertFalse(chat.live)
+        assertEquals(CHAT_HAND_OFF_HELD, chat.state.handOffBlock)
+    }
+
+    @Test
+    fun `with no process the tab opens at once`() {
+        finishedTurn()
+        exit(0)
+        assertTrue(chat.handOff())
+        assertEquals(listOf(first to "/root"), host.tabs)
+        assertFalse(chat.state.canRestart)
+    }
+
+    @Test
+    fun `a prompt while the tab may hold the session asks instead of forking it`() {
+        finishedTurn()
+        exit(0)
+        chat.handOff()
+        assertFalse(chat.send("here again"))
+        assertEquals(1, host.launches.size)
+        assertEquals(ChatTabHold.ASKING, chat.state.tabHold)
+        chat.keepInTab()
+        assertEquals(ChatTabHold.NONE, chat.state.tabHold)
+        assertFalse(chat.send("here again"))
+        assertEquals(1, host.launches.size)
+    }
+
+    @Test
+    fun `taking back closes the tab and waits for it, then shows what the tab added`() {
+        finishedTurn()
+        exit(0)
+        chat.handOff()
+        chat.send("here again")
+        chat.takeBack()
+        val tab = host.tabHandles.single()
+        assertEquals(1, tab.closes)
+        assertEquals(ChatTabHold.TAKING_BACK, chat.state.tabHold)
+        assertFalse(chat.send("here again"))
+        transcript(first, "hello", "typed in the tab")
+        tab.open = false
+        chat.tabChanged()
+        assertEquals(ChatTabHold.NONE, chat.state.tabHold)
+        work()
+        assertEquals(listOf("hello", "typed in the tab"), shown())
+        assertTrue(chat.send("here again"))
+        assertEquals(first, argFlag("--resume"))
+    }
+
+    @Test
+    fun `coming back after the tab's claude exited goes on without asking`() {
+        finishedTurn()
+        exit(0)
+        chat.handOff()
+        host.tabHandles.single().open = false
+        chat.opened()
+        assertEquals(null, chat.state.handOffBlock)
+        assertTrue(chat.send("back"))
+        assertEquals(first, argFlag("--resume"))
+        assertEquals(ChatTabHold.NONE, chat.state.tabHold)
+    }
+
+    @Test
+    fun `the tab's hold stays with its session across other chats`() {
+        finishedTurn()
+        exit(0)
+        chat.handOff()
+        chat.resume(past)
+        assertTrue(chat.send("elsewhere"))
+        drain()
+        exit(0)
+        chat.resume(first)
+        assertFalse(chat.send("back"))
+        assertEquals(ChatTabHold.ASKING, chat.state.tabHold)
     }
 }

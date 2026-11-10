@@ -120,6 +120,28 @@ class ClaudeLaunchTest {
     }
 
     @Test
+    fun `everything but letters and digits becomes a dash in the folder name`() {
+        assertEquals("/root/.claude/projects/-tmp-my-proj-v1-2", claudeTranscriptDir("/root", "/tmp/my_proj.v1 2"))
+        // As JavaScript sees it: an emoji is two UTF-16 units, so two dashes.
+        assertEquals("/root/.claude/projects/-root-caf--", claudeTranscriptDir("/root", "/root/caf\uD83D\uDE00"))
+    }
+
+    @Test
+    fun `the hand-off tab runs claude with the app's flags, then says it's done`() {
+        val command = claudeHandOffCommand(uuid, "/tmp/.mynx/chat-tab-$uuid")
+        assertEquals(listOf("/bin/bash", "--login", "-c"), command.take(3))
+        val script = command[3]
+        assertTrue(script.contains("mynx agent start claude --resume '$uuid';"), script)
+        assertTrue(script.contains(": > '/tmp/.mynx/chat-tab-$uuid'"), script)
+        assertTrue(script.endsWith("exec /bin/bash --login"), script)
+    }
+
+    @Test
+    fun `the hand-off refuses what isn't a session id`() {
+        assertFailsWith<IllegalArgumentException> { claudeHandOffCommand("x; rm -rf /", "/tmp/f") }
+    }
+
+    @Test
     fun `transcripts list newest first, only session files`() {
         val a = File(top, "$uuid.jsonl").apply { writeText("x"); setLastModified(1000_000) }
         val other = "aaaaaaaa-89d5-4e7f-a7ce-41bcea8fe1ef"

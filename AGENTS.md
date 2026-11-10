@@ -774,7 +774,21 @@ See `docs/ROADMAP.md` "How it works". The details:
   `mdRows()` flattens them into `ChatView`'s views, one per row, reused
   by index; inline markers show as typed until closed, so a stray `**`
   stays right in the finished text; links are http(s) only. Redraws:
-  at most about 10 a second (`chatRenderDelay`).
+  at most about 10 a second (`chatRenderDelay`). **History**
+  (`core/.../ClaudeHistory.kt`): `--resume` replays nothing, so a
+  resumed chat reads its transcript (`readClaudeHistory`, off the main
+  thread, line by line, last 300 rows) into the same `ChatItem`s.
+  **Chats** lists `claudeTranscriptDir`'s sessions (the 50 newest,
+  first 16 KB each for the title). Claude names that folder by turning
+  every character but ASCII letters and digits into `-` (read in its
+  binary). **One session, one program:** nothing stops two programs
+  driving one session (the transcript forks), so `ChatController`
+  stops its process and waits for `ProcessEnded` before a resume or
+  "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:
+  `mynx agent start claude --resume ID`, then a file saying it's
+  done, then the shell) holds the session until that file appears or
+  the tab ends, and a prompt meanwhile asks to take it back (closing
+  the tab) instead of resuming.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

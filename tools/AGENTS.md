@@ -252,7 +252,9 @@ One `key = value` per line; `mynx settings` describes each.
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
   back to Home. In `touch`, Home's AI agents opens an installed Claude
   Code as a chat (messages, tool cards, Allow/Deny); the other agents
-  run in a tab.
+  run in a tab. The chat's Chats lists past Claude Code sessions of
+  `/root` to go on with, and To tab moves the chat to a terminal tab
+  (`claude --resume`); one session runs in one place at a time.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a

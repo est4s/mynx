@@ -53,10 +53,12 @@ import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatCheck
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatHost
+import io.github.est4s.terminal.core.ChatTab
 import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
 import io.github.est4s.terminal.core.claudeAuthStatusCommand
+import io.github.est4s.terminal.core.claudeHandOffCommand
 import io.github.est4s.terminal.core.agentBinary
 import io.github.est4s.terminal.core.CONFIG_DIR
 import io.github.est4s.terminal.core.SOUND_DIR
@@ -238,6 +240,32 @@ class TerminalService : Service() {
             AgentProcess(debianLaunch(launch.cwd, agentProotCommand(launch)), filesDir)
 
         override fun newSessionId(): String = UUID.randomUUID().toString()
+
+        override fun background(work: () -> Unit) {
+            thread(name = "chat-history", isDaemon = true) { work() }
+        }
+
+        override fun hostFile(path: String): File = File(hostPath(path, rootfs) ?: path)
+
+        // The tab is held until its claude exits (it writes the file) or the tab ends.
+        override fun openInTab(sessionId: String, cwd: String): ChatTab {
+            val doneName = "chat-tab-$sessionId"
+            cwdDir.mkdirs()
+            val done = File(cwdDir, doneName)
+            done.delete()
+            val session = startShell(cwd = cwd, command = claudeHandOffCommand(sessionId, "$CWD_DIR/$doneName")).also { tabs.open(it) }
+            chatOnScreen = false
+            activity?.chatHandedOff()
+            return object : ChatTab {
+                override val open: Boolean get() = session.isRunning && !done.exists()
+
+                override fun close() {
+                    // Closing the last tab would close the app, under the chat.
+                    if (tabs.tabs.size == 1) newSession()
+                    if (tabs.find(session) != null) closeTab(session) else stop(session)
+                }
+            }
+        }
 
         // A chat kept the app up with no tabs; with it over and nothing else running, it goes.
         override fun ended() {
@@ -832,6 +860,7 @@ class TerminalService : Service() {
     }
 
     fun onSessionFinished(session: TerminalSession) {
+        chat.tabChanged()
         // A service's end is the services' business; it never closes a tab.
         // An open tab still shows it (and its bar) until the service starts again.
         if (serviceManager.exited(session)) {

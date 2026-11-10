@@ -274,6 +274,10 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF -- "as a chat" "$GUIDE"
 }
 
+@test "the guide says a chat can go on in a tab, one session in one place" {
+    grep -qF -- "To tab moves the chat to a terminal tab" "$GUIDE"
+}
+
 @test "the guide says a page can take the back key first: window.androidBack" {
     grep -qF -- "window.androidBack" "$GUIDE"
     grep -qF -- "window.androidBack" "$BATS_TEST_DIRNAME/../../app/src/main/java/io/github/est4s/terminal/WebAppActivity.kt"

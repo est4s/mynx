@@ -312,6 +312,7 @@ class MainActivity : Activity(), FrontActivity {
     // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left.
     private fun goBack() {
         when {
+            chatShown && chat?.back() == true -> Unit
             chatShown -> {
                 hideChat()
                 showHome()
@@ -364,6 +365,12 @@ class MainActivity : Activity(), FrontActivity {
     private fun chatToTerminal() {
         hideChat()
         terminalView.requestFocus()
+    }
+
+    /** The chat was handed to a tab, which the service has opened: show it; Back comes back to the chat. */
+    fun chatHandedOff() {
+        chatAfterTab = true
+        chatToTerminal()
     }
 
     // Signing in or installing happens in a tab; Back comes back here and checks again.
