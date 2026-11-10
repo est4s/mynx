@@ -26,10 +26,11 @@ private val HOW_OPTIONS = listOf(
  *   or one arriving before a sent prompt's `init`, belongs to something
  *   else and ends nothing. A subagent's tools and permissions go on across a
  *   turn's end; the agent's own are failed or withdrawn by it.
- * - "Allow always" saves for this session only: Claude's suggestions often
- *   say `localSettings`, which would write a file. Of the suggestions,
- *   rules and modes are kept; extra directories aren't, as the user didn't
- *   ask for those.
+ * - "Allow always" grants only the suggestions' `addRules` (`allow`), for
+ *   this session only (they often say `localSettings`, which would write a
+ *   file), and its label names every rule. A suggested mode or directory
+ *   would widen more than the button says, so they're left out; with no
+ *   rule to add, there's no "Allow always".
  * - All writes are JSON built here, so no raw user text reaches stdin; one
  *   line that isn't JSON would kill the process.
  *
@@ -498,22 +499,32 @@ class ClaudeSession(
 
     private fun alwaysGrants(suggestions: Any?): List<Map<String, Any?>> =
         (suggestions as? List<*>).orEmpty().filterIsInstance<Map<*, *>>()
-            .filter { it["type"] == "setMode" || (it["type"] == "addRules" && it["behavior"] == "allow") }
-            .map { suggestion ->
-                val grant = LinkedHashMap<String, Any?>()
-                for ((key, value) in suggestion) grant[key.toString()] = value
-                grant["destination"] = "session"
-                grant
+            .filter { it["type"] == "addRules" && it["behavior"] == "allow" }
+            .mapNotNull { suggestion ->
+                val rules = (suggestion["rules"] as? List<*>).orEmpty().mapNotNull(::grantRule)
+                if (rules.isEmpty()) return@mapNotNull null
+                mapOf("type" to "addRules", "rules" to rules, "behavior" to "allow", "destination" to "session")
             }
 
-    private fun alwaysName(always: List<Map<String, Any?>>): String {
-        val rule = (always.firstOrNull { it["type"] == "addRules" }?.get("rules") as? List<*>)?.firstOrNull() as? Map<*, *>
-        val content = rule?.get("ruleContent") as? String ?: rule?.get("toolName") as? String
-        return when {
-            content != null -> "Always allow: $content"
-            always.any { it["mode"] == "acceptEdits" } -> "Allow all edits"
-            else -> "Always allow"
+    // Built anew, so nothing is granted that the label doesn't name.
+    private fun grantRule(rule: Any?): Map<String, Any?>? {
+        val fields = rule as? Map<*, *> ?: return null
+        val tool = fields["toolName"] as? String ?: return null
+        if (tool.isBlank()) return null
+        return when (val content = fields["ruleContent"]) {
+            null -> mapOf("toolName" to tool)
+            is String -> if (content.isBlank()) null else mapOf("toolName" to tool, "ruleContent" to content)
+            else -> null
         }
+    }
+
+    private fun alwaysName(always: List<Map<String, Any?>>): String {
+        val granted = always.flatMap { it["rules"] as List<*> }.map { rule ->
+            val fields = rule as Map<*, *>
+            val content = fields["ruleContent"]
+            if (content == null) "all ${fields["toolName"]}" else "${fields["toolName"]}($content)"
+        }
+        return "Always allow this session: " + granted.joinToString(", ")
     }
 
     private fun onControlCancel(message: Map<*, *>) {

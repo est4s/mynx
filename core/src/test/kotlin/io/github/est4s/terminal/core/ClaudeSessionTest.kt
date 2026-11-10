@@ -386,14 +386,59 @@ class ClaudeSessionTest {
     }
 
     @Test
-    fun `allow always for edits takes the suggested mode`() {
+    fun `allow always grants only the rule when the mode and directories are suggested too`() {
         started()
-        val edits = """, "permission_suggestions":[{"type":"setMode","mode":"acceptEdits","destination":"session"}]"""
-        transport.say(canUse("r1", "Write", "t1", """{"file_path":"/a","content":"x"}""", edits))
+        // As a real can_use_tool for mkdir suggested them, all together.
+        val all = """, "permission_suggestions":[
+            {"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"mkdir *"}],"behavior":"allow","destination":"session"},
+            {"type":"addDirectories","directories":["/w"],"destination":"session"},
+            {"type":"setMode","mode":"acceptEdits","destination":"session"}]""".replace("\n", " ")
+        transport.say(canUse("r1", "Bash", "t1", """{"command":"mkdir a"}""", all))
         val option = all<AgentEvent.PermissionRequest>().single().options.first { it.kind == PermissionOptionKind.ALLOW_ALWAYS }
+        assertEquals("Always allow this session: Bash(mkdir *)", option.name)
         session.answerPermission("r1", option.id)
         assertEquals(
-            listOf(mapOf("type" to "setMode", "mode" to "acceptEdits", "destination" to "session")),
+            listOf(mapOf("type" to "addRules", "rules" to listOf(mapOf("toolName" to "Bash", "ruleContent" to "mkdir *")), "behavior" to "allow", "destination" to "session")),
+            answerOf(lastWritten())["updatedPermissions"],
+        )
+    }
+
+    @Test
+    fun `no always option for a suggestion with no rule to add`() {
+        val noRule = listOf(
+            """{"type":"setMode","mode":"acceptEdits","destination":"session"}""",
+            """{"type":"addDirectories","directories":["/w"],"destination":"session"}""",
+            """{"type":"addRules","rules":[],"behavior":"allow","destination":"session"}""",
+            """{"type":"addRules","rules":[{"ruleContent":"no tool named"}],"behavior":"allow","destination":"session"}""",
+            """{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":7}],"behavior":"allow","destination":"session"}""",
+            """{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"rm *"}],"behavior":"deny","destination":"session"}""",
+        )
+        started()
+        noRule.forEachIndexed { i, suggestion ->
+            transport.say(canUse("r$i", "Write", "t$i", """{"file_path":"/a","content":"x"}""", """, "permission_suggestions":[$suggestion]"""))
+            assertEquals(
+                listOf(PermissionOptionKind.ALLOW_ONCE, PermissionOptionKind.REJECT_ONCE),
+                all<AgentEvent.PermissionRequest>().last().options.map { it.kind },
+                suggestion,
+            )
+        }
+    }
+
+    @Test
+    fun `the always label names every rule, and a rule for a whole tool says so`() {
+        started()
+        val rules = """, "permission_suggestions":[
+            {"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"mkdir *"},{"toolName":"Bash","ruleContent":"touch *"}],"behavior":"allow","destination":"localSettings"},
+            {"type":"addRules","rules":[{"toolName":"WebFetch"}],"behavior":"allow","destination":"userSettings"}]""".replace("\n", " ")
+        transport.say(canUse("r1", "Bash", "t1", """{"command":"mkdir a && touch b"}""", rules))
+        val option = all<AgentEvent.PermissionRequest>().single().options.first { it.kind == PermissionOptionKind.ALLOW_ALWAYS }
+        assertEquals("Always allow this session: Bash(mkdir *), Bash(touch *), all WebFetch", option.name)
+        session.answerPermission("r1", option.id)
+        assertEquals(
+            listOf(
+                mapOf("type" to "addRules", "rules" to listOf(mapOf("toolName" to "Bash", "ruleContent" to "mkdir *"), mapOf("toolName" to "Bash", "ruleContent" to "touch *")), "behavior" to "allow", "destination" to "session"),
+                mapOf("type" to "addRules", "rules" to listOf(mapOf("toolName" to "WebFetch")), "behavior" to "allow", "destination" to "session"),
+            ),
             answerOf(lastWritten())["updatedPermissions"],
         )
     }

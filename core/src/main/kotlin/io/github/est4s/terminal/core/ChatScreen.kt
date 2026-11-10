@@ -125,3 +125,10 @@ class QuestionPicks(val questions: List<AgentQuestion>) {
         questions[q].question to picks[q].joinToString(", ") { questions[q].options[it].label }
     }
 }
+
+/** Streaming redraws at most about ten times a second. */
+const val CHAT_RENDER_INTERVAL_MS = 100L
+
+/** How long to wait before the next redraw; the first change after a quiet spell shows at once. */
+fun chatRenderDelay(now: Long, last: Long, interval: Long = CHAT_RENDER_INTERVAL_MS): Long =
+    (last + interval - now).coerceIn(0L, interval)

@@ -208,8 +208,8 @@ New, Restart (`--resume`), sign-in and install cards that open a tab.
 The native Services list (entry 172) waits on the phone too.
 
 **Next:** the phone test (below), then what's left: hand-off to a tab,
-artifact cards, Markdown, a resume list, other agents (Codex's
-`app-server`, Gemini's ACP).
+artifact cards, a resume list, other agents (Codex's `app-server`,
+Gemini's ACP).
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -247,6 +247,22 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (175): Chat: Markdown, and Always allow says what it grants (not yet on the phone)
+
+**Always allow** sent the suggested mode too, so tapping it on a
+`mkdir` would have switched the session to accepting edits: now only
+`addRules`, for the session, labelled with each rule (`Always allow
+this session: Bash(mkdir *)`); no rule, no Always. **Markdown:**
+`core/.../Markdown.kt` (blocks, GitHub tables, inline spans; tested at
+every prefix of a sample, and incremental against whole parses);
+`ChatView` draws agent messages from `mdRows()`, one view per row,
+reused by index; Copy on code blocks; tables and code scroll sideways;
+links open in the browser, http(s) only. Decided: inline markers show
+as typed until closed, so a stray `**` is right in the finished text
+(a marker can show for a moment while streaming). Redraws are at most
+about 10 a second, the first at once. `app/` isn't compiled yet.
+Plans stay plain text, as do user messages and tool output.
 
 ### 2026-11-10 (174): Chat screen for Claude Code (not yet on the phone)
 

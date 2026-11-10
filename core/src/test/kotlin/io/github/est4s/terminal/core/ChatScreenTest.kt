@@ -143,4 +143,13 @@ class ChatScreenTest {
     fun `with less height than the input needs, every optional row goes`() {
         assertEquals(ChatFit(header = false, status = false, gate = false), chatFit(60, 100, 50, 100, 40, 80))
     }
+
+    @Test
+    fun `redraws wait for the rest of the interval, not longer`() {
+        assertEquals(0, chatRenderDelay(now = 1000, last = 0))
+        assertEquals(0, chatRenderDelay(now = 1100, last = 1000))
+        assertEquals(70, chatRenderDelay(now = 1030, last = 1000))
+        assertEquals(100, chatRenderDelay(now = 1000, last = 1000))
+        assertEquals(100, chatRenderDelay(now = 500, last = 1000))
+    }
 }
