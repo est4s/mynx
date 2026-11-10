@@ -52,6 +52,7 @@ import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.AppView
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeMenus
+import io.github.est4s.terminal.core.ServiceOp
 import io.github.est4s.terminal.core.ToolsInstaller
 import io.github.est4s.terminal.core.WebApps
 import io.github.est4s.terminal.core.SETTINGS_TAB_COMMAND
@@ -320,7 +321,11 @@ class MainActivity : Activity(), FrontActivity {
 
     private val homeShown get() = home?.visibility == View.VISIBLE
 
-    private fun homeMenus() = HomeMenus(WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools), service?.servicesActive ?: 0)
+    private fun homeMenus(): HomeMenus {
+        // The list first: reading it can pick up a hand edit, which changes the count.
+        val services = service?.homeServices ?: emptyList()
+        return HomeMenus(WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools), service?.servicesActive ?: 0, services)
+    }
 
     private fun onHomeAction(action: HomeAction) {
         val service = service ?: return
@@ -328,6 +333,12 @@ class MainActivity : Activity(), FrontActivity {
             is HomeAction.Tab -> service.newSession(action.command)
             HomeAction.Shell -> service.newSession()
             is HomeAction.App -> return startActivity(WebAppActivity.shortcutIntent(this, action.name))
+            is HomeAction.Service -> {
+                val refusal = service.serviceAct(action.name, action.op)
+                toastError(refusal)
+                // Only Open leaves Home; the rest show on the list, through onServicesChanged.
+                if (refusal != null || action.op != ServiceOp.OPEN) return
+            }
             is HomeAction.Menu, HomeAction.None -> return
         }
         hideHome()
@@ -438,13 +449,18 @@ class MainActivity : Activity(), FrontActivity {
             setPadding(dp(14), dp(8), dp(14), dp(8))
             setOnClickListener { onTabAction(TabAction.New) }
         })
-        // While services run: how many; tapping opens the menu's Services list.
+        // While services run: how many; tapping opens the Services list (Home's in touch view).
         service?.stripServicesMark?.let { mark ->
             stripRow.addView(stripText(mark, strip.mark).apply {
                 setPadding(dp(4), dp(8), dp(14), dp(8))
                 setOnClickListener {
-                    service?.newSession(SERVICES_TAB_COMMAND)
-                    terminalView.requestFocus()
+                    if (touchView) {
+                        home?.showMenu("services", "Services")
+                        showHome()
+                    } else {
+                        service?.newSession(SERVICES_TAB_COMMAND)
+                        terminalView.requestFocus()
+                    }
                 }
             })
         }

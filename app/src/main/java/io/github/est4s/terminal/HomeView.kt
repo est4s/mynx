@@ -55,6 +55,7 @@ class HomeView(
         addView(terminalButton)
     }
     private var shown = emptyList<HomeItem>()
+    private var drawn: Level? = null
     private var asked = 0
 
     var colors: StripColors? = null
@@ -84,6 +85,13 @@ class HomeView(
         return true
     }
 
+    /** Makes [menu] the list on show, directly above the main one, for the next [refresh]. */
+    fun showMenu(menu: String, title: String) {
+        levels.subList(1, levels.size).clear()
+        levels.add(Level(menu, title))
+        scroll.scrollTo(0, 0)
+    }
+
     /** Reads the current list again, off the main thread (it reads Debian's files). */
     fun refresh() {
         val request = ++asked
@@ -93,6 +101,9 @@ class HomeView(
             val items = source.items(level.menu)
             main.post {
                 if (request != asked) return@post
+                // Nothing new (a live update elsewhere): a press on a row isn't lost to a rebuild.
+                if (level === drawn && items == shown) return@post
+                drawn = level
                 shown = items
                 render()
             }
@@ -102,7 +113,8 @@ class HomeView(
     private fun open(item: HomeItem) {
         val action = item.action
         if (action is HomeAction.Menu) {
-            levels.add(Level(action.name, item.label))
+            // A service's row says its state too; its page is called by its name.
+            levels.add(Level(action.name, action.name.substringAfter("service:", item.label)))
             scroll.scrollTo(0, 0)
             refresh()
         } else {

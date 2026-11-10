@@ -735,7 +735,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   suites). Anything that runs a program is a tab running `menu --act
   ACTION`, so both views run the same code; apps open their own screen.
   `HomeView` lies over the terminal, which keeps its size so tabs start
-  as usual. Exit isn't listed. Services is still the terminal's list.
+  as usual. Exit isn't listed. Services is a list of its own:
+  `HomeMenus` takes a snapshot (`ServiceManager.homeServices()`) and
+  `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
+  thread; `ServiceHost.changed` refreshes it while it shows, and in
+  touch view the strip's `● N` opens it.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

@@ -684,4 +684,132 @@ class ServiceRequestTest {
 
         assertEquals(1, changes { ask("service-add", "db", "command=postgres") })
     }
+
+    private val noRecord: (String) -> Unit = {}
+
+    @Test
+    fun `homeServices gives the words the terminal's list shows`() {
+        write("[web]\ncommand = run\nautostart = yes\n[db]\ncommand = postgres\n[flaky]\ncommand = x\nrestart = always\n")
+        host.tabs[7] = AdoptedTab("tab7", 7, "vim", "/root", open = true)
+        ask("service-adopt", "dev", "7")
+        ask("service-start", "web")
+        ask("service-start", "flaky")
+        File(servicesDir, "flaky.exit").writeText("1\n")
+        manager.exited("flaky#2")
+
+        assertEquals(
+            listOf(
+                HomeService("web", "running", saved = true, autostart = true),
+                HomeService("db", "stopped", saved = true, autostart = false),
+                HomeService("flaky", "stopped", saved = true, autostart = false),
+                HomeService("dev", "running", saved = false, autostart = false),
+            ),
+            manager.homeServices(),
+        )
+        assertTrue(manager.services["flaky"]!!.restartPending, "the terminal shows a waiting restart as stopped too")
+    }
+
+    @Test
+    fun `homeServices sees a hand edit, as the terminal's list does`() {
+        write("[web]\ncommand = run\n")
+        manager.reload()
+        write("[db]\ncommand = postgres\n")
+
+        assertEquals(listOf("db"), manager.homeServices().map { it.name })
+        assertEquals(0, changes { manager.homeServices() }, "reading it again changes nothing")
+    }
+
+    @Test
+    fun `act starts, stops, restarts and opens by name`() {
+        write("[web]\ncommand = run\n")
+
+        assertNull(manager.act("web", ServiceOp.START, noRecord))
+        assertEquals("start web saved=true", host.events.last())
+        assertNull(manager.act("web", ServiceOp.OPEN, noRecord))
+        assertEquals("open web web#1", host.events.last())
+        assertTrue(manager.services["web"]!!.open)
+        assertNull(manager.act("web", ServiceOp.STOP, noRecord))
+        assertEquals("stopping", manager.homeServices().single().state)
+        manager.exited("web#1")
+        assertNull(manager.act("web", ServiceOp.RESTART, noRecord))
+        assertEquals("start web saved=true", host.events.last())
+    }
+
+    @Test
+    fun `act says why it can't`() {
+        write("[web]\ncommand = run\n")
+
+        assertEquals("web hasn't run yet", manager.act("web", ServiceOp.OPEN, noRecord))
+        assertEquals("web isn't running", manager.act("web", ServiceOp.STOP, noRecord))
+        assertEquals(
+            "no service named gone (mynx service list shows them)",
+            manager.act("gone", ServiceOp.START, noRecord),
+        )
+        host.tabs[7] = AdoptedTab("tab7", 7, "vim", "/root", open = true)
+        ask("service-adopt", "dev", "7")
+        assertEquals(
+            "dev isn't in ~/$CONFIG_DIR/$SERVICES_CONF: mynx service save dev first",
+            manager.act("dev", ServiceOp.AUTOSTART_ON, noRecord),
+        )
+    }
+
+    @Test
+    fun `act turns autostart on and off in the file`() {
+        write("[web]\ncommand = run\n")
+
+        assertEquals(null, manager.act("web", ServiceOp.AUTOSTART_ON, noRecord))
+        assertEquals("[web]\ncommand = run\nautostart = yes\n", conf.readText())
+        assertTrue(manager.homeServices().single().autostart)
+        assertEquals(null, manager.act("web", ServiceOp.AUTOSTART_OFF, noRecord))
+        assertFalse(manager.homeServices().single().autostart)
+    }
+
+    @Test
+    fun `act's autostart is an undo step, apart from edits by hand before it`() {
+        write("[web]\ncommand = run\n")
+        requests.start()
+        write("[web]\ncommand = edited\n")
+
+        assertNull(manager.act("web", ServiceOp.AUTOSTART_ON, requests::recordChange))
+
+        assertEquals("""{"ok":true,"undone":"service set web"}""", ask("undo"))
+        assertEquals("[web]\ncommand = edited\n", conf.readText())
+    }
+
+    @Test
+    fun `act answers with what went wrong rather than throwing`() {
+        write("[web]\ncommand = run\n")
+        File(conf.path + ".tmp").mkdirs()
+
+        val answer = manager.act("web", ServiceOp.AUTOSTART_ON, noRecord)
+
+        assertTrue(answer != null && answer.startsWith("web: "), "got $answer")
+    }
+
+    @Test
+    fun `every change the list shows tells the app, and is there when it asks`() {
+        write("[web]\ncommand = run\nrestart = on-failure\n")
+        manager.reload()
+        fun shows(state: String, action: () -> Unit) {
+            assertTrue(changes(action) > 0, "no change heard for $state")
+            assertEquals(state, manager.homeServices().single().state)
+        }
+
+        shows("running") { manager.act("web", ServiceOp.START, noRecord) }
+        shows("stopping") { manager.act("web", ServiceOp.STOP, noRecord) }
+        shows("stopped") { manager.exited("web#1") }
+        shows("running") { manager.act("web", ServiceOp.START, noRecord) }
+        File(servicesDir, "web.exit").writeText("1\n")
+        shows("stopped") { manager.exited("web#2") }
+        shows("running") { host.scheduled.removeAt(0).second() }
+        File(servicesDir, "web.exit").writeText("1\n")
+        shows("stopped") { manager.exited("web#3") }
+        shows("stopped") { manager.act("web", ServiceOp.STOP, noRecord) }
+        assertFalse(manager.services["web"]!!.restartPending)
+        host.startFails = "no"
+        shows("failed") { manager.act("web", ServiceOp.START, noRecord) }
+        val before = manager.homeServices().single().autostart
+        assertEquals(1, changes { manager.act("web", ServiceOp.AUTOSTART_ON, noRecord) })
+        assertTrue(manager.homeServices().single().autostart != before)
+    }
 }

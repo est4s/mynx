@@ -17,7 +17,8 @@ class HomeTest {
         deleteTree(top)
     }
 
-    private fun menus(services: Int = 0) = HomeMenus(WebApps(home, rootfs.path, tools), services)
+    private fun menus(services: Int = 0, list: List<HomeService> = emptyList()) =
+        HomeMenus(WebApps(home, rootfs.path, tools), services, list)
     private fun act(action: String) = HomeAction.Tab(runThenShell("keybar menu menu --act " + shellQuote(action)))
     private fun labels(menu: String, services: Int = 0) = menus(services).items(menu).map { it.label }
 
@@ -56,7 +57,7 @@ class HomeTest {
         assertEquals(
             listOf(
                 HomeAction.Menu("terminal-apps"), HomeAction.Menu("games"), HomeAction.Menu("settings"),
-                act("settings"), HomeAction.Menu("agents"), HomeAction.Tab(SERVICES_TAB_COMMAND),
+                act("settings"), HomeAction.Menu("agents"), HomeAction.Menu("services"),
                 HomeAction.Menu("system"), HomeAction.Menu("help"), act("welcome"),
             ),
             menus().items("main").map { it.action },
@@ -216,5 +217,75 @@ class HomeTest {
         assertEquals(act("update"), menus().items("system")[0].action)
         assertEquals(act("info"), menus().items("system")[1].action)
         assertEquals(emptyList(), menus().items("nope"))
+    }
+
+    private val web = HomeService("web", "running", saved = true, autostart = true)
+    private val db = HomeService("database-server-long", "stopped", saved = true, autostart = false)
+    private val tab = HomeService("tab", "stopping", saved = false, autostart = false)
+    private fun service(name: String, op: ServiceOp) = HomeAction.Service(name, op)
+
+    @Test
+    fun `Services lists each service with its state, whole names, unsaved ones marked`() {
+        assertEquals(
+            listOf(
+                HomeItem("web running", HomeAction.Menu("service:web")),
+                HomeItem("database-server-long stopped", HomeAction.Menu("service:database-server-long")),
+                HomeItem("tab* stopping", HomeAction.Menu("service:tab")),
+            ),
+            menus(list = listOf(web, db, tab)).items("services"),
+        )
+    }
+
+    @Test
+    fun `with no services the list says so and opens the how-to, as the terminal's does`() {
+        assertEquals(listOf(HomeItem("(no services yet)", act("svchelp"))), menus().items("services"))
+    }
+
+    @Test
+    fun `a running service offers what the launcher menu's does, in its order`() {
+        assertEquals(
+            listOf(
+                HomeItem("Open", service("web", ServiceOp.OPEN)),
+                HomeItem("Stop", service("web", ServiceOp.STOP)),
+                HomeItem("Restart", service("web", ServiceOp.RESTART)),
+                HomeItem("Log", act("svclog:web")),
+                HomeItem("Autostart: on", service("web", ServiceOp.AUTOSTART_OFF)),
+            ),
+            menus(list = listOf(web)).items("service:web"),
+        )
+    }
+
+    @Test
+    fun `a stopped service offers Start, and its autostart turns on`() {
+        val name = db.name
+        assertEquals(
+            listOf(
+                HomeItem("Open", service(name, ServiceOp.OPEN)),
+                HomeItem("Start", service(name, ServiceOp.START)),
+                HomeItem("Restart", service(name, ServiceOp.RESTART)),
+                HomeItem("Log", act("svclog:$name")),
+                HomeItem("Autostart: off", service(name, ServiceOp.AUTOSTART_ON)),
+            ),
+            menus(list = listOf(db)).items("service:$name"),
+        )
+    }
+
+    @Test
+    fun `one stopping still offers Stop, and an unsaved one has no Autostart`() {
+        assertEquals(listOf("Open", "Stop", "Restart", "Log"), menus(list = listOf(tab)).items("service:tab").map { it.label })
+    }
+
+    @Test
+    fun `a failed service offers Start`() {
+        val failed = web.copy(state = "failed")
+        assertEquals("Start", menus(list = listOf(failed)).items("service:web")[1].label)
+    }
+
+    @Test
+    fun `a service removed while its list was open is a line that does nothing`() {
+        assertEquals(
+            listOf(HomeItem("(no service named gone)", HomeAction.None)),
+            menus(list = listOf(web)).items("service:gone"),
+        )
     }
 }

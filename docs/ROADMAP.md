@@ -63,7 +63,7 @@ and either view switches to the other.
   it (`claude --resume ID` and the others' equivalents); the chat lets
   go of it first, so two programs never drive one session.
 - **Home built** (2026-11-09): `view = touch`, passed on the phone.
-  Services is still the terminal's list.
+  A native Services list is built, waiting on the phone.
 - Sign-in is the terminal's: Chat opens a tab when it's needed
   (maintainer's decision, 2026-11-09).
 - The agent widget could open straight into a chat.
