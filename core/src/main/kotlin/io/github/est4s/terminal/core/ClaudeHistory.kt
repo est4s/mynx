@@ -13,7 +13,7 @@ const val CLAUDE_TITLE_MAX = 120
 /** How many past chats the list reads. */
 const val CLAUDE_SESSIONS_MAX = 50
 
-/** A past chat for the Chats list: [title] is its first prompt, on one line. */
+/** A past chat for the chat history: [title] is its first prompt, on one line. */
 data class ClaudeSessionSummary(val sessionId: String, val title: String, val modifiedMs: Long)
 
 // User lines Claude writes itself: slash commands and their output, `!`
@@ -38,13 +38,16 @@ private fun aside(line: Map<*, *>): Boolean =
 /** What the user typed on a `user` line; null for tool results and lines Claude made. */
 private fun promptText(line: Map<*, *>): String? {
     if (line["type"] != "user" || aside(line)) return null
-    val text = when (val content = (line["message"] as? Map<*, *>)?.get("content")) {
-        is String -> content
-        is List<*> -> content.filterIsInstance<Map<*, *>>().filter { it["type"] == "text" }
-            .mapNotNull { it["text"] as? String }.joinToString("\n")
-        else -> return null
-    }
+    val text = promptContent((line["message"] as? Map<*, *>)?.get("content")) ?: return null
     return text.takeUnless { it.isBlank() || systemText(it) }
+}
+
+// A prompt Claude took during a turn is stored as an attachment, not a user line.
+private fun queuedPrompt(line: Map<*, *>): String? {
+    if (aside(line)) return null
+    val attachment = line["attachment"] as? Map<*, *> ?: return null
+    if (attachment["type"] != "queued_command" || (attachment["commandMode"] ?: "prompt") != "prompt") return null
+    return promptContent(attachment["prompt"])?.takeUnless { it.isBlank() || systemText(it) }
 }
 
 private fun parseLine(line: String): Map<*, *>? = try {
@@ -55,7 +58,8 @@ private fun parseLine(line: String): Map<*, *>? = try {
 
 /**
  * A Claude transcript (`~/.claude/projects/…/ID.jsonl`, one JSON object a
- * line) as the Chat screen's rows: prompts, the agent's text, and tool
+ * line) as the Chat screen's rows: prompts (also those taken during a
+ * turn, `queued_command` attachments), the agent's text, and tool
  * cards ended as completed or failed with their output (one with no
  * result never finished: failed). Thinking, subagents' and Claude's own
  * lines, compaction summaries, and lines of unknown types are left out;
@@ -67,12 +71,19 @@ private fun parseLine(line: String): Map<*, *>? = try {
 fun readClaudeHistory(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
     readClaudeTranscript(lines, max).items
 
-/** A transcript's rows ([readClaudeHistory]) and the [model] its last answer came from (`message.model`), if any. */
-data class ClaudeHistory(val items: List<ChatItem>, val model: String?)
+/**
+ * A transcript's rows ([readClaudeHistory]), the [model] its last answer
+ * came from (`message.model`), its [title] (the first prompt, on one line,
+ * as [claudeSessionTitle] has it) and the [context] its last answer used
+ * (input, cache read and cache written), each null when there's none.
+ */
+data class ClaudeHistory(val items: List<ChatItem>, val model: String?, val title: String? = null, val context: Long? = null)
 
 /** [readClaudeHistory], with the model: `--resume` runs the chat on it again. */
 fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): ClaudeHistory {
     var model: String? = null
+    var title: String? = null
+    var context: Long? = null
     // In order of first appearance; a tool's result replaces its row in place.
     val rows = LinkedHashMap<String, ChatItem>()
     var dropped = false
@@ -89,12 +100,16 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
     for (text in lines) {
         number++
         // Claude writes compact JSON: this skips its many big lines of other kinds unparsed.
-        if (!text.contains("\"type\":\"user\"") && !text.contains("\"type\":\"assistant\"")) continue
+        if (!text.contains("\"type\":\"user\"") && !text.contains("\"type\":\"assistant\"") && !text.contains("\"type\":\"queued_command\"")) continue
         val line = parseLine(text) ?: continue
         val uuid = line["uuid"] as? String ?: "line$number"
         when (line["type"]) {
+            "attachment" -> queuedPrompt(line)?.let { add(ChatItem.User("$HISTORY_ID$uuid", it)) }
             "user" -> {
-                promptText(line)?.let { add(ChatItem.User("$HISTORY_ID$uuid", it)) }
+                promptText(line)?.let {
+                    if (title == null) title = oneLine(promptTitleText(it))
+                    add(ChatItem.User("$HISTORY_ID$uuid", it))
+                }
                 if (aside(line)) continue
                 val content = (line["message"] as? Map<*, *>)?.get("content") as? List<*> ?: continue
                 for (block in content.filterIsInstance<Map<*, *>>()) {
@@ -110,6 +125,7 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
                 val message = line["message"] as? Map<*, *> ?: continue
                 if (message["model"] == "<synthetic>") continue
                 (message["model"] as? String)?.let { model = it }
+                (message["usage"] as? Map<*, *>)?.let { usage -> contextTokens(usage)?.let { context = it } }
                 val content = message["content"] as? List<*> ?: continue
                 content.forEachIndexed { index, item ->
                     val block = item as? Map<*, *> ?: return@forEachIndexed
@@ -138,7 +154,7 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
     }
     val items = rows.values.toList()
     val shown = if (dropped) listOf(ChatItem.Notice("history-earlier", NoticeKind.INFO, CHAT_HISTORY_EARLIER)) + items else items
-    return ClaudeHistory(shown, model)
+    return ClaudeHistory(shown, model, title, context)
 }
 
 /** [readClaudeHistory] of a file; call it off the main thread. */
@@ -149,7 +165,7 @@ fun readClaudeHistory(file: File, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
 fun readClaudeTranscript(file: File, max: Int = CHAT_HISTORY_MAX): ClaudeHistory =
     file.useLines { readClaudeTranscript(it, max) }
 
-private fun oneLine(text: String): String =
+internal fun oneLine(text: String): String =
     text.take(CLAUDE_TITLE_MAX * 4).trim().replace(Regex("\\s+"), " ").take(CLAUDE_TITLE_MAX)
 
 /**
@@ -170,7 +186,7 @@ fun claudeSessionTitle(file: File, head: Int = CLAUDE_TITLE_HEAD_BYTES): String?
     val full = size == head
     for (line in if (full) lines.dropLast(1) else lines) {
         val parsed = parseLine(line) ?: continue
-        promptText(parsed)?.let { return oneLine(it) }
+        promptText(parsed)?.let { return oneLine(promptTitleText(it)) }
     }
     return if (full) cutPrompt(lines.last()) else null
 }
@@ -203,7 +219,7 @@ fun listClaudeSessions(dir: File, max: Int = CLAUDE_SESSIONS_MAX): List<ClaudeSe
         title?.let { ClaudeSessionSummary(transcript.sessionId, it, transcript.modifiedMs) }
     }
 
-/** How long ago [then] was, for the Chats list. */
+/** How long ago [then] was, for the chat history. */
 fun chatRelativeTime(now: Long, then: Long): String {
     val minutes = (now - then) / 60_000
     val hours = minutes / 60

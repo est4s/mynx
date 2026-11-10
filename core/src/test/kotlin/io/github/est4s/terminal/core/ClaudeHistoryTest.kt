@@ -24,6 +24,29 @@ class ClaudeHistoryTest {
 
     private fun jsonText(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 
+    // A prompt taken during a turn (Claude 2.1.321): an attachment, not a user line; `rendered` cut short.
+    private val queuedLine =
+        """{"parentUuid":"4eb21736-a416-4876-94e3-127252cad610","isSidechain":false,"attachment":{"type":"queued_command","prompt":"Also say the word BANANA.","source_uuid":"472074a1-2603-4f4e-a9de-1524c68e05ec","delivery_id":"e1a42079-284e-46e1-a2f9-33cb7ce63d8f","commandMode":"prompt","timestamp":"2026-11-10T08:38:48.322Z"},"type":"attachment","uuid":"1c0be48a-c886-4291-8095-a1679464290c","timestamp":"2026-11-10T08:38:48.322Z","rendered":[{"content":"<system-reminder>\nThe user sent a new message while you were working:\nAlso say the word BANANA.\n</system-reminder>"}],"renderedRole":"system","userType":"external","entrypoint":"sdk-cli","sessionId":"778cae7f-ee53-4a3b-96c2-f5059025088a","version":"2.1.321"}"""
+
+    @Test
+    fun `a prompt queued during a turn reads back as the user's, where Claude took it`() {
+        val items = readClaudeHistory(sequenceOf(user(1, "Run sleep"), queuedLine, agent(2, "DONE")))
+        assertEquals(
+            listOf<ChatItem>(
+                ChatItem.User("history:u1", "Run sleep"),
+                ChatItem.User("history:1c0be48a-c886-4291-8095-a1679464290c", "Also say the word BANANA."),
+                ChatItem.Agent("history:a2:0", "DONE"),
+            ),
+            items,
+        )
+    }
+
+    @Test
+    fun `queued commands other than prompts are left out`() {
+        val other = queuedLine.replace("\"commandMode\":\"prompt\"", "\"commandMode\":\"task-notification\"")
+        assertEquals(emptyList(), readClaudeHistory(sequenceOf(other)))
+    }
+
     @Test
     fun `a transcript becomes the screen's rows`() {
         val items = readClaudeHistory(fixture.lineSequence())
@@ -213,5 +236,35 @@ class ClaudeHistoryTest {
         assertEquals(readClaudeHistory(lines.asSequence()), transcript.items)
         assertEquals("m", readClaudeTranscript(fixture.lineSequence()).model)
         assertNull(readClaudeTranscript(sequenceOf(user(1, "hi"))).model)
+    }
+
+    private fun answered(n: Int, input: Int, read: Int, written: Int, sidechain: Boolean = false) =
+        """{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"a"}],""" +
+            """"usage":{"input_tokens":$input,"cache_read_input_tokens":$read,"cache_creation_input_tokens":$written,"output_tokens":9}},""" +
+            """"isSidechain":$sidechain,"uuid":"a$n"}"""
+
+    @Test
+    fun `the context is the last answer's, not a subagent's`() {
+        val lines = sequenceOf(user(1, "hi"), answered(2, 2, 100, 50), answered(3, 3, 1000, 20), answered(4, 1, 9, 9, sidechain = true))
+        assertEquals(1023L, readClaudeTranscript(lines).context)
+        assertNull(readClaudeTranscript(sequenceOf(user(1, "hi"), agent(2, "a"))).context)
+    }
+
+    @Test
+    fun `the transcript's title is its first prompt, even once that row is cut off`() {
+        val lines = (1..5).map { user(it, "prompt\n$it") }
+        val transcript = readClaudeTranscript(lines.asSequence(), max = 2)
+        assertEquals("prompt 1", transcript.title)
+        assertNull(readClaudeTranscript(sequenceOf(agent(1, "a"))).title)
+    }
+
+    @Test
+    fun `a title leaves attachments out, or names the first when there's no text`() {
+        val photo = ChatAttachment("/root/Shared/photo.jpg", "photo.jpg", image = true)
+        val withText = promptWithAttachments("What is this?", listOf(photo))
+        assertEquals("What is this?", readClaudeTranscript(sequenceOf(user(1, withText))).title)
+        assertEquals("photo.jpg", readClaudeTranscript(sequenceOf(user(1, promptWithAttachments("", listOf(photo))))).title)
+        val file = File(top, "t.jsonl").apply { writeText(user(1, withText) + "\n") }
+        assertEquals("What is this?", claudeSessionTitle(file))
     }
 }

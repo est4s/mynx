@@ -66,8 +66,10 @@ and either view switches to the other.
   go of it first, so two programs never drive one session.
 - **Home built** (2026-11-09): `view = touch`, passed on the phone.
   The native Services list and Chat for Claude Code passed on the
-  phone (2026-11-10). Next: several chats at once, the chat history
-  as the agent's home.
+  phone (2026-11-10). Several chats at once, with the chat history
+  as the agent's home, queued prompts, and a layout like Claude's app
+  (+ sheet with files and permission, usage ring, dictation): passed
+  on the phone (2026-11-10).
 - Sign-in is the terminal's: Chat opens a tab when it's needed
   (maintainer's decision, 2026-11-09).
 - The agent widget could open straight into a chat.

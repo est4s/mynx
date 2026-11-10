@@ -110,8 +110,106 @@ class ClaudeSessionTest {
         assertEquals(AgentEvent.UserMessage("user-1", "hello"), events[0])
         assertEquals(AgentEvent.TurnStarted, events[1])
         session.sendPrompt("more")
-        assertEquals(AgentEvent.UserMessage("user-2", "more"), events[2])
+        assertEquals(AgentEvent.PromptQueued("user-2", "more"), events[2])
         assertEquals(3, events.size, "no second TurnStarted during a turn")
+    }
+
+    private fun replayed(text: String) =
+        """{"type":"user","message":{"role":"user","content":${json(text)}},"session_id":"s1","parent_tool_use_id":null,"isReplay":true}"""
+
+    @Test
+    fun `a prompt sent during a turn waits for its replay, and lands where Claude took it`() {
+        started()
+        session.sendPrompt("Run the shell command `sleep 12` with the Bash tool, then say DONE.")
+        session.sendPrompt("Also say the word APPLE.")
+        session.sendPrompt("Also say the word CHERRY.")
+        assertEquals(listOf("user-2", "user-3"), all<AgentEvent.PromptQueued>().map { it.id })
+        assertEquals(listOf("user-1"), all<AgentEvent.UserMessage>().map { it.id })
+        replay("claude-queue-replay.txt")
+        assertEquals(listOf("user-1", "user-2", "user-3"), all<AgentEvent.UserMessage>().map { it.id }, "the first one's replay is swallowed")
+        val apple = events.indexOf(AgentEvent.UserMessage("user-2", "Also say the word APPLE."))
+        val tool = events.indexOfFirst { it is AgentEvent.ToolCallUpdate && it.call.status == ToolStatus.COMPLETED }
+        assertTrue(tool in 0 until apple, "after the tool's result: $events")
+        assertEquals(1, all<AgentEvent.TurnStarted>().size)
+        assertEquals(1, all<AgentEvent.TurnEnded>().size)
+    }
+
+    @Test
+    fun `a replay of prompts merged together takes each of them, in order`() {
+        started()
+        session.sendPrompt("go")
+        transport.say(init)
+        session.sendPrompt("a")
+        session.sendPrompt("b")
+        session.sendPrompt("c")
+        transport.say(replayed("go"))
+        transport.say(result())
+        transport.say(init)
+        transport.say(replayed("a\nb"))
+        assertEquals(listOf("user-1", "user-2", "user-3"), all<AgentEvent.UserMessage>().map { it.id })
+        assertEquals(2, all<AgentEvent.TurnStarted>().size, "the queued ones are a turn of their own")
+        transport.say(replayed("c"))
+        assertEquals(listOf("user-1", "user-2", "user-3", "user-4"), all<AgentEvent.UserMessage>().map { it.id })
+    }
+
+    @Test
+    fun `a replay that skips a queued prompt sends that one too, and one matching nothing does nothing`() {
+        started()
+        session.sendPrompt("go")
+        transport.say(init)
+        session.sendPrompt("a")
+        session.sendPrompt("b")
+        transport.say(replayed("/compact"))
+        assertEquals(listOf("user-1"), all<AgentEvent.UserMessage>().map { it.id })
+        transport.say(replayed("b"))
+        assertEquals(listOf("user-1", "user-2", "user-3"), all<AgentEvent.UserMessage>().map { it.id })
+    }
+
+    @Test
+    fun `a prompt sent while others still wait queues behind them, and starts the turn`() {
+        started()
+        session.sendPrompt("go")
+        transport.say(init)
+        session.sendPrompt("a")
+        transport.say(result())
+        session.sendPrompt("b")
+        assertEquals(listOf("user-2", "user-3"), all<AgentEvent.PromptQueued>().map { it.id })
+        assertEquals(2, all<AgentEvent.TurnStarted>().size)
+        transport.say(init)
+        transport.say(replayed("a\nb"))
+        assertEquals(listOf("user-1", "user-2", "user-3"), all<AgentEvent.UserMessage>().map { it.id })
+    }
+
+    @Test
+    fun `a replay with text blocks counts as its text`() {
+        started()
+        session.sendPrompt("go")
+        transport.say(init)
+        session.sendPrompt("a")
+        transport.say("""{"type":"user","message":{"role":"user","content":[{"type":"text","text":"a"}]},"isReplay":true}""")
+        assertEquals(AgentEvent.UserMessage("user-2", "a"), all<AgentEvent.UserMessage>().last())
+    }
+
+    @Test
+    fun `prompts queued before a real interrupt run as the next turn`() {
+        started()
+        session.sendPrompt("Run the shell command `sleep 12` with the Bash tool, then say DONE.")
+        session.sendPrompt("Also say the word APPLE.")
+        session.sendPrompt("Also say the word CHERRY.")
+        val lines = chatFixture("claude-queue-interrupt.txt")
+        val firstResult = lines.indexOfFirst { parsed(it)["type"] == "result" }
+        lines.take(firstResult + 1).forEach(transport::say)
+        assertEquals(StopReason.CANCELLED, all<AgentEvent.TurnEnded>().single().stopReason)
+        assertEquals(listOf("user-1"), all<AgentEvent.UserMessage>().map { it.id }, "still queued after the stop")
+        val second = lines.indexOfFirst { it.contains("\"result\":\"APPLE") }
+        lines.subList(firstResult + 1, second + 1).forEach(transport::say)
+        assertEquals(listOf("user-1", "user-2", "user-3"), all<AgentEvent.UserMessage>().map { it.id })
+        assertEquals(2, all<AgentEvent.TurnStarted>().size)
+        assertEquals(2, all<AgentEvent.TurnEnded>().size)
+        session.sendPrompt("Say the word LAST.")
+        lines.drop(second + 1).forEach(transport::say)
+        assertEquals(AgentEvent.UserMessage("user-4", "Say the word LAST."), all<AgentEvent.UserMessage>().last())
+        assertEquals(3, all<AgentEvent.TurnEnded>().size)
     }
 
     @Test
@@ -987,4 +1085,56 @@ class ClaudeSessionTest {
         started()
         assertEquals("{\n  \"cmd\": \"ls\"\n}", reviewOf("Bash", """{"cmd":"ls"}"""))
     }
+
+    @Test
+    fun `each call's context and the model's window come from a real run`() {
+        started()
+        replay("claude-usage.txt")
+        assertEquals(
+            listOf(ContextUsed(19_472, null), ContextUsed(21_461, null), ContextUsed(21_461, 1_000_000)),
+            all<ContextUsed>(),
+            "input, cache read and cache written; once per change; the window from the result",
+        )
+    }
+
+    @Test
+    fun `the plan's windows come from a real run's rate limit event`() {
+        started()
+        replay("claude-usage.txt")
+        assertEquals(
+            listOf(
+                AgentEvent.PlanLimits(
+                    listOf(
+                        PlanWindow("five_hour", 0.35, 1_794_309_000, "allowed"),
+                        PlanWindow("seven_day", 0.67, 1_794_369_600, "allowed"),
+                    ),
+                ),
+            ),
+            all<AgentEvent.PlanLimits>(),
+        )
+    }
+
+    @Test
+    fun `a window of another kind is kept, one without numbers left out`() {
+        started()
+        transport.say(
+            """{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","unifiedWindows":""" +
+                """{"seven_day_opus":{"utilization":0.1},"odd":{"status":"allowed"},"bad":3}}}""",
+        )
+        assertEquals(listOf(PlanWindow("seven_day_opus", 0.1, null, null)), all<AgentEvent.PlanLimits>().single().windows)
+        transport.say("""{"type":"rate_limit_event","rate_limit_info":{"status":"allowed"}}""")
+        assertEquals(1, all<AgentEvent.PlanLimits>().size, "nothing to tell")
+    }
+
+    @Test
+    fun `a subagent's calls don't count as the chat's context`() {
+        started()
+        transport.say(
+            """{"type":"assistant","parent_tool_use_id":"t1","message":{"id":"m1","content":[],""" +
+                """"usage":{"input_tokens":5,"cache_read_input_tokens":500,"cache_creation_input_tokens":0}}}""",
+        )
+        assertEquals(emptyList(), all<ContextUsed>())
+    }
 }
+
+private typealias ContextUsed = AgentEvent.ContextUsed

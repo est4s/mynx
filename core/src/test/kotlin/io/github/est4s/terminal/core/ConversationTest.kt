@@ -22,6 +22,33 @@ class ConversationTest {
     }
 
     @Test
+    fun `a queued prompt waits outside the rows until it's taken`() {
+        val waiting = fold(AgentEvent.UserMessage("user-1", "go"), AgentEvent.TurnStarted, AgentEvent.PromptQueued("user-2", "more"))
+        assertEquals(listOf(ChatItem.User("user-2", "more")), waiting.queued)
+        assertEquals(listOf<ChatItem>(ChatItem.User("user-1", "go")), waiting.items)
+        val taken = fold(AgentEvent.AgentMessageChunk("m#0", "ok"), AgentEvent.UserMessage("user-2", "more"), from = waiting)
+        assertEquals(emptyList(), taken.queued)
+        assertEquals(listOf("user-1", "m#0", "user-2"), taken.items.map { it.id })
+    }
+
+    @Test
+    fun `queued prompts left when the process ends are shown as not sent`() {
+        val state = fold(
+            AgentEvent.UserMessage("user-1", "go"),
+            AgentEvent.PromptQueued("user-2", "a"),
+            AgentEvent.PromptQueued("user-3", "b"),
+            AgentEvent.ProcessEnded(0, "", stopped = true),
+        )
+        assertEquals(emptyList(), state.queued)
+        assertEquals(listOf("user-1", "user-2", "user-3"), state.items.take(3).map { it.id })
+        val notice = state.items.last() as ChatItem.Notice
+        assertEquals("Not sent: the agent stopped before taking these 2 messages.", notice.text)
+        val one = fold(AgentEvent.PromptQueued("user-2", "a"), AgentEvent.ProcessEnded(1, "", stopped = false))
+        assertEquals("Not sent: the agent stopped before taking it.", (one.items[1] as ChatItem.Notice).text)
+        assertEquals(NoticeKind.ERROR, (one.items[2] as ChatItem.Notice).kind, "then why it stopped")
+    }
+
+    @Test
     fun `chunks build one agent row`() {
         val state = fold(AgentEvent.AgentMessageChunk("m#0", "Hel"), AgentEvent.AgentMessageChunk("m#0", "lo"))
         assertEquals(listOf<ChatItem>(ChatItem.Agent("m#0", "Hello")), state.items)

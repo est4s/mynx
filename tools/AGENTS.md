@@ -251,13 +251,23 @@ One `key = value` per line; `mynx settings` describes each.
   same `menu.conf` and app folders; programs open in a tab. Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
   back to Home. In `touch`, Home's AI agents opens an installed Claude
-  Code as a chat (messages, tool cards, Allow/Deny); the other agents
-  run in a tab. The chat's Chats lists past Claude Code sessions of
-  `/root` to go on with, and To tab moves the chat to a terminal tab
+  Code's chat history: New chat, then its chats in `/root`, newest
+  first, marked while one works or waits for you. A chat shows
+  messages, tool cards and Allow/Deny; Back goes to the history, and
+  Back again to Home. Several chats can work at once, each its own
+  Claude Code: one left while it works keeps going, one left idle is
+  stopped and goes on (`--resume`) with its next message. The other
+  agents run in a tab. A chat's To tab moves it to a terminal tab
   (`claude --resume`); one session runs in one place at a time. When
   Claude Code makes or changes an app in `~/apps` or `~/terminal-apps`,
   or writes an APK, the chat shows a card for it: Open (a web app),
   Run (a terminal app, in a tab), Share.
+- `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
+  the permission mode new chats of touch view's Chat start in. `auto`
+  lets Claude Code decide what's safe to run, asking less; `default`
+  asks first. A mode picked in a chat stays with that chat, also after
+  leaving it; the chat's "Use as default" sets this setting. Never
+  `bypassPermissions`.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a
@@ -338,9 +348,10 @@ hook never fails, so it can't disturb the agent. `mynx agent notify
 NAME on|off` (or the Settings editor) adds or removes the hook entries
 in the agent's config file and leaves everything else in it alone;
 that file is the only record of whether they're on. `agent-notify off`
-silences all agents at once. Touch view's Chat notifies the same way
-when it isn't on screen (Claude Code's switch and both settings
-apply), and tapping that notification opens Chat.
+silences all agents at once. Touch view's chats notify the same way,
+each with a notification of its own, when that chat isn't on screen
+(Claude Code's switch and both settings apply); tapping one opens its
+chat.
 
 Your own scripts can notify too: `long-job && mynx notify "Done" "long-job finished"`.
 

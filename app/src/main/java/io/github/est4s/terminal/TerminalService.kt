@@ -42,6 +42,7 @@ import io.github.est4s.terminal.core.isNusName
 import io.github.est4s.terminal.core.cameraRequests
 import io.github.est4s.terminal.core.locationRequests
 import io.github.est4s.terminal.core.sensorRequests
+import io.github.est4s.terminal.core.setSetting
 import io.github.est4s.terminal.core.MynxRequests
 import io.github.est4s.terminal.core.Vibrations
 import io.github.est4s.terminal.core.Share
@@ -52,8 +53,9 @@ import io.github.est4s.terminal.core.ArtifactFinder
 import io.github.est4s.terminal.core.AgentTransport
 import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatCheck
-import io.github.est4s.terminal.core.ChatController
+import io.github.est4s.terminal.core.CHAT_NOTICE_SLOTS
 import io.github.est4s.terminal.core.ChatHost
+import io.github.est4s.terminal.core.ChatHub
 import io.github.est4s.terminal.core.ChatNotice
 import io.github.est4s.terminal.core.ChatNoticeRules
 import io.github.est4s.terminal.core.ChatTab
@@ -160,11 +162,15 @@ const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 const val ACTION_UPDATE = "io.github.est4s.terminal.UPDATE"
 /** Opens a tab with the menu's Services list (the notification's Services button). */
 const val ACTION_SERVICES = "io.github.est4s.terminal.SERVICES"
-/** Shows touch mode's Chat (its notification). */
+/** Shows touch mode's Chat (a chat's notification): the chat [EXTRA_CHAT_SESSION] names, else the history. */
 const val ACTION_CHAT = "io.github.est4s.terminal.CHAT"
-// The chat's notification: one, replaced by the next.
+const val EXTRA_CHAT_SESSION = "chat-session"
+// Each chat's notification: the first of CHAT_NOTICE_SLOTS (web apps' are from 5000 to 5999).
 // Past every range in use (web apps take 5000-5999).
 private const val CHAT_NOTICE_ID = 6000
+
+/** Which of touch mode's chat screens shows: none, the history, or a chat. */
+enum class ChatPlace { NONE, HISTORY, CHAT }
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -222,13 +228,16 @@ class TerminalService : Service() {
     private val keyBarFiles = WeakHashMap<TerminalSession, File>()
     private var nextShellId = 1
     private val tools by lazy { ToolsInstaller(filesDir) }
-    /** Touch mode's Chat: kept here so it outlives the activity. */
-    val chat: ChatController by lazy {
-        ChatController(chatHost, post = { action -> mainHandler.post(action) }, artifacts = ArtifactFinder(webAppFiles))
+    /** Touch mode's chats: kept here so they outlive the activity. */
+    val chats: ChatHub by lazy {
+        ChatHub(
+            chatHost, post = { action -> mainHandler.post(action) }, artifacts = ArtifactFinder(webAppFiles),
+            picksFile = File(filesDir, "state/chat-picks"),
+        )
     }
-    /** Whether the Chat screen was showing, for a recreated activity. */
-    var chatOnScreen = false
-    // A chat turn runs (ChatController.working): auto holds the wakelock for it.
+    /** Which chat screen was showing, for a recreated activity: the history, the hub's shown chat, or neither. */
+    var chatPlace = ChatPlace.NONE
+    // A chat turn runs (ChatHub.working): auto holds the wakelock for it.
     private var chatWorking = false
     private var destroyed = false
     private val chatHost: ChatHost = object : ChatHost {
@@ -272,7 +281,7 @@ class TerminalService : Service() {
             val session = startShell(cwd = cwd, command = claudeHandOffCommand(sessionId, "$CWD_DIR/$doneName", model, mode))
             watchChatTabs()
             tabs.open(session)
-            chatOnScreen = false
+            chatPlace = ChatPlace.NONE
             activity?.chatHandedOff()
             return object : ChatTab {
                 override val open: Boolean
@@ -288,7 +297,7 @@ class TerminalService : Service() {
                         closeTab(session)
                     } else {
                         stop(session)
-                        mainHandler.post { chat.tabChanged() }
+                        mainHandler.post { chats.tabChanged() }
                     }
                 }
             }
@@ -298,7 +307,7 @@ class TerminalService : Service() {
             val settings = currentSettings()
             val hooks = runCatching { File(rootfs, "root/.claude/settings.json").takeIf { it.isFile }?.readText() }.getOrNull()
             return ChatNoticeRules(
-                onScreen = chatOnScreen && activity?.onScreen == true,
+                onScreen = chatPlace == ChatPlace.CHAT && activity?.onScreen == true,
                 agentNotify = settings?.agentNotify ?: true,
                 afterSeconds = settings?.agentNotifyAfter ?: 30,
                 agentOn = claudeNotifyHooks(hooks),
@@ -309,13 +318,24 @@ class TerminalService : Service() {
             showChatNotice(notice)
         }
 
-        override fun clearNotice() {
-            getSystemService(NotificationManager::class.java).cancel(CHAT_NOTICE_ID)
+        override fun clearNotice(slot: Int) {
+            getSystemService(NotificationManager::class.java).cancel(CHAT_NOTICE_ID + slot)
         }
 
         override fun workingChanged(working: Boolean) {
             chatWorking = working
             if (!destroyed) applyWakelockSetting()
+        }
+
+        override fun chatDefaultMode(): String = currentSettings()?.chatMode ?: "auto"
+
+        // As pinching writes font-size: undo records it at the next check.
+        override fun setChatDefaultMode(value: String) {
+            val file = File(rootfs, "root/$CONFIG_DIR/settings.conf")
+            runCatching {
+                file.parentFile?.mkdirs()
+                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "chat-mode", value).getOrThrow())
+            }
         }
 
         // A chat kept the app up with no tabs; with it over and nothing else running, it goes.
@@ -758,7 +778,7 @@ class TerminalService : Service() {
                 if (path == null || !path.startsWith(CHAT_TAB_DONE)) return
                 mainHandler.post {
                     chatTabsDone.add(path)
-                    chat.tabChanged()
+                    chats.tabChanged()
                 }
             }
         }.also { it.startWatching() }
@@ -866,7 +886,7 @@ class TerminalService : Service() {
         runCatching { usbFds.stop() }
         runCatching { bluetooth.stop() }
         runCatching { ble.closeAll() }
-        chat.shutdown()
+        chats.shutdown()
         killAll()
         stopServices()
         releaseWakeLock()
@@ -917,13 +937,13 @@ class TerminalService : Service() {
             serviceManager.setOpen(service, false)
         }
         // A hand-off tab whose shell never started has nothing to finish: closed, it lets go.
-        mainHandler.post { chat.tabChanged() }
+        mainHandler.post { chats.tabChanged() }
         if (tabs.isEmpty) lastTabClosed()
     }
 
     // With services or a chat running the app stays, with no tabs; opening it again opens a fresh one.
     private fun lastTabClosed() {
-        if (serviceManager.active == 0 && !chat.live) {
+        if (serviceManager.active == 0 && !chats.live) {
             exit()
             return
         }
@@ -934,7 +954,7 @@ class TerminalService : Service() {
     }
 
     fun onSessionFinished(session: TerminalSession) {
-        chat.tabChanged()
+        chats.tabChanged()
         // A service's end is the services' business; it never closes a tab.
         // An open tab still shows it (and its bar) until the service starts again.
         if (serviceManager.exited(session)) {
@@ -946,9 +966,10 @@ class TerminalService : Service() {
 
     /** Kills every session, stops the services and the service, and closes the app. The next start is fresh. */
     fun exit() {
-        chat.shutdown()
-        // Nothing to come back to: a "Your turn" left up would open an empty chat.
-        getSystemService(NotificationManager::class.java).cancel(CHAT_NOTICE_ID)
+        chats.shutdown()
+        // Nothing to come back to: a "Your turn" left up would open a chat that's gone.
+        val manager = getSystemService(NotificationManager::class.java)
+        for (slot in 0 until CHAT_NOTICE_SLOTS) manager.cancel(CHAT_NOTICE_ID + slot)
         val stopping = serviceManager.active > 0
         serviceHost.exiting = true
         serviceManager.stopAll()
@@ -980,7 +1001,7 @@ class TerminalService : Service() {
         syncServiceTabs()
         activity?.onServicesChanged()
         if (hadTabs && tabs.isEmpty) lastTabClosed()
-        else if (tabsClosed && tabs.isEmpty && serviceManager.active == 0 && !chat.live) exit()
+        else if (tabsClosed && tabs.isEmpty && serviceManager.active == 0 && !chats.live) exit()
     }
 
     // Removed services' tabs close; the others' titles say how they are.
@@ -1401,15 +1422,18 @@ class TerminalService : Service() {
             NotificationChannel(NOTICE_CHANNEL_ID, "Notifications from programs", NotificationManager.IMPORTANCE_HIGH))
     }
 
-    // The chat's notice (core decided it's due): tapping it opens Chat.
+    // A chat's notice (core decided it's due), in its slot: tapping it opens that chat.
     private fun showChatNotice(notice: ChatNotice) {
         val manager = getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return
         noticeChannel(manager)
+        val id = CHAT_NOTICE_ID + notice.slot
         val open = Intent(this, MainActivity::class.java).setAction(ACTION_CHAT).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val tap = PendingIntent.getActivity(this, CHAT_NOTICE_ID, open,
+            .putExtra(EXTRA_CHAT_SESSION, notice.sessionId)
+        // A request code per slot: one PendingIntent each, with its own chat.
+        val tap = PendingIntent.getActivity(this, id, open,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        manager.notify(CHAT_NOTICE_ID, Notification.Builder(this, NOTICE_CHANNEL_ID)
+        manager.notify(id, Notification.Builder(this, NOTICE_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(notice.title)
             .setContentText(notice.text)
@@ -1521,7 +1545,7 @@ class TerminalService : Service() {
 
     // Not after Exit, nor with nothing running: that would bring the notification back.
     private fun refreshNotification() {
-        if (serviceHost.exiting || (tabs.isEmpty && serviceManager.active == 0 && !chat.live)) return
+        if (serviceHost.exiting || (tabs.isEmpty && serviceManager.active == 0 && !chats.live)) return
         updateNotification()
     }
 

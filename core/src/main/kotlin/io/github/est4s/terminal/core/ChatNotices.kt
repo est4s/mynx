@@ -4,17 +4,25 @@ package io.github.est4s.terminal.core
  * Phone notifications for the Chat screen, as `mynx hook claude` gives an
  * agent in a tab (a chat runs with MYNX_CHAT=1, which silences the hooks):
  * a turn that took agent-notify-after seconds or more ended, or a card waits
- * for an answer. Never while the Chat screen is on show. [ChatController]
- * asks [chatNotice] and the app posts what it gives: one notification for
- * the chat, replaced by the next, cleared when Chat opens.
+ * for an answer. Never while that chat is on show. [ChatController] asks
+ * [chatNotice] and [ChatHub] gives what it gives a [slot][ChatNotice.slot]
+ * of its own chat's: one notification per chat, replaced by the chat's
+ * next, cleared when that chat opens, and tapping it opens that chat.
  */
 
-/** A notification for the chat. */
-data class ChatNotice(val title: String, val text: String)
+/** How many chats can have a notification up at once: slots 0 until this, the oldest one's reused. */
+const val CHAT_NOTICE_SLOTS = 16
+
+/**
+ * A notification for a chat: [sessionId] the chat to open when it's tapped,
+ * [slot] (0 until [CHAT_NOTICE_SLOTS]) the one the app posts it in, as an
+ * offset to its own notification id. The hub fills both in.
+ */
+data class ChatNotice(val title: String, val text: String, val sessionId: String? = null, val slot: Int = 0)
 
 /** How things stand when a notice may be due, read from the app then. */
 data class ChatNoticeRules(
-    /** The Chat screen is on show: nothing to tell. */
+    /** The chat is on show (the app says whether its Chat screen is; the hub narrows that to the chat shown): nothing to tell. */
     val onScreen: Boolean,
     /** The `agent-notify` setting. */
     val agentNotify: Boolean = true,

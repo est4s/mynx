@@ -52,16 +52,19 @@ object FrontActivities {
  */
 class ActivityAsks(private val activity: Activity) {
     private val permissionAsks = mutableListOf<Pair<Array<String>, (Boolean) -> Unit>>()
-    private var resultAnswer: ((Boolean) -> Unit)? = null
+    private var resultAnswer: ((Boolean, Intent?) -> Unit)? = null
 
     fun askPermissions(permissions: Array<String>, answer: (Boolean) -> Unit) {
         permissionAsks += permissions to answer
         if (permissionAsks.size == 1) activity.requestPermissions(permissions, PERMISSION_REQUEST)
     }
 
+    fun startForResult(intent: Intent, answer: (Boolean) -> Unit): Boolean = startForData(intent) { ok, _ -> answer(ok) }
+
+    /** As [startForResult], with what it sent back (a picker's files). */
     @Suppress("DEPRECATION") // the ActivityResult API needs AndroidX
-    fun startForResult(intent: Intent, answer: (Boolean) -> Unit): Boolean {
-        resultAnswer?.invoke(false)
+    fun startForData(intent: Intent, answer: (Boolean, Intent?) -> Unit): Boolean {
+        resultAnswer?.invoke(false, null)
         resultAnswer = null
         return try {
             activity.startActivityForResult(intent, RESULT_REQUEST)
@@ -72,11 +75,11 @@ class ActivityAsks(private val activity: Activity) {
         }
     }
 
-    fun onActivityResult(requestCode: Int, resultCode: Int) {
+    fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent? = null) {
         if (requestCode != RESULT_REQUEST) return
         val answer = resultAnswer ?: return
         resultAnswer = null
-        answer(resultCode == Activity.RESULT_OK)
+        answer(resultCode == Activity.RESULT_OK, data)
     }
 
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray) {
@@ -91,7 +94,7 @@ class ActivityAsks(private val activity: Activity) {
         permissionAsks.toList().also { permissionAsks.clear() }.forEach { it.second(false) }
         resultAnswer?.let {
             resultAnswer = null
-            it(false)
+            it(false, null)
         }
     }
 

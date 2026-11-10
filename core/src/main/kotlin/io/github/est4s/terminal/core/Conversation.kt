@@ -36,9 +36,14 @@ sealed interface ChatItem {
 
 enum class NoticeKind { INFO, ERROR, SIGN_IN }
 
-/** What the Chat screen shows: its rows, and [running] for the Stop button. */
+/**
+ * What the Chat screen shows: its rows, and [running] for the Stop button.
+ * [queued] are prompts the agent hasn't taken yet, drawn after the rows;
+ * each moves into them when taken.
+ */
 data class Conversation(
     val items: List<ChatItem> = emptyList(),
+    val queued: List<ChatItem.User> = emptyList(),
     val running: Boolean = false,
     val thinking: Boolean = false,
     val sessionId: String? = null,
@@ -60,7 +65,10 @@ fun Conversation.reduce(event: AgentEvent): Conversation = when (event) {
     is AgentEvent.ModeChanged -> copy(mode = event.mode)
     is AgentEvent.ModelChanged -> copy(model = event.model)
     is AgentEvent.ModeRefused, is AgentEvent.ModelRefused -> this
-    is AgentEvent.UserMessage -> copy(items = items + ChatItem.User(event.id, event.text))
+    // The controller keeps them: [ChatState.usage].
+    is AgentEvent.ContextUsed, is AgentEvent.PlanLimits -> this
+    is AgentEvent.UserMessage -> copy(items = items + ChatItem.User(event.id, event.text), queued = queued.filterNot { it.id == event.id })
+    is AgentEvent.PromptQueued -> copy(queued = queued + ChatItem.User(event.id, event.text))
     AgentEvent.TurnStarted -> copy(running = true)
     is AgentEvent.AgentMessageChunk -> agentText(event)
     is AgentEvent.ThoughtIndicator -> copy(thinking = event.active)
@@ -76,7 +84,14 @@ fun Conversation.reduce(event: AgentEvent): Conversation = when (event) {
     is AgentEvent.Notice -> notice(NoticeKind.INFO, event.text)
     is AgentEvent.TurnEnded -> copy(running = false, thinking = false).turnNotice(event)
     is AgentEvent.NotSignedIn -> notice(NoticeKind.SIGN_IN, event.message)
-    is AgentEvent.ProcessEnded -> copy(running = false, thinking = false, processEnded = true).processNotice(event)
+    is AgentEvent.ProcessEnded -> copy(running = false, thinking = false, processEnded = true).notSent().processNotice(event)
+}
+
+// Their text stays to copy, marked for what it is: the agent never read them.
+private fun Conversation.notSent(): Conversation {
+    if (queued.isEmpty()) return this
+    val what = if (queued.size == 1) "it" else "these ${queued.size} messages"
+    return copy(items = items + queued, queued = emptyList()).notice(NoticeKind.INFO, "Not sent: the agent stopped before taking $what.")
 }
 
 private fun requestItem(requestId: String) = "request:$requestId"
