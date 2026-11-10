@@ -63,7 +63,6 @@ import io.github.est4s.terminal.core.ChatItem
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.ChatStatusLine
 import io.github.est4s.terminal.core.ChatTabHold
-import io.github.est4s.terminal.core.ClaudeSessionSummary
 import io.github.est4s.terminal.core.IncrementalMarkdown
 import io.github.est4s.terminal.core.MdAlign
 import io.github.est4s.terminal.core.MdRow
@@ -81,7 +80,6 @@ import io.github.est4s.terminal.core.chatArtifactRunCommand
 import io.github.est4s.terminal.core.chatArtifactShortcutCommand
 import io.github.est4s.terminal.core.chatFit
 import io.github.est4s.terminal.core.chatOutcomeText
-import io.github.est4s.terminal.core.chatRelativeTime
 import io.github.est4s.terminal.core.chatRenderDelay
 import io.github.est4s.terminal.core.chatReviewCut
 import io.github.est4s.terminal.core.chatRowChanges
@@ -97,8 +95,6 @@ private const val CHAT_TITLE = "Claude Code"
 // Root's home, as the chat runs in it (ChatController's default).
 private const val CHAT_HOME = "/root"
 // The header's ⋮ menu items, and how To tab looks when it can't go now.
-private const val MORE_CHATS = 1
-private const val MORE_NEW = 2
 private const val MORE_TO_TAB = 3
 private const val MORE_MODEL = 4
 private const val MORE_MODE = 5
@@ -190,7 +186,7 @@ private class ChatLink(private val url: String, private val color: Int, private 
 }
 
 /**
- * Touch mode's Chat: the service's [ChatController] as rows over the
+ * Touch mode's Chat: the hub's shown [ChatController] as rows over the
  * terminal, drawn from the [ChatState]s the activity passes to [show].
  * Rows only change in place (see [chatRowChanges]), so streaming touches
  * one row. [back] is ‹ and [showTerminal] the Terminal button, as on Home;
@@ -241,7 +237,7 @@ class ChatView(
         addView(subtitleText)
     }
     private var drawnLine: ChatStatusLine? = null
-    // Chats, New and To tab: a narrow phone has room for ‹, the title and Terminal only, as Home.
+    // Model, Mode and To tab: a narrow phone has room for ‹, the title and Terminal only, as Home.
     private val moreButton = headerText("⋮").apply {
         contentDescription = "More"
         setOnClickListener { showMore() }
@@ -279,16 +275,6 @@ class ChatView(
             addView(gateSecond)
         }, buttonFlowParams())
     }
-    // The Chats list: the folder's past chats, over the conversation.
-    private val listRows = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(0, dp(4), 0, dp(4))
-    }
-    private val listScroll = ScrollView(context).apply {
-        addView(listRows)
-        visibility = View.GONE
-    }
-    private var listLoad = 0
     private val input = EditText(context).apply {
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         imeOptions = EditorInfo.IME_FLAG_NO_ENTER_ACTION
@@ -316,6 +302,7 @@ class ChatView(
     private val cells = ArrayList<Cell>()
     private var drawn: List<ChatItem> = emptyList()
     private var latest: ChatState? = null
+    private var drawnChat: Any? = null
     private var renderPending = false
     private var lastRender = 0L
     private val renderTask = Runnable {
@@ -367,7 +354,6 @@ class ChatView(
         descendantFocusability = FOCUS_AFTER_DESCENDANTS
         addView(header, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         addView(scroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-        addView(listScroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         addView(statusText, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         addView(gateCard, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         addView(inputRow, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
@@ -389,10 +375,6 @@ class ChatView(
 
     private fun fitRows(widthSpec: Int, heightSpec: Int) {
         if (View.MeasureSpec.getMode(heightSpec) == View.MeasureSpec.UNSPECIFIED) return
-        if (listShown) {
-            header.visibility = View.VISIBLE
-            return
-        }
         val natural = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         fun height(view: View, wanted: Boolean): Int {
             if (!wanted) return 0
@@ -428,8 +410,23 @@ class ChatView(
         return super.dispatchKeyEvent(event)
     }
 
-    /** Takes the chat as it stands; drawn soon, with whatever else comes first. */
-    fun show(state: ChatState) {
+    /**
+     * Takes the chat as it stands; drawn soon, with whatever else comes first.
+     * Another [chat] than the last one's (the hub's controller) starts the
+     * screen over: its rows, what's open in them, and the box.
+     */
+    fun show(state: ChatState, chat: Any? = null) {
+        if (chat !== drawnChat) {
+            drawnChat = chat
+            cells.clear()
+            rows.removeAllViews()
+            drawn = emptyList()
+            expandedTools.clear()
+            expandedReviews.clear()
+            questionPicks.clear()
+            input.setText("")
+            stick = true
+        }
         latest = state
         if (renderPending) return
         renderPending = true
@@ -543,8 +540,6 @@ class ChatView(
     private fun showMore() {
         val chat = controller() ?: return
         val popup = PopupMenu(context, moreButton)
-        popup.menu.add(Menu.NONE, MORE_CHATS, Menu.NONE, "Chats")
-        popup.menu.add(Menu.NONE, MORE_NEW, Menu.NONE, "New chat")
         popup.menu.add(Menu.NONE, MORE_MODEL, Menu.NONE, "Model…")
         popup.menu.add(Menu.NONE, MORE_MODE, Menu.NONE, "Mode…")
         // Greyed when it can't go, but still tappable, to say why.
@@ -556,8 +551,6 @@ class ChatView(
         popup.menu.add(Menu.NONE, MORE_TO_TAB, Menu.NONE, toTab)
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                MORE_CHATS -> showList()
-                MORE_NEW -> askNewChat()
                 MORE_TO_TAB -> handOff()
                 MORE_MODEL -> pickModel()
                 MORE_MODE -> pickMode()
@@ -609,110 +602,12 @@ class ChatView(
         chat.handOff()
     }
 
-    private val listShown get() = listScroll.visibility == View.VISIBLE
-
-    /** Back: closes the Chats list; false when there's none to close. */
-    fun back(): Boolean {
-        if (!listShown) return false
-        hideList()
-        return true
-    }
-
-    private fun showList() {
-        val chat = controller() ?: return
-        val colors = colors ?: return
-        listScroll.visibility = View.VISIBLE
-        scroll.visibility = View.GONE
-        statusText.visibility = View.GONE
-        gateCard.visibility = View.GONE
-        inputRow.visibility = View.GONE
-        moreButton.visibility = View.GONE
-        subtitleText.visibility = View.GONE
-        titleText.text = "Chats"
-        (context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
-            .hideSoftInputFromWindow(windowToken, 0)
-        listRows.removeAllViews()
-        listRows.addView(listNote("Reading…", colors))
-        val own = ++listLoad
-        chat.pastChats { sessions -> if (own == listLoad && listShown) fillList(sessions, colors) }
-    }
-
-    private fun hideList() {
-        listLoad++
-        listScroll.visibility = View.GONE
-        scroll.visibility = View.VISIBLE
-        inputRow.visibility = View.VISIBLE
-        moreButton.visibility = View.VISIBLE
-        subtitleText.visibility = View.VISIBLE
-        titleText.text = CHAT_TITLE
-        requestLayout()
-        render()
-    }
-
-    private fun fillList(sessions: List<ClaudeSessionSummary>, colors: StripColors) {
-        listRows.removeAllViews()
-        if (sessions.isEmpty()) {
-            listRows.addView(listNote("No past chats here yet.", colors))
-            return
-        }
-        val now = System.currentTimeMillis()
-        for (session in sessions) {
-            val title = plainText(colors.text, 16f).apply {
-                text = session.title
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-            }
-            val time = plainText(colors.accent, 13f).apply { text = chatRelativeTime(now, session.modifiedMs) }
-            listRows.addView(LinearLayout(context).apply {
-                orientation = LinearLayout.VERTICAL
-                minimumHeight = dp(56)
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(16), dp(8), dp(16), dp(8))
-                isClickable = true
-                isFocusable = true
-                background = RippleDrawable(ColorStateList.valueOf(colors.selectedBackground), null, ColorDrawable(colors.background))
-                addView(title)
-                addView(time)
-                setOnClickListener { askResume(session.sessionId) }
-            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        }
-    }
-
-    private fun listNote(text: String, colors: StripColors) = plainText(colors.accent, 15f).apply {
-        this.text = text
-        setPadding(dp(16), dp(16), dp(16), dp(16))
-    }
-
     private fun sendInput() {
         val text = input.text.toString()
         if (controller()?.send(text) == true) {
             input.setText("")
             stick = true
         }
-    }
-
-    // Going to another chat stops this one's process: a running turn or an open card asks first, as New does.
-    private fun askResume(id: String) {
-        val go = {
-            controller()?.resume(id)
-            hideList()
-            stick = true
-        }
-        if (controller()?.state?.busy != true) return go()
-        AlertDialog.Builder(context)
-            .setMessage("This chat has a turn running or a card open. Stop it and open the other chat?")
-            .setPositiveButton("Open") { _, _ -> go() }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun askNewChat() {
-        if (drawn.isEmpty()) return
-        AlertDialog.Builder(context)
-            .setMessage("End this chat and start a new one?")
-            .setPositiveButton("New chat") { _, _ -> controller()?.newChat() }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     private fun userCell(colors: StripColors): Cell {

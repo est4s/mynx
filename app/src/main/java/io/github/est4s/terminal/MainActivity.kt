@@ -40,6 +40,7 @@ import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
+import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.ColorScheme
 import io.github.est4s.terminal.core.fitAroundTerminal
@@ -128,13 +129,16 @@ class MainActivity : Activity(), FrontActivity {
     // The launcher shortcut "Settings" (the editors) or the update notification
     // (`mynx update`): a new tab running it, once the service is connected.
     private var tabToOpen: List<String>? = null
-    // The chat's notification was tapped: Chat, once the service is connected.
+    // A chat's notification was tapped: that chat (null: the history), once the service is connected.
     private var chatToShow = false
+    private var chatSessionToShow: String? = null
     private var home: HomeView? = null
     private var chat: ChatView? = null
+    private var chatHistory: ChatHistoryView? = null
     // After Chat's Sign in or Install opens a tab: Back returns to the chat, to check again.
     private var chatAfterTab = false
-    private val chatListener: (ChatState) -> Unit = { state -> chat?.show(state) }
+    private val chatListener: (ChatController, ChatState) -> Unit = { controller, state -> chat?.show(state, controller) }
+    private val chatHistoryListener: () -> Unit = { chatHistory?.update() }
     private var touchView = false
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
@@ -146,9 +150,15 @@ class MainActivity : Activity(), FrontActivity {
             s.activity = this@MainActivity
             applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
-            s.chat.listener = chatListener
+            s.chats.listener = chatListener
+            s.chats.historyListener = chatHistoryListener
             if (touchView && shellToShow == null && tabToOpen == null) {
-                if (s.chatOnScreen || chatToShow) showChat() else showHome()
+                when {
+                    chatToShow -> openChatFromNotice()
+                    s.chatPlace == ChatPlace.CHAT && s.chats.shown != null -> showChat()
+                    s.chatPlace != ChatPlace.NONE -> showChatHistory()
+                    else -> showHome()
+                }
             }
             chatToShow = false
             showShellFromNotification()
@@ -204,6 +214,7 @@ class MainActivity : Activity(), FrontActivity {
         shellToShow = shellOf(intent)
         // Once: a recreated activity (rotation) keeps the intent that opened it.
         chatToShow = savedInstanceState == null && intent?.action == ACTION_CHAT
+        chatSessionToShow = if (chatToShow) intent?.getStringExtra(EXTRA_CHAT_SESSION) else null
         // Not when Android recreates the activity: that tab is open already.
         tabToOpen = if (savedInstanceState == null) commandOf(intent) else null
         if (installer.isInstalled) connectService() else installDebian()
@@ -218,7 +229,8 @@ class MainActivity : Activity(), FrontActivity {
         tabToOpen = commandOf(intent)
         openCommandTab()
         if (intent.action == ACTION_CHAT) {
-            if (service == null) chatToShow = true else if (touchView) showChat()
+            chatSessionToShow = intent.getStringExtra(EXTRA_CHAT_SESSION)
+            if (service == null) chatToShow = true else if (touchView) openChatFromNotice()
         }
         // On screen already, so onStart won't look for it.
         if (intent.action == ACTION_USB_ALLOWED) service?.refreshUsb()
@@ -237,6 +249,7 @@ class MainActivity : Activity(), FrontActivity {
         tabToOpen = null
         service.newSession(command)
         hideChat()
+        hideChatHistory()
         hideHome()
     }
 
@@ -249,6 +262,7 @@ class MainActivity : Activity(), FrontActivity {
         shellToShow = null
         service.selectShell(id)
         hideChat()
+        hideChatHistory()
         hideHome()
     }
 
@@ -261,7 +275,8 @@ class MainActivity : Activity(), FrontActivity {
             refreshKeyBar(force = true) // bar files may have been edited
             applySettings()
             if (homeShown) home?.refresh() // apps and games may have changed
-            if (chatShown) service?.chat?.opened() // signed in or installed meanwhile?
+            if (chatShown) service?.chats?.opened() // signed in or installed meanwhile?
+            if (chatHistoryShown) chatHistory?.refresh()
         }
         root.post(keyBarPoll)
         service?.cameOnScreen()
@@ -288,7 +303,8 @@ class MainActivity : Activity(), FrontActivity {
         FrontActivities.gone(this)
         service?.let {
             if (it.activity === this) it.activity = null
-            if (it.chat.listener === chatListener) it.chat.listener = null
+            if (it.chats.listener === chatListener) it.chats.listener = null
+            if (it.chats.historyListener === chatHistoryListener) it.chats.historyListener = null
         }
         service = null
         if (bound) unbindService(connection)
@@ -317,12 +333,13 @@ class MainActivity : Activity(), FrontActivity {
         goBack()
     }
 
-    // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left.
+    // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left;
+    // a chat backs out to the chat history, which backs out to Home.
     private fun goBack() {
         when {
-            chatShown && chat?.back() == true -> Unit
-            chatShown -> {
-                hideChat()
+            chatShown -> showChatHistory()
+            chatHistoryShown -> {
+                hideChatHistory()
                 showHome()
             }
             homeShown && home?.back() == true -> Unit
@@ -351,20 +368,60 @@ class MainActivity : Activity(), FrontActivity {
 
     private val chatShown get() = chat?.visibility == View.VISIBLE
 
-    /** Touch mode's Chat, over the terminal, as Home is; the chat itself lives in the service. */
+    private val chatHistoryShown get() = chatHistory?.visibility == View.VISIBLE
+
+    /** Touch mode's Chat, over the terminal, as Home is: the hub's shown chat (the chats live in the service), else the history. */
     private fun showChat() {
         val view = chat ?: return
         val service = service ?: return
+        if (service.chats.shown == null) return showChatHistory()
         hideHome()
+        hideChatHistory()
         chatAfterTab = false
-        service.chatOnScreen = true
+        service.chatPlace = ChatPlace.CHAT
         view.visibility = View.VISIBLE
-        service.chat.opened()
+        service.chats.opened()
         view.focusInput()
     }
 
+    // A history row (its session) or New chat (null).
+    private fun openChat(sessionId: String?) {
+        val chats = service?.chats ?: return
+        if (sessionId == null) chats.newChat() else chats.open(sessionId)
+        showChat()
+    }
+
+    private fun openChatFromNotice() {
+        val id = chatSessionToShow
+        chatSessionToShow = null
+        if (id == null) showChatHistory() else openChat(id)
+    }
+
+    /** The agent's home: its chats, and New chat. Leaving a chat for it lets an idle chat's process go. */
+    private fun showChatHistory() {
+        val view = chatHistory ?: return
+        val service = service ?: return
+        hideHome()
+        hideChat()
+        service.chats.leave()
+        chatAfterTab = false
+        service.chatPlace = ChatPlace.HISTORY
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
+        view.visibility = View.VISIBLE
+        view.refresh()
+        view.requestFocus()
+    }
+
+    private fun hideChatHistory() {
+        val service = service
+        if (service?.chatPlace == ChatPlace.HISTORY) service.chatPlace = ChatPlace.NONE
+        if (!chatHistoryShown) return
+        chatHistory?.visibility = View.GONE
+    }
+
     private fun hideChat() {
-        service?.chatOnScreen = false
+        val service = service
+        if (service?.chatPlace == ChatPlace.CHAT) service.chatPlace = ChatPlace.NONE
         if (!chatShown) return
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
         chat?.visibility = View.GONE
@@ -372,6 +429,11 @@ class MainActivity : Activity(), FrontActivity {
 
     private fun chatToTerminal() {
         hideChat()
+        terminalView.requestFocus()
+    }
+
+    private fun chatHistoryToTerminal() {
+        hideChatHistory()
         terminalView.requestFocus()
     }
 
@@ -399,7 +461,7 @@ class MainActivity : Activity(), FrontActivity {
         when (action) {
             is HomeAction.Tab -> service.newSession(action.command)
             HomeAction.Shell -> service.newSession()
-            is HomeAction.Chat -> return showChat()
+            is HomeAction.Chat -> return showChatHistory()
             is HomeAction.App -> return startActivity(WebAppActivity.shortcutIntent(this, action.name))
             is HomeAction.Service -> {
                 val refusal = service.serviceAct(action.name, action.op)
@@ -496,12 +558,18 @@ class MainActivity : Activity(), FrontActivity {
         }
 
         chat = ChatView(
-            this, { service?.chat }, { goBack() }, ::chatToTerminal, ::openTabFromChat,
+            this, { service?.chats?.shown }, { goBack() }, ::chatToTerminal, ::openTabFromChat,
             openApp = { name -> startActivity(WebAppActivity.shortcutIntent(this, name)) },
             shareFile = { path -> toastError(service?.shareDebianFile(path)) },
             // As `mynx install-apk`: only debug builds install other apps.
             installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
         ).also {
+            it.colors = strip
+            it.visibility = View.GONE
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
+        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }, ::chatHistoryToTerminal, ::openChat).also {
             it.colors = strip
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -735,6 +803,7 @@ class MainActivity : Activity(), FrontActivity {
         keyBar.colors = strip
         home?.colors = strip
         chat?.colors = strip
+        chatHistory?.colors = strip
         renderStrip()
         terminalView.onScreenUpdated()
     }
@@ -931,6 +1000,7 @@ class MainActivity : Activity(), FrontActivity {
             showHome()
         } else {
             hideChat()
+            hideChatHistory()
             hideHome()
         }
         renderStrip()
@@ -962,7 +1032,7 @@ class MainActivity : Activity(), FrontActivity {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // A hardware keyboard must reach Chat's box, not the terminal under it.
         if (chatShown && chat?.hasFocus() != true) chat?.focusInput()
-        return (::keyBar.isInitialized && !homeShown && !chatShown && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
+        return (::keyBar.isInitialized && !homeShown && !chatShown && !chatHistoryShown && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
     }
 
     /** A tap on a link opens it; anywhere else brings up the keyboard. */
