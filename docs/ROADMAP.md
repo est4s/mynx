@@ -59,13 +59,15 @@ and either view switches to the other.
   `~/apps` or `~/terminal-apps` (seen in its file writes, or declared with a `mynx`
   command), the chat shows a card: Run (a terminal app in a tab),
   Open (a web app, below), Share, or Install (an APK). **Built**
-  for Claude Code's chat (2026-11-10), not yet on the phone; Install
+  for Claude Code's chat (2026-11-10), passed on the phone; Install
   only in debug builds (release builds offer Share).
 - **Open in terminal:** hands the conversation to a tab that resumes
   it (`claude --resume ID` and the others' equivalents); the chat lets
   go of it first, so two programs never drive one session.
 - **Home built** (2026-11-09): `view = touch`, passed on the phone.
-  A native Services list is built, waiting on the phone.
+  The native Services list and Chat for Claude Code passed on the
+  phone (2026-11-10). Next: several chats at once, the chat history
+  as the agent's home.
 - Sign-in is the terminal's: Chat opens a tab when it's needed
   (maintainer's decision, 2026-11-09).
 - The agent widget could open straight into a chat.

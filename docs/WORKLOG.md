@@ -193,31 +193,24 @@ usbfs ioctls libusb sends (Termux's `termux-usb` +
   so agents needn't serve it to the browser; and one that fetches
   `r8.jar` and `android.jar`.
 
-### 3. Touch mode: Chat built, waiting on the phone
+### 3. Touch mode: Chat, parallel chats next
 
-Home passed on the phone (entry 171). Built overnight 2026-11-10 as a
-stack of draft PRs, each based on the one before:
-#67 Services list (172) → #68 Chat's protocol in core (173) → #69 the
-Chat screen (174) → #70 Markdown, Always allow (175) → #71 history,
-Chats, To tab (176) → #72 artifact cards (177) → #74 CI screenshots
-(179) → #75 wakelock and notifications (180) → #76 model and mode
-(181). #73 (178, on `main`) is a fix of its own. The top branch's
-APK has all of it. `core` ran against the real CLI (2.1.321, Haiku):
-plain turn, allow, deny, cancel, stop, resume, AskUserQuestion.
+The Chat stack (#67-#76, entries 172-181) passed the maintainer's phone
+test on 2026-11-10 and is merged: the Services list, sign-in, turns,
+permission and question cards, Markdown, Chats and To tab, artifact
+cards, notifications and the wakelock, model and mode. The
+maintainer's call on the stack: "the sign in works really well", merge
+it.
 
-**Maintainer's decisions (2026-11-09):** Chat uses Claude's stream-json
-first, behind an `AgentSession` in `core` with ACP's vocabulary. Users
-sign in through the terminal: Chat opens a tab when sign-in is needed.
-**Still open:** whether Chat may run on a subscription login (the
-Agent SDK docs forbid third-party products offering claude.ai login
-or rate limits). Chat stays in draft PRs until the maintainer decides.
+**Asked for next (maintainer, 2026-11-10):**
+- a queued prompt (sent while a turn runs) shows in the chat;
+- several chats at once: a new chat while one works starts an
+  independent session beside it;
+- the agent's Home is its chat history, with a New chat button;
+- Back from a chat goes to that history, Back again to Home's menu.
 
-**Next:** the phone test, in order: the Services list (#67's checks);
-Chat's first turn, permission, Stop, Back and reopen; Markdown; Chats
-and To tab; cards; notifications and the wakelock with the screen
-off; model and mode. Fix what it finds on the branch it belongs to.
-Then merge bottom-up. Left: other agents (Codex's `app-server`,
-Gemini's ACP), which need accounts to test.
+Left after that: other agents (Codex's `app-server`, Gemini's ACP),
+which need accounts to test.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -256,7 +249,14 @@ Ctrl+Shift).
 
 ## Log
 
-### 2026-11-10 (181): Chat: model and permission mode (not yet on the phone)
+### 2026-11-10 (182): The Chat stack passed on the phone, merged
+
+The maintainer ran the test prompt and the checks by hand: every part
+of #67-#76 worked (sign-in "really well"). Found, for the next PR: a
+queued prompt doesn't show, and a second chat can't start while one
+works. Merged bottom-up; #73 too.
+
+### 2026-11-10 (181): Chat: model and permission mode (passed on the phone)
 
 Chat's ⋮ has **Model…** and **Mode…** (single-choice dialogs, the
 current one checked), and a line under the title says both ("Opus 5.5
@@ -305,7 +305,7 @@ Model… lists what Claude reported; switching mode mid-chat changes
 the line and Claude's behaviour next turn; Restart keeps both; an
 approved plan: what the line says during and after that turn.
 
-### 2026-11-10 (180): Chat: wakelock during a turn, and notifications (not yet on the phone)
+### 2026-11-10 (180): Chat: wakelock during a turn, and notifications (passed on the phone)
 
 **Wakelock:** `wakelock = auto` now also holds while a chat turn runs
 and no card waits (`ChatController.working`; `Wakelock.held(…,
@@ -341,7 +341,7 @@ permission card notifies at once; nothing while Chat is on screen, but
 from Home it does; tapping opens Chat and clears it; `mynx set
 agent-notify off` and `mynx agent notify claude off` each silence it.
 
-### 2026-11-10 (179): Screenshots of touch mode in CI (not yet seen)
+### 2026-11-10 (179): Screenshots of touch mode in CI
 
 Robolectric tests that draw touch mode's screens with sample data, so
 an agent can see them without a phone: `app/src/test/.../`
@@ -372,7 +372,7 @@ if 4.14.1 trips over AGP 9; `Config.application` is a plain
 `Application` so `TerminalApp` isn't used; blank PNGs mean native
 graphics didn't draw (look for a warning in the test report).
 
-### 2026-11-10 (177): Chat: artifact cards (not yet on the phone)
+### 2026-11-10 (177): Chat: artifact cards (passed on the phone)
 
 When Claude Code makes or changes an app, the chat shows a card
 (`ChatItem.Artifact`, `core/.../ChatArtifacts.kt`). Hints: a turn's
@@ -403,7 +403,7 @@ FileObserver, and a closed tab whose shell never started lets go;
 `killProot` does nothing for pid 0 or -1 (closing a never-started tab
 killed by TracerPid 0: every untraced process of the app).
 
-### 2026-11-10 (176): Chat: history, past chats and hand-off to a tab (not yet on the phone)
+### 2026-11-10 (176): Chat: history, past chats and hand-off to a tab (passed on the phone)
 
 `--resume` replays no history, so `core/.../ClaudeHistory.kt` reads a
 transcript into the chat's rows (prompts, agent text, tool cards done
@@ -422,7 +422,7 @@ project folder by turning every non-alphanumeric into `-` (not only
 rows; a test says so. Not tracked: a session the user resumed in a tab
 by hand. `app/` isn't compiled yet.
 
-### 2026-11-10 (175): Chat: Markdown, and Always allow says what it grants (not yet on the phone)
+### 2026-11-10 (175): Chat: Markdown, and Always allow says what it grants (passed on the phone)
 
 **Always allow** sent the suggested mode too, so tapping it on a
 `mkdir` would have switched the session to accepting edits: now only
@@ -438,7 +438,7 @@ as typed until closed, so a stray `**` is right in the finished text
 about 10 a second, the first at once. `app/` isn't compiled yet.
 Plans stay plain text, as do user messages and tool output.
 
-### 2026-11-10 (174): Chat screen for Claude Code (not yet on the phone)
+### 2026-11-10 (174): Chat screen for Claude Code (passed on the phone)
 
 The Android side on 173's core. `AgentProcess` (a proot over pipes),
 `ChatController` in core (auth check, one chat, `--session-id` then
@@ -455,7 +455,7 @@ gives the focus back to the box, the input keeps its height
 (`chatFit`), picks and expansion survive redraws, a running chat keeps
 the app up, one binary lookup, only an init-backed turn is resumable.
 
-### 2026-11-10 (173): Chat's protocol layer in core (not yet on the phone)
+### 2026-11-10 (173): Chat's protocol layer in core (passed on the phone)
 
 The plain-Kotlin layer the Chat screen will sit on: `AgentSession` and
 `AgentTransport` with ACP's vocabulary, `ClaudeSession` over Claude's
@@ -467,7 +467,7 @@ out to silence mynx's hooks would drop their permission rules and
 `CLAUDE.md`); `MYNX_CHAT=1` makes `mynx hook` stay quiet instead. The
 spike's policy question about subscription sign-in is still open.
 
-### 2026-11-09 (172): Touch mode's native Services list (not yet on the phone)
+### 2026-11-09 (172): Touch mode's native Services list (passed on the phone)
 
 Home's Services is now a list of its own, not a terminal tab: each
 service with its state, a page per service (Open, Start or Stop,

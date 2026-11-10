@@ -747,7 +747,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   of `AgentSession`, `AgentTransport`, `claudeLaunch` and
   `Conversation.reduce` is the contract (threads, process lifetime,
   stopping); tests replay real scrubbed lines from
-  `core/src/test/resources/chat/`. The app side (not on the phone yet):
+  `core/src/test/resources/chat/`. The app side (passed on the phone, 2026-11-10):
   `app/.../AgentProcess.kt` is an `AgentTransport` over pipes (core's
   `ProcessAgentTransport`, tested with real shells); core's
   `ChatController`, held by `TerminalService` (`chat`), is the one chat:
