@@ -765,7 +765,16 @@ See `docs/ROADMAP.md` "How it works". The details:
   A permission card shows `PermissionRequest.review`, built from the
   input sent back as `updatedInput`, never just the model's
   description. A running chat keeps the app up like a service
-  (`ChatController.live`).
+  (`ChatController.live`). **Always allow** sends only the suggested
+  `addRules` (`allow`), for the session, and its label names each rule;
+  a suggested mode or directory would grant more than the button says,
+  and no rule means no Always. **Markdown** (`core/.../Markdown.kt`,
+  KDoc is the contract): agent messages only, parsed with
+  `IncrementalMarkdown` (only the last two blocks are parsed again);
+  `mdRows()` flattens them into `ChatView`'s views, one per row, reused
+  by index; inline markers show as typed until closed, so a stray `**`
+  stays right in the finished text; links are http(s) only. Redraws:
+  at most about 10 a second (`chatRenderDelay`).
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's
