@@ -165,6 +165,8 @@ private const val UPDATE_TICK_MS = 3_600_000L
 private const val POWER_SUPPLY_SECONDS = 30
 private const val ACTION_EXIT = "io.github.est4s.terminal.EXIT"
 private const val CWD_DIR = "/tmp/.mynx"
+// A hand-off tab's done file in CWD_DIR, before the session id.
+private const val CHAT_TAB_DONE = "chat-tab-"
 private const val REQUEST_DIR = "$CWD_DIR/requests"
 private const val TOOLS_ASSET = "tools.tar.xz"
 // How often to check whether waiting requests' `mynx`s have gone.
@@ -250,22 +252,33 @@ class TerminalService : Service() {
 
         override fun hostFile(path: String): File = File(hostPath(path, rootfs) ?: path)
 
-        // The tab is held until its claude exits (it writes the file) or the tab ends.
+        // The tab is held until its claude exits (it writes the file, which the watcher
+        // sees), or the tab ends; a tab whose shell never started holds it while it's a tab.
         override fun openInTab(sessionId: String, cwd: String): ChatTab {
-            val doneName = "chat-tab-$sessionId"
-            cwdDir.mkdirs()
-            val done = File(cwdDir, doneName)
-            done.delete()
-            val session = startShell(cwd = cwd, command = claudeHandOffCommand(sessionId, "$CWD_DIR/$doneName")).also { tabs.open(it) }
+            val doneName = "$CHAT_TAB_DONE$sessionId"
+            chatTabsDone.remove(doneName)
+            // startShell makes the folder; its process starts only once the tab is shown.
+            val session = startShell(cwd = cwd, command = claudeHandOffCommand(sessionId, "$CWD_DIR/$doneName"))
+            watchChatTabs()
+            tabs.open(session)
             chatOnScreen = false
             activity?.chatHandedOff()
             return object : ChatTab {
-                override val open: Boolean get() = session.isRunning && !done.exists()
+                override val open: Boolean
+                    get() {
+                        if (doneName in chatTabsDone) return false
+                        return if (session.pid > 0) session.isRunning else session.pid == 0 && tabs.find(session) != null
+                    }
 
                 override fun close() {
                     // Closing the last tab would close the app, under the chat.
                     if (tabs.tabs.size == 1) newSession()
-                    if (tabs.find(session) != null) closeTab(session) else stop(session)
+                    if (tabs.find(session) != null) {
+                        closeTab(session)
+                    } else {
+                        stop(session)
+                        mainHandler.post { chat.tabChanged() }
+                    }
                 }
             }
         }
@@ -569,6 +582,9 @@ class TerminalService : Service() {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     // Kept in a field: a FileObserver stops when it's garbage collected.
     private var requestWatcher: FileObserver? = null
+    // Hand-off tabs whose claude has exited (their done file appeared), by file name; main thread.
+    private val chatTabsDone = HashSet<String>()
+    private var chatTabWatcher: FileObserver? = null
     // Last folder known for each session: where it started, or what its shell
     // last reported. Restored tabs only start when first shown, so this keeps
     // their folder until then.
@@ -697,6 +713,22 @@ class TerminalService : Service() {
         }.exceptionOrNull()?.stackTraceToString()
     }
 
+    // Hand-off tabs write their done file in cwdDir: noticed here, so nothing on the
+    // main thread asks the disk. Started once, after cwdDir exists.
+    @Suppress("DEPRECATION") // the File constructor needs API 29
+    private fun watchChatTabs() {
+        if (chatTabWatcher != null) return
+        chatTabWatcher = object : FileObserver(cwdDir.path, CLOSE_WRITE or MOVED_TO) {
+            override fun onEvent(event: Int, path: String?) {
+                if (path == null || !path.startsWith(CHAT_TAB_DONE)) return
+                mainHandler.post {
+                    chatTabsDone.add(path)
+                    chat.tabChanged()
+                }
+            }
+        }.also { it.startWatching() }
+    }
+
     @Suppress("DEPRECATION") // the File constructor needs API 29
     private fun watchRequests() {
         requestDir.mkdirs()
@@ -781,6 +813,7 @@ class TerminalService : Service() {
 
     override fun onDestroy() {
         requestWatcher?.stopWatching()
+        chatTabWatcher?.stopWatching()
         WebAppActivity.closed = null
         WebAppActivity.bridge = null
         mainHandler.removeCallbacks(sweep)
@@ -847,6 +880,8 @@ class TerminalService : Service() {
             if (!session.isRunning) forgetFiles(session)
             serviceManager.setOpen(service, false)
         }
+        // A hand-off tab whose shell never started has nothing to finish: closed, it lets go.
+        mainHandler.post { chat.tabChanged() }
         if (tabs.isEmpty) lastTabClosed()
     }
 

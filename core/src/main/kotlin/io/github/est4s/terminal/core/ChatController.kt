@@ -5,12 +5,12 @@ import java.io.File
 /** Whether the chat can run: [check][ChatHost.check]'s answer, and [CHECKING] while one runs. */
 enum class ChatAccess { CHECKING, READY, NOT_INSTALLED, NOT_SIGNED_IN }
 
-/** What the Chat screen draws. [canRestart]: the process ended by itself and a chat can go on with `--resume`. */
 /**
  * What the Chat screen draws. [canRestart]: the process ended by itself and
  * a chat can go on with `--resume`. [stopping]: the last process is being
  * waited for, so nothing can be sent. [handOffBlock] says why "To tab"
- * can't go now; null when it can.
+ * can't go now; null when it can. [busy]: a turn runs or a card waits for
+ * an answer, so going to another chat would cut it off: ask first.
  */
 data class ChatState(
     val conversation: Conversation,
@@ -19,14 +19,19 @@ data class ChatState(
     val stopping: Boolean = false,
     val tabHold: ChatTabHold = ChatTabHold.NONE,
     val handOffBlock: String? = null,
+    val busy: Boolean = false,
 )
 
 /** A tab may still run this chat's session: [ASKING] whether to take it back, [TAKING_BACK] while its tab closes. */
 enum class ChatTabHold { NONE, ASKING, TAKING_BACK }
 
-/** The tab a chat was handed to ([ChatHost.openInTab]). */
+/**
+ * The tab a chat was handed to ([ChatHost.openInTab]). It holds the session
+ * only while the claude it was opened with runs: a session resumed by hand
+ * in that tab's shell after that claude has exited isn't tracked.
+ */
 interface ChatTab {
-    /** Whether its claude may still be running. */
+    /** Whether its claude may still be running: false once it has exited, or the tab has closed or never started. */
     val open: Boolean
 
     /** Closes the tab; [ChatController.tabChanged] follows once it has ended. */
@@ -47,7 +52,7 @@ interface ChatHost {
     /** Whether the agent can run (off the main thread, in the app); [done] is called on the main thread. */
     fun check(done: (ChatCheck) -> Unit)
 
-    /** The process ended by itself and [ChatController.live] is now false. */
+    /** A process has ended and [ChatController.live] is now false: the app may go, if nothing else keeps it. */
     fun ended() {}
 
     fun transport(launch: AgentLaunch): AgentTransport
@@ -77,8 +82,8 @@ interface ChatHost {
  * nothing to resume, so a new id it is, as after a resume that found no
  * conversation.
  *
- * One session, one program: a process being replaced ([resume], [handOff])
- * is stopped and waited for ([ChatState.stopping]) before anything runs
+ * One session, one program: a process being replaced ([resume], [handOff],
+ * [newChat]) is stopped and waited for ([ChatState.stopping]) before anything runs
  * on its behalf, and a session handed to a tab isn't run here again while
  * that tab may still run it ([ChatTabHold]). A resumed chat shows its
  * transcript ([readClaudeHistory]): `--resume` doesn't replay it.
@@ -119,7 +124,7 @@ class ChatController(
     private var cards = 0
     private var conversations = 0
 
-    val state: ChatState get() = ChatState(conversation, access, canRestart, exiting != null, tabHold, handOffBlock())
+    val state: ChatState get() = ChatState(conversation, access, canRestart, exiting != null, tabHold, handOffBlock(), busy())
 
     /** A process is running, so the app mustn't exit by itself. */
     val live: Boolean get() = session != null || exiting != null
@@ -264,9 +269,13 @@ class ChatController(
         return false
     }
 
+    private fun cardWaiting(): Boolean = session != null && conversation.items.any(::unanswered)
+
+    private fun busy(): Boolean = conversation.running || cardWaiting()
+
     private fun handOffBlock(): String? = when {
         conversation.running -> CHAT_HAND_OFF_RUNNING
-        session != null && conversation.items.any(::unanswered) -> CHAT_HAND_OFF_CARD
+        cardWaiting() -> CHAT_HAND_OFF_CARD
         exiting != null -> CHAT_HAND_OFF_STOPPING
         chatId?.let { it in heldByTabs } == true -> CHAT_HAND_OFF_HELD
         chatId == null || !resumable -> CHAT_HAND_OFF_NOTHING
@@ -319,12 +328,13 @@ class ChatController(
 
     fun answerPlan(requestId: String, approved: Boolean): Boolean = session?.answerPlan(requestId, approved) ?: false
 
-    /** Ends this chat and starts an empty one; what the old process still says is ignored. */
+    /**
+     * Ends this chat and starts an empty one; what the old process still says
+     * is ignored, and nothing runs until it has exited (it may be picked
+     * again from Chats at once).
+     */
     fun newChat() {
-        val old = session
-        generation++
-        session = null
-        old?.stop()
+        stopThen(null)
         conversation = Conversation()
         conversations++
         turnStart = null
@@ -378,6 +388,7 @@ class ChatController(
             afterExit = null
             then?.invoke()
             changed()
+            if (!live) host.ended()
             return
         }
         if (own != generation) return

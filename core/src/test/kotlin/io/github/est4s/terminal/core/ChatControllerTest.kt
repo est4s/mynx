@@ -456,7 +456,7 @@ class ChatControllerTest {
         assertEquals(1, host.launches.size)
         exit(0)
         assertFalse(chat.state.stopping)
-        assertEquals(0, host.ends, "a stop asked for isn't an end")
+        assertEquals(1, host.ends, "nothing runs any more, so the app may go")
         assertTrue(chat.send("now"))
         assertEquals(past, argFlag("--resume"))
     }
@@ -606,6 +606,66 @@ class ChatControllerTest {
         chat.resume(first)
         assertFalse(chat.send("back"))
         assertEquals(ChatTabHold.ASKING, chat.state.tabHold)
+    }
+
+    @Test
+    fun `busy while a turn runs or a card waits, so leaving it asks first`() {
+        ready()
+        assertFalse(chat.state.busy)
+        chat.send("hello")
+        drain()
+        init()
+        assertTrue(chat.state.busy, "a turn runs")
+        done()
+        assertFalse(chat.state.busy)
+        line("""{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"ls"},"tool_use_id":"t1"}}""")
+        assertTrue(chat.state.busy, "a card waits")
+        exit(0)
+        assertFalse(chat.state.busy, "with no process the card can't be answered")
+    }
+
+    @Test
+    fun `New waits for the old process, so going back to its chat can't run it twice`() {
+        finishedTurn()
+        val old = process
+        chat.newChat()
+        assertEquals(1, old.closed)
+        assertTrue(chat.live, "the old process still runs")
+        assertTrue(chat.state.stopping)
+        chat.resume(first)
+        work()
+        assertFalse(chat.send("back"))
+        assertEquals(1, host.launches.size, "never two programs on one session")
+        old.listener!!.onExit(143, "")
+        drain()
+        assertFalse(chat.state.stopping)
+        assertTrue(chat.send("back"))
+        assertEquals(first, argFlag("--resume"))
+    }
+
+    @Test
+    fun `New waits for the old process before its chat can go to a tab`() {
+        finishedTurn()
+        val old = process
+        chat.newChat()
+        chat.resume(first)
+        assertEquals(CHAT_HAND_OFF_STOPPING, chat.state.handOffBlock)
+        assertFalse(chat.handOff())
+        assertTrue(host.tabs.isEmpty())
+        old.listener!!.onExit(143, "")
+        drain()
+        assertTrue(chat.handOff())
+        assertEquals(listOf(first to "/root"), host.tabs)
+    }
+
+    @Test
+    fun `a stopped process that leaves nothing running is told as an end`() {
+        finishedTurn()
+        chat.newChat()
+        assertEquals(0, host.ends)
+        exit(143)
+        assertFalse(chat.live)
+        assertEquals(1, host.ends)
     }
 
     private fun file(guest: String, text: String) = File(top, guest.removePrefix("/")).apply {

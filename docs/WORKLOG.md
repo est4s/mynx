@@ -275,6 +275,16 @@ to home screen (`menu --act shortcut:`), terminal app Run (`menu
 release builds say to Share it), all Share (the web app's
 `index.html`, else `app.conf`). `app/` isn't compiled yet.
 
+Review fixes: New now waits for the old process's exit like Chats and
+To tab (picking the same chat again could run it twice), and a stop's
+exit that leaves nothing running calls `ended()` (the app may go);
+Chats, New and To tab moved into a ⋮ menu (To tab greyed, tapping
+says why); a past chat asks first while a turn runs or a card waits
+(`ChatState.busy`); a hand-off tab's done file is seen by a
+FileObserver, and a closed tab whose shell never started lets go;
+`killProot` does nothing for pid 0 or -1 (closing a never-started tab
+killed by TracerPid 0: every untraced process of the app).
+
 ### 2026-11-10 (176): Chat: history, past chats and hand-off to a tab (not yet on the phone)
 
 `--resume` replays no history, so `core/.../ClaudeHistory.kt` reads a

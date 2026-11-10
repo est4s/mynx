@@ -783,12 +783,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   every character but ASCII letters and digits into `-` (read in its
   binary). **One session, one program:** nothing stops two programs
   driving one session (the transcript forks), so `ChatController`
-  stops its process and waits for `ProcessEnded` before a resume or
-  "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:
+  stops its process and waits for `ProcessEnded` before New, a resume
+  or "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:
   `mynx agent start claude --resume ID`, then a file saying it's
-  done, then the shell) holds the session until that file appears or
-  the tab ends, and a prompt meanwhile asks to take it back (closing
-  the tab) instead of resuming. **Artifact cards**
+  done, then the shell) holds the session until that file appears (a
+  FileObserver on the folder sees it) or the tab ends (closed before
+  its shell started counts), and a prompt meanwhile asks to take it
+  back (closing the tab) instead of resuming. A session resumed by
+  hand in that tab afterwards isn't tracked. **Artifact cards**
   (`core/.../ChatArtifacts.kt`, its top comment is the contract): a
   turn's completed Write/Edit/NotebookEdit paths, and Bash's paths in
   the app folders or ending `.apk` (only if changed since the turn

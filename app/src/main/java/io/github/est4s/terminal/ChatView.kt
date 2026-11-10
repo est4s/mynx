@@ -23,6 +23,7 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.text.style.BackgroundColorSpan
 import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.text.style.LeadingMarginSpan
 import android.text.style.QuoteSpan
 import android.text.style.RelativeSizeSpan
@@ -44,6 +45,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TableLayout
 import android.widget.TableRow
@@ -90,6 +92,11 @@ import kotlin.math.ceil
 private const val CHAT_TITLE = "Claude Code"
 // Root's home, as the chat runs in it (ChatController's default).
 private const val CHAT_HOME = "/root"
+// The header's ⋮ menu items, and how To tab looks when it can't go now.
+private const val MORE_CHATS = 1
+private const val MORE_NEW = 2
+private const val MORE_TO_TAB = 3
+private const val MORE_GREYED = 0x80808080.toInt()
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
 // One level of a list or quote.
@@ -158,22 +165,15 @@ class ChatView(
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
     }
-    private val newButton = headerText("New").apply {
-        setOnClickListener { askNewChat() }
-        setPadding(dp(10), dp(12), dp(10), dp(12))
-    }
-    private val chatsButton = headerText("Chats").apply {
-        setOnClickListener { showList() }
-        setPadding(dp(10), dp(12), dp(10), dp(12))
-    }
-    private val tabButton = headerText("To tab").apply {
-        contentDescription = "Open this chat in a terminal tab"
-        setOnClickListener { handOff() }
-        setPadding(dp(10), dp(12), dp(10), dp(12))
+    // Chats, New and To tab: a narrow phone has room for ‹, the title and Terminal only, as Home.
+    private val moreButton = headerText("⋮").apply {
+        contentDescription = "More"
+        setOnClickListener { showMore() }
+        setPadding(dp(12), dp(12), dp(12), dp(12))
     }
     private val terminalButton = headerText("Terminal").apply {
         setOnClickListener { showTerminal() }
-        setPadding(dp(12), dp(12), dp(16), dp(12))
+        setPadding(dp(8), dp(12), dp(16), dp(12))
     }
     private val header = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -181,9 +181,7 @@ class ChatView(
         minimumHeight = dp(56)
         addView(backButton)
         addView(titleText, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        addView(chatsButton)
-        addView(newButton)
-        addView(tabButton)
+        addView(moreButton)
         addView(terminalButton)
     }
     private val statusText = TextView(context).apply {
@@ -279,7 +277,7 @@ class ChatView(
             field = value
             value ?: return
             setBackgroundColor(value.background)
-            listOf(backButton, titleText, chatsButton, newButton, tabButton, terminalButton).forEach { it.setTextColor(value.accent) }
+            listOf(backButton, titleText, moreButton, terminalButton).forEach { it.setTextColor(value.accent) }
             statusText.setTextColor(value.accent)
             gateText.setTextColor(value.text)
             gateButton.setTextColor(value.accent)
@@ -450,7 +448,6 @@ class ChatView(
         val canSend = state.access == ChatAccess.READY && !state.stopping && state.tabHold != ChatTabHold.TAKING_BACK
         sendButton.isEnabled = canSend
         sendButton.alpha = if (canSend) 1f else 0.4f
-        tabButton.alpha = if (state.handOffBlock == null) 1f else 0.4f
     }
 
     private fun showGate(text: String, action: String?, second: String? = null, onSecond: () -> Unit = {}, onTap: () -> Unit) {
@@ -462,6 +459,29 @@ class ChatView(
         gateSecond.visibility = if (second == null) View.GONE else View.VISIBLE
         gateSecond.setOnClickListener { onSecond() }
         gateWanted = true
+    }
+
+    private fun showMore() {
+        val chat = controller() ?: return
+        val popup = PopupMenu(context, moreButton)
+        popup.menu.add(Menu.NONE, MORE_CHATS, Menu.NONE, "Chats")
+        popup.menu.add(Menu.NONE, MORE_NEW, Menu.NONE, "New chat")
+        // Greyed when it can't go, but still tappable, to say why.
+        val toTab: CharSequence = if (chat.state.handOffBlock == null) {
+            "To tab"
+        } else {
+            SpannableString("To tab").apply { setSpan(ForegroundColorSpan(MORE_GREYED), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        }
+        popup.menu.add(Menu.NONE, MORE_TO_TAB, Menu.NONE, toTab)
+        popup.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                MORE_CHATS -> showList()
+                MORE_NEW -> askNewChat()
+                MORE_TO_TAB -> handOff()
+            }
+            true
+        }
+        popup.show()
     }
 
     // Says why when it can't go now (a turn running, nothing to resume yet).
@@ -492,7 +512,7 @@ class ChatView(
         statusText.visibility = View.GONE
         gateCard.visibility = View.GONE
         inputRow.visibility = View.GONE
-        listOf(chatsButton, newButton, tabButton).forEach { it.visibility = View.GONE }
+        moreButton.visibility = View.GONE
         titleText.text = "Chats"
         (context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
             .hideSoftInputFromWindow(windowToken, 0)
@@ -507,7 +527,7 @@ class ChatView(
         listScroll.visibility = View.GONE
         scroll.visibility = View.VISIBLE
         inputRow.visibility = View.VISIBLE
-        listOf(chatsButton, newButton, tabButton).forEach { it.visibility = View.VISIBLE }
+        moreButton.visibility = View.VISIBLE
         titleText.text = CHAT_TITLE
         requestLayout()
         render()
@@ -537,11 +557,7 @@ class ChatView(
                 background = RippleDrawable(ColorStateList.valueOf(colors.selectedBackground), null, ColorDrawable(colors.background))
                 addView(title)
                 addView(time)
-                setOnClickListener {
-                    controller()?.resume(session.sessionId)
-                    hideList()
-                    stick = true
-                }
+                setOnClickListener { askResume(session.sessionId) }
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         }
     }
@@ -557,6 +573,21 @@ class ChatView(
             input.setText("")
             stick = true
         }
+    }
+
+    // Going to another chat stops this one's process: a running turn or an open card asks first, as New does.
+    private fun askResume(id: String) {
+        val go = {
+            controller()?.resume(id)
+            hideList()
+            stick = true
+        }
+        if (controller()?.state?.busy != true) return go()
+        AlertDialog.Builder(context)
+            .setMessage("This chat has a turn running or a card open. Stop it and open the other chat?")
+            .setPositiveButton("Open") { _, _ -> go() }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun askNewChat() {
@@ -1043,6 +1074,7 @@ class ChatView(
     private fun headerText(text: String) = TextView(context).apply {
         this.text = text
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+        maxLines = 1
     }
 
     private fun barButton(text: String) = TextView(context).apply {
