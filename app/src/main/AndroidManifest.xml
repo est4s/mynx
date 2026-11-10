@@ -46,6 +46,16 @@
     <!-- The USB serial bridge; phones without USB host still install the app. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- Chat's mic: API 30+ hides the speech recognizer and its activity unless they're named here. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <application
         android:name=".TerminalApp"
         android:icon="@mipmap/ic_launcher"

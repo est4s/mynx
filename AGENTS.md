@@ -773,7 +773,20 @@ See `docs/ROADMAP.md` "How it works". The details:
   merged with the transcripts, a live one in its transcript's place,
   new ones not in a transcript first. `app/.../ChatView.kt` draws the
   shown chat (one row per `ChatItem`,
-  only changed rows are touched, `core/.../ChatScreen.kt`). **Stopping**
+  only changed rows are touched, `core/.../ChatScreen.kt`). **Layout**
+  (maintainer's request, 2026-11-10: like the Claude app, in the
+  theme's colours): ← and the title over "Claude Code · mode", the
+  context ring (`usageRing()`, tap: the Usage sheet from
+  `usageRows()`), ⋮ (Model…, To tab, Terminal); the box is a pill of
+  +, the input, the mic and one round button that is Stop while a turn
+  runs and the box is empty, Send otherwise (it follows each
+  keystroke). + is the Add context sheet (`ChatSheet.kt`, an overlay
+  inside the view so screenshots draw it): Camera, Photos and Files
+  (`ChatFiles.kt`, copied into the share folder as shares are, sent as
+  paths, `promptWithAttachments()`), Permission (this chat's mode, and
+  the `chat-mode` default) and Model. The mic is `SpeechRecognizer`
+  (`ChatVoice.kt`; the `<queries>` entries make it visible on API
+  30+), else the speech activity, else hidden. **Stopping**
   (`stopAgentProot`): off the main thread, SIGTERM to the agent itself
   (the tracee whose parent is proot, so it can end its children: KILL
   leaves them running), then after 5 s `stopProot`'s QUIT and its force.
