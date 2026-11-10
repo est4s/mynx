@@ -926,7 +926,9 @@ class ChatView(
                 val primary = request.options.firstOrNull { it.kind == PermissionOptionKind.ALLOW_ONCE }
                     ?: request.options.firstOrNull { !refuses(it.kind) }
                 val flow = buttonFlow()
-                request.options.forEach { option ->
+                // Once-only answers first, so Allow and Reject sit side by side; the long Always below.
+                fun always(kind: PermissionOptionKind) = kind == PermissionOptionKind.ALLOW_ALWAYS || kind == PermissionOptionKind.REJECT_ALWAYS
+                request.options.sortedBy { always(it.kind) }.forEach { option ->
                     val tone = if (refuses(option.kind)) colors.mark else colors.accent
                     flow.addView(cardButton(option.name, option === primary, colors, tone) {
                         controller()?.answerPermission(request.requestId, option.id)
