@@ -219,8 +219,12 @@ hand-off to a tab (To tab), one process per session.
 **Built too (entry 177):** artifact cards for apps and APKs the
 agent makes.
 
+**Built too (entry 180):** the wakelock during a turn, and Chat's
+notifications.
+
 **Next:** the phone test (Chat, then Chats and To tab, then cards:
-a web app, a terminal app, an APK, a resumed chat), then what's
+a web app, a terminal app, an APK, a resumed chat, then entry 180's
+checks), then what's
 left: other agents (Codex's `app-server`, Gemini's ACP).
 
 ### Regression checks (steps 4-6)
@@ -259,6 +263,42 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (180): Chat: wakelock during a turn, and notifications (not yet on the phone)
+
+**Wakelock:** `wakelock = auto` now also holds while a chat turn runs
+and no card waits (`ChatController.working`; `Wakelock.held(…,
+chatRunning)`). The controller tells the host only when it changes
+(`ChatHost.workingChanged`), so the service doesn't read settings.conf
+on every chunk; the notification's "wakelock held" follows, and
+`refreshNotification()` now also runs with no tabs while a chat is
+live. Not while a card waits: Claude only waits on stdin then, and the
+phone wakes when the user answers (the maintainer may prefer holding
+then too: one condition in `working`).
+
+**Notifications** (`core/.../ChatNotices.kt`, `chatNotice()`): unless
+Chat is on screen (the activity visible and Chat shown), a turn that
+took `agent-notify-after` or more ends ("Your turn: " and the first
+line of the reply, Markdown marks dropped; "The turn failed: …" for an
+error; none for Stop), and a card waits ("Wants to run Bash", "Asks:
+…", "Has a plan for you to approve"), at once. Title "Claude Code",
+as the hooks'. `agent-notify off` silences them, and so does Claude's
+own switch: they follow the hooks being in `~/.claude/settings.json`
+(`claudeNotifyHooks`, as `mynx agent list` decides "notifications
+on"), since that file is the only record of `mynx agent notify claude
+off` (decided: one switch per agent, as everywhere; a Claude installed
+by hand without hooks doesn't notify). The service posts one
+notification (`CHAT_NOTICE_ID`, the programs' channel, shared helper
+`noticeChannel()`), replaced by the next; `ChatController.opened()`
+clears it; tapping it sends `ACTION_CHAT`, and `MainActivity` shows
+Chat (touch view only). No commits yet.
+
+Phone checks: with the screen off, a long turn finishes (wakelock
+held shows, then goes); a 30 s+ turn with the app in the background
+notifies with the reply's first line, and a short one doesn't; a
+permission card notifies at once; nothing while Chat is on screen, but
+from Home it does; tapping opens Chat and clears it; `mynx set
+agent-notify off` and `mynx agent notify claude off` each silence it.
 
 ### 2026-11-10 (179): Screenshots of touch mode in CI (not yet seen)
 

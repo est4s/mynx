@@ -42,6 +42,21 @@ class ChatControllerTest {
 
         override fun hostFile(path: String) = File(top, path)
 
+        var rules = ChatNoticeRules(onScreen = true)
+        val notices = mutableListOf<ChatNotice>()
+        var clears = 0
+        val working = mutableListOf<Boolean>()
+        override fun noticeRules() = rules
+        override fun notify(notice: ChatNotice) {
+            notices += notice
+        }
+        override fun clearNotice() {
+            clears++
+        }
+        override fun workingChanged(working: Boolean) {
+            this.working += working
+        }
+
         val tabs = mutableListOf<Pair<String, String>>()
         val tabHandles = mutableListOf<Tab>()
         override fun openInTab(sessionId: String, cwd: String): ChatTab {
@@ -746,5 +761,84 @@ class ChatControllerTest {
         chat.resume(past)
         work()
         assertEquals(listOf("make", "Tool", "Artifact"), shown())
+    }
+
+    private val away = ChatNoticeRules(onScreen = false, agentNotify = true, afterSeconds = 30, agentOn = true)
+    private fun say(text: String) =
+        line("""{"type":"assistant","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"$text"}]}}""")
+    private fun askToRun() =
+        line("""{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"ls"},"tool_use_id":"t1"}}""")
+
+    @Test
+    fun `a long turn's end, with Chat away, is a notice with the reply`() {
+        host.rules = away
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        clock += 31_000
+        say("All done")
+        assertTrue(host.notices.isEmpty())
+        done()
+        assertEquals(listOf(ChatNotice("Claude Code", "Your turn: All done")), host.notices)
+    }
+
+    @Test
+    fun `a short turn's end isn't, nor anything while Chat is on screen`() {
+        host.rules = away
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        clock += 29_000
+        done()
+        assertTrue(host.notices.isEmpty())
+        host.rules = away.copy(onScreen = true)
+        chat.send("again")
+        drain()
+        clock += 60_000
+        askToRun()
+        done()
+        assertTrue(host.notices.isEmpty())
+    }
+
+    @Test
+    fun `a card waiting is a notice at once`() {
+        host.rules = away
+        ready()
+        chat.send("hello")
+        drain()
+        init()
+        askToRun()
+        assertEquals(listOf(ChatNotice("Claude Code", "Wants to run Bash")), host.notices)
+    }
+
+    @Test
+    fun `opening Chat clears its notice`() {
+        ready()
+        assertEquals(1, host.clears)
+    }
+
+    @Test
+    fun `the host hears when a turn starts and stops working, not while a card waits`() {
+        ready()
+        chat.send("hello")
+        assertEquals(emptyList(), host.working)
+        drain()
+        assertTrue(chat.working)
+        assertEquals(listOf(true), host.working)
+        init()
+        say("thinking aloud")
+        assertEquals(listOf(true), host.working, "told only on a change")
+        askToRun()
+        assertFalse(chat.working)
+        assertEquals(listOf(true, false), host.working)
+        done()
+        assertEquals(false, host.working.last(), "the turn's end takes back the card, then ends")
+        chat.send("more")
+        drain()
+        assertEquals(true, host.working.last())
+        chat.shutdown()
+        assertEquals(false, host.working.last())
     }
 }

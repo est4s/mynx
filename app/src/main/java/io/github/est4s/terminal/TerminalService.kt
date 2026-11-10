@@ -54,12 +54,15 @@ import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatCheck
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatHost
+import io.github.est4s.terminal.core.ChatNotice
+import io.github.est4s.terminal.core.ChatNoticeRules
 import io.github.est4s.terminal.core.ChatTab
 import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
 import io.github.est4s.terminal.core.claudeAuthStatusCommand
 import io.github.est4s.terminal.core.claudeHandOffCommand
+import io.github.est4s.terminal.core.claudeNotifyHooks
 import io.github.est4s.terminal.core.agentBinary
 import io.github.est4s.terminal.core.CONFIG_DIR
 import io.github.est4s.terminal.core.SOUND_DIR
@@ -157,6 +160,10 @@ const val EXTRA_SHELL = "io.github.est4s.terminal.SHELL"
 const val ACTION_UPDATE = "io.github.est4s.terminal.UPDATE"
 /** Opens a tab with the menu's Services list (the notification's Services button). */
 const val ACTION_SERVICES = "io.github.est4s.terminal.SERVICES"
+/** Shows touch mode's Chat (its notification). */
+const val ACTION_CHAT = "io.github.est4s.terminal.CHAT"
+// The chat's notification: one, replaced by the next.
+private const val CHAT_NOTICE_ID = 5000
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -220,6 +227,9 @@ class TerminalService : Service() {
     }
     /** Whether the Chat screen was showing, for a recreated activity. */
     var chatOnScreen = false
+    // A chat turn runs (ChatController.working): auto holds the wakelock for it.
+    private var chatWorking = false
+    private var destroyed = false
     private val chatHost: ChatHost = object : ChatHost {
         override fun check(done: (ChatCheck) -> Unit) {
             // The lookup reads Debian's folders; the proot it needs is set up as a new tab's is, on the main thread.
@@ -281,6 +291,30 @@ class TerminalService : Service() {
                     }
                 }
             }
+        }
+
+        override fun noticeRules(): ChatNoticeRules {
+            val settings = currentSettings()
+            val hooks = runCatching { File(rootfs, "root/.claude/settings.json").takeIf { it.isFile }?.readText() }.getOrNull()
+            return ChatNoticeRules(
+                onScreen = chatOnScreen && activity?.onScreen == true,
+                agentNotify = settings?.agentNotify ?: true,
+                afterSeconds = settings?.agentNotifyAfter ?: 30,
+                agentOn = claudeNotifyHooks(hooks),
+            )
+        }
+
+        override fun notify(notice: ChatNotice) {
+            showChatNotice(notice)
+        }
+
+        override fun clearNotice() {
+            getSystemService(NotificationManager::class.java).cancel(CHAT_NOTICE_ID)
+        }
+
+        override fun workingChanged(working: Boolean) {
+            chatWorking = working
+            if (!destroyed) applyWakelockSetting()
         }
 
         // A chat kept the app up with no tabs; with it over and nothing else running, it goes.
@@ -641,11 +675,11 @@ class TerminalService : Service() {
         runCatching { writeServicesActive(File(rootfs, SERVICES_ACTIVE), if (serviceHost.exiting) 0 else serviceManager.active) }
     }
 
-    // Held while the `wakelock` setting says (auto: while a service runs), so jobs keep running with the screen off.
+    // Held while the `wakelock` setting says (auto: while a service or a chat turn runs), so jobs keep running with the screen off.
     private var wakeLock: PowerManager.WakeLock? = null
 
     private fun applyWakelockSetting() {
-        val on = (currentSettings()?.wakelock ?: Wakelock.AUTO).held(servicesRunning = serviceManager.active > 0)
+        val on = (currentSettings()?.wakelock ?: Wakelock.AUTO).held(servicesRunning = serviceManager.active > 0, chatRunning = chatWorking)
         if (on == (wakeLock != null)) return
         if (on) {
             wakeLock = getSystemService(PowerManager::class.java)
@@ -812,6 +846,7 @@ class TerminalService : Service() {
     }
 
     override fun onDestroy() {
+        destroyed = true
         requestWatcher?.stopWatching()
         chatTabWatcher?.stopWatching()
         WebAppActivity.closed = null
@@ -1358,6 +1393,29 @@ class TerminalService : Service() {
 
     private fun usbNoticeId(deviceId: String) = USB_NOTICE_ID_BASE + Math.floorMod(deviceId.hashCode(), 1000)
 
+    private fun noticeChannel(manager: NotificationManager) {
+        manager.createNotificationChannel(
+            NotificationChannel(NOTICE_CHANNEL_ID, "Notifications from programs", NotificationManager.IMPORTANCE_HIGH))
+    }
+
+    // The chat's notice (core decided it's due): tapping it opens Chat.
+    private fun showChatNotice(notice: ChatNotice) {
+        val manager = getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled()) return
+        noticeChannel(manager)
+        val open = Intent(this, MainActivity::class.java).setAction(ACTION_CHAT).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val tap = PendingIntent.getActivity(this, CHAT_NOTICE_ID, open,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        manager.notify(CHAT_NOTICE_ID, Notification.Builder(this, NOTICE_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(notice.title)
+            .setContentText(notice.text)
+            .setStyle(Notification.BigTextStyle().bigText(notice.text))
+            .setContentIntent(tap)
+            .setAutoCancel(true)
+            .build())
+    }
+
     // Answers `mynx notify`: null when shown, else why not.
     private fun showNotice(notice: Notice): String? {
         val manager = getSystemService(NotificationManager::class.java)
@@ -1366,8 +1424,7 @@ class TerminalService : Service() {
         if (notice.ifAway && activity?.onScreen == true && (session == null || tabs.selected?.session === session)) {
             return if (session == null) "the app is on screen" else "that tab is on screen"
         }
-        manager.createNotificationChannel(
-            NotificationChannel(NOTICE_CHANNEL_ID, "Notifications from programs", NotificationManager.IMPORTANCE_HIGH))
+        noticeChannel(manager)
         val id = NOTICE_ID_BASE + (if (session != null) notice.shell!! else 0)
         val open = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -1390,8 +1447,7 @@ class TerminalService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return "the app's notifications are off in Android's settings"
         if (ifAway && WebAppActivity.screen(app.name)?.onScreen == true) return "the app is on screen"
-        manager.createNotificationChannel(
-            NotificationChannel(NOTICE_CHANNEL_ID, "Notifications from programs", NotificationManager.IMPORTANCE_HIGH))
+        noticeChannel(manager)
         val id = WebAppActivity.noticeId(app.name)
         val open = WebAppActivity.shortcutIntent(this, app.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val tap = PendingIntent.getActivity(this, id, open,
@@ -1462,7 +1518,7 @@ class TerminalService : Service() {
 
     // Not after Exit, nor with nothing running: that would bring the notification back.
     private fun refreshNotification() {
-        if (serviceHost.exiting || (tabs.isEmpty && serviceManager.active == 0)) return
+        if (serviceHost.exiting || (tabs.isEmpty && serviceManager.active == 0 && !chat.live)) return
         updateNotification()
     }
 

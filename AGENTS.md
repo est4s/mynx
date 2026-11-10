@@ -765,7 +765,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   A permission card shows `PermissionRequest.review`, built from the
   input sent back as `updatedInput`, never just the model's
   description. A running chat keeps the app up like a service
-  (`ChatController.live`). **Always allow** sends only the suggested
+  (`ChatController.live`); `wakelock = auto` also holds while a turn
+  runs and no card waits (`ChatController.working`, told to the host on
+  change). **Notifications** (`core/.../ChatNotices.kt`): as the hooks
+  (silenced by `MYNX_CHAT=1`) would, unless Chat is on screen: a turn of
+  `agent-notify-after` or more ends, or a card waits; one notification
+  (`CHAT_NOTICE_ID`), cleared by `opened()`; it follows `agent-notify`
+  and Claude's hooks being on (`claudeNotifyHooks`, as `mynx agent
+  list` reads them). **Always allow** sends only the suggested
   `addRules` (`allow`), for the session, and its label names each rule;
   a suggested mode or directory would grant more than the button says,
   and no rule means no Always. **Markdown** (`core/.../Markdown.kt`,

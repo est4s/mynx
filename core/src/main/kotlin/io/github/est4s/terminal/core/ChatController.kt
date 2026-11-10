@@ -68,6 +68,18 @@ interface ChatHost {
 
     /** Opens a tab running Claude Code on [sessionId] in [cwd] (see [claudeHandOffCommand]) and shows it. */
     fun openInTab(sessionId: String, cwd: String): ChatTab
+
+    /** How notices go now ([chatNotice]); read only when one may be due. The default: Chat on screen, so none. */
+    fun noticeRules(): ChatNoticeRules = ChatNoticeRules(onScreen = true)
+
+    /** Posts the chat's notification, replacing the last. */
+    fun notify(notice: ChatNotice) {}
+
+    /** Removes the chat's notification: the user has opened Chat. */
+    fun clearNotice() {}
+
+    /** [ChatController.working] changed: the `wakelock` setting's auto follows it. */
+    fun workingChanged(working: Boolean) {}
 }
 
 /**
@@ -123,8 +135,12 @@ class ChatController(
     private var artifactsApplied = 0
     private var cards = 0
     private var conversations = 0
+    private var toldWorking = false
 
     val state: ChatState get() = ChatState(conversation, access, canRestart, exiting != null, tabHold, handOffBlock(), busy())
+
+    /** A turn runs and no card waits for the user: the app keeps the CPU awake for it ([Wakelock]). */
+    val working: Boolean get() = session != null && conversation.running && !cardWaiting()
 
     /** A process is running, so the app mustn't exit by itself. */
     val live: Boolean get() = session != null || exiting != null
@@ -138,6 +154,7 @@ class ChatController(
 
     /** The screen is on show: checks whether the chat can run, unless that's known or being found out. */
     fun opened() {
+        host.clearNotice()
         heldByTab()
         if (access == ChatAccess.READY || checking || waitingForExit) return
         access = ChatAccess.CHECKING
@@ -394,6 +411,10 @@ class ChatController(
         if (own != generation) return
         if (event == AgentEvent.TurnStarted && !conversation.running) turnStart = now()
         conversation = conversation.reduce(event)
+        if (mayNotify(event)) {
+            val took = if (event is AgentEvent.TurnEnded) turnStart?.let { now() - it } else null
+            chatNotice(event, conversation, took, host.noticeRules())?.let(host::notify)
+        }
         when (event) {
             is AgentEvent.ToolCall -> if (event.call.status == ToolStatus.COMPLETED) checkArtifacts(event.call)
             is AgentEvent.ToolCallUpdate -> if (event.call.status == ToolStatus.COMPLETED) checkArtifacts(event.call)
@@ -468,5 +489,9 @@ class ChatController(
 
     private fun changed() {
         listener?.invoke(state)
+        if (working != toldWorking) {
+            toldWorking = working
+            host.workingChanged(toldWorking)
+        }
     }
 }
