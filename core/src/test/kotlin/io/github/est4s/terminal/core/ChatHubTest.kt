@@ -65,6 +65,15 @@ class ChatHubTest {
         override fun workingChanged(working: Boolean) {
             this.working += working
         }
+
+        var defaultMode: String? = null
+        val defaultsSet = mutableListOf<String>()
+        override fun chatDefaultMode() = defaultMode
+
+        override fun setChatDefaultMode(value: String) {
+            defaultsSet += value
+            defaultMode = value
+        }
     }
 
     inner class Tab : ChatTab {
@@ -354,5 +363,81 @@ class ChatHubTest {
             ),
             chatHistory(live, past),
         )
+    }
+
+    private fun flag(name: String, launch: AgentLaunch = host.launches.last()): String? =
+        launch.argv.indexOf(name).takeIf { it >= 0 }?.let { launch.argv[it + 1] }
+
+    private fun FakeTransport.taken(id: String) =
+        line("""{"type":"control_response","response":{"subtype":"success","request_id":"$id"}}""")
+
+    // A chat whose mode was changed to Accept edits while it ran, left once idle, and dropped.
+    private fun pickedAndLeft(): String {
+        val first = hub.newChat()
+        val one = start(first)
+        first.setMode("acceptEdits")
+        one.taken("chat-2")
+        first.setModel("haiku")
+        one.taken("chat-3")
+        one.done()
+        val id = first.sessionId!!
+        hub.leave()
+        one.ended()
+        assertEquals(emptyList(), hub.held)
+        return id
+    }
+
+    @Test
+    fun `a chat left and opened again keeps its picks`() {
+        val id = pickedAndLeft()
+        val again = hub.open(id)
+        assertEquals("acceptEdits", again.state.mode)
+        assertEquals("haiku", again.state.model)
+        assertTrue(again.send("more"))
+        assertEquals("acceptEdits", flag("--permission-mode"))
+        assertEquals("haiku", flag("--model"))
+    }
+
+    @Test
+    fun `picks are kept in their file, for the next start of the app`() {
+        val file = File(top, "state/chat-picks")
+        val saving = ChatHub(host, { posted.addLast(it) }, now = { clock }, picksFile = file)
+        val first = saving.newChat()
+        saving.opened()
+        first.setMode("plan")
+        assertTrue(first.send("hello"))
+        drain()
+        val id = first.sessionId!!
+        assertTrue(file.isFile)
+        val later = ChatHub(host, { posted.addLast(it) }, now = { clock }, picksFile = file)
+        assertEquals("plan", later.open(id).state.mode)
+    }
+
+    @Test
+    fun `a broken picks file is read as none`() {
+        val file = File(top, "chat-picks").apply { writeText("not\u0000 picks\n\n\tx\n") }
+        val broken = ChatHub(host, { posted.addLast(it) }, now = { clock }, picksFile = file)
+        assertEquals("default", broken.open("11111111-1111-1111-1111-111111111111").state.mode)
+    }
+
+    @Test
+    fun `a new chat starts in the default mode the host gives`() {
+        host.defaultMode = "auto"
+        val chat = hub.newChat()
+        assertEquals("auto", chat.state.mode)
+        assertEquals("auto", chat.state.defaultMode)
+        start(chat)
+        assertEquals("auto", flag("--permission-mode"))
+    }
+
+    @Test
+    fun `use as default writes the setting through the host`() {
+        val chat = hub.newChat()
+        hub.setDefaultMode("acceptEdits")
+        assertEquals(listOf("acceptEdits"), host.defaultsSet)
+        assertEquals("acceptEdits", chat.state.defaultMode)
+        hub.setDefaultMode("bypassPermissions")
+        assertEquals(listOf("acceptEdits"), host.defaultsSet, "only modes Chat offers")
+        assertEquals("acceptEdits", hub.newChat().state.mode)
     }
 }

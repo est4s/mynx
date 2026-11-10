@@ -286,6 +286,11 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF -- "one left idle is" "$GUIDE"
 }
 
+@test "the guide says new chats start in auto, and a chat keeps its own mode" {
+    grep -qF -- '`chat-mode`: `auto` (default)' "$GUIDE"
+    grep -qF -- "A mode picked in a chat stays with that chat" "$GUIDE"
+}
+
 @test "the guide says a chat can go on in a tab, one session in one place" {
     grep -qF -- "To tab moves it to a terminal tab" "$GUIDE"
 }

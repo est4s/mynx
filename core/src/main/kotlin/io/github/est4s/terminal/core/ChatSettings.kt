@@ -9,6 +9,7 @@ data class ChatMode(val value: String, val name: String)
  * user's own settings) is still shown.
  */
 val CHAT_MODES: List<ChatMode> = listOf(
+    ChatMode("auto", "Auto"),
     ChatMode("default", "Default (asks)"),
     ChatMode("plan", "Plan (plan first)"),
     ChatMode("acceptEdits", "Accept edits"),
@@ -73,7 +74,7 @@ fun chatStatusLine(choice: String?, reported: String?, mode: String?, models: Li
         else -> DEFAULT_MODEL
     }
     val current = mode ?: "default"
-    return ChatStatusLine(model, modeName(current), highlighted = current != "default")
+    return ChatStatusLine(model, chatModeName(current), highlighted = current != "default")
 }
 
 // "Default (recommended)" → "Default".
@@ -93,7 +94,9 @@ private fun modelName(id: String): String {
 private fun modelAlias(id: String): String? =
     MODEL_ID.matchEntire(id)?.destructured?.let { (family, _, _, wide) -> family + wide }
 
-private fun modeName(mode: String): String = when (mode) {
+/** A permission mode as the header's small line names it. */
+fun chatModeName(mode: String): String = when (mode) {
+    "auto" -> "Auto"
     "default" -> "Asks first"
     "plan" -> "Plan"
     "acceptEdits" -> "Accept edits"

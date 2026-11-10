@@ -215,6 +215,16 @@ sealed interface AgentEvent {
     /** [message] says what went wrong with [StopReason.ERROR]. [costUsd] is what the agent reports. */
     data class TurnEnded(val stopReason: StopReason, val message: String? = null, val costUsd: Double? = null) : AgentEvent
 
+    /**
+     * How much context the chat's last call used (input, cache read and
+     * cache written), and the model's window once the agent has said it
+     * ([windowTokens], null till then). Told when either changes.
+     */
+    data class ContextUsed(val usedTokens: Long, val windowTokens: Long?) : AgentEvent
+
+    /** The plan's usage windows, as the agent last heard them. */
+    data class PlanLimits(val windows: List<PlanWindow>) : AgentEvent
+
     /** Sign-in is needed: the app opens a tab for it. Followed by [TurnEnded] with no message. */
     data class NotSignedIn(val message: String) : AgentEvent
 

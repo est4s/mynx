@@ -5,6 +5,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ChatControllerTest {
@@ -1016,5 +1017,71 @@ class ChatControllerTest {
         next()
         assertEquals("Default model", chat.state.line.model)
         assertEquals("default", chat.state.model)
+    }
+
+    private val photo = ChatAttachment("/root/Shared/photo.jpg", "photo.jpg", image = true)
+
+    private fun promptSent(): String {
+        val sent = process.written.map { parseJson(it) as Map<*, *> }.last { it["type"] == "user" }
+        return (sent["message"] as Map<*, *>)["content"] as String
+    }
+
+    @Test
+    fun `attachments go as paths in the prompt, text or not`() {
+        ready()
+        assertFalse(chat.send(" ", emptyList()))
+        assertTrue(chat.send("", listOf(photo)))
+        assertEquals(promptWithAttachments("", listOf(photo)), promptSent())
+        assertEquals("photo.jpg", chat.state.title)
+        assertTrue(chat.send("And this?", listOf(photo)))
+        assertEquals(promptWithAttachments("And this?", listOf(photo)), promptSent())
+        assertEquals("photo.jpg", chat.state.title, "the first prompt's")
+    }
+
+    @Test
+    fun `a chat's title is its first prompt's first line, as its history row, none before it`() {
+        ready()
+        assertNull(chat.state.title)
+        chat.send("\nFix the\nbuild")
+        assertEquals("Fix the", chat.state.title)
+    }
+
+    @Test
+    fun `a resumed chat is titled by its transcript`() {
+        transcript(past, "old prompt", "later")
+        ready()
+        next(past)
+        work()
+        assertEquals("old prompt", chat.state.title)
+    }
+
+    @Test
+    fun `usage is the chat's context, and the plan as any chat heard it`() {
+        ready()
+        chat.send("hello")
+        chatFixture("claude-usage.txt").forEach(::line)
+        assertEquals(ChatUsage(ContextUse(21_461, 1_000_000), chat.state.usage.plan, clock), chat.state.usage)
+        assertEquals(listOf("five_hour", "seven_day"), chat.state.usage.plan.map { it.kind })
+        next()
+        assertEquals(null, chat.state.usage.context, "a new chat has used none")
+        assertEquals(2, chat.state.usage.plan.size, "the plan is the account's")
+    }
+
+    @Test
+    fun `a resumed chat's context is its transcript's, with the window Claude reported for its model`() {
+        ready()
+        chat.send("hello")
+        chatFixture("claude-usage.txt").forEach(::line)
+        File(top, claudeTranscriptPath("/root", "/root", past).removePrefix("/")).apply {
+            parentFile.mkdirs()
+            writeText(
+                """{"type":"user","message":{"role":"user","content":"old"},"uuid":"u"}""" + "\n" +
+                    """{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"a"}],""" +
+                    """"usage":{"input_tokens":1,"cache_read_input_tokens":40000,"cache_creation_input_tokens":0}},"uuid":"a"}""" + "\n",
+            )
+        }
+        next(past)
+        work()
+        assertEquals(ContextUse(40_001, 1_000_000), chat.state.usage.context)
     }
 }

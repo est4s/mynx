@@ -237,4 +237,34 @@ class ClaudeHistoryTest {
         assertEquals("m", readClaudeTranscript(fixture.lineSequence()).model)
         assertNull(readClaudeTranscript(sequenceOf(user(1, "hi"))).model)
     }
+
+    private fun answered(n: Int, input: Int, read: Int, written: Int, sidechain: Boolean = false) =
+        """{"type":"assistant","message":{"role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"a"}],""" +
+            """"usage":{"input_tokens":$input,"cache_read_input_tokens":$read,"cache_creation_input_tokens":$written,"output_tokens":9}},""" +
+            """"isSidechain":$sidechain,"uuid":"a$n"}"""
+
+    @Test
+    fun `the context is the last answer's, not a subagent's`() {
+        val lines = sequenceOf(user(1, "hi"), answered(2, 2, 100, 50), answered(3, 3, 1000, 20), answered(4, 1, 9, 9, sidechain = true))
+        assertEquals(1023L, readClaudeTranscript(lines).context)
+        assertNull(readClaudeTranscript(sequenceOf(user(1, "hi"), agent(2, "a"))).context)
+    }
+
+    @Test
+    fun `the transcript's title is its first prompt, even once that row is cut off`() {
+        val lines = (1..5).map { user(it, "prompt\n$it") }
+        val transcript = readClaudeTranscript(lines.asSequence(), max = 2)
+        assertEquals("prompt 1", transcript.title)
+        assertNull(readClaudeTranscript(sequenceOf(agent(1, "a"))).title)
+    }
+
+    @Test
+    fun `a title leaves attachments out, or names the first when there's no text`() {
+        val photo = ChatAttachment("/root/Shared/photo.jpg", "photo.jpg", image = true)
+        val withText = promptWithAttachments("What is this?", listOf(photo))
+        assertEquals("What is this?", readClaudeTranscript(sequenceOf(user(1, withText))).title)
+        assertEquals("photo.jpg", readClaudeTranscript(sequenceOf(user(1, promptWithAttachments("", listOf(photo))))).title)
+        val file = File(top, "t.jsonl").apply { writeText(user(1, withText) + "\n") }
+        assertEquals("What is this?", claudeSessionTitle(file))
+    }
 }

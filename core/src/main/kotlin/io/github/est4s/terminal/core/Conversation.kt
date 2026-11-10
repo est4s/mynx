@@ -65,6 +65,8 @@ fun Conversation.reduce(event: AgentEvent): Conversation = when (event) {
     is AgentEvent.ModeChanged -> copy(mode = event.mode)
     is AgentEvent.ModelChanged -> copy(model = event.model)
     is AgentEvent.ModeRefused, is AgentEvent.ModelRefused -> this
+    // The controller keeps them: [ChatState.usage].
+    is AgentEvent.ContextUsed, is AgentEvent.PlanLimits -> this
     is AgentEvent.UserMessage -> copy(items = items + ChatItem.User(event.id, event.text), queued = queued.filterNot { it.id == event.id })
     is AgentEvent.PromptQueued -> copy(queued = queued + ChatItem.User(event.id, event.text))
     AgentEvent.TurnStarted -> copy(running = true)

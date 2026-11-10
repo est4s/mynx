@@ -262,6 +262,12 @@ One `key = value` per line; `mynx settings` describes each.
   Claude Code makes or changes an app in `~/apps` or `~/terminal-apps`,
   or writes an APK, the chat shows a card for it: Open (a web app),
   Run (a terminal app, in a tab), Share.
+- `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
+  the permission mode new chats of touch view's Chat start in. `auto`
+  lets Claude Code decide what's safe to run, asking less; `default`
+  asks first. A mode picked in a chat stays with that chat, also after
+  leaving it; the chat's "Use as default" sets this setting. Never
+  `bypassPermissions`.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a
