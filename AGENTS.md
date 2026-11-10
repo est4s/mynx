@@ -876,7 +876,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   QUIT blocked while a program it traces sits stopped (seen once
   after a sound restart), so the force after the grace is
   `killProot()`: KILL what it traces (`TracerPid`), then proot.
-  **Android's `Process.destroyForcibly()` only sends TERM** (its
+  A session that never started has pid 0 and an ended one -1: never
+  look up tracees for those (every untraced process has `TracerPid 0`,
+  the app included).   **Android's `Process.destroyForcibly()` only sends TERM** (its
   `UNIXProcess` doesn't override it); its pid comes from `toString()`
   (`processPid()`).
 - **The host can't see a guest process's working directory:** proot

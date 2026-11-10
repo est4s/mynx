@@ -372,6 +372,15 @@ if 4.14.1 trips over AGP 9; `Config.application` is a plain
 `Application` so `TerminalApp` isn't used; blank PNGs mean native
 graphics didn't draw (look for a warning in the test report).
 
+### 2026-11-10 (178): killProot does nothing for a tab that never started
+
+Found while reviewing Chat (draft PR #72): closing a tab whose shell
+never started (pid 0, e.g. a restored tab never shown) reached
+`killProot(0)` after the grace, and `prootTracees(0)` matches every
+untraced process, the app itself and other tabs' proots included, then
+`kill(0)`, the app's process group. It now returns for pid <= 0. Not
+seen on the phone; the test reproduces it.
+
 ### 2026-11-10 (177): Chat: artifact cards (passed on the phone)
 
 When Claude Code makes or changes an app, the chat shows a card
