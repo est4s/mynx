@@ -8,6 +8,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
@@ -39,6 +40,7 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.EditorInfo
@@ -117,6 +119,63 @@ private class ChatSideScroll(context: Context) : HorizontalScrollView(context) {
 }
 
 // Selectable text ignores a ClickableSpan's taps: selectableText finds them itself.
+// A card's buttons side by side, wrapping onto the next line; one too wide for a
+// line takes a line of its own, at full width (its text wraps, then ellipsizes).
+private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(context) {
+    override fun shouldDelayChildPressedState(): Boolean = false
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val unbounded = View.MeasureSpec.getMode(widthMeasureSpec) == View.MeasureSpec.UNSPECIFIED
+        val width = if (unbounded) Int.MAX_VALUE / 2 else View.MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
+        val loose = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        var x = 0
+        var y = 0
+        var lineHeight = 0
+        var used = 0
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            if (child.visibility == View.GONE) continue
+            child.measure(loose, loose)
+            if (child.measuredWidth > width) {
+                child.measure(View.MeasureSpec.makeMeasureSpec(width.coerceAtLeast(0), View.MeasureSpec.EXACTLY), loose)
+            }
+            if (x > 0 && x + child.measuredWidth > width) {
+                y += lineHeight + gap
+                x = 0
+                lineHeight = 0
+            }
+            x += child.measuredWidth + gap
+            used = maxOf(used, x - gap)
+            lineHeight = maxOf(lineHeight, child.measuredHeight)
+        }
+        setMeasuredDimension(
+            View.resolveSize(used + paddingLeft + paddingRight, widthMeasureSpec),
+            View.resolveSize(y + lineHeight + paddingTop + paddingBottom, heightMeasureSpec),
+        )
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val width = r - l - paddingLeft - paddingRight
+        var x = 0
+        var y = 0
+        var lineHeight = 0
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            if (child.visibility == View.GONE) continue
+            if (x > 0 && x + child.measuredWidth > width) {
+                y += lineHeight + gap
+                x = 0
+                lineHeight = 0
+            }
+            val left = paddingLeft + x
+            val top = paddingTop + y
+            child.layout(left, top, left + child.measuredWidth, top + child.measuredHeight)
+            x += child.measuredWidth + gap
+            lineHeight = maxOf(lineHeight, child.measuredHeight)
+        }
+    }
+}
+
 private class ChatLink(private val url: String, private val color: Int, private val open: (String) -> Unit) : ClickableSpan() {
     override fun onClick(widget: View) = open(url)
 
@@ -190,31 +249,18 @@ class ChatView(
         visibility = View.GONE
     }
     private val gateText = TextView(context).apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) }
-    private val gateButton = TextView(context).apply {
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        minHeight = dp(44)
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, dp(8), 0, dp(8))
-        isFocusable = true
-    }
-    private val gateSecond = TextView(context).apply {
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        minHeight = dp(44)
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(32), dp(8), 0, dp(8))
-        isFocusable = true
-        visibility = View.GONE
-    }
+    // Styled as card buttons when the colours come.
+    private val gateButton = TextView(context)
+    private val gateSecond = TextView(context).apply { visibility = View.GONE }
     private val gateCard = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(16), dp(10), dp(16), dp(4))
+        setPadding(dp(16), dp(8), dp(16), dp(8))
         visibility = View.GONE
         addView(gateText)
-        addView(LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+        addView(buttonFlow().apply {
             addView(gateButton)
             addView(gateSecond)
-        })
+        }, buttonFlowParams())
     }
     // The Chats list: the folder's past chats, over the conversation.
     private val listRows = LinearLayout(context).apply {
@@ -280,8 +326,8 @@ class ChatView(
             listOf(backButton, titleText, moreButton, terminalButton).forEach { it.setTextColor(value.accent) }
             statusText.setTextColor(value.accent)
             gateText.setTextColor(value.text)
-            gateButton.setTextColor(value.accent)
-            gateSecond.setTextColor(value.accent)
+            styleButton(gateButton, true, value)
+            styleButton(gateSecond, false, value)
             input.setTextColor(value.text)
             input.setHintTextColor(value.accent)
             input.setBackgroundColor(value.selectedBackground)
@@ -736,7 +782,9 @@ class ChatView(
     private fun mdCodeCell(first: MdRow.Code, colors: StripColors): MdCell {
         var code = ""
         val language = plainText(colors.accent, 12f)
-        val copy = cardButton("Copy", colors.accent, colors) { }
+        val copy = linkButton("Copy", colors) { }
+        copy.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        copy.setPadding(dp(6), dp(8), dp(6), dp(8))
         copy.minHeight = dp(36)
         copy.setOnClickListener {
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -860,11 +908,11 @@ class ChatView(
             card.addView(selectableText(colors.text, 14f).apply {
                 typeface = Typeface.MONOSPACE
                 text = if (whole) request.review else cut.text
-                setPadding(0, dp(4), 0, dp(4))
+                setPadding(0, dp(4), 0, dp(2))
             })
             if (cut.hidden > 0) {
                 val label = if (whole) "Show less" else "Show all (${cut.hidden} more characters)"
-                card.addView(cardButton(label, colors.accent, colors) {
+                card.addView(linkButton(label, colors) {
                     if (!expandedReviews.remove(request.id)) expandedReviews.add(request.id)
                     draw(request)
                 })
@@ -873,12 +921,18 @@ class ChatView(
             if (outcome != null) {
                 card.addView(answeredText(chatOutcomeText(outcome), colors))
             } else {
+                fun refuses(kind: PermissionOptionKind) = kind == PermissionOptionKind.REJECT_ONCE || kind == PermissionOptionKind.REJECT_ALWAYS
+                // Filled: allowing once, else the first that allows at all.
+                val primary = request.options.firstOrNull { it.kind == PermissionOptionKind.ALLOW_ONCE }
+                    ?: request.options.firstOrNull { !refuses(it.kind) }
+                val flow = buttonFlow()
                 request.options.forEach { option ->
-                    val refuses = option.kind == PermissionOptionKind.REJECT_ONCE || option.kind == PermissionOptionKind.REJECT_ALWAYS
-                    card.addView(cardButton(option.name, if (refuses) colors.mark else colors.accent, colors) {
+                    val tone = if (refuses(option.kind)) colors.mark else colors.accent
+                    flow.addView(cardButton(option.name, option === primary, colors, tone) {
                         controller()?.answerPermission(request.requestId, option.id)
                     })
                 }
+                card.addView(flow, buttonFlowParams())
             }
         }
         return Cell(card) { item -> draw(item as ChatItem.Permission) }
@@ -890,19 +944,23 @@ class ChatView(
             card.removeAllViews()
             val current = questionPicks.getOrPut(request.id) { QuestionPicks(request.questions) }
             request.questions.forEachIndexed { q, question ->
-                question.header?.let { head -> card.addView(plainText(colors.accent, 13f).apply { text = head }) }
+                question.header?.let { head ->
+                    card.addView(plainText(colors.accent, 13f).apply {
+                        text = head
+                        if (q > 0) setPadding(0, dp(10), 0, 0)
+                    })
+                }
                 card.addView(plainText(colors.text, 16f).apply {
                     text = question.question
-                    setPadding(0, dp(2), 0, dp(4))
+                    setPadding(0, if (q > 0 && question.header == null) dp(10) else dp(2), 0, dp(2))
                 })
                 if (request.outcome == null) {
                     question.options.forEachIndexed { o, option ->
                         val mark = when {
-                            current.isPicked(q, o) -> if (question.multiSelect) "☑ " else "● "
-                            else -> if (question.multiSelect) "☐ " else "○ "
+                            current.isPicked(q, o) -> if (question.multiSelect) "☑" else "●"
+                            else -> if (question.multiSelect) "☐" else "○"
                         }
-                        val label = mark + option.label + (option.description?.let { "\n" + it } ?: "")
-                        card.addView(cardButton(label, colors.text, colors) {
+                        card.addView(optionRow(mark, current.isPicked(q, o), option.label, option.description, colors) {
                             current.toggle(q, o)
                             if (current.answersOnTap) {
                                 controller()?.answerQuestion(request.requestId, current.answers())
@@ -917,9 +975,11 @@ class ChatView(
             if (outcome != null) {
                 card.addView(answeredText(chatOutcomeText(outcome), colors))
             } else if (!current.answersOnTap) {
-                card.addView(cardButton("Send answer", colors.accent, colors) {
-                    if (current.complete) controller()?.answerQuestion(request.requestId, current.answers())
-                }.apply { alpha = if (current.complete) 1f else 0.4f })
+                card.addView(buttonFlow().apply {
+                    addView(cardButton("Send answer", true, colors) {
+                        if (current.complete) controller()?.answerQuestion(request.requestId, current.answers())
+                    }.apply { alpha = if (current.complete) 1f else 0.4f })
+                }, buttonFlowParams())
             }
         }
         return Cell(card) { item -> draw(item as ChatItem.Question) }
@@ -933,19 +993,21 @@ class ChatView(
             card.addView(plainText(colors.accent, 13f).apply { text = "Plan" })
             card.addView(selectableText(colors.text, 15f).apply {
                 text = request.plan
-                setPadding(0, dp(4), 0, dp(4))
+                setPadding(0, dp(4), 0, dp(2))
             })
             request.planFilePath?.let { path -> card.addView(plainText(colors.accent, 12f).apply { text = path }) }
             val outcome = request.outcome
             if (outcome != null) {
                 card.addView(answeredText(chatOutcomeText(outcome), colors))
             } else {
-                card.addView(cardButton("Approve", colors.accent, colors) {
-                    controller()?.answerPlan(request.requestId, true)
-                })
-                card.addView(cardButton("Keep planning", colors.mark, colors) {
-                    controller()?.answerPlan(request.requestId, false)
-                })
+                card.addView(buttonFlow().apply {
+                    addView(cardButton("Approve", true, colors) {
+                        controller()?.answerPlan(request.requestId, true)
+                    })
+                    addView(cardButton("Keep planning", false, colors, colors.mark) {
+                        controller()?.answerPlan(request.requestId, false)
+                    })
+                }, buttonFlowParams())
             }
         }
     }
@@ -977,8 +1039,9 @@ class ChatView(
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.MIDDLE
             })
-            chatArtifactActions(artifact, canInstall = install != null).forEach { action ->
-                card.addView(cardButton(action.label, colors.accent, colors) {
+            val flow = buttonFlow()
+            chatArtifactActions(artifact, canInstall = install != null).forEachIndexed { i, action ->
+                flow.addView(cardButton(action.label, i == 0, colors) {
                     when (action) {
                         ArtifactAction.OPEN -> artifact.appName?.let(openApp)
                         ArtifactAction.ADD_TO_HOME -> openTab(chatArtifactShortcutCommand(artifact))
@@ -988,6 +1051,7 @@ class ChatView(
                     }
                 })
             }
+            card.addView(flow, buttonFlowParams())
             chatArtifactNote(artifact, canInstall = install != null)?.let { note ->
                 card.addView(answeredText(note, colors))
             }
@@ -1056,20 +1120,96 @@ class ChatView(
         row.post { if (row.isFocused && !row.hasSelection()) input.requestFocus() }
     }
 
-    private fun answeredText(text: String, colors: StripColors) = plainText(colors.accent, 14f).apply {
+    private fun answeredText(text: String, colors: StripColors) = plainText(faded(colors.text, 0xA0), 14f).apply {
         this.text = text
         setPadding(0, dp(6), 0, 0)
     }
 
-    private fun cardButton(label: String, color: Int, colors: StripColors, onTap: () -> Unit) = plainText(color, 15f).apply {
+    private fun buttonFlow() = ButtonFlow(context, dp(8))
+
+    private fun buttonFlowParams() = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+
+    // The primary action is filled with [tone]; the others are outlined in it.
+    private fun cardButton(label: String, primary: Boolean, colors: StripColors, tone: Int = colors.accent, onTap: () -> Unit) =
+        TextView(context).apply {
+            text = label
+            styleButton(this, primary, colors, tone)
+            setOnClickListener { onTap() }
+        }
+
+    private fun styleButton(button: TextView, primary: Boolean, colors: StripColors, tone: Int = colors.accent) {
+        val radius = dp(8).toFloat()
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        button.setTextColor(if (primary) colors.background else tone)
+        button.gravity = Gravity.CENTER
+        button.minHeight = dp(48)
+        button.minWidth = dp(72)
+        button.maxLines = 2
+        button.ellipsize = TextUtils.TruncateAt.END
+        button.setPadding(dp(16), dp(6), dp(16), dp(6))
+        button.isFocusable = true
+        val shape = GradientDrawable().apply {
+            cornerRadius = radius
+            if (primary) {
+                setColor(tone)
+            } else {
+                setColor(Color.TRANSPARENT)
+                setStroke(dp(1), faded(tone, 0xB0))
+            }
+        }
+        // Outlined buttons are see-through: the mask keeps the ripple to the whole button.
+        val mask = GradientDrawable().apply {
+            cornerRadius = radius
+            setColor(faded(tone, 0xFF))
+        }
+        val ripple = if (primary) faded(colors.background, 0x40) else faded(tone, 0x40)
+        button.background = RippleDrawable(ColorStateList.valueOf(ripple), shape, mask)
+    }
+
+    // A quiet action inside a card's text (Show all): no outline, the same touch size.
+    private fun linkButton(label: String, colors: StripColors, onTap: () -> Unit) = plainText(colors.accent, 14f).apply {
         text = label
         gravity = Gravity.CENTER_VERTICAL
-        minHeight = dp(44)
-        setPadding(dp(6), dp(8), dp(6), dp(8))
-        background = RippleDrawable(ColorStateList.valueOf(colors.accent), null, ColorDrawable(colors.text))
+        minHeight = dp(48)
+        setPadding(0, 0, 0, 0)
+        background = RippleDrawable(ColorStateList.valueOf(faded(colors.accent, 0x40)), null, ColorDrawable(colors.text))
         isFocusable = true
         setOnClickListener { onTap() }
     }
+
+    // One answer to a question: its mark, the label, and under it the description, smaller and dimmer.
+    private fun optionRow(mark: String, picked: Boolean, label: String, description: String?, colors: StripColors, onTap: () -> Unit) =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(48)
+            setPadding(dp(4), dp(6), dp(8), dp(6))
+            val mask = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(faded(colors.text, 0xFF))
+            }
+            background = RippleDrawable(ColorStateList.valueOf(faded(colors.accent, 0x40)), null, mask)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { onTap() }
+            addView(plainText(if (picked) colors.accent else faded(colors.text, 0xB0), 18f).apply {
+                text = mark
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(28), WRAP_CONTENT).apply { marginEnd = dp(8) })
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(plainText(colors.text, 15f).apply { text = label })
+                description?.let { more ->
+                    addView(plainText(faded(colors.text, 0x99), 13f).apply {
+                        text = more
+                        setPadding(0, dp(1), 0, 0)
+                    })
+                }
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+
+    // A theme colour with another opacity: the only colours not straight from the theme.
+    private fun faded(color: Int, alpha: Int) = (color and 0x00FFFFFF) or (alpha shl 24)
 
     private fun headerText(text: String) = TextView(context).apply {
         this.text = text

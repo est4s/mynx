@@ -11,6 +11,7 @@ import io.github.est4s.terminal.core.Conversation
 import io.github.est4s.terminal.core.PermissionOption
 import io.github.est4s.terminal.core.PermissionOptionKind
 import io.github.est4s.terminal.core.QuestionOption
+import io.github.est4s.terminal.core.RequestOutcome
 import io.github.est4s.terminal.core.ToolCallInfo
 import io.github.est4s.terminal.core.ToolKind
 import io.github.est4s.terminal.core.ToolStatus
@@ -93,12 +94,71 @@ private val SHORT = listOf(
     ChatItem.Agent("agent-1", "Your home has **apps**, **pixel-hero** and **neon-runner**, and the notes in `AGENTS.md`."),
 )
 
+/** The other cards and states: a plan, a multiple choice, answered cards, an APK and a terminal app. */
+private val CARDS = listOf(
+    ChatItem.User("user-1", "Plan a currency switch, then build it."),
+    ChatItem.Permission(
+        "request:perm-1",
+        "perm-1",
+        ToolCallInfo("tool-1", "Bash", SERVE, ToolKind.EXECUTE, ToolStatus.COMPLETED),
+        listOf(
+            PermissionOption("allow_once", "Allow", PermissionOptionKind.ALLOW_ONCE),
+            PermissionOption("reject_once", "Reject", PermissionOptionKind.REJECT_ONCE),
+        ),
+        outcome = RequestOutcome.Selected(PermissionOptionKind.ALLOW_ONCE),
+        review = SERVE,
+    ),
+    ChatItem.Question(
+        "request:question-1",
+        "question-1",
+        listOf(
+            AgentQuestion(
+                "Which currency should it show?",
+                "Currency",
+                multiSelect = false,
+                options = listOf(QuestionOption("Euro (€)", "Shown as 12,50 €"), QuestionOption("US dollar", null)),
+            ),
+        ),
+        outcome = RequestOutcome.Answered(mapOf("Which currency should it show?" to "Euro (€)")),
+    ),
+    ChatItem.Plan(
+        "request:plan-1",
+        "plan-1",
+        "1. Add a currency picker\n2. Remember the choice\n3. Format sums for it",
+        "/root/.claude/plans/currency.md",
+    ),
+    ChatItem.Question(
+        "request:question-2",
+        "question-2",
+        listOf(
+            AgentQuestion(
+                "Which rounding should it offer?",
+                "Rounding",
+                multiSelect = true,
+                options = listOf(
+                    QuestionOption("Up to a whole amount", "40.00 + 15% → 46"),
+                    QuestionOption("To the nearest 0.50", "Common for cash"),
+                    QuestionOption("None", null),
+                ),
+            ),
+        ),
+    ),
+    ChatItem.Artifact(
+        "artifact-1",
+        ChatArtifact(ArtifactKind.APK, "/root/tip/tip.apk", "Tip calculator", "/root/tip/tip.apk"),
+    ),
+    ChatItem.Artifact(
+        "artifact-2",
+        ChatArtifact(ArtifactKind.TERMINAL_APP, "/root/apps/tip", "tip", "/root/apps/tip"),
+    ),
+)
+
 /** Touch mode's Chat, fed [ChatState]s directly (no controller, so its buttons do nothing): see [Screenshots]. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], application = Application::class, qualifiers = PHONE_QUALIFIERS)
 class ChatScreenshotTest {
-    private fun shoot(w: Int, h: Int, name: String, items: List<ChatItem>, running: Boolean) {
+    private fun shoot(w: Int, h: Int, name: String, items: List<ChatItem>, running: Boolean, access: ChatAccess = ChatAccess.READY) {
         val view = Screenshots.open(w, h) { activity ->
             ChatView(
                 activity,
@@ -111,7 +171,7 @@ class ChatScreenshotTest {
                 installApk = {},
             ).apply { colors = Screenshots.colors }
         }
-        view.show(ChatState(Conversation(items, running = running), ChatAccess.READY, canRestart = false, busy = running))
+        view.show(ChatState(Conversation(items, running = running), access, canRestart = false, busy = running))
         Screenshots.settle()
         Screenshots.save(view, name)
     }
@@ -131,6 +191,10 @@ class ChatScreenshotTest {
     @Test
     @Config(qualifiers = LANDSCAPE_QUALIFIERS)
     fun landscape() = shoot(2400, 1080, "chat-landscape", FULL, running = true)
+
+    /** The other cards, answered ones, and the sign-in gate over the box. */
+    @Test
+    fun cards() = shoot(1080, 4200, "chat-cards", CARDS, running = false, access = ChatAccess.NOT_SIGNED_IN)
 
     /** Landscape with the keyboard up: what chatFit keeps of a short height. */
     @Test
