@@ -58,9 +58,11 @@ class ChatControllerTest {
         }
 
         val tabs = mutableListOf<Pair<String, String>>()
+        val tabPicks = mutableListOf<Pair<String?, String?>>()
         val tabHandles = mutableListOf<Tab>()
-        override fun openInTab(sessionId: String, cwd: String): ChatTab {
+        override fun openInTab(sessionId: String, cwd: String, model: String?, mode: String?): ChatTab {
             tabs += sessionId to cwd
+            tabPicks += model to mode
             return Tab().also { tabHandles += it }
         }
     }
@@ -152,37 +154,101 @@ class ChatControllerTest {
         assertEquals(null, argFlag("--permission-mode"))
     }
 
+    private fun answered(id: String, ok: Boolean = true) = line(
+        if (ok) """{"type":"control_response","response":{"subtype":"success","request_id":"$id"}}"""
+        else """{"type":"control_response","response":{"subtype":"error","request_id":"$id","error":"No"}}""",
+    )
+
+    private fun relaunched(): AgentLaunch {
+        done()
+        exit()
+        chat.restart()
+        return host.launches.last()
+    }
+
     @Test
-    fun `a choice while the process runs goes to it, and to the next launch`() {
+    fun `a choice while the process runs goes to it, and once taken to the next launch`() {
         ready()
         chat.send("hello")
         init()
         chat.setMode("acceptEdits")
         val request = (parseJson(process.written.last()) as Map<*, *>)["request"]
         assertEquals(mapOf("subtype" to "set_permission_mode", "mode" to "acceptEdits"), request)
+        assertEquals("default", chat.state.mode, "not until Claude takes it")
+        answered("chat-2")
         assertEquals("acceptEdits", chat.state.mode)
         chat.setModel("haiku")
         assertEquals(mapOf("subtype" to "set_model", "model" to "haiku"), (parseJson(process.written.last()) as Map<*, *>)["request"])
-        done()
-        exit()
-        chat.restart()
-        assertEquals("acceptEdits", argFlag("--permission-mode"))
-        assertEquals("haiku", argFlag("--model"))
+        assertEquals("default", chat.state.model)
+        answered("chat-3")
+        assertEquals("haiku", chat.state.model)
+        val next = relaunched()
+        assertEquals("acceptEdits", argFlag("--permission-mode", next))
+        assertEquals("haiku", argFlag("--model", next))
     }
 
     @Test
-    fun `the mode Claude reports is followed`() {
+    fun `a refused choice is neither shown nor launched`() {
         ready()
         chat.setMode("plan")
         chat.send("hello")
-        line("""{"type":"system","subtype":"init","session_id":"11111111-1111-1111-1111-111111111111","model":"claude-haiku-5-5","permissionMode":"plan"}""")
-        line("""{"type":"system","subtype":"status","status":null,"permissionMode":"default"}""")
-        assertEquals("default", chat.state.mode)
-        assertEquals(ChatStatusLine("Haiku 5.5", "Asks first", highlighted = false), chat.state.line)
-        done()
-        exit()
-        chat.restart()
-        assertEquals("default", argFlag("--permission-mode"))
+        line("""{"type":"system","subtype":"init","session_id":"$first","model":"m","permissionMode":"plan"}""")
+        chat.setMode("acceptEdits")
+        answered("chat-2", ok = false)
+        chat.setModel("haiku")
+        answered("chat-3", ok = false)
+        assertEquals("plan", chat.state.mode)
+        assertEquals("default", chat.state.model)
+        val next = relaunched()
+        assertEquals("plan", argFlag("--permission-mode", next), "the last one taken")
+        assertEquals(null, argFlag("--model", next))
+    }
+
+    @Test
+    fun `a mode Claude reports is shown, never launched`() {
+        ready()
+        chat.send("hello")
+        line("""{"type":"control_response","response":{"subtype":"success","request_id":"chat-1","response":{"current_permission_mode":"dontAsk"}}}""")
+        line("""{"type":"system","subtype":"init","session_id":"$first","model":"m","permissionMode":"bypassPermissions"}""")
+        assertEquals("bypassPermissions", chat.state.mode)
+        assertEquals("Bypass permissions", chat.state.line.mode)
+        assertEquals(null, argFlag("--permission-mode", relaunched()))
+    }
+
+    @Test
+    fun `a pick Claude has left is dropped`() {
+        ready()
+        chat.setMode("plan")
+        chat.send("hello")
+        line("""{"type":"system","subtype":"init","session_id":"$first","model":"claude-haiku-5-5","permissionMode":"plan"}""")
+        line("""{"type":"system","subtype":"status","status":null,"permissionMode":"dontAsk"}""")
+        assertEquals("dontAsk", chat.state.mode)
+        assertEquals(ChatStatusLine("Haiku 5.5", "dontAsk", highlighted = true), chat.state.line)
+        assertEquals(null, argFlag("--permission-mode", relaunched()), "neither the pick nor what Claude said")
+    }
+
+    @Test
+    fun `an approved plan leaves plan mode`() {
+        ready()
+        chat.setMode("plan")
+        chat.send("hello")
+        line("""{"type":"system","subtype":"init","session_id":"$first","model":"m","permissionMode":"plan"}""")
+        line("""{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{"plan":"Do it"},"tool_use_id":"t1"}}""")
+        assertTrue(chat.answerPlan("r1", true))
+        assertEquals("default", chat.state.mode, "not known until the next init")
+        assertEquals(null, argFlag("--permission-mode", relaunched()))
+    }
+
+    @Test
+    fun `a refused plan stays in plan mode`() {
+        ready()
+        chat.setMode("plan")
+        chat.send("hello")
+        line("""{"type":"system","subtype":"init","session_id":"$first","model":"m","permissionMode":"plan"}""")
+        line("""{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"ExitPlanMode","input":{"plan":"Do it"},"tool_use_id":"t1"}}""")
+        assertTrue(chat.answerPlan("r1", false))
+        assertEquals("plan", chat.state.mode)
+        assertEquals("plan", argFlag("--permission-mode", relaunched()))
     }
 
     @Test
@@ -600,6 +666,31 @@ class ChatControllerTest {
         assertEquals(null, got)
         work()
         assertEquals(listOf(past), got!!.map { it.sessionId })
+    }
+
+    @Test
+    fun `the hand-off tab gets the chat's own picks`() {
+        ready()
+        chat.setModel("haiku")
+        chat.send("hello")
+        init()
+        chat.setMode("plan")
+        answered("chat-2")
+        done()
+        assertTrue(chat.handOff())
+        exit(0)
+        assertEquals(listOf<Pair<String?, String?>>("haiku" to "plan"), host.tabPicks)
+    }
+
+    @Test
+    fun `a hand-off with nothing picked adds nothing`() {
+        ready()
+        chat.send("hello")
+        line("""{"type":"system","subtype":"init","session_id":"$first","model":"m","permissionMode":"bypassPermissions"}""")
+        done()
+        assertTrue(chat.handOff())
+        exit(0)
+        assertEquals(listOf<Pair<String?, String?>>(null to null), host.tabPicks)
     }
 
     @Test

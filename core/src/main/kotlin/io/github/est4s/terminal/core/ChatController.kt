@@ -73,8 +73,8 @@ interface ChatHost {
     /** Debian's [path] as the app sees it. */
     fun hostFile(path: String): File
 
-    /** Opens a tab running Claude Code on [sessionId] in [cwd] (see [claudeHandOffCommand]) and shows it. */
-    fun openInTab(sessionId: String, cwd: String): ChatTab
+    /** Opens a tab running Claude Code on [sessionId] in [cwd] with the chat's picks, null for none (see [claudeHandOffCommand]), and shows it. */
+    fun openInTab(sessionId: String, cwd: String, model: String?, mode: String?): ChatTab
 
     /** How notices go now ([chatNotice]); read only when one may be due. The default: Chat on screen, so none. */
     fun noticeRules(): ChatNoticeRules = ChatNoticeRules(onScreen = true)
@@ -108,10 +108,15 @@ interface ChatHost {
  * transcript ([readClaudeHistory]): `--resume` doesn't replay it.
  *
  * The model and permission mode picked ([setModel], [setMode]) go to the
- * running process, and are the flags of every launch of this chat, as
- * `--resume` keeps neither. The mode follows what Claude reports, so a mode
- * it changed itself is the one a relaunch gets. A new or another chat
- * starts from the defaults again.
+ * running process and count once Claude takes them (a refused one is
+ * dropped; with no process, a pick waits for the launch). They are the
+ * flags of every launch of this chat, as `--resume` keeps neither, and of
+ * its hand-off tab. Only a mode the user picked from [CHAT_MODES] is ever a
+ * flag: what Claude reports (its init, a status line, the user's own
+ * settings) is only shown, and once it reports another mode than the pick,
+ * or a plan is approved (which leaves plan mode without saying so), the
+ * pick is dropped and the next launch has no mode flag. A new or another
+ * chat starts from the defaults again.
  */
 class ChatController(
     private val host: ChatHost,
@@ -149,9 +154,12 @@ class ChatController(
     private var cards = 0
     private var conversations = 0
     private var toldWorking = false
-    // Picked in this chat (the mode also as Claude reports it); null: never said, so no flag.
+    // Picked in this chat and taken, or waiting for the launch; null: no flag. The pending ones
+    // were sent to the process and wait for its answer.
     private var model: String? = null
     private var mode: String? = null
+    private var pendingModel: String? = null
+    private var pendingMode: String? = null
     // The last list the agent gave, kept for chats before their process says.
     private var knownModels: List<AgentModel> = emptyList()
 
@@ -253,6 +261,8 @@ class ChatController(
         conversations++
         model = null
         mode = null
+        pendingModel = null
+        pendingMode = null
         turnStart = null
         chatId = id
         resumable = true
@@ -277,7 +287,7 @@ class ChatController(
         if (handOffBlock() != null) return false
         val id = chatId ?: return false
         canRestart = false
-        stopThen { heldByTabs[id] = host.openInTab(id, cwd) }
+        stopThen { heldByTabs[id] = host.openInTab(id, cwd, model, mode) }
         changed()
         return true
     }
@@ -370,26 +380,44 @@ class ChatController(
 
     fun cancel(): Boolean = session?.cancel() ?: false
 
-    /** Model…: to the running process, if any, and the flag of the next launch. */
+    /** Model…: to the running process, if any, kept once it takes it; with none, the flag of the next launch. */
     fun setModel(value: String) {
-        model = value
-        session?.setModel(value)
+        if (session?.setModel(value) == true) pendingModel = value else model = value
         changed()
     }
 
     /** Mode…: as [setModel]; only [CHAT_MODES]. */
     fun setMode(value: String) {
         if (!chatModeOffered(value)) return
-        mode = value
-        session?.setMode(value)
+        if (session?.setMode(value) == true) pendingMode = value else mode = value
         changed()
+    }
+
+    // A mode Claude says it's in: the pick it took, or one that ends the pick.
+    private fun modeReported(value: String) {
+        if (value == pendingMode) {
+            pendingMode = null
+            mode = value
+        } else if (mode != null && value != mode) {
+            mode = null
+        }
     }
 
     fun answerPermission(requestId: String, optionId: String): Boolean = session?.answerPermission(requestId, optionId) ?: false
 
     fun answerQuestion(requestId: String, answers: Map<String, String>): Boolean = session?.answerQuestion(requestId, answers) ?: false
 
-    fun answerPlan(requestId: String, approved: Boolean): Boolean = session?.answerPlan(requestId, approved) ?: false
+    /** An approved plan leaves plan mode, which Claude doesn't report until its next init: not known till then. */
+    fun answerPlan(requestId: String, approved: Boolean): Boolean {
+        if (session?.answerPlan(requestId, approved) != true) return false
+        if (approved) {
+            if (mode == "plan") mode = null
+            if (pendingMode == "plan") pendingMode = null
+            if (conversation.mode == "plan") conversation = conversation.copy(mode = null)
+            changed()
+        }
+        return true
+    }
 
     /**
      * Ends this chat and starts an empty one; what the old process still says
@@ -402,6 +430,8 @@ class ChatController(
         conversations++
         model = null
         mode = null
+        pendingModel = null
+        pendingMode = null
         turnStart = null
         chatId = null
         resumable = false
@@ -436,6 +466,8 @@ class ChatController(
         )
         canRestart = false
         initSeen = false
+        pendingModel = null
+        pendingMode = null
         conversation = conversation.copy(processEnded = false)
         generation++
         val own = generation
@@ -474,9 +506,15 @@ class ChatController(
             is AgentEvent.SessionStarted -> {
                 chatId = event.sessionId
                 initSeen = true
-                event.mode?.let { mode = it }
+                event.mode?.let(::modeReported)
             }
-            is AgentEvent.ModeChanged -> mode = event.mode
+            is AgentEvent.ModeChanged -> modeReported(event.mode)
+            is AgentEvent.ModeRefused -> if (event.mode == pendingMode) pendingMode = null
+            is AgentEvent.ModelChanged -> {
+                if (event.model == pendingModel) pendingModel = null
+                model = event.model
+            }
+            is AgentEvent.ModelRefused -> if (event.model == pendingModel) pendingModel = null
             is AgentEvent.AvailableModels -> knownModels = event.models
             is AgentEvent.TurnEnded -> {
                 checkArtifacts(null)
@@ -493,6 +531,9 @@ class ChatController(
             }
             is AgentEvent.ProcessEnded -> {
                 session = null
+                // Never answered: not taken.
+                pendingModel = null
+                pendingMode = null
                 if (waitingForExit) {
                     waitingForExit = false
                     access = ChatAccess.READY

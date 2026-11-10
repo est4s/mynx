@@ -804,7 +804,27 @@ class ClaudeSessionTest {
         session.setMode("plan")
         val id = lastWritten()["request_id"]
         transport.say("""{"type":"control_response","response":{"subtype":"error","request_id":"$id","error":"No"}}""")
-        assertEquals(listOf<AgentEvent>(AgentEvent.Notice("No")), events)
+        assertEquals(listOf(AgentEvent.Notice("No"), AgentEvent.ModeRefused("plan")), events)
+    }
+
+    @Test
+    fun `a refused model change is told as refused`() {
+        started()
+        session.setModel("nope")
+        val id = lastWritten()["request_id"]
+        transport.say("""{"type":"control_response","response":{"subtype":"error","request_id":"$id"}}""")
+        assertEquals(listOf<AgentEvent>(AgentEvent.ModelRefused("nope")), events)
+    }
+
+    @Test
+    fun `an accepted change to the mode it's in is told too`() {
+        started()
+        transport.say(init)
+        events.clear()
+        session.setMode("default")
+        val id = lastWritten()["request_id"]
+        transport.say("""{"type":"control_response","response":{"subtype":"success","request_id":"$id"}}""")
+        assertEquals(listOf<AgentEvent>(AgentEvent.ModeChanged("default")), events)
     }
 
     @Test
@@ -837,7 +857,7 @@ class ClaudeSessionTest {
         session.setModel("nope")
         val id = lastWritten()["request_id"]
         transport.say("""{"type":"control_response","response":{"subtype":"error","request_id":"$id","error":"No such model"}}""")
-        assertEquals(AgentEvent.Notice("No such model"), events.last())
+        assertEquals(listOf(AgentEvent.Notice("No such model"), AgentEvent.ModelRefused("nope")), events.takeLast(2))
     }
 
     @Test

@@ -274,17 +274,23 @@ from the defaults. `ClaudeSession` tells `ModeChanged`/`ModelChanged`
 once a control request is answered with success, the mode from the
 `initialize` answer's `current_permission_mode` and each init's
 `permissionMode`, and from a `system`/`status` line's `permissionMode`
-(the SDK's shape, not seen in a run). The controller's mode follows
-them, so a relaunch gets the mode Claude is in.
+(the SDK's shape, not seen in a run). After review, the controller
+only *shows* what Claude reports: the launch flag (and the hand-off
+tab's) is only the user's own pick among `CHAT_MODES`, kept once
+Claude takes it (`ModeRefused`/`ModelRefused` on an error answer drop
+a refused pick; a pick waits for the launch with no process), dropped
+when Claude reports another mode, or when a plan is approved (shown as
+the default until the next init); `claudeLaunch` and
+`claudeHandOffCommand` refuse any other mode, `bypassPermissions`
+above all. "To tab" passes the picks (`--model`, `--permission-mode`).
 
 From real runs: `initialize`'s `models` (`value` `default`, `opus`)
 and `current_permission_mode`, init's `permissionMode`. Assumed:
 `--model sonnet`/`haiku`/`default` (Claude Code's documented
 aliases), a success `control_response` to the two requests, and the
-status line's mode. **Not followed:** an approved plan's switch out of
-plan mode: no line says so in the spike (the next turn's init will,
-so the line can say Plan until then). Sending `setMode` with the
-approval would fix it; left for the maintainer. `--resume` keeps
+status line's mode. An approved plan's switch out of plan mode: no
+line says so in the spike, so the controller drops a `plan` pick and
+the shown mode then (no flag on a relaunch). `--resume` keeps
 neither model nor mode as far as we know, hence the flags. No commits
 yet.
 

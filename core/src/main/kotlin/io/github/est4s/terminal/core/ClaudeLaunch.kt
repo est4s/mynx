@@ -21,6 +21,10 @@ data class ClaudeLaunchOptions(
 private val UUID = Regex("[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 private val PLAIN_VALUE = Regex("[A-Za-z0-9._:\\[\\]-]+")
 
+// The app never launches a mode it doesn't offer, `bypassPermissions` above all, whoever asks.
+private fun requireOfferedMode(value: String) =
+    require(chatModeOffered(value)) { "--permission-mode: $value isn't one Chat offers" }
+
 private fun requireUuid(flag: String, value: String) = require(UUID.matches(value)) { "$flag: $value isn't a UUID" }
 
 private fun requirePlain(flag: String, value: String) =
@@ -43,7 +47,7 @@ fun claudeLaunch(options: ClaudeLaunchOptions): AgentLaunch {
     options.resume?.let { requireUuid("--resume", it) }
     options.sessionId?.let { requireUuid("--session-id", it) }
     options.model?.let { requirePlain("--model", it) }
-    options.permissionMode?.let { requirePlain("--permission-mode", it) }
+    options.permissionMode?.let(::requireOfferedMode)
     val argv = mutableListOf(
         options.binary ?: claudeBinary(options.home), "-p",
         "--output-format", "stream-json",
@@ -173,8 +177,17 @@ fun listClaudeTranscripts(dir: File): List<ClaudeTranscript> =
  * agent start` adds what it needs under proot, and its key bar), then the
  * tab's shell. Once Claude has exited it creates [doneFile] (Debian's
  * path), so the app knows the session is free again while the tab lives on.
+ * [model] and [permissionMode] are the chat's own picks, as for
+ * [claudeLaunch]: `--resume` keeps neither, and `mynx agent start` passes
+ * them on to claude.
  */
-fun claudeHandOffCommand(sessionId: String, doneFile: String): List<String> {
+fun claudeHandOffCommand(sessionId: String, doneFile: String, model: String? = null, permissionMode: String? = null): List<String> {
     requireUuid("--resume", sessionId)
-    return runThenShell("mynx agent start claude --resume ${shellQuote(sessionId)}; : > ${shellQuote(doneFile)}")
+    model?.let { requirePlain("--model", it) }
+    permissionMode?.let(::requireOfferedMode)
+    val flags = listOfNotNull(
+        model?.let { " --model ${shellQuote(it)}" },
+        permissionMode?.let { " --permission-mode ${shellQuote(it)}" },
+    ).joinToString("")
+    return runThenShell("mynx agent start claude --resume ${shellQuote(sessionId)}$flags; : > ${shellQuote(doneFile)}")
 }

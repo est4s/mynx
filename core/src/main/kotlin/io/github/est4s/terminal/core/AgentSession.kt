@@ -159,6 +159,12 @@ sealed interface AgentEvent {
     /** The agent accepted [AgentSession.setModel]: [model] is the value it was given. */
     data class ModelChanged(val model: String) : AgentEvent
 
+    /** The agent refused [AgentSession.setMode] with [mode]: it stays in the one it was in. */
+    data class ModeRefused(val mode: String) : AgentEvent
+
+    /** The agent refused [AgentSession.setModel] with [model]. */
+    data class ModelRefused(val model: String) : AgentEvent
+
     /** The user's own message, once sent. */
     data class UserMessage(val id: String, val text: String) : AgentEvent
 

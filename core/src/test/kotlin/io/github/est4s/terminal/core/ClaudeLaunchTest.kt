@@ -56,6 +56,17 @@ class ClaudeLaunchTest {
     }
 
     @Test
+    fun `only the modes Chat offers can be launched`() {
+        for (mode in listOf("bypassPermissions", "dontAsk", "auto", "manual")) {
+            assertFailsWith<IllegalArgumentException>(mode) { claudeLaunch(ClaudeLaunchOptions(cwd = "/", permissionMode = mode)) }
+            assertFailsWith<IllegalArgumentException>(mode) { claudeHandOffCommand(uuid, "/tmp/f", permissionMode = mode) }
+        }
+        for (mode in CHAT_MODES.map { it.value }) {
+            assertTrue(mode in claudeLaunch(ClaudeLaunchOptions(cwd = "/", permissionMode = mode)).argv)
+        }
+    }
+
+    @Test
     fun `auth status runs the real binary in a login shell`() {
         assertEquals(LOGIN + listOf("/root/.local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand())
         assertEquals(LOGIN + listOf("/usr/local/bin/claude", "auth", "status", "--json"), claudeAuthStatusCommand("/usr/local/bin/claude"))
@@ -134,6 +145,13 @@ class ClaudeLaunchTest {
         assertTrue(script.contains("mynx agent start claude --resume '$uuid';"), script)
         assertTrue(script.contains(": > '/tmp/.mynx/chat-tab-$uuid'"), script)
         assertTrue(script.endsWith("exec /bin/bash --login"), script)
+    }
+
+    @Test
+    fun `the hand-off tab gets the chat's model and mode`() {
+        val script = claudeHandOffCommand(uuid, "/tmp/f", model = "claude-haiku-5-5", permissionMode = "plan")[3]
+        assertTrue(script.contains("mynx agent start claude --resume '$uuid' --model 'claude-haiku-5-5' --permission-mode 'plan';"), script)
+        assertFailsWith<IllegalArgumentException> { claudeHandOffCommand(uuid, "/tmp/f", model = "x'; rm -rf /") }
     }
 
     @Test

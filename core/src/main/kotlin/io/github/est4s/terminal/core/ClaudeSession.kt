@@ -553,6 +553,11 @@ class ClaudeSession(
         val change = changes.remove(id)
         if (response["subtype"] == "error") {
             (response["error"] as? String)?.let { listener(AgentEvent.Notice(it)) }
+            when (change) {
+                is AgentEvent.ModeChanged -> listener(AgentEvent.ModeRefused(change.mode))
+                is AgentEvent.ModelChanged -> listener(AgentEvent.ModelRefused(change.model))
+                else -> Unit
+            }
             return
         }
         if (id == initializeId) {
@@ -564,7 +569,11 @@ class ClaudeSession(
             ((response["response"] as? Map<*, *>)?.get("current_permission_mode") as? String)?.let(::modeIs)
         }
         when (change) {
-            is AgentEvent.ModeChanged -> modeIs(change.mode)
+            // Told even when it was the mode already: the change asked for is confirmed.
+            is AgentEvent.ModeChanged -> {
+                mode = change.mode
+                listener(change)
+            }
             is AgentEvent.ModelChanged -> listener(change)
             else -> Unit
         }

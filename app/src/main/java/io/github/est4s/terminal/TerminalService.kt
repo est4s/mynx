@@ -265,11 +265,11 @@ class TerminalService : Service() {
 
         // The tab is held until its claude exits (it writes the file, which the watcher
         // sees), or the tab ends; a tab whose shell never started holds it while it's a tab.
-        override fun openInTab(sessionId: String, cwd: String): ChatTab {
+        override fun openInTab(sessionId: String, cwd: String, model: String?, mode: String?): ChatTab {
             val doneName = "$CHAT_TAB_DONE$sessionId"
             chatTabsDone.remove(doneName)
             // startShell makes the folder; its process starts only once the tab is shown.
-            val session = startShell(cwd = cwd, command = claudeHandOffCommand(sessionId, "$CWD_DIR/$doneName"))
+            val session = startShell(cwd = cwd, command = claudeHandOffCommand(sessionId, "$CWD_DIR/$doneName", model, mode))
             watchChatTabs()
             tabs.open(session)
             chatOnScreen = false

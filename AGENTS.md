@@ -791,13 +791,16 @@ See `docs/ROADMAP.md` "How it works". The details:
   binary). **Model and mode** (`core/.../ChatSettings.kt`): Model…
   and Mode… in ⋮ go to a running process (`set_model`,
   `set_permission_mode`) and are every launch's `--model` and
-  `--permission-mode` for that chat; the mode follows what Claude
-  reports (init, control answers); `CHAT_MODES` never offers
-  `bypassPermissions`. **One session, one program:** nothing stops two programs
+  `--permission-mode` for that chat (and its hand-off tab's) once
+  Claude takes them (a refused one is dropped). What Claude reports
+  (init, `initialize`, status lines) is only shown: the mode flag is
+  only the user's pick among `CHAT_MODES`, dropped when Claude reports
+  another or a plan is approved; `claudeLaunch` refuses any other mode,
+  so `bypassPermissions` is never launched. **One session, one program:** nothing stops two programs
   driving one session (the transcript forks), so `ChatController`
   stops its process and waits for `ProcessEnded` before New, a resume
   or "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:
-  `mynx agent start claude --resume ID`, then a file saying it's
+  `mynx agent start claude --resume ID` with the picks, then a file saying it's
   done, then the shell) holds the session until that file appears (a
   FileObserver on the folder sees it) or the tab ends (closed before
   its shell started counts), and a prompt meanwhile asks to take it
