@@ -210,9 +210,12 @@ The native Services list (entry 172) waits on the phone too.
 **Built too (entry 176):** past chats (Chats) with their history, and
 hand-off to a tab (To tab), one process per session.
 
-**Next:** the phone test (Chat, then Chats and To tab), then
-what's left: artifact cards, other agents (Codex's `app-server`,
-Gemini's ACP).
+**Built too (entry 177):** artifact cards for apps and APKs the
+agent makes.
+
+**Next:** the phone test (Chat, then Chats and To tab, then cards:
+a web app, a terminal app, an APK, a resumed chat), then what's
+left: other agents (Codex's `app-server`, Gemini's ACP).
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -250,6 +253,27 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (177): Chat: artifact cards (not yet on the phone)
+
+When Claude Code makes or changes an app, the chat shows a card
+(`ChatItem.Artifact`, `core/.../ChatArtifacts.kt`). Hints: a turn's
+completed Write/Edit/NotebookEdit paths (relative to the chat's
+folder, `~/`), and Bash paths in `~/apps`, `~/terminal-apps` or
+ending `.apk`, which count only if changed since the turn started (2 s
+slack), so `cat ~/apps/x/index.html` gives no card. Checked on disk off
+the main thread after such a tool completes and at the turn's end
+(then all written paths, so a file written through a link in `~/apps`
+finds its app). Web apps by `WebApps` (only `~/apps`), terminal apps
+as the menu (executable file, `# label:`; `terminalAppLabel` and
+`isExecutable` moved out of `HomeMenus`), APKs anywhere. One card per
+app per turn, changed in place; a check that ends after the next
+prompt is dropped. History adds each turn's cards at its end (written
+files only: no turn times). Buttons: web app Open (as Home) and Add
+to home screen (`menu --act shortcut:`), terminal app Run (`menu
+--act app:`), APK Install (debug builds only, as `mynx install-apk`;
+release builds say to Share it), all Share (the web app's
+`index.html`, else `app.conf`). `app/` isn't compiled yet.
 
 ### 2026-11-10 (176): Chat: history, past chats and hand-off to a tab (not yet on the phone)
 

@@ -254,7 +254,10 @@ One `key = value` per line; `mynx settings` describes each.
   Code as a chat (messages, tool cards, Allow/Deny); the other agents
   run in a tab. The chat's Chats lists past Claude Code sessions of
   `/root` to go on with, and To tab moves the chat to a terminal tab
-  (`claude --resume`); one session runs in one place at a time.
+  (`claude --resume`); one session runs in one place at a time. When
+  Claude Code makes or changes an app in `~/apps` or `~/terminal-apps`,
+  or writes an APK, the chat shows a card for it: Open (a web app),
+  Run (a terminal app, in a tab), Share.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a

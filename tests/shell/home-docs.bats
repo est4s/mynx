@@ -278,6 +278,10 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF -- "To tab moves the chat to a terminal tab" "$GUIDE"
 }
 
+@test "the guide says the chat shows a card for an app the agent makes" {
+    grep -qF -- "the chat shows a card for it: Open (a web app)" "$GUIDE"
+}
+
 @test "the guide says a page can take the back key first: window.androidBack" {
     grep -qF -- "window.androidBack" "$GUIDE"
     grep -qF -- "window.androidBack" "$BATS_TEST_DIRNAME/../../app/src/main/java/io/github/est4s/terminal/WebAppActivity.kt"

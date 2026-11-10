@@ -58,7 +58,9 @@ and either view switches to the other.
 - **Artifact cards:** when an agent makes or changes an app in
   `~/apps` or `~/terminal-apps` (seen in its file writes, or declared with a `mynx`
   command), the chat shows a card: Run (a terminal app in a tab),
-  Open (a web app, below), Share, or Install (an APK).
+  Open (a web app, below), Share, or Install (an APK). **Built**
+  for Claude Code's chat (2026-11-10), not yet on the phone; Install
+  only in debug builds (release builds offer Share).
 - **Open in terminal:** hands the conversation to a tab that resumes
   it (`claude --resume ID` and the others' equivalents); the chat lets
   go of it first, so two programs never drive one session.

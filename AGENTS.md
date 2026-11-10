@@ -788,7 +788,15 @@ See `docs/ROADMAP.md` "How it works". The details:
   `mynx agent start claude --resume ID`, then a file saying it's
   done, then the shell) holds the session until that file appears or
   the tab ends, and a prompt meanwhile asks to take it back (closing
-  the tab) instead of resuming.
+  the tab) instead of resuming. **Artifact cards**
+  (`core/.../ChatArtifacts.kt`, its top comment is the contract): a
+  turn's completed Write/Edit/NotebookEdit paths, and Bash's paths in
+  the app folders or ending `.apk` (only if changed since the turn
+  started), are checked on disk off the main thread with Home's rules
+  (`WebApps`, `terminalAppLabel`); one `ChatItem.Artifact` per app per
+  turn, changed in place; history gets them too (written files only).
+  Run and Add to home screen are `menu --act` tabs; Install only in
+  debug builds, as `mynx install-apk`.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

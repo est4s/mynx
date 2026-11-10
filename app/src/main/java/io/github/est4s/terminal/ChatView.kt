@@ -49,6 +49,7 @@ import android.widget.TableLayout
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
+import io.github.est4s.terminal.core.ArtifactAction
 import io.github.est4s.terminal.core.CLAUDE_INSTALL_COMMAND
 import io.github.est4s.terminal.core.CLAUDE_SIGN_IN_COMMAND
 import io.github.est4s.terminal.core.ChatAccess
@@ -67,6 +68,11 @@ import io.github.est4s.terminal.core.PermissionOptionKind
 import io.github.est4s.terminal.core.QuestionPicks
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.ToolCallInfo
+import io.github.est4s.terminal.core.chatArtifactActions
+import io.github.est4s.terminal.core.chatArtifactLine
+import io.github.est4s.terminal.core.chatArtifactNote
+import io.github.est4s.terminal.core.chatArtifactRunCommand
+import io.github.est4s.terminal.core.chatArtifactShortcutCommand
 import io.github.est4s.terminal.core.chatFit
 import io.github.est4s.terminal.core.chatOutcomeText
 import io.github.est4s.terminal.core.chatRelativeTime
@@ -82,6 +88,8 @@ import kotlin.math.abs
 import kotlin.math.ceil
 
 private const val CHAT_TITLE = "Claude Code"
+// Root's home, as the chat runs in it (ChatController's default).
+private const val CHAT_HOME = "/root"
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
 // One level of a list or quote.
@@ -116,7 +124,10 @@ private class ChatLink(private val url: String, private val color: Int, private 
  * terminal, drawn from the [ChatState]s the activity passes to [show].
  * Rows only change in place (see [chatRowChanges]), so streaming touches
  * one row. [back] is ‹ and [showTerminal] the Terminal button, as on Home;
- * [openTab] runs a command in a new tab (signing in, installing).
+ * [openTab] runs a command in a new tab (signing in, installing, an
+ * artifact card's Run). A card's Open is [openApp] (a web app's name),
+ * Share [shareFile] and Install [installApk] (Debian paths); a null
+ * [installApk] means this build can't install apps.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ChatView(
@@ -125,6 +136,9 @@ class ChatView(
     private val back: () -> Unit,
     showTerminal: () -> Unit,
     private val openTab: (List<String>) -> Unit,
+    private val openApp: (String) -> Unit,
+    private val shareFile: (String) -> Unit,
+    private val installApk: ((String) -> Unit)?,
 ) : LinearLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
     private class MdCell(val type: Class<*>, val view: View, val bind: (MdRow) -> Unit)
@@ -395,6 +409,7 @@ class ChatView(
             is ChatItem.Question -> questionCell(colors)
             is ChatItem.Plan -> planCell(colors)
             is ChatItem.Notice -> noticeCell(colors)
+            is ChatItem.Artifact -> artifactCell(colors)
         }
         cell.bind(item)
         cells.add(cell)
@@ -916,6 +931,35 @@ class ChatView(
                     NoticeKind.INFO -> colors.text
                 },
             )
+        }
+    }
+
+    private fun artifactCell(colors: StripColors): Cell {
+        val card = cardColumn(colors)
+        return Cell(card) { item ->
+            val artifact = (item as ChatItem.Artifact).artifact
+            val install = installApk
+            card.removeAllViews()
+            card.addView(plainText(colors.text, 16f).apply { text = artifact.label })
+            card.addView(plainText(colors.accent, 13f).apply {
+                text = chatArtifactLine(artifact, CHAT_HOME)
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.MIDDLE
+            })
+            chatArtifactActions(artifact, canInstall = install != null).forEach { action ->
+                card.addView(cardButton(action.label, colors.accent, colors) {
+                    when (action) {
+                        ArtifactAction.OPEN -> artifact.appName?.let(openApp)
+                        ArtifactAction.ADD_TO_HOME -> openTab(chatArtifactShortcutCommand(artifact))
+                        ArtifactAction.RUN -> openTab(chatArtifactRunCommand(artifact))
+                        ArtifactAction.INSTALL -> install?.invoke(artifact.shareFile)
+                        ArtifactAction.SHARE -> shareFile(artifact.shareFile)
+                    }
+                })
+            }
+            chatArtifactNote(artifact, canInstall = install != null)?.let { note ->
+                card.addView(answeredText(note, colors))
+            }
         }
     }
 

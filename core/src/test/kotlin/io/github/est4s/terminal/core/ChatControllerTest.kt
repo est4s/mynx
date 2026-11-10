@@ -84,7 +84,10 @@ class ChatControllerTest {
     private val host = Host()
     private val posted = ArrayDeque<() -> Unit>()
     private val states = mutableListOf<ChatState>()
-    private val chat = ChatController(host, { posted.addLast(it) }).also { it.listener = { s -> states += s } }
+    private var clock = 10_000_000L
+    private val finder = ArtifactFinder(WebApps(File(top, "root"), top.path, File(top, "tools")))
+    private val chat = ChatController(host, { posted.addLast(it) }, artifacts = finder, now = { clock })
+        .also { it.listener = { s -> states += s } }
 
     private fun drain() {
         while (posted.isNotEmpty()) posted.removeFirst()()
@@ -603,5 +606,85 @@ class ChatControllerTest {
         chat.resume(first)
         assertFalse(chat.send("back"))
         assertEquals(ChatTabHold.ASKING, chat.state.tabHold)
+    }
+
+    private fun file(guest: String, text: String) = File(top, guest.removePrefix("/")).apply {
+        parentFile.mkdirs()
+        writeText(text)
+    }
+
+    private fun tool(id: String, name: String, input: String) {
+        line("""{"type":"assistant","message":{"id":"m-$id","content":[{"type":"tool_use","id":"$id","name":"$name","input":$input}]},"parent_tool_use_id":null}""")
+        line("""{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"$id","content":"ok","is_error":false}]},"parent_tool_use_id":null}""")
+    }
+
+    private fun cards() = chat.state.conversation.items.filterIsInstance<ChatItem.Artifact>()
+
+    @Test
+    fun `an app the agent writes gets one card a turn, changed in place`() {
+        ready()
+        chat.send("make an app")
+        drain()
+        init()
+        file("/root/apps/demo/index.html", "<title>Demo</title>")
+        tool("t1", "Write", """{"file_path":"~/apps/demo/index.html","content":"x"}""")
+        assertTrue(cards().isEmpty(), "found off the main thread")
+        work()
+        assertEquals(listOf("Demo"), cards().map { it.artifact.label })
+        assertEquals("Artifact", shown().last())
+        file("/root/apps/demo/index.html", "<title>Demo 2</title>")
+        tool("t2", "Edit", """{"file_path":"/root/apps/demo/index.html","old_string":"a","new_string":"b"}""")
+        file("/root/notes.txt", "x")
+        tool("t3", "Write", """{"file_path":"/root/notes.txt","content":"x"}""")
+        done()
+        work()
+        assertEquals(listOf("Demo 2"), cards().map { it.artifact.label })
+        val first = cards().single().id
+        chat.send("again")
+        drain()
+        tool("t4", "Write", """{"file_path":"/root/apps/demo/index.html","content":"x"}""")
+        done()
+        work()
+        assertEquals(2, cards().size, "a new turn, a new card")
+        assertEquals(first, cards().first().id)
+        assertTrue(cards().last().id != first)
+    }
+
+    @Test
+    fun `a command's path counts when it changed during the turn`() {
+        ready()
+        chat.send("build it")
+        drain()
+        init()
+        val apk = file("/root/old.apk", "PK").apply { setLastModified(1_000_000L) }
+        tool("t1", "Bash", """{"command":"unzip -l ~/old.apk"}""")
+        done()
+        work()
+        assertTrue(cards().isEmpty(), "read, not written")
+        chat.send("now build")
+        drain()
+        apk.setLastModified(clock + 5_000)
+        tool("t2", "Bash", """{"command":"apksigner sign --out ~/old.apk x"}""")
+        done()
+        work()
+        assertEquals(listOf(ArtifactKind.APK), cards().map { it.artifact.kind })
+    }
+
+    @Test
+    fun `a past chat shows the cards of its turns`() {
+        file("/root/apps/demo/index.html", "<title>Demo</title>")
+        File(top, claudeTranscriptPath("/root", "/root", past).removePrefix("/")).apply {
+            parentFile.mkdirs()
+            writeText(
+                """{"type":"user","message":{"role":"user","content":"make"},"uuid":"u1"}
+                |{"type":"assistant","message":{"model":"m","content":[{"type":"tool_use","id":"w1","name":"Write","input":{"file_path":"/root/apps/demo/index.html"}}]},"uuid":"a1"}
+                |{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"w1","content":"ok"}]},"uuid":"r1"}
+                |""".trimMargin(),
+            )
+        }
+        ready()
+        chat.resume(past)
+        work()
+        assertEquals(listOf("make", "Tool", "Artifact"), shown())
     }
 }

@@ -487,7 +487,13 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        chat = ChatView(this, { service?.chat }, { goBack() }, ::chatToTerminal, ::openTabFromChat).also {
+        chat = ChatView(
+            this, { service?.chat }, { goBack() }, ::chatToTerminal, ::openTabFromChat,
+            openApp = { name -> startActivity(WebAppActivity.shortcutIntent(this, name)) },
+            shareFile = { path -> toastError(service?.shareDebianFile(path)) },
+            // As `mynx install-apk`: only debug builds install other apps.
+            installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
+        ).also {
             it.colors = strip
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))

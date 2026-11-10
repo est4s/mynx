@@ -48,6 +48,7 @@ import io.github.est4s.terminal.core.Share
 import io.github.est4s.terminal.core.shareType
 import io.github.est4s.terminal.core.ProotPaths
 import io.github.est4s.terminal.core.AgentLaunch
+import io.github.est4s.terminal.core.ArtifactFinder
 import io.github.est4s.terminal.core.AgentTransport
 import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatCheck
@@ -212,7 +213,9 @@ class TerminalService : Service() {
     private var nextShellId = 1
     private val tools by lazy { ToolsInstaller(filesDir) }
     /** Touch mode's Chat: kept here so it outlives the activity. */
-    val chat: ChatController by lazy { ChatController(chatHost, post = { action -> mainHandler.post(action) }) }
+    val chat: ChatController by lazy {
+        ChatController(chatHost, post = { action -> mainHandler.post(action) }, artifacts = ArtifactFinder(webAppFiles))
+    }
     /** Whether the Chat screen was showing, for a recreated activity. */
     var chatOnScreen = false
     private val chatHost: ChatHost = object : ChatHost {
@@ -1219,6 +1222,18 @@ class TerminalService : Service() {
         } catch (e: ActivityNotFoundException) {
             "no app on the phone takes shares"
         }
+    }
+
+    /** A chat card's Share: the share sheet for the Debian file [guest]; null when it opened, else why not. */
+    fun shareDebianFile(guest: String): String? {
+        val file = webAppFiles.host(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
+        return share(Share(listOf(file), null))
+    }
+
+    /** A chat card's Install (debug builds only, as `mynx install-apk`); null when the installer opened. */
+    fun installDebianApk(guest: String): String? {
+        val file = webAppFiles.host(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
+        return installApk(file)
     }
 
     // Answers `mynx install-apk`: null when the installer opened, else why not.

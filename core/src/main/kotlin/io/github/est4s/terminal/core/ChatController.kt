@@ -88,6 +88,9 @@ class ChatController(
     private val post: (() -> Unit) -> Unit,
     private val home: String = "/root",
     private val cwd: String = "/root",
+    /** Finds the apps and APKs a turn made, for artifact cards; none without it. */
+    private val artifacts: ArtifactLookup? = null,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     private var conversation = Conversation()
     private var access = ChatAccess.CHECKING
@@ -108,6 +111,13 @@ class ChatController(
     // Sessions handed to a tab, by id, for as long as the tab may run them.
     private val heldByTabs = HashMap<String, ChatTab>()
     private var tabHold = ChatTabHold.NONE
+    // Artifact cards: when this turn started, the checks asked and applied, the cards made, and
+    // a count bumped when the conversation is replaced, so a late check is dropped.
+    private var turnStart: Long? = null
+    private var artifactChecks = 0
+    private var artifactsApplied = 0
+    private var cards = 0
+    private var conversations = 0
 
     val state: ChatState get() = ChatState(conversation, access, canRestart, exiting != null, tabHold, handOffBlock())
 
@@ -189,6 +199,8 @@ class ChatController(
         if (id == chatId) return
         stopThen(null)
         conversation = Conversation(sessionId = id)
+        conversations++
+        turnStart = null
         chatId = id
         resumable = true
         canRestart = false
@@ -289,6 +301,7 @@ class ChatController(
         val file = host.hostFile(claudeTranscriptPath(home, cwd, id))
         host.background {
             val items = runCatching { readClaudeHistory(file) }.getOrDefault(emptyList())
+                .let { rows -> artifacts?.let { withHistoryArtifacts(rows, it, cwd, home) } ?: rows }
             post {
                 if (own == historyLoad && chatId == id && items.isNotEmpty()) {
                     conversation = conversation.copy(items = items + conversation.items.drop(before))
@@ -313,6 +326,8 @@ class ChatController(
         session = null
         old?.stop()
         conversation = Conversation()
+        conversations++
+        turnStart = null
         chatId = null
         resumable = false
         canRestart = false
@@ -366,16 +381,25 @@ class ChatController(
             return
         }
         if (own != generation) return
+        if (event == AgentEvent.TurnStarted && !conversation.running) turnStart = now()
         conversation = conversation.reduce(event)
+        when (event) {
+            is AgentEvent.ToolCall -> if (event.call.status == ToolStatus.COMPLETED) checkArtifacts(event.call)
+            is AgentEvent.ToolCallUpdate -> if (event.call.status == ToolStatus.COMPLETED) checkArtifacts(event.call)
+            else -> Unit
+        }
         when (event) {
             is AgentEvent.SessionStarted -> {
                 chatId = event.sessionId
                 initSeen = true
             }
-            is AgentEvent.TurnEnded -> when {
-                isNoConversationResult(event.message) -> resumable = false
-                // Without an init, this is a Stop that beat the process: there's no conversation yet.
-                initSeen && event.stopReason != StopReason.ERROR -> resumable = true
+            is AgentEvent.TurnEnded -> {
+                checkArtifacts(null)
+                when {
+                    isNoConversationResult(event.message) -> resumable = false
+                    // Without an init, this is a Stop that beat the process: there's no conversation yet.
+                    initSeen && event.stopReason != StopReason.ERROR -> resumable = true
+                }
             }
             is AgentEvent.Notice -> if (isNoConversationResult(event.text)) resumable = false
             is AgentEvent.NotSignedIn -> {
@@ -397,6 +421,38 @@ class ChatController(
             else -> Unit
         }
         changed()
+    }
+
+    // Looks on disk, off the main thread, for what this turn's tool calls made: after a
+    // [completed] call that may have touched an app folder or an APK, and at the turn's
+    // end (null) for all of them, links included.
+    private fun checkArtifacts(completed: ToolCallInfo?) {
+        val lookup = artifacts ?: return
+        if (completed != null && !artifactTool(completed)) return
+        val items = conversation.items
+        val start = items.indexOfLast { it is ChatItem.User } + 1
+        val calls = items.subList(start, items.size).mapNotNull { (it as? ChatItem.Tool)?.call }
+        val hints = artifactHints(calls, cwd, home)
+        if (hints.isEmpty()) return
+        if (completed != null && hints.none { it.direct(home) }) return
+        val since = turnStart?.let { it - ARTIFACT_CLOCK_SLACK_MS }
+        val check = ++artifactChecks
+        val chat = conversations
+        val turn = items.getOrNull(start - 1)?.id
+        host.background {
+            val found = runCatching { lookup.find(hints, since) }.getOrDefault(emptyList())
+            post {
+                val sameTurn = conversation.items.lastOrNull { it is ChatItem.User }?.id == turn
+                if (chat == conversations && sameTurn && check > artifactsApplied) {
+                    artifactsApplied = check
+                    val items = withArtifactCards(conversation.items, found) { "artifact-${++cards}" }
+                    if (items !== conversation.items) {
+                        conversation = conversation.copy(items = items)
+                        changed()
+                    }
+                }
+            }
+        }
     }
 
     private fun changed() {
