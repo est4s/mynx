@@ -100,6 +100,12 @@ are in git history: the full log up to entry 92 is
 
 ## Next
 
+### 0. Screenshots of touch mode (entry 179)
+The first CI run of the screenshot tests: if they fail, see entry
+179's "If CI fails"; if they pass, look at the `screenshots`
+artifact (`gh run download RUN -n screenshots -D DIR`) and check
+the PNGs show real text and cards, not blank screens.
+
 ### 1. Development boards (leftovers; the maintainer picks)
 
 The roadmap's last items, planned with the maintainer 2026-10-25
@@ -253,6 +259,37 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-10 (179): Screenshots of touch mode in CI (not yet seen)
+
+Robolectric tests that draw touch mode's screens with sample data, so
+an agent can see them without a phone: `app/src/test/.../`
+`Screenshots.kt` (an activity holds the view in a `FixedFrame` at an
+exact pixel size, the main looper is idled, then `view.draw()` into a
+bitmap, saved as PNG), `HomeScreenshotTest` (main list, Services with
+2 services, a service's page, the main list at 360 dp) and
+`ChatScreenshotTest` (a turn with a user prompt, a Markdown reply with
+heading, list, code, table and link, a running tool, a Bash permission,
+a question, a web app card, the box; the same 7000 px tall to see every
+row; a short chat at 360 dp; landscape 2400x1080, and 2400x450 as with
+the keyboard up). 1080x2400 at 420 dpi (2.625, 412 dp), neon's colours,
+the default font. Chat is fed `ChatState`s through `show()` with no
+controller; Home a real `HomeMenus` over an empty temp rootfs. No
+production code changed.
+
+Dependencies: `org.robolectric:robolectric:4.14.1` and
+`junit:junit:4.13.2` (`testImplementation` only), `@Config(sdk = [34])`
+and `@GraphicsMode(NATIVE)`; `isIncludeAndroidResources`, and the
+tests get the folder as the `mynx.screenshots` system property.
+`build.yml` uploads `app/build/screenshots/` as `screenshots` after the
+tests (`if: always()`, warn if empty); `release.yml` doesn't. `app/`
+can't build here, so none of this has run yet.
+
+If CI fails: Robolectric downloads `android-all-instrumented` for SDK
+34 on the first run (network); a newer Robolectric (4.16 has SDK 36)
+if 4.14.1 trips over AGP 9; `Config.application` is a plain
+`Application` so `TerminalApp` isn't used; blank PNGs mean native
+graphics didn't draw (look for a warning in the test report).
 
 ### 2026-11-10 (177): Chat: artifact cards (not yet on the phone)
 

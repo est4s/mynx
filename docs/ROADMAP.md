@@ -74,8 +74,9 @@ and either view switches to the other.
   Claude's stream-json run under proot; do sign-in and resume work?),
   then Home, then Chat for Claude Code, then the cards, the hand-off
   and the other agents. The protocol and transcript logic go in
-  `core`, test-first. Screenshots in CI (Robolectric or an emulator)
-  would save phone rounds, so they may come first.
+  `core`, test-first. Screenshots in CI (Robolectric) save phone
+  rounds: CI uploads PNGs of Home and Chat (`AGENTS.md`, "Running
+  tests").
 
 ### Web apps
 **Part 1 done** (2026-11-08, PR #59, in the next release): the view, served apps, what

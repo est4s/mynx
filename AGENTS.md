@@ -1105,6 +1105,15 @@ When you add a tested source set, add its `source test` pair to
   Without an Android SDK, Gradle only configures `:core`; that's expected.
 - **In CI:** `./gradlew test` runs every suite before the APK is built. A
   failing test means no APK.
+- **Screenshots:** the app's Robolectric tests (`app/src/test/`,
+  `Screenshots.kt`) draw touch mode's Home and Chat with sample data
+  at phone sizes (412 dp and 360 dp wide, landscape) into
+  `app/build/screenshots/`, which CI uploads as the `screenshots`
+  artifact, even when a test fails: `gh run download RUN -n
+  screenshots -D DIR`, then look at the PNGs. Robolectric renders them
+  (its native graphics, Android 14), not a phone, so fonts and small
+  details may differ; nothing compares them. Add a screen there when
+  you change a view.
 
 ### What enforces it
 - **`.githooks/pre-commit`** blocks a commit that changes `core/src/main/`
