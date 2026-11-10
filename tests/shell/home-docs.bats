@@ -117,8 +117,8 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide says Chat notifies as the hooks do, and holds the wakelock during a turn" {
-    grep -qF "Touch view's Chat notifies the same way" "$GUIDE"
-    grep -qF 'tapping that notification opens Chat' "$GUIDE"
+    grep -qF "Touch view's chats notify the same way" "$GUIDE"
+    grep -qF 'tapping one opens its' "$GUIDE"
     grep -qF "a turn of touch view's Chat runs" "$GUIDE"
 }
 
@@ -276,12 +276,18 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     done
 }
 
-@test "the guide says Claude Code opens as a chat in touch view" {
-    grep -qF -- "as a chat" "$GUIDE"
+@test "the guide says Claude Code opens its chat history in touch view, and Back goes back through it" {
+    grep -qF -- "Code's chat history: New chat" "$GUIDE"
+    grep -qF -- "Back goes to the history" "$GUIDE"
+}
+
+@test "the guide says chats run at once, and an idle one left is stopped" {
+    grep -qF -- "Several chats can work at once" "$GUIDE"
+    grep -qF -- "one left idle is" "$GUIDE"
 }
 
 @test "the guide says a chat can go on in a tab, one session in one place" {
-    grep -qF -- "To tab moves the chat to a terminal tab" "$GUIDE"
+    grep -qF -- "To tab moves it to a terminal tab" "$GUIDE"
 }
 
 @test "the guide says the chat shows a card for an app the agent makes" {

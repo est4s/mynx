@@ -739,7 +739,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   `HomeMenus` takes a snapshot (`ServiceManager.homeServices()`) and
   `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
   thread; `ServiceHost.changed` refreshes it while it shows, and in
-  touch view the strip's `● N` opens it.
+  touch view the strip's `● N` opens it. AI agents → Claude Code
+  (`HomeAction.Chat`) opens the agent's home, the chat history
+  (`app/.../ChatHistoryView.kt`, over the terminal too): New chat, then
+  `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
+  (maintainer's decision, 2026-11-10). The service keeps which chat
+  screen shows (`chatPlace`) for a recreated activity.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with
@@ -750,10 +755,24 @@ See `docs/ROADMAP.md` "How it works". The details:
   `core/src/test/resources/chat/`. The app side (passed on the phone, 2026-11-10):
   `app/.../AgentProcess.kt` is an `AgentTransport` over pipes (core's
   `ProcessAgentTransport`, tested with real shells); core's
-  `ChatController`, held by `TerminalService` (`chat`), is the one chat:
-  checks `claude auth status` before the first prompt, starts the
-  process on it (`--session-id`, then `--resume`), survives the
-  activity; `app/.../ChatView.kt` draws it (one row per `ChatItem`,
+  `ChatController` is one chat for life (a new one, or a past session
+  resumed), each with its own process: checks `claude auth status`
+  before the first prompt, starts the process on it (`--session-id`,
+  then `--resume`). **Several at once** (`core/.../ChatHub.kt`, its KDoc
+  is the contract; maintainer's decision, 2026-11-10): the hub, held by
+  `TerminalService` (`chats`), owns them and survives the activity;
+  `newChat()`/`open(id)` show one (the held controller for a live
+  session, never a second one on it). A chat left while busy (a turn
+  runs or a card waits) keeps working; one left idle, or going idle in
+  the background, has its process stopped to spare memory (its next
+  prompt resumes it); one not shown with no process left is dropped
+  (the history shows its transcript), but only once its process has
+  exited. `ChatShared` gives all of them the hand-off tabs' holds, the
+  models listed and a passed sign-in check. The history's rows
+  (`chatHistory()`): live chats (working, waiting for you, idle)
+  merged with the transcripts, a live one in its transcript's place,
+  new ones not in a transcript first. `app/.../ChatView.kt` draws the
+  shown chat (one row per `ChatItem`,
   only changed rows are touched, `core/.../ChatScreen.kt`). **Stopping**
   (`stopAgentProot`): off the main thread, SIGTERM to the agent itself
   (the tracee whose parent is proot, so it can end its children: KILL
@@ -765,12 +784,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   A permission card shows `PermissionRequest.review`, built from the
   input sent back as `updatedInput`, never just the model's
   description. A running chat keeps the app up like a service
-  (`ChatController.live`); `wakelock = auto` also holds while a turn
-  runs and no card waits (`ChatController.working`, told to the host on
+  (`ChatHub.live`, any chat's); `wakelock = auto` also holds while a
+  turn runs and no card waits (`ChatHub.working`, told to the host on
   change). **Notifications** (`core/.../ChatNotices.kt`): as the hooks
-  (silenced by `MYNX_CHAT=1`) would, unless Chat is on screen: a turn of
-  `agent-notify-after` or more ends, or a card waits; one notification
-  (`CHAT_NOTICE_ID`), cleared by `opened()`; it follows `agent-notify`
+  (silenced by `MYNX_CHAT=1`) would, unless that chat is on screen: a
+  turn of `agent-notify-after` or more ends, or a card waits; one
+  notification per chat, in its own slot (`CHAT_NOTICE_ID` + 0 to 15,
+  above web apps' 5000-5999), opening that chat (`EXTRA_CHAT_SESSION`),
+  cleared when it's shown; it follows `agent-notify`
   and Claude's hooks being on (`claudeNotifyHooks`, as `mynx agent
   list` reads them). **Always allow** sends only the suggested
   `addRules` (`allow`), for the session, and its label names each rule;
@@ -785,7 +806,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`core/.../ClaudeHistory.kt`): `--resume` replays nothing, so a
   resumed chat reads its transcript (`readClaudeHistory`, off the main
   thread, line by line, last 300 rows) into the same `ChatItem`s.
-  **Chats** lists `claudeTranscriptDir`'s sessions (the 50 newest,
+  The history lists `claudeTranscriptDir`'s sessions (the 50 newest,
   first 16 KB each for the title). Claude names that folder by turning
   every character but ASCII letters and digits into `-` (read in its
   binary). **Model and mode** (`core/.../ChatSettings.kt`): Model…
@@ -797,9 +818,10 @@ See `docs/ROADMAP.md` "How it works". The details:
   only the user's pick among `CHAT_MODES`, dropped when Claude reports
   another or a plan is approved; `claudeLaunch` refuses any other mode,
   so `bypassPermissions` is never launched. **One session, one program:** nothing stops two programs
-  driving one session (the transcript forks), so `ChatController`
-  stops its process and waits for `ProcessEnded` before New, a resume
-  or "To tab" runs anything; the hand-off tab (`claudeHandOffCommand`:
+  driving one session (the transcript forks), so a session has one
+  controller at a time (the hub's), which stops its process and waits
+  for `ProcessEnded` before a new launch or "To tab" runs anything; the
+  hand-off tab (`claudeHandOffCommand`:
   `mynx agent start claude --resume ID` with the picks, then a file saying it's
   done, then the shell) holds the session until that file appears (a
   FileObserver on the folder sees it) or the tab ends (closed before
