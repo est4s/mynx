@@ -30,7 +30,7 @@ fun chatHistory(live: List<LiveChat>, past: List<ClaudeSessionSummary>): List<Ch
     return freshRows + (knownRows + pastRows).sortedByDescending { it.modifiedMs }
 }
 
-private fun promptTitle(prompt: String?): String =
+internal fun promptTitle(prompt: String?): String =
     prompt?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() }?.take(CLAUDE_TITLE_MAX) ?: CHAT_UNTITLED
 
 /**
@@ -73,8 +73,10 @@ class ChatHub(
     private val cwd: String = "/root",
     private val artifacts: ArtifactLookup? = null,
     private val now: () -> Long = System::currentTimeMillis,
+    /** Where each session's picks are kept for the next start ([ChatShared]); in memory only without it. */
+    picksFile: java.io.File? = null,
 ) {
-    private val shared = ChatShared()
+    private val shared = ChatShared(picksFile)
     private val chats = ArrayList<ChatController>()
     // Session id → notice slot, the most recently posted last.
     private val noticeSlots = LinkedHashMap<String, Int>()
@@ -142,6 +144,13 @@ class ChatHub(
                 done(rows())
             }
         }
+    }
+
+    /** "Use as default for new chats": the `chat-mode` setting; only [CHAT_MODES]. */
+    fun setDefaultMode(value: String) {
+        if (!chatModeOffered(value)) return
+        val chat = shown
+        if (chat != null) chat.setDefaultMode(value) else host.setChatDefaultMode(value)
     }
 
     /** The app is exiting: every chat stops. */
@@ -244,6 +253,10 @@ class ChatHub(
             val id = chat.sessionId ?: return
             host.notify(notice.copy(sessionId = id, slot = noticeSlot(id)))
         }
+
+        override fun chatDefaultMode(): String? = host.chatDefaultMode()
+
+        override fun setChatDefaultMode(value: String) = host.setChatDefaultMode(value)
 
         override fun workingChanged(working: Boolean) {
             val now = this@ChatHub.working

@@ -58,7 +58,7 @@ class ClaudeLaunchTest {
 
     @Test
     fun `only the modes Chat offers can be launched`() {
-        for (mode in listOf("bypassPermissions", "dontAsk", "auto", "manual")) {
+        for (mode in listOf("bypassPermissions", "dontAsk", "manual")) {
             assertFailsWith<IllegalArgumentException>(mode) { claudeLaunch(ClaudeLaunchOptions(cwd = "/", permissionMode = mode)) }
             assertFailsWith<IllegalArgumentException>(mode) { claudeHandOffCommand(uuid, "/tmp/f", permissionMode = mode) }
         }

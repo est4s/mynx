@@ -71,6 +71,10 @@ class ClaudeSession(
     private var thinking: String? = null
     private var apiErrorText: String? = null
     private var authFailed = false
+    // The last call's context and the model's window, and what was last told of them.
+    private var contextUsed: Long? = null
+    private var contextWindow: Long? = null
+    private var contextTold: AgentEvent.ContextUsed? = null
 
     private val calls = LinkedHashMap<String, ToolCallInfo>()
     private val ended = HashSet<String>()
@@ -269,6 +273,8 @@ class ClaudeSession(
                 "assistant" -> onAssistant(message)
                 "user" -> if (message["isReplay"] == true) onReplay(message) else onToolResults(message)
                 "result" -> onResult(message)
+                "rate_limit_event" -> (message["rate_limit_info"] as? Map<*, *>)?.let(::planWindows)
+                    ?.takeIf { it.isNotEmpty() }?.let { listener(AgentEvent.PlanLimits(it)) }
                 "control_request" -> onControlRequest(message)
                 "control_cancel_request" -> onControlCancel(message)
                 "control_response" -> onControlResponse(message)
@@ -355,6 +361,10 @@ class ClaudeSession(
             return
         }
         val parent = message["parent_tool_use_id"] as? String
+        if (parent == null) (body["usage"] as? Map<*, *>)?.let(::contextTokens)?.let {
+            contextUsed = it
+            tellContext()
+        }
         val messageId = body["id"] as? String
         for (block in content.filterIsInstance<Map<*, *>>()) {
             when (block["type"]) {
@@ -440,7 +450,26 @@ class ClaudeSession(
         }
     }
 
+    private fun tellContext() {
+        val used = contextUsed ?: return
+        val event = AgentEvent.ContextUsed(used, contextWindow)
+        if (event == contextTold) return
+        contextTold = event
+        listener(event)
+    }
+
+    // The window of the model the session runs, else of the first model listed.
+    private fun learnWindow(message: Map<*, *>) {
+        val models = message["modelUsage"] as? Map<*, *> ?: return
+        val usage = (models[session?.model] ?: models.values.firstOrNull()) as? Map<*, *> ?: return
+        (usage["contextWindow"] as? Number)?.toLong()?.takeIf { it > 0 }?.let {
+            contextWindow = it
+            tellContext()
+        }
+    }
+
     private fun onResult(message: Map<*, *>) {
+        learnWindow(message)
         val isError = message["is_error"] == true
         val errors = (message["errors"] as? List<*>).orEmpty().filterIsInstance<String>()
             .filterNot { it.startsWith("[ede_diagnostic]") }.joinToString("\n")

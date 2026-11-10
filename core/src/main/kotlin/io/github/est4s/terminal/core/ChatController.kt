@@ -27,6 +27,12 @@ data class ChatState(
     val mode: String = conversation.mode ?: "default",
     /** The line under the title. */
     val line: ChatStatusLine = chatStatusLine(null, conversation.model, conversation.mode, models),
+    /** The `chat-mode` setting, the mode new chats start in. */
+    val defaultMode: String = "default",
+    /** The chat's title: its first prompt (as the history row has it), null for a new empty chat. */
+    val title: String? = null,
+    /** This chat's context, and the plan's usage as any chat last heard it. */
+    val usage: ChatUsage = ChatUsage(),
 )
 
 /** A tab may still run this chat's session: [ASKING] whether to take it back, [TAKING_BACK] while its tab closes. */
@@ -87,19 +93,78 @@ interface ChatHost {
 
     /** [ChatController.working] changed: the `wakelock` setting's auto follows it. */
     fun workingChanged(working: Boolean) {}
+
+    /** The `chat-mode` setting: the permission mode new chats launch with; null for no flag. */
+    fun chatDefaultMode(): String? = null
+
+    /** Writes the `chat-mode` setting ("Use as default"); [value] is one of [CHAT_MODES]. */
+    fun setChatDefaultMode(value: String) {}
 }
+
+/** A chat's own picks: the model and permission mode its launches take as flags, null for none. */
+data class ChatPicks(val model: String?, val mode: String?)
+
+/** How many sessions' picks are kept: the most recently changed. */
+const val CHAT_PICKS_MAX = 300
 
 /**
  * What every chat of a [ChatHub] shares: the sessions handed to a tab, by
  * id, for as long as the tab may run them (so a session handed off is known
- * whichever controller opens it), the models the agent last listed, and the
+ * whichever controller opens it), the models the agent last listed, the
  * last check that found the agent ready (a new chat starts from it rather
- * than checking again; a chat that finds sign-in lost forgets it).
+ * than checking again; a chat that finds sign-in lost forgets it), each
+ * session's [ChatPicks], and the plan's usage as any chat last heard it.
+ *
+ * The picks outlive a controller (leaving an idle chat drops it, and
+ * `--resume` restores the model but not the mode) and, with [picksFile],
+ * the app: one line a session, `ID<tab>MODEL<tab>MODE` (`-` for none),
+ * written whole to a temp file and renamed into place. Lines that don't
+ * read are skipped.
  */
-class ChatShared {
+class ChatShared(private val picksFile: File? = null) {
     internal val tabs = HashMap<String, ChatTab>()
     internal var models: List<AgentModel> = emptyList()
     internal var ready: ChatCheck? = null
+    /** The `chat-mode` setting as last read; null: no flag. */
+    internal var defaultMode: String? = null
+    internal var plan: List<PlanWindow> = emptyList()
+    internal var planSeenMs: Long? = null
+    /** Context windows Claude reported, by model: a resumed chat's ring before its first reply. */
+    internal val windows = HashMap<String, Long>()
+    // In order of change, the latest last.
+    private val picks: LinkedHashMap<String, ChatPicks> by lazy { readPicks() }
+
+    internal fun picks(sessionId: String): ChatPicks? = picks[sessionId]
+
+    internal fun keepPicks(sessionId: String, value: ChatPicks) {
+        if (picks[sessionId] == value) return
+        picks.remove(sessionId)
+        picks[sessionId] = value
+        while (picks.size > CHAT_PICKS_MAX) picks.remove(picks.keys.first())
+        savePicks()
+    }
+
+    private fun readPicks(): LinkedHashMap<String, ChatPicks> {
+        val map = LinkedHashMap<String, ChatPicks>()
+        val text = picksFile?.let { runCatching { it.takeIf(File::isFile)?.readText() }.getOrNull() } ?: return map
+        for (line in text.lines()) {
+            val parts = line.split('\t')
+            if (parts.size != 3 || parts[0].isBlank() || parts.any { it.isBlank() }) continue
+            fun value(part: String) = part.takeUnless { it == "-" }
+            map[parts[0]] = ChatPicks(value(parts[1]), value(parts[2])?.takeIf(::chatModeOffered))
+        }
+        return map
+    }
+
+    private fun savePicks() {
+        val file = picksFile ?: return
+        runCatching {
+            file.parentFile?.mkdirs()
+            val tmp = File(file.path + ".tmp")
+            tmp.writeText(picks.entries.joinToString("") { (id, p) -> "$id\t${p.model ?: "-"}\t${p.mode ?: "-"}\n" })
+            if (!tmp.renameTo(file)) tmp.delete()
+        }
+    }
 }
 
 /** A chat's row mark in the history ([chatHistory]). */
@@ -191,6 +256,9 @@ class ChatController(
     // A past chat resumed: it runs the model it ran before, which isn't the default.
     private val pastChat = resumeId != null
     private var firstPrompt: String? = null
+    // The transcript's first prompt, for a resumed chat.
+    private var historyTitle: String? = null
+    private var context: ContextUse? = null
 
     /** When this chat last did anything: made, a prompt, an event. */
     var touchedMs: Long = now()
@@ -207,13 +275,25 @@ class ChatController(
             resumable = true
             loadHistory(resumeId)
         }
+        shared.defaultMode = host.chatDefaultMode()?.takeIf(::chatModeOffered)
+        val kept = resumeId?.let(shared::picks)
+        if (kept != null) {
+            model = kept.model
+            mode = kept.mode
+        } else {
+            mode = shared.defaultMode
+        }
     }
 
     /** The session this chat runs, once it has one: the one it resumes, or the id its first launch got. */
     val sessionId: String? get() = chatId
 
-    /** The first prompt sent here, for a title before the transcript has one. */
-    val title: String? get() = firstPrompt
+    /**
+     * The chat's title, as its history row has it: the transcript's, else
+     * the first prompt sent here (its text, else its first file's name), on
+     * one line; null before either.
+     */
+    val title: String? get() = historyTitle ?: firstPrompt?.let { promptTitle(promptTitleText(it)) }
 
     /** A turn runs or a card waits: [ChatState.busy]. */
     val busy: Boolean get() = busy()
@@ -240,6 +320,9 @@ class ChatController(
                 model = menu.ticked,
                 mode = mode ?: "default",
                 line = chatStatusLine(model, conversation.model, mode, models, pastChat),
+                defaultMode = shared.defaultMode ?: "default",
+                title = title,
+                usage = ChatUsage(context, shared.plan, shared.planSeenMs),
             )
         }
 
@@ -285,15 +368,16 @@ class ChatController(
     }
 
     /** Sends a prompt, starting the process if there is none; false, and nothing done, if it can't. */
-    fun send(text: String): Boolean {
-        if (access != ChatAccess.READY || text.isBlank() || exiting != null) return false
+    fun send(text: String, attachments: List<ChatAttachment> = emptyList()): Boolean {
+        if (access != ChatAccess.READY || (text.isBlank() && attachments.isEmpty()) || exiting != null) return false
         if (session == null && heldByTab()) {
             ask()
             return false
         }
-        val sent = (session ?: launch()).sendPrompt(text)
+        val prompt = promptWithAttachments(text, attachments)
+        val sent = (session ?: launch()).sendPrompt(prompt)
         if (sent) {
-            if (firstPrompt == null) firstPrompt = text
+            if (firstPrompt == null) firstPrompt = prompt
             touchedMs = now()
         }
         return sent
@@ -410,6 +494,8 @@ class ChatController(
                     conversation = conversation.copy(items = items + conversation.items.drop(before))
                     // What `--resume` will run, till a process says; a running one knows better.
                     if (session == null && history.model != null) conversation = conversation.copy(model = history.model)
+                    history.title?.let { historyTitle = it }
+                    if (context == null) history.context?.let { context = ContextUse(it, history.model?.let(shared.windows::get)) }
                     changed()
                 }
             }
@@ -421,6 +507,14 @@ class ChatController(
     /** Model…: to the running process, if any, kept once it takes it; with none, the flag of the next launch. */
     fun setModel(value: String) {
         if (session?.setModel(value) == true) pendingModel = value else model = value
+        changed()
+    }
+
+    /** "Use as default": the `chat-mode` setting, for new chats; this chat's own pick stays. Only [CHAT_MODES]. */
+    fun setDefaultMode(value: String) {
+        if (!chatModeOffered(value)) return
+        host.setChatDefaultMode(value)
+        shared.defaultMode = value
         changed()
     }
 
@@ -539,6 +633,15 @@ class ChatController(
             }
             is AgentEvent.ModelRefused -> if (event.model == pendingModel) pendingModel = null
             is AgentEvent.AvailableModels -> knownModels = event.models
+            is AgentEvent.ContextUsed -> {
+                context = ContextUse(event.usedTokens, event.windowTokens)
+                val model = conversation.model
+                if (event.windowTokens != null && model != null) shared.windows[model] = event.windowTokens
+            }
+            is AgentEvent.PlanLimits -> {
+                shared.plan = event.windows
+                shared.planSeenMs = now()
+            }
             is AgentEvent.TurnEnded -> {
                 checkArtifacts(null)
                 when {
@@ -606,6 +709,7 @@ class ChatController(
     }
 
     private fun changed() {
+        chatId?.let { shared.keepPicks(it, ChatPicks(model, mode)) }
         listener?.invoke(state)
         if (working != toldWorking) {
             toldWorking = working
