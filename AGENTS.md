@@ -764,7 +764,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   ignored (`agentBinary()` finds the path, the same lookup as Home's).
   A permission card shows `PermissionRequest.review`, built from the
   input sent back as `updatedInput`, never just the model's
-  description. A running chat keeps the app up like a service
+  description. **Queued prompts:** one sent during a turn is
+  `PromptQueued`, drawn dimmed after the rows (`Conversation.queued`),
+  until Claude's echo of it (`--replay-user-messages`; after a tool's
+  result, or as the next turn, queued ones joined by line breaks) makes
+  it a `UserMessage` where Claude took it; Stop doesn't drop them (they
+  run next, tested with 2.1.321), the process ending leaves them "Not
+  sent", and transcripts keep mid-turn ones as `queued_command`
+  attachments. A running chat keeps the app up like a service
   (`ChatController.live`); `wakelock = auto` also holds while a turn
   runs and no card waits (`ChatController.working`, told to the host on
   change). **Notifications** (`core/.../ChatNotices.kt`): as the hooks

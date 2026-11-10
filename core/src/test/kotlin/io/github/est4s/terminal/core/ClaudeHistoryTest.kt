@@ -24,6 +24,29 @@ class ClaudeHistoryTest {
 
     private fun jsonText(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
 
+    // A prompt taken during a turn (Claude 2.1.321): an attachment, not a user line; `rendered` cut short.
+    private val queuedLine =
+        """{"parentUuid":"4eb21736-a416-4876-94e3-127252cad610","isSidechain":false,"attachment":{"type":"queued_command","prompt":"Also say the word BANANA.","source_uuid":"472074a1-2603-4f4e-a9de-1524c68e05ec","delivery_id":"e1a42079-284e-46e1-a2f9-33cb7ce63d8f","commandMode":"prompt","timestamp":"2026-11-10T08:38:48.322Z"},"type":"attachment","uuid":"1c0be48a-c886-4291-8095-a1679464290c","timestamp":"2026-11-10T08:38:48.322Z","rendered":[{"content":"<system-reminder>\nThe user sent a new message while you were working:\nAlso say the word BANANA.\n</system-reminder>"}],"renderedRole":"system","userType":"external","entrypoint":"sdk-cli","sessionId":"778cae7f-ee53-4a3b-96c2-f5059025088a","version":"2.1.321"}"""
+
+    @Test
+    fun `a prompt queued during a turn reads back as the user's, where Claude took it`() {
+        val items = readClaudeHistory(sequenceOf(user(1, "Run sleep"), queuedLine, agent(2, "DONE")))
+        assertEquals(
+            listOf<ChatItem>(
+                ChatItem.User("history:u1", "Run sleep"),
+                ChatItem.User("history:1c0be48a-c886-4291-8095-a1679464290c", "Also say the word BANANA."),
+                ChatItem.Agent("history:a2:0", "DONE"),
+            ),
+            items,
+        )
+    }
+
+    @Test
+    fun `queued commands other than prompts are left out`() {
+        val other = queuedLine.replace("\"commandMode\":\"prompt\"", "\"commandMode\":\"task-notification\"")
+        assertEquals(emptyList(), readClaudeHistory(sequenceOf(other)))
+    }
+
     @Test
     fun `a transcript becomes the screen's rows`() {
         val items = readClaudeHistory(fixture.lineSequence())

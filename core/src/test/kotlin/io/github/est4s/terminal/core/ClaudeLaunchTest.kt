@@ -18,6 +18,7 @@ class ClaudeLaunchTest {
         "--verbose",
         "--input-format", "stream-json",
         "--include-partial-messages",
+        "--replay-user-messages",
         "--permission-prompt-tool", "stdio",
     )
 

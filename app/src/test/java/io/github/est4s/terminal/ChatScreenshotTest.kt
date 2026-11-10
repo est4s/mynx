@@ -89,6 +89,9 @@ private val FULL = listOf(
     ),
 )
 
+/** Sent during the turn, not taken yet. */
+private val QUEUED = listOf(ChatItem.User("user-2", "Make the buttons bigger too."))
+
 private val SHORT = listOf(
     ChatItem.User("user-1", "What's in my home folder?"),
     ChatItem.Agent("agent-1", "Your home has **apps**, **pixel-hero** and **neon-runner**, and the notes in `AGENTS.md`."),
@@ -167,6 +170,7 @@ class ChatScreenshotTest {
         access: ChatAccess = ChatAccess.READY,
         model: String? = null,
         mode: String? = null,
+        queued: List<ChatItem.User> = emptyList(),
     ) {
         val view = Screenshots.open(w, h) { activity ->
             ChatView(
@@ -180,18 +184,18 @@ class ChatScreenshotTest {
                 installApk = {},
             ).apply { colors = Screenshots.colors }
         }
-        view.show(ChatState(Conversation(items, running = running, model = model, mode = mode), access, canRestart = false, busy = running))
+        view.show(ChatState(Conversation(items, queued = queued, running = running, model = model, mode = mode), access, canRestart = false, busy = running))
         Screenshots.settle()
         Screenshots.save(view, name)
     }
 
     /** The phone's height: the rows stay at the end, as they do on the phone. */
     @Test
-    fun conversation() = shoot(1080, 2400, "chat", FULL, running = true)
+    fun conversation() = shoot(1080, 2400, "chat", FULL, running = true, queued = QUEUED)
 
     /** Tall enough for every row, to see them all at once. */
     @Test
-    fun wholeConversation() = shoot(1080, 7000, "chat-whole", FULL, running = true)
+    fun wholeConversation() = shoot(1080, 7000, "chat-whole", FULL, running = true, queued = QUEUED)
 
     /** Also the line under the title, with a mode that isn't the default. */
     @Test

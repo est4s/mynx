@@ -315,6 +315,8 @@ class ChatView(
 
     private val cells = ArrayList<Cell>()
     private var drawn: List<ChatItem> = emptyList()
+    // Queued prompts: views in [rows] after the cells, drawn again whenever they change.
+    private var drawnQueued: List<ChatItem.User> = emptyList()
     private var latest: ChatState? = null
     private var renderPending = false
     private var lastRender = 0L
@@ -356,6 +358,7 @@ class ChatView(
             cells.clear()
             rows.removeAllViews()
             drawn = emptyList()
+            drawnQueued = emptyList()
             render()
         }
 
@@ -440,7 +443,19 @@ class ChatView(
         val state = latest ?: return
         val colors = colors ?: return
         renderRows(state.conversation.items, colors)
+        renderQueued(state.conversation.queued, colors)
         renderControls(state, colors)
+    }
+
+    private fun renderQueued(queued: List<ChatItem.User>, colors: StripColors) {
+        if (queued == drawnQueued && rows.childCount == cells.size + queued.size) return
+        rows.removeViews(cells.size, rows.childCount - cells.size)
+        queued.forEach { item ->
+            val cell = userCell(colors, queued = true)
+            cell.bind(item)
+            rows.addView(cell.view, cellParams())
+        }
+        drawnQueued = queued
     }
 
     private fun renderRows(items: List<ChatItem>, colors: StripColors) {
@@ -475,10 +490,13 @@ class ChatView(
             is ChatItem.Artifact -> artifactCell(colors)
         }
         cell.bind(item)
+        // Before any queued prompts' views, which stay last.
+        rows.addView(cell.view, cells.size, cellParams())
         cells.add(cell)
-        rows.addView(cell.view, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-            setMargins(dp(12), dp(4), dp(12), dp(4))
-        })
+    }
+
+    private fun cellParams() = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+        setMargins(dp(12), dp(4), dp(12), dp(4))
     }
 
     private fun renderControls(state: ChatState, colors: StripColors) {
@@ -715,15 +733,21 @@ class ChatView(
             .show()
     }
 
-    private fun userCell(colors: StripColors): Cell {
+    // A queued prompt is dimmed under a "Queued" label until the agent takes it.
+    private fun userCell(colors: StripColors, queued: Boolean = false): Cell {
         val bubble = selectableText(colors.text, 16f).apply {
             background = rounded(colors.selectedBackground)
             setPadding(dp(12), dp(8), dp(12), dp(8))
+            if (queued) alpha = 0.55f
         }
         val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = if (queued) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
             gravity = Gravity.END
             setPadding(dp(48), 0, 0, 0)
+            if (queued) addView(plainText(faded(colors.text, 0xB0), 12f).apply {
+                text = "Queued"
+                setPadding(0, 0, dp(4), dp(2))
+            })
             addView(bubble)
         }
         return Cell(row) { item -> bubble.text = (item as ChatItem.User).text }

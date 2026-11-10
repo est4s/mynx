@@ -54,6 +54,7 @@ fun claudeLaunch(options: ClaudeLaunchOptions): AgentLaunch {
         "--verbose",
         "--input-format", "stream-json",
         "--include-partial-messages",
+        "--replay-user-messages",
         "--permission-prompt-tool", "stdio",
     )
     options.resume?.let { argv += listOf("--resume", it) }

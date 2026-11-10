@@ -38,13 +38,16 @@ private fun aside(line: Map<*, *>): Boolean =
 /** What the user typed on a `user` line; null for tool results and lines Claude made. */
 private fun promptText(line: Map<*, *>): String? {
     if (line["type"] != "user" || aside(line)) return null
-    val text = when (val content = (line["message"] as? Map<*, *>)?.get("content")) {
-        is String -> content
-        is List<*> -> content.filterIsInstance<Map<*, *>>().filter { it["type"] == "text" }
-            .mapNotNull { it["text"] as? String }.joinToString("\n")
-        else -> return null
-    }
+    val text = promptContent((line["message"] as? Map<*, *>)?.get("content")) ?: return null
     return text.takeUnless { it.isBlank() || systemText(it) }
+}
+
+// A prompt Claude took during a turn is stored as an attachment, not a user line.
+private fun queuedPrompt(line: Map<*, *>): String? {
+    if (aside(line)) return null
+    val attachment = line["attachment"] as? Map<*, *> ?: return null
+    if (attachment["type"] != "queued_command" || (attachment["commandMode"] ?: "prompt") != "prompt") return null
+    return promptContent(attachment["prompt"])?.takeUnless { it.isBlank() || systemText(it) }
 }
 
 private fun parseLine(line: String): Map<*, *>? = try {
@@ -55,7 +58,8 @@ private fun parseLine(line: String): Map<*, *>? = try {
 
 /**
  * A Claude transcript (`~/.claude/projects/…/ID.jsonl`, one JSON object a
- * line) as the Chat screen's rows: prompts, the agent's text, and tool
+ * line) as the Chat screen's rows: prompts (also those taken during a
+ * turn, `queued_command` attachments), the agent's text, and tool
  * cards ended as completed or failed with their output (one with no
  * result never finished: failed). Thinking, subagents' and Claude's own
  * lines, compaction summaries, and lines of unknown types are left out;
@@ -89,10 +93,11 @@ fun readClaudeTranscript(lines: Sequence<String>, max: Int = CHAT_HISTORY_MAX): 
     for (text in lines) {
         number++
         // Claude writes compact JSON: this skips its many big lines of other kinds unparsed.
-        if (!text.contains("\"type\":\"user\"") && !text.contains("\"type\":\"assistant\"")) continue
+        if (!text.contains("\"type\":\"user\"") && !text.contains("\"type\":\"assistant\"") && !text.contains("\"type\":\"queued_command\"")) continue
         val line = parseLine(text) ?: continue
         val uuid = line["uuid"] as? String ?: "line$number"
         when (line["type"]) {
+            "attachment" -> queuedPrompt(line)?.let { add(ChatItem.User("$HISTORY_ID$uuid", it)) }
             "user" -> {
                 promptText(line)?.let { add(ChatItem.User("$HISTORY_ID$uuid", it)) }
                 if (aside(line)) continue

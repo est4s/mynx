@@ -31,6 +31,13 @@ private val HOW_OPTIONS = listOf(
  *   file), and its label names every rule. A suggested mode or directory
  *   would widen more than the button says, so they're left out; with no
  *   rule to add, there's no "Allow always".
+ * - A prompt sent while a turn runs (or while others still wait) is
+ *   queued: Claude echoes each user message it takes in
+ *   (`--replay-user-messages`, `isReplay`), right after a tool's result
+ *   within the turn, or as a turn of its own, several queued ones joined
+ *   with line breaks. The replay, matched to the prompts sent in order,
+ *   turns a queued one into the user's message there; an echo of one
+ *   already shown is dropped. One matching none is ignored.
  * - All writes are JSON built here, so no raw user text reaches stdin; one
  *   line that isn't JSON would kill the process.
  *
@@ -50,6 +57,8 @@ class ClaudeSession(
     private var cancelRequested = false
     private var requests = 0
     private var prompts = 0
+    // Prompts written and not yet replayed, in order; [Sent.shown] once told as a UserMessage.
+    private val sent = ArrayList<Sent>()
     private var initializeId: String? = null
     private val interrupts = HashSet<String>()
     private var session: AgentEvent.SessionStarted? = null
@@ -66,6 +75,8 @@ class ClaudeSession(
     private val calls = LinkedHashMap<String, ToolCallInfo>()
     private val ended = HashSet<String>()
     private val pending = LinkedHashMap<String, Pending>()
+
+    private class Sent(val id: String, val text: String, val shown: Boolean)
 
     private class TextBlock(val id: String) {
         val text = StringBuilder()
@@ -107,7 +118,10 @@ class ClaudeSession(
         if (!isOpen || text.isBlank() || !transport.accepting) return false
         if (!send(linkedMapOf("type" to "user", "message" to linkedMapOf("role" to "user", "content" to text)))) return false
         prompts++
-        listener(AgentEvent.UserMessage("user-$prompts", text))
+        val id = "user-$prompts"
+        val queued = running || sent.any { !it.shown }
+        sent.add(Sent(id, text, shown = !queued))
+        listener(if (queued) AgentEvent.PromptQueued(id, text) else AgentEvent.UserMessage(id, text))
         if (!running) {
             running = true
             awaitingInit = true
@@ -253,7 +267,7 @@ class ClaudeSession(
                 }
                 "stream_event" -> onStream(message)
                 "assistant" -> onAssistant(message)
-                "user" -> onToolResults(message)
+                "user" -> if (message["isReplay"] == true) onReplay(message) else onToolResults(message)
                 "result" -> onResult(message)
                 "control_request" -> onControlRequest(message)
                 "control_cancel_request" -> onControlCancel(message)
@@ -405,6 +419,24 @@ class ClaudeSession(
             ended.add(id)
             val status = if (block["is_error"] == true) ToolStatus.FAILED else ToolStatus.COMPLETED
             listener(AgentEvent.ToolCallUpdate(call.copy(status = status, content = cutToolText(resultText(block["content"])))))
+        }
+    }
+
+    private fun onReplay(message: Map<*, *>) {
+        val text = promptContent((message["message"] as? Map<*, *>)?.get("content"))?.trim() ?: return
+        for (start in sent.indices) {
+            var joined: String? = null
+            for (end in start until sent.size) {
+                val part = sent[end].text.trim()
+                joined = if (joined == null) part else joined + "\n" + part
+                if (joined.length > text.length) break
+                if (joined != text) continue
+                // Ones before start were taken without an echo: they aren't waiting any more.
+                val taken = sent.subList(0, end + 1)
+                for (prompt in taken) if (!prompt.shown) listener(AgentEvent.UserMessage(prompt.id, prompt.text))
+                taken.clear()
+                return
+            }
         }
     }
 
@@ -594,6 +626,14 @@ class ClaudeSession(
             listener(AgentEvent.ProcessEnded(exitCode, detail, stopping))
         }
     }
+}
+
+/** A user message's text: a string, or its text blocks joined by line breaks; null if neither. */
+internal fun promptContent(content: Any?): String? = when (content) {
+    is String -> content
+    is List<*> -> content.filterIsInstance<Map<*, *>>().filter { it["type"] == "text" }
+        .mapNotNull { it["text"] as? String }.joinToString("\n")
+    else -> null
 }
 
 /** A `tool_result`'s text: a string, or its text blocks. */

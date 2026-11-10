@@ -26,7 +26,8 @@ interface AgentSession {
     /**
      * Sends [text] as a user message, encoded for the wire. False, and
      * nothing sent, if it's blank or the session isn't open. Fine during a
-     * turn: the agent queues it (Claude merges lines queued together).
+     * turn: the agent queues it ([AgentEvent.PromptQueued]; Claude merges
+     * lines queued together into one turn's prompt).
      */
     fun sendPrompt(text: String): Boolean
 
@@ -165,8 +166,19 @@ sealed interface AgentEvent {
     /** The agent refused [AgentSession.setModel] with [model]. */
     data class ModelRefused(val model: String) : AgentEvent
 
-    /** The user's own message, once sent. */
+    /**
+     * The user's own message: sent while idle, or a [PromptQueued] one
+     * (same [id]) now that the agent has taken it, at that point of the turn.
+     */
     data class UserMessage(val id: String, val text: String) : AgentEvent
+
+    /**
+     * A prompt sent while a turn runs: written, but waiting until the agent
+     * takes it (between tool calls, or as the next turn), when [UserMessage]
+     * follows with the same [id]. Stop doesn't drop it: it runs next. Still
+     * waiting at [ProcessEnded], it was never taken.
+     */
+    data class PromptQueued(val id: String, val text: String) : AgentEvent
 
     /** A turn began: a prompt was sent, or the agent started one by itself (a background job finished). */
     data object TurnStarted : AgentEvent
