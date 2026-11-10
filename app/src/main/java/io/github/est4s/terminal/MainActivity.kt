@@ -202,7 +202,8 @@ class MainActivity : Activity(), FrontActivity {
         applySystemInsets(root)
 
         shellToShow = shellOf(intent)
-        chatToShow = intent?.action == ACTION_CHAT
+        // Once: a recreated activity (rotation) keeps the intent that opened it.
+        chatToShow = savedInstanceState == null && intent?.action == ACTION_CHAT
         // Not when Android recreates the activity: that tab is open already.
         tabToOpen = if (savedInstanceState == null) commandOf(intent) else null
         if (installer.isInstalled) connectService() else installDebian()

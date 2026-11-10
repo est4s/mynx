@@ -163,7 +163,8 @@ const val ACTION_SERVICES = "io.github.est4s.terminal.SERVICES"
 /** Shows touch mode's Chat (its notification). */
 const val ACTION_CHAT = "io.github.est4s.terminal.CHAT"
 // The chat's notification: one, replaced by the next.
-private const val CHAT_NOTICE_ID = 5000
+// Past every range in use (web apps take 5000-5999).
+private const val CHAT_NOTICE_ID = 6000
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -946,6 +947,8 @@ class TerminalService : Service() {
     /** Kills every session, stops the services and the service, and closes the app. The next start is fresh. */
     fun exit() {
         chat.shutdown()
+        // Nothing to come back to: a "Your turn" left up would open an empty chat.
+        getSystemService(NotificationManager::class.java).cancel(CHAT_NOTICE_ID)
         val stopping = serviceManager.active > 0
         serviceHost.exiting = true
         serviceManager.stopAll()
