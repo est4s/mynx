@@ -10,7 +10,7 @@ enum class ChatAccess { CHECKING, READY, NOT_INSTALLED, NOT_SIGNED_IN }
  * a chat can go on with `--resume`. [stopping]: the last process is being
  * waited for, so nothing can be sent. [handOffBlock] says why "To tab"
  * can't go now; null when it can. [busy]: a turn runs or a card waits for
- * an answer, so going to another chat would cut it off: ask first.
+ * an answer, so [ChatHub] keeps its process when the chat is left.
  */
 data class ChatState(
     val conversation: Conversation,
@@ -82,18 +82,36 @@ interface ChatHost {
     /** Posts the chat's notification, replacing the last. */
     fun notify(notice: ChatNotice) {}
 
-    /** Removes the chat's notification: the user has opened Chat. */
-    fun clearNotice() {}
+    /** Removes the notification in [slot] ([ChatNotice.slot]): the user has opened its chat. */
+    fun clearNotice(slot: Int) {}
 
     /** [ChatController.working] changed: the `wakelock` setting's auto follows it. */
     fun workingChanged(working: Boolean) {}
 }
 
 /**
- * The one chat of the Chat screen, kept by the service so it outlives the
- * activity: the [ClaudeSession] (one per process), the [Conversation], and
- * whether the chat may run. Main thread only, except what [AgentSession]'s
- * listener posts through [post], in order.
+ * What every chat of a [ChatHub] shares: the sessions handed to a tab, by
+ * id, for as long as the tab may run them (so a session handed off is known
+ * whichever controller opens it), the models the agent last listed, and the
+ * last check that found the agent ready (a new chat starts from it rather
+ * than checking again; a chat that finds sign-in lost forgets it).
+ */
+class ChatShared {
+    internal val tabs = HashMap<String, ChatTab>()
+    internal var models: List<AgentModel> = emptyList()
+    internal var ready: ChatCheck? = null
+}
+
+/** A chat's row mark in the history ([chatHistory]). */
+enum class ChatRowState { WORKING, WAITING, IDLE }
+
+/**
+ * One chat of the Chat screen, for life: a new one, or the past session
+ * [resumeId] (its transcript shown, resumed with the next prompt). Kept by
+ * [ChatHub], in the service, so it outlives the activity: the
+ * [ClaudeSession] (one per process), the [Conversation], and whether the
+ * chat may run. Main thread only, except what [AgentSession]'s listener
+ * posts through [post], in order.
  *
  * The first prompt starts the process, with a new `--session-id`. After
  * that a process that ended is started with `--resume`, so that one chat
@@ -101,11 +119,11 @@ interface ChatHost {
  * nothing to resume, so a new id it is, as after a resume that found no
  * conversation.
  *
- * One session, one program: a process being replaced ([resume], [handOff],
- * [newChat]) is stopped and waited for ([ChatState.stopping]) before anything runs
- * on its behalf, and a session handed to a tab isn't run here again while
- * that tab may still run it ([ChatTabHold]). A resumed chat shows its
- * transcript ([readClaudeHistory]): `--resume` doesn't replay it.
+ * One session, one program: a process being stopped ([stop], [handOff]) is
+ * waited for ([ChatState.stopping]) before anything runs on its behalf, and
+ * a session handed to a tab isn't run here again while that tab may still
+ * run it ([ChatTabHold], kept in [ChatShared] for all chats). A resumed chat
+ * shows its transcript ([readClaudeHistory]): `--resume` doesn't replay it.
  *
  * The model and permission mode picked ([setModel], [setMode]) go to the
  * running process and count once Claude takes them (a refused one is
@@ -119,7 +137,7 @@ interface ChatHost {
  * settings) is only shown, and once it reports another mode than the pick,
  * or a plan is approved (which leaves plan mode without saying so), the
  * pick is dropped and the next launch has no mode flag. A new or another
- * chat starts from the defaults again.
+ * chat starts from the defaults again (its own controller).
  */
 class ChatController(
     private val host: ChatHost,
@@ -129,6 +147,8 @@ class ChatController(
     /** Finds the apps and APKs a turn made, for artifact cards; none without it. */
     private val artifacts: ArtifactLookup? = null,
     private val now: () -> Long = System::currentTimeMillis,
+    resumeId: String? = null,
+    private val shared: ChatShared = ChatShared(),
 ) {
     private var conversation = Conversation()
     private var access = ChatAccess.CHECKING
@@ -146,8 +166,7 @@ class ChatController(
     private var exiting: Int? = null
     private var afterExit: (() -> Unit)? = null
     private var historyLoad = 0
-    // Sessions handed to a tab, by id, for as long as the tab may run them.
-    private val heldByTabs = HashMap<String, ChatTab>()
+    private val heldByTabs get() = shared.tabs
     private var tabHold = ChatTabHold.NONE
     // Artifact cards: when this turn started, the checks asked and applied, the cards made, and
     // a count bumped when the conversation is replaced, so a late check is dropped.
@@ -164,9 +183,51 @@ class ChatController(
     private var pendingModel: String? = null
     private var pendingMode: String? = null
     // The last list the agent gave, kept for chats before their process says.
-    private var knownModels: List<AgentModel> = emptyList()
-    // A chat picked from Chats: it runs the model it ran before, which isn't the default.
-    private var pastChat = false
+    private var knownModels: List<AgentModel>
+        get() = shared.models
+        set(value) {
+            shared.models = value
+        }
+    // A past chat resumed: it runs the model it ran before, which isn't the default.
+    private val pastChat = resumeId != null
+    private var firstPrompt: String? = null
+
+    /** When this chat last did anything: made, a prompt, an event. */
+    var touchedMs: Long = now()
+        private set
+
+    init {
+        shared.ready?.let {
+            access = ChatAccess.READY
+            binary = it.binary
+        }
+        if (resumeId != null) {
+            conversation = Conversation(sessionId = resumeId)
+            chatId = resumeId
+            resumable = true
+            loadHistory(resumeId)
+        }
+    }
+
+    /** The session this chat runs, once it has one: the one it resumes, or the id its first launch got. */
+    val sessionId: String? get() = chatId
+
+    /** The first prompt sent here, for a title before the transcript has one. */
+    val title: String? get() = firstPrompt
+
+    /** A turn runs or a card waits: [ChatState.busy]. */
+    val busy: Boolean get() = busy()
+
+    /** A process runs, not counting one being stopped: [stop] has something to stop. */
+    val running: Boolean get() = session != null
+
+    /** The history's mark for it. */
+    val rowState: ChatRowState
+        get() = when {
+            cardWaiting() -> ChatRowState.WAITING
+            session != null && conversation.running -> ChatRowState.WORKING
+            else -> ChatRowState.IDLE
+        }
 
     val state: ChatState
         get() {
@@ -197,7 +258,6 @@ class ChatController(
 
     /** The screen is on show: checks whether the chat can run, unless that's known or being found out. */
     fun opened() {
-        host.clearNotice()
         heldByTab()
         if (access == ChatAccess.READY || checking || waitingForExit) return
         access = ChatAccess.CHECKING
@@ -210,6 +270,7 @@ class ChatController(
         val result = check.access
         checking = false
         check.binary?.let { binary = it }
+        shared.ready = check.takeIf { result == ChatAccess.READY }
         val current = session
         if (result == ChatAccess.READY && signInLost && current != null) {
             // Signed in afresh: don't count on a running process noticing.
@@ -230,7 +291,12 @@ class ChatController(
             ask()
             return false
         }
-        return (session ?: launch()).sendPrompt(text)
+        val sent = (session ?: launch()).sendPrompt(text)
+        if (sent) {
+            if (firstPrompt == null) firstPrompt = text
+            touchedMs = now()
+        }
+        return sent
     }
 
     /** The Restart button: goes on with the same chat. */
@@ -243,44 +309,6 @@ class ChatController(
     private fun ask() {
         if (tabHold != ChatTabHold.NONE) return
         tabHold = ChatTabHold.ASKING
-        changed()
-    }
-
-    /** The past chats of this folder, newest first, read off the main thread; [done] on the main thread. */
-    fun pastChats(done: (List<ClaudeSessionSummary>) -> Unit) {
-        val dir = host.hostFile(claudeTranscriptDir(home, cwd))
-        host.background {
-            val list = runCatching { listClaudeSessions(dir) }.getOrDefault(emptyList())
-            post { done(list) }
-        }
-    }
-
-    /**
-     * Goes on with the past chat [id]: stops the running process (the next
-     * prompt waits for it to exit), shows the transcript and resumes [id]
-     * with the next prompt. The chat on screen already: nothing.
-     */
-    fun resume(id: String) {
-        if (id == chatId) return
-        stopThen(null)
-        conversation = Conversation(sessionId = id)
-        conversations++
-        model = null
-        mode = null
-        pendingModel = null
-        pendingMode = null
-        turnStart = null
-        chatId = id
-        pastChat = true
-        resumable = true
-        canRestart = false
-        signInLost = false
-        tabHold = ChatTabHold.NONE
-        if (waitingForExit) {
-            waitingForExit = false
-            access = ChatAccess.READY
-        }
-        loadHistory(id)
         changed()
     }
 
@@ -430,30 +458,13 @@ class ChatController(
     }
 
     /**
-     * Ends this chat and starts an empty one; what the old process still says
-     * is ignored, and nothing runs until it has exited (it may be picked
-     * again from Chats at once).
+     * Stops the process, if one runs, keeping the chat: what it still says is
+     * ignored, it stays [live] until it has exited, and the next prompt
+     * resumes the session then.
      */
-    fun newChat() {
+    fun stop() {
+        if (session == null) return
         stopThen(null)
-        conversation = Conversation()
-        conversations++
-        model = null
-        mode = null
-        pendingModel = null
-        pendingMode = null
-        turnStart = null
-        chatId = null
-        pastChat = false
-        resumable = false
-        canRestart = false
-        signInLost = false
-        tabHold = ChatTabHold.NONE
-        historyLoad++
-        if (waitingForExit) {
-            waitingForExit = false
-            access = ChatAccess.READY
-        }
         changed()
     }
 
@@ -502,6 +513,7 @@ class ChatController(
             return
         }
         if (own != generation) return
+        touchedMs = now()
         if (event == AgentEvent.TurnStarted && !conversation.running) turnStart = now()
         conversation = conversation.reduce(event)
         if (mayNotify(event)) {
@@ -537,6 +549,7 @@ class ChatController(
             }
             is AgentEvent.Notice -> if (isNoConversationResult(event.text)) resumable = false
             is AgentEvent.NotSignedIn -> {
+                shared.ready = null
                 signInLost = true
                 access = ChatAccess.NOT_SIGNED_IN
             }

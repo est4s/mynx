@@ -50,7 +50,7 @@ class ChatControllerTest {
         override fun notify(notice: ChatNotice) {
             notices += notice
         }
-        override fun clearNotice() {
+        override fun clearNotice(slot: Int) {
             clears++
         }
         override fun workingChanged(working: Boolean) {
@@ -103,8 +103,17 @@ class ChatControllerTest {
     private val states = mutableListOf<ChatState>()
     private var clock = 10_000_000L
     private val finder = ArtifactFinder(WebApps(File(top, "root"), top.path, File(top, "tools")))
-    private val chat = ChatController(host, { posted.addLast(it) }, artifacts = finder, now = { clock })
-        .also { it.listener = { s -> states += s } }
+    private val shared = ChatShared()
+    private fun controller(resume: String? = null) =
+        ChatController(host, { posted.addLast(it) }, artifacts = finder, now = { clock }, resumeId = resume, shared = shared)
+            .also { it.listener = { s -> states += s } }
+    private var chat = controller()
+
+    // Another chat, as ChatHub makes it: the same app and what chats share.
+    private fun next(resume: String? = null) {
+        chat.listener = null
+        chat = controller(resume)
+    }
 
     private fun drain() {
         while (posted.isNotEmpty()) posted.removeFirst()()
@@ -257,7 +266,7 @@ class ChatControllerTest {
         chat.send("hello")
         line("""{"type":"control_response","response":{"subtype":"success","request_id":"chat-1","response":{"models":[{"value":"default","displayName":"Default (recommended)"},{"value":"opus","displayName":"Opus 5.5"}]}}}""")
         assertEquals(listOf("default", "opus"), chat.state.models.map { it.value })
-        chat.newChat()
+        next()
         assertEquals(listOf("default", "opus"), chat.state.models.map { it.value })
     }
 
@@ -275,7 +284,7 @@ class ChatControllerTest {
         ready()
         chat.setModel("opus")
         chat.setMode("plan")
-        chat.newChat()
+        next()
         assertEquals("default", chat.state.model)
         assertEquals("default", chat.state.mode)
         chat.send("hello")
@@ -430,37 +439,41 @@ class ChatControllerTest {
     }
 
     @Test
-    fun `New ends the chat, ignores what the old one says and starts fresh`() {
+    fun `stopping ignores what the process still says, and the next prompt resumes it`() {
         ready()
         chat.send("hello")
         drain()
         init()
         done()
         val old = process
-        chat.newChat()
+        chat.stop()
         assertEquals(1, old.closed)
-        assertTrue(chat.state.conversation.items.isEmpty())
-        old.listener!!.onLine("""{"type":"system","subtype":"init","session_id":"x","model":"m"}""")
+        assertFalse(chat.running)
+        assertTrue(chat.live, "till it has exited")
+        old.listener!!.onLine("""{"type":"assistant","message":{"id":"m9","role":"assistant","content":[{"type":"text","text":"late"}]}}""")
+        drain()
+        assertTrue(chat.state.conversation.items.none { it is ChatItem.Agent && it.text == "late" })
+        assertFalse(chat.send("too early"))
         old.listener!!.onExit(143, "")
         drain()
+        assertFalse(chat.live)
         assertFalse(chat.state.conversation.processEnded)
-        assertTrue(chat.state.conversation.items.isEmpty())
-        assertTrue(chat.send("fresh"))
-        assertEquals(null, argFlag("--resume"))
-        assertEquals("00000000-0000-0000-0000-000000000002", argFlag("--session-id"))
+        assertTrue(chat.send("more"))
+        assertEquals("11111111-1111-1111-1111-111111111111", argFlag("--resume"))
     }
 
     @Test
-    fun `New while waiting to restart after sign-in doesn't stay stuck`() {
+    fun `a new chat starts ready once one check has passed, and one that lost sign-in forgets it`() {
         ready()
+        next()
+        assertEquals(ChatAccess.READY, chat.state.access)
+        assertEquals(1, host.checks.size)
         chat.send("hello")
         drain()
         init()
         notSignedIn()
-        chat.opened()
+        next()
         assertEquals(ChatAccess.CHECKING, chat.state.access)
-        chat.newChat()
-        assertEquals(ChatAccess.READY, chat.state.access)
     }
 
     @Test
@@ -599,7 +612,7 @@ class ChatControllerTest {
     fun `a past chat shows its history and the next prompt resumes it`() {
         transcript(past, "old prompt")
         ready()
-        chat.resume(past)
+        next(past)
         work()
         assertEquals(listOf("old prompt"), shown())
         assertTrue(chat.send("more"))
@@ -609,43 +622,14 @@ class ChatControllerTest {
     }
 
     @Test
-    fun `resuming stops the running chat and waits for it to exit before running again`() {
-        transcript(past, "old prompt")
-        finishedTurn()
-        chat.resume(past)
-        assertEquals(1, process.closed)
-        assertTrue(chat.live, "the old process still runs")
-        assertTrue(chat.state.stopping)
-        work()
-        assertEquals(listOf("old prompt"), shown(), "history at once")
-        line("""{"type":"assistant","message":{"id":"m9","role":"assistant","content":[{"type":"text","text":"late"}]}}""")
-        assertEquals(listOf("old prompt"), shown(), "the old chat's words stay out")
-        assertFalse(chat.send("too early"))
-        assertEquals(1, host.launches.size)
-        exit(0)
-        assertFalse(chat.state.stopping)
-        assertEquals(1, host.ends, "nothing runs any more, so the app may go")
-        assertTrue(chat.send("now"))
-        assertEquals(past, argFlag("--resume"))
-    }
-
-    @Test
     fun `a prompt sent before the history is read stays after it`() {
         transcript(past, "old prompt")
         ready()
-        chat.resume(past)
+        next(past)
         assertTrue(chat.send("quick"))
         drain()
         work()
         assertEquals(listOf("old prompt", "quick"), shown())
-    }
-
-    @Test
-    fun `resuming the chat on screen does nothing`() {
-        finishedTurn()
-        chat.resume(first)
-        assertEquals(0, process.closed)
-        assertEquals(listOf("hello"), shown())
     }
 
     @Test
@@ -656,16 +640,6 @@ class ChatControllerTest {
         chat.restart()
         drain()
         assertEquals(before, shown())
-    }
-
-    @Test
-    fun `past chats are read off the main thread`() {
-        transcript(past, "old prompt")
-        var got: List<ClaudeSessionSummary>? = null
-        chat.pastChats { got = it }
-        assertEquals(null, got)
-        work()
-        assertEquals(listOf(past), got!!.map { it.sessionId })
     }
 
     @Test
@@ -792,17 +766,17 @@ class ChatControllerTest {
         finishedTurn()
         exit(0)
         chat.handOff()
-        chat.resume(past)
+        next(past)
         assertTrue(chat.send("elsewhere"))
         drain()
         exit(0)
-        chat.resume(first)
+        next(first)
         assertFalse(chat.send("back"))
         assertEquals(ChatTabHold.ASKING, chat.state.tabHold)
     }
 
     @Test
-    fun `busy while a turn runs or a card waits, so leaving it asks first`() {
+    fun `busy while a turn runs or a card waits`() {
         ready()
         assertFalse(chat.state.busy)
         chat.send("hello")
@@ -818,30 +792,10 @@ class ChatControllerTest {
     }
 
     @Test
-    fun `New waits for the old process, so going back to its chat can't run it twice`() {
+    fun `a stopped process is waited for before the chat can go to a tab`() {
         finishedTurn()
         val old = process
-        chat.newChat()
-        assertEquals(1, old.closed)
-        assertTrue(chat.live, "the old process still runs")
-        assertTrue(chat.state.stopping)
-        chat.resume(first)
-        work()
-        assertFalse(chat.send("back"))
-        assertEquals(1, host.launches.size, "never two programs on one session")
-        old.listener!!.onExit(143, "")
-        drain()
-        assertFalse(chat.state.stopping)
-        assertTrue(chat.send("back"))
-        assertEquals(first, argFlag("--resume"))
-    }
-
-    @Test
-    fun `New waits for the old process before its chat can go to a tab`() {
-        finishedTurn()
-        val old = process
-        chat.newChat()
-        chat.resume(first)
+        chat.stop()
         assertEquals(CHAT_HAND_OFF_STOPPING, chat.state.handOffBlock)
         assertFalse(chat.handOff())
         assertTrue(host.tabs.isEmpty())
@@ -854,7 +808,7 @@ class ChatControllerTest {
     @Test
     fun `a stopped process that leaves nothing running is told as an end`() {
         finishedTurn()
-        chat.newChat()
+        chat.stop()
         assertEquals(0, host.ends)
         exit(143)
         assertFalse(chat.live)
@@ -936,7 +890,7 @@ class ChatControllerTest {
             )
         }
         ready()
-        chat.resume(past)
+        next(past)
         work()
         assertEquals(listOf("make", "Tool", "Artifact"), shown())
     }
@@ -992,12 +946,6 @@ class ChatControllerTest {
     }
 
     @Test
-    fun `opening Chat clears its notice`() {
-        ready()
-        assertEquals(1, host.clears)
-    }
-
-    @Test
     fun `the host hears when a turn starts and stops working, not while a card waits`() {
         ready()
         chat.send("hello")
@@ -1034,7 +982,7 @@ class ChatControllerTest {
     fun `a resumed chat shows and ticks the model its transcript ran, with no flag`() {
         transcriptWithModel(past, "claude-haiku-5-5")
         ready()
-        chat.resume(past)
+        next(past)
         assertEquals("", chat.state.line.model, "not known yet: not Default either")
         work()
         assertEquals("Haiku 5.5", chat.state.line.model)
@@ -1047,7 +995,7 @@ class ChatControllerTest {
     fun `with nothing picked, Model… ticks what the resumed process reports`() {
         transcript(past, "old prompt")
         ready()
-        chat.resume(past)
+        next(past)
         work()
         assertEquals("", chat.state.line.model)
         chat.send("more")
@@ -1062,9 +1010,9 @@ class ChatControllerTest {
     fun `a new chat shows the default model again`() {
         transcriptWithModel(past, "claude-haiku-5-5")
         ready()
-        chat.resume(past)
+        next(past)
         work()
-        chat.newChat()
+        next()
         assertEquals("Default model", chat.state.line.model)
         assertEquals("default", chat.state.model)
     }
