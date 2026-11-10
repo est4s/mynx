@@ -666,8 +666,13 @@ class ChatView(
 
     private fun renderMic() {
         val colors = colors ?: return
-        micButton.background = circle(if (listening) colors.accent else faded(colors.text, 0x1C))
-        micButton.tint(if (listening) colors.background else colors.text)
+        // Listening: ringed in the accent, so it isn't mistaken for Send beside it.
+        micButton.background = if (listening) {
+            circle(faded(colors.accent, 0x40)).apply { setStroke(dp(2), colors.accent) }
+        } else {
+            circle(faded(colors.text, 0x1C))
+        }
+        micButton.tint(if (listening) colors.accent else colors.text)
         micButton.contentDescription = if (listening) "Stop dictating" else "Dictate"
     }
 

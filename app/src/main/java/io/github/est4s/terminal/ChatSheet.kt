@@ -135,6 +135,10 @@ class ChatSheetLayer(
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), 0, dp(16), dp(16))
     }
+    private val contentScroll = ScrollView(context).apply {
+        isVerticalScrollBarEnabled = false
+        addView(content)
+    }
     private val sheet = SheetColumn(context).apply {
         orientation = LinearLayout.VERTICAL
         isClickable = true
@@ -209,10 +213,8 @@ class ChatSheetLayer(
             ChatSheetPage.MODEL -> modelPage(now, colors)
             ChatSheetPage.USAGE -> usagePage(now, colors)
         }
-        sheet.addView(ScrollView(context).apply {
-            isVerticalScrollBarEnabled = false
-            addView(content)
-        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        contentScroll.scrollTo(0, 0)
+        sheet.addView(contentScroll, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
     // × on a sheet of its own, ← on a sub page; the title centred over the whole width.
@@ -386,6 +388,7 @@ class ChatSheetLayer(
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             maxLines = 1
             setPadding(0, dp(8), 0, 0)
+            gravity = Gravity.CENTER
         })
     }
 
