@@ -49,7 +49,16 @@ sealed interface HomeAction {
     data object None : HomeAction
     /** [op] on the background service [name]: [ServiceManager.act]. */
     data class Service(val name: String, val op: ServiceOp) : HomeAction
+    /** The `mynx` request [request] (`set`, `theme-set`, `undo`), run in the app; [back]: then one list up. */
+    data class Config(val request: String, val args: List<String>, val back: Boolean = false) : HomeAction
+    /** Asks for a line of text, starting from [value]; [homeInputAction] says what it then does. */
+    data class Input(val title: String, val value: String, val note: String?, val target: String) : HomeAction
+    /** Opens [url] in the browser. */
+    data class Link(val url: String) : HomeAction
 }
+
+/** How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, or a label with its value. */
+enum class HomeRow { BUTTON, SECTION, TEXT, INFO }
 
 /**
  * A background service as Home lists it, from [ServiceManager.homeServices].
@@ -59,7 +68,18 @@ sealed interface HomeAction {
  */
 data class HomeService(val name: String, val state: String, val saved: Boolean, val autostart: Boolean)
 
-data class HomeItem(val label: String, val action: HomeAction)
+/**
+ * A row of a Home list: [detail] is its value, shown after the label;
+ * [checked], the choice in use; [swatch], a theme's colours (ARGB).
+ */
+data class HomeItem(
+    val label: String,
+    val action: HomeAction,
+    val detail: String? = null,
+    val checked: Boolean = false,
+    val swatch: List<Int> = emptyList(),
+    val kind: HomeRow = HomeRow.BUTTON,
+)
 
 /**
  * Touch mode's Home: the launcher menu's lists (`tools/bin/menu`'s
@@ -75,8 +95,11 @@ class HomeMenus(
     private val apps: WebApps,
     private val servicesActive: Int = 0,
     private val services: List<HomeService> = emptyList(),
+    facts: () -> SystemFacts = { readSystemFacts(File(apps.rootfs)) },
+    now: () -> Long = System::currentTimeMillis,
 ) {
     private val guestHome get() = apps.guestHome
+    private val settings = HomeSettings(apps, facts, now)
 
     /** The list called [menu] ([HOME_MAIN], or a [HomeAction.Menu]'s name); empty if there's none. */
     fun items(menu: String): List<HomeItem> = when (menu) {
@@ -92,21 +115,11 @@ class HomeMenus(
                 else -> HomeItem(title, act("agent:$name"))
             }
         }
-        "settings" -> listOf(
-            HomeItem("App settings", act("settings")),
-            HomeItem("System", HomeAction.Menu("system")),
-            HomeItem("Help", HomeAction.Menu("help")),
-        )
-        "system" -> listOf(HomeItem("Update all", act("update")), HomeItem("System info", act("info"))) +
+        "system" -> listOf(HomeItem("Update all", act("update")), HomeItem("System info", HomeAction.Menu("info"))) +
             if (gitHubReady()) listOf(HomeItem("GitHub setup", act("github"))) else emptyList()
-        "help" -> listOf(
-            HomeItem("Getting started", act("welcome")),
-            HomeItem("Release notes", act("notes")),
-            HomeItem("Report a bug", act("report")),
-            HomeItem("About", act("about")),
-        )
         "services" -> serviceRows()
-        else -> if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
+        else -> settings.items(menu)
+            ?: if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
     }
 
     private fun act(action: String) = menuActTab(action)
@@ -161,8 +174,9 @@ class HomeMenus(
             HomeAction.Menu("services"),
         )
         "apps", "terminal-apps", "games", "settings", "agents", "system", "help" -> HomeItem(label, HomeAction.Menu(action))
-        "app-settings" -> HomeItem(label, act("settings"))
-        "files", "welcome" -> HomeItem(label, act(action))
+        "app-settings" -> HomeItem(label, HomeAction.Menu("settings"))
+        "welcome" -> HomeItem(label, HomeAction.Menu("welcome"))
+        "files" -> HomeItem(label, act(action))
         else -> HomeItem(label, act("cmd:" + action.removePrefix("run ")))
     }
 

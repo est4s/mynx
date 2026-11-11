@@ -303,6 +303,10 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
     grep -qF -- "Copy (a Markdown file's text)" "$GUIDE"
 }
 
+@test "the guide says touch view's Settings are lists to tap" {
+    grep -qF -- "Settings are lists to tap too" "$GUIDE"
+}
+
 @test "the guide says a page can take the back key first: window.androidBack" {
     grep -qF -- "window.androidBack" "$GUIDE"
     grep -qF -- "window.androidBack" "$BATS_TEST_DIRNAME/../../app/src/main/java/io/github/est4s/terminal/WebAppActivity.kt"

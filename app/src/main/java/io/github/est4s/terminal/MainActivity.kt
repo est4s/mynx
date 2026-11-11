@@ -607,7 +607,9 @@ class MainActivity : Activity(), FrontActivity {
                 // Only Open leaves Home; the rest show on the list, through onServicesChanged.
                 if (refusal != null || action.op != ServiceOp.OPEN) return
             }
-            is HomeAction.Menu, HomeAction.None -> return
+            is HomeAction.Link -> return toastError(service.openLink(action.url))
+            // HomeView runs these itself.
+            is HomeAction.Menu, is HomeAction.Config, is HomeAction.Input, HomeAction.None -> return
         }
         hideHome()
         hideChatHome()
@@ -694,7 +696,9 @@ class MainActivity : Activity(), FrontActivity {
             addView(keyBar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
 
-        home = HomeView(this, ::homeMenus, ::onHomeAction).also {
+        home = HomeView(this, ::homeMenus, ::onHomeAction) { name, args ->
+            service?.configRequest(name, args) ?: "the app isn't ready yet"
+        }.also {
             // Touch view reaches Home's lists from the chat home's drawer, and goes back there.
             it.leave = ::showChatHome
             it.visibility = View.GONE

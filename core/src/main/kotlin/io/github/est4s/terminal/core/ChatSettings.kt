@@ -31,6 +31,19 @@ private val FALLBACK_MODELS = listOf(
 
 fun chatModelChoices(reported: List<AgentModel>): List<AgentModel> = reported.ifEmpty { FALLBACK_MODELS }
 
+private val CLAUDE_DECIDES = AgentModel(
+    "default", "Claude Code decides",
+    "No model is set; Claude Code picks, and its pick can change with its updates.",
+)
+
+/**
+ * The `chat-model` setting's choices: "default" there means no `--model`
+ * at all, so it's named for what it does (the agent's "Default
+ * (recommended)" read as a model of its own), and always offered first.
+ */
+fun chatDefaultModelChoices(reported: List<AgentModel>): List<AgentModel> =
+    listOf(CLAUDE_DECIDES) + chatModelChoices(reported).filter { it.value != "default" }
+
 /** Model…'s entries, and the [AgentModel.value] it ticks. */
 data class ChatModelMenu(val models: List<AgentModel>, val ticked: String)
 

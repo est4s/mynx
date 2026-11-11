@@ -248,7 +248,10 @@ One `key = value` per line; `mynx settings` describes each.
   scrolling, pinching and selecting text are left alone.
 - `view`: `terminal` (default) or `touch`: what the app shows. `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
-  same `menu.conf` and app folders; programs open in a tab. Terminal
+  same `menu.conf` and app folders; programs open in a tab. Its
+  Settings are lists to tap too: each setting, the theme, undo,
+  System info and Help (Update all, GitHub setup and the key bar and
+  menu editors still run in a tab). Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
   back to Home. In `touch`, Home's AI agents opens an installed Claude
   Code's chat history: New chat, then its chats in `/root`, newest

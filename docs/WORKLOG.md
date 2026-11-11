@@ -240,7 +240,18 @@ terminal theme.
    + → Model → Default for new chats (then a new chat starts with it:
    the line under the title), Copy under a reply, a card after Claude
    writes a `.md` file (Copy, Share), ⋮ → Open in a tab, the drawer's
-   Linux lists.
+   Linux lists. Entry 188 compiled and its screenshots looked right
+   (run 43074583752).
+   Then (entry 189): Settings, System info and Help as touch lists.
+   Look at CI's `home-settings*.png`, `home-themes.png`,
+   `home-setting-*.png`, `home-system-info.png`,
+   `home-release-notes.png`, `home-help.png` and `home-report.png`,
+   then on the phone: drawer → Settings; flip an on/off setting (Swipe
+   between tabs), pick a theme (the terminal changes), type a text
+   size (a bad one shows the reason), Undo → Undo last change, System
+   info, Help's pages, Report a bug → Next opens a tab with the
+   report; the default model's first choice reads "Claude Code
+   decides".
 3. **Maybe, in core:** a first prompt waiting for the sign-in check
    (MainActivity's `firstPrompt` for now: `ChatController.send()`
    refuses while `CHECKING`); `ChatHub`'s home and cwd made public
@@ -282,6 +293,30 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-11 (189): Settings as touch lists; "Claude Code decides" (written, not compiled)
+
+The maintainer: the default model's "Default" choice didn't make sense
+(renamed, their pick: "Claude Code decides", saying it may change), and
+everything under Settings should be touch menus, not terminal programs
+(their pick: menus, with Update all and GitHub setup still in a tab).
+Entry 188's CI first failed installing `bats` (the runners couldn't
+resolve `security.ubuntu.com`, `apt-get update` didn't help): CI now
+takes bats-core v1.13.0 from GitHub, pinned by hash, in `build.yml` and
+`release.yml`. The guide then lacked `chat-model` (the docs test
+caught it).
+- core, test-first: `chatDefaultModelChoices()`; `HomeSettings.kt`:
+  Settings' lists (`HOME_SETTING_GROUPS`, every setting in one, labels),
+  choices pages, Theme (colours as swatches), Undo (its steps),
+  System info (`SystemFacts`), Help (a touch Getting started, release
+  notes made plain, About, Report a bug typed in). `HomeItem` gained
+  `detail`, `checked`, `swatch` and `kind`; `HomeAction` gained
+  `Config` (a `mynx` request), `Input` and `Link`;
+  `homeInputAction()` says what typed text does.
+- app: `TerminalService.configRequest()` runs a request in-process as
+  `mynx` does (undo records it) and applies it as `processRequests()`
+  does; `HomeView` draws the new rows and a text input page.
+Left: CI's compile and screenshots, then the phone ("Next" 4).
 
 ### 2026-11-11 (188): Default model, Copy, Markdown cards, the rest in pixel (written, not compiled)
 

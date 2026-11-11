@@ -21,6 +21,7 @@ import io.github.est4s.terminal.core.CHAT_MODES
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.StripColors
+import io.github.est4s.terminal.core.chatDefaultModelChoices
 import io.github.est4s.terminal.core.chatModeName
 import io.github.est4s.terminal.core.usageRows
 import java.time.ZoneId
@@ -284,7 +285,7 @@ class ChatSheetLayer(
             }, rowParams(0))
         }
         val current = state?.defaultModel ?: "default"
-        val name = state?.models.orEmpty().firstOrNull { it.value == current }?.name ?: current
+        val name = chatDefaultModelChoices(state?.models.orEmpty()).firstOrNull { it.value == current }?.name ?: current
         content.addView(navRow(null, "Default for new chats", name, colors) {
             open(ChatSheetPage.DEFAULT_MODEL)
         }, rowParams().apply { topMargin = dp(12) })
@@ -294,7 +295,7 @@ class ChatSheetLayer(
         header("Default for new chats", colors)
         content.addView(note("New chats start with this model; a chat's own pick wins for that chat.", colors))
         val current = state?.defaultModel ?: "default"
-        state?.models.orEmpty().forEach { model ->
+        chatDefaultModelChoices(state?.models.orEmpty()).forEach { model ->
             content.addView(choiceRow(model.name, model.description, current == model.value, colors) {
                 chat()?.setDefaultModel(model.value)
                 back()

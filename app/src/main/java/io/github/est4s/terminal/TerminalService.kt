@@ -27,6 +27,7 @@ import io.github.est4s.terminal.core.Mic
 import io.github.est4s.terminal.core.Notice
 import io.github.est4s.terminal.core.Orientation
 import io.github.est4s.terminal.core.Phone
+import io.github.est4s.terminal.core.ReplySink
 import io.github.est4s.terminal.core.RotationLocks
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
@@ -83,6 +84,7 @@ import io.github.est4s.terminal.core.Updater
 import io.github.est4s.terminal.core.downloadApk
 import io.github.est4s.terminal.core.fetchLatestRelease
 import io.github.est4s.terminal.core.parseColorScheme
+import io.github.est4s.terminal.core.parseJson
 import io.github.est4s.terminal.core.Tabs
 import io.github.est4s.terminal.core.closesOnExit
 import io.github.est4s.terminal.core.debianTimeZone
@@ -809,18 +811,39 @@ class TerminalService : Service() {
         for (request in handled) {
             when (request.name) {
                 "preview-colors" -> activity?.previewColors(parseColorScheme(request.args.joinToString("\n"), NEON).scheme)
-                in RELOADING_REQUESTS -> {
-                    activity?.reloadConfig(quiet = true)
-                    // A hand edit to services.conf: tabs, mark and notification follow (only if it changed).
-                    runCatching { serviceManager.reload() }
-                    applySoundSetting()
-                    applyWakelockSetting()
-                    // android-bluetooth, or bluetooth.conf by hand (mynx check).
-                    runCatching { bluetooth.refresh() }
-                }
+                in RELOADING_REQUESTS -> applyConfigChange()
             }
         }
         scheduleSweep()
+    }
+
+    private fun applyConfigChange() {
+        activity?.reloadConfig(quiet = true)
+        // A hand edit to services.conf: tabs, mark and notification follow (only if it changed).
+        runCatching { serviceManager.reload() }
+        applySoundSetting()
+        applyWakelockSetting()
+        // android-bluetooth, or bluetooth.conf by hand (mynx check).
+        runCatching { bluetooth.refresh() }
+    }
+
+    /**
+     * Runs the config request [name] (touch Settings: `set`, `theme-set`,
+     * `undo`) as `mynx` would, recorded for undo, and applies it; the
+     * refusal's text, or null. Main thread.
+     */
+    fun configRequest(name: String, args: List<String>): String? {
+        var answered: String? = null
+        requests.call(name, args, object : ReplySink {
+            override fun waiting(seconds: Int?) {}
+            override fun line(json: String) {}
+            override fun answer(json: String) { answered = json }
+            override fun discard() {}
+        })
+        val reply = answered?.let { runCatching { parseJson(it) }.getOrNull() } as? Map<*, *>
+        if (reply?.get("ok") != true) return reply?.get("error") as? String ?: "$name failed"
+        if (name in RELOADING_REQUESTS) applyConfigChange()
+        return null
     }
 
     // Stops waiting requests that `mynx` cancelled or whose `mynx` has gone.

@@ -744,7 +744,15 @@ See `docs/ROADMAP.md` "How it works". The details:
   `HomeMenus` takes a snapshot (`ServiceManager.homeServices()`) and
   `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
   thread; `ServiceHost.changed` refreshes it while it shows, and in
-  touch view the strip's `● N` opens it. AI agents → Claude Code
+  touch view the strip's `● N` opens it. **Settings, System info and
+  Help are touch lists** (`HomeSettings.kt`; maintainer's decision,
+  2026-11-11): each setting by group, its choices, a theme list with
+  swatches, Undo, text typed in a page of `HomeView`'s own. A change
+  is a `HomeAction.Config`, the `mynx` request run in the app
+  (`TerminalService.configRequest()`), so undo records it and it
+  applies as `mynx set` does; Update all, GitHub setup, the key bar
+  and menu editors and About's full list stay terminal programs in a
+  tab. AI agents → Claude Code
   (`HomeAction.Chat`) opens the agent's home, the chat history
   (`app/.../ChatHistoryView.kt`, over the terminal too): New chat, then
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list

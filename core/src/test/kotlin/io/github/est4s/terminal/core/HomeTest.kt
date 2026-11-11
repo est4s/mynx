@@ -53,14 +53,14 @@ class HomeTest {
     }
 
     @Test
-    fun `each menu action goes where the launcher menu's does`() {
+    fun `each menu action goes where the launcher menu's does, settings and the welcome as touch lists`() {
         gitHubReady()
         userMenu("a = terminal-apps\nb = games\nc = settings\nd = app-settings\ne = agents\nf = services\ng = system\nh = help\ni = welcome\n")
         assertEquals(
             listOf(
                 HomeAction.Menu("terminal-apps"), HomeAction.Menu("games"), HomeAction.Menu("settings"),
-                act("settings"), HomeAction.Menu("agents"), HomeAction.Menu("services"),
-                HomeAction.Menu("system"), HomeAction.Menu("help"), act("welcome"),
+                HomeAction.Menu("settings"), HomeAction.Menu("agents"), HomeAction.Menu("services"),
+                HomeAction.Menu("system"), HomeAction.Menu("help"), HomeAction.Menu("welcome"),
             ),
             menus().items("main").map { it.action },
         )
@@ -224,25 +224,10 @@ class HomeTest {
     }
 
     @Test
-    fun `settings and help are the launcher's`() {
-        assertEquals(
-            listOf(HomeItem("App settings", act("settings")), HomeItem("System", HomeAction.Menu("system")), HomeItem("Help", HomeAction.Menu("help"))),
-            menus().items("settings"),
-        )
-        assertEquals(
-            listOf(
-                HomeItem("Getting started", act("welcome")), HomeItem("Release notes", act("notes")),
-                HomeItem("Report a bug", act("report")), HomeItem("About", act("about")),
-            ),
-            menus().items("help"),
-        )
-    }
-
-    @Test
-    fun `system runs its items in a tab, and an unknown menu is empty`() {
+    fun `system runs its programs in a tab, and an unknown menu is empty`() {
         gitHubReady()
         assertEquals(act("update"), menus().items("system")[0].action)
-        assertEquals(act("info"), menus().items("system")[1].action)
+        assertEquals(HomeAction.Menu("info"), menus().items("system")[1].action)
         assertEquals(emptyList(), menus().items("nope"))
     }
 
