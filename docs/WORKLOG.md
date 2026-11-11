@@ -207,20 +207,18 @@ lists fallback models until a session reports its own.
 ### 4. Touch mode: chat first, with a drawer (planned, entry 185)
 
 Decided by the maintainer (`docs/ROADMAP.md`, Touch mode). Not
-started. A plan, about 2-3 PRs:
+started. Design and pictures: `docs/TOUCH-DESIGN.md`, the spec to
+build from. A plan, about 2-3 PRs:
 1. In touch view, start on the chat home (the prompt box, live chats
    above it) instead of Home's list; Back from a chat goes there.
 2. The drawer behind ☰ (tap only): New chat, latest chats, All chats
    (the history screen, kept as it is), then Home's main items, then
-   Terminal view. What it lists comes from `core` (`HomeMenus` plus
+   Terminal. What it lists comes from `core` (`HomeMenus` plus
    `ChatHub`'s rows), test-first; the view stays thin.
 3. Screenshots of both (`Screenshots.kt`), then a phone round.
-The style isn't decided. The mock-ups tried two: rounded cards in
-Neon's colours, and a "pixel style" taken from the logo (only its
-three colours, `#0D0221`, `#00F3FF`, `#FF0BBB`; square corners; its
-hard pink drop shadow on the main action; icons drawn from blocks),
-which matched the logo better; ask before choosing a font (JetBrains Mono everywhere
-was the agent's suggestion).
+The style isn't decided (both are in `docs/TOUCH-DESIGN.md`): the
+"pixel style" from the logo matched it better than the first pass;
+ask the maintainer which, and which font, before building.
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -262,8 +260,9 @@ Ctrl+Shift).
 ### 2026-11-11 (185): Touch mode design study; chat first with a drawer chosen
 
 A design study of touch mode (no code), as phone mock-ups on a
-design canvas in the maintainer's claude.ai account (private, not in
-the repo: these docs say what was decided without it). Six layouts:
+design canvas in the maintainer's claude.ai account (private). The
+chosen screens are in the repo as pictures with a spec,
+`docs/TOUCH-DESIGN.md`. Six layouts:
 chat first with a drawer, chat first with a launcher sheet beside the
 prompt box, chat as the first tab; and launcher first as a home grid
 with a dock, a dashboard, or a command bar. A second version of each

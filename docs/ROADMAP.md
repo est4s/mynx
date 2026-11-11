@@ -82,7 +82,8 @@ and either view switches to the other.
   screen of its own. The alternative was a launcher button next to the
   prompt box, opening a sheet of Home's items from the bottom; if
   it's chosen instead, switch before touch mode's first release,
-  while nobody has learned the drawer.
+  while nobody has learned the drawer. Design and pictures:
+  `docs/TOUCH-DESIGN.md`.
 - **Later, not decided** (discussed 2026-11-11): a
   "run, open or ask" box (open an app, run a command in a tab, or
   ask the agent); a launcher mode (mynx as Android's home app, off by

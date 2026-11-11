@@ -745,6 +745,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
   (maintainer's decision, 2026-11-10). The service keeps which chat
   screen shows (`chatPlace`) for a recreated activity.
+  **Next** (maintainer's decision, 2026-11-11): touch view starts on
+  the chat home, with the rest in a drawer behind ☰;
+  `docs/TOUCH-DESIGN.md` is the spec, with pictures.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with
