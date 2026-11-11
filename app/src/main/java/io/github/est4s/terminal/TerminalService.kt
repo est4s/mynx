@@ -169,8 +169,8 @@ const val EXTRA_CHAT_SESSION = "chat-session"
 // Past every range in use (web apps take 5000-5999).
 private const val CHAT_NOTICE_ID = 6000
 
-/** Which of touch mode's chat screens shows: none, the history, or a chat. */
-enum class ChatPlace { NONE, HISTORY, CHAT }
+/** Which of touch mode's chat screens shows: none, the chat home (touch view's start), the history, or a chat. */
+enum class ChatPlace { NONE, HOME, HISTORY, CHAT }
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -235,7 +235,7 @@ class TerminalService : Service() {
             picksFile = File(filesDir, "state/chat-picks"),
         )
     }
-    /** Which chat screen was showing, for a recreated activity: the history, the hub's shown chat, or neither. */
+    /** Which chat screen was showing, for a recreated activity: the chat home, the history, the hub's shown chat, or none. */
     var chatPlace = ChatPlace.NONE
     // A chat turn runs (ChatHub.working): auto holds the wakelock for it.
     private var chatWorking = false

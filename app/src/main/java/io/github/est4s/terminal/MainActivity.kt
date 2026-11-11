@@ -40,8 +40,13 @@ import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
+import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatController
+import io.github.est4s.terminal.core.ChatHome
 import io.github.est4s.terminal.core.ChatState
+import io.github.est4s.terminal.core.HOME_MAIN
+import io.github.est4s.terminal.core.agentBinary
+import io.github.est4s.terminal.core.chatHome
 import io.github.est4s.terminal.core.ColorScheme
 import io.github.est4s.terminal.core.fitAroundTerminal
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
@@ -89,6 +94,8 @@ private const val KEY_BAR_POLL_MS = 250L
 // Rows the terminal keeps when the screen is squeezed (the library's own minimum).
 private const val TERMINAL_MIN_ROWS = 4
 private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
+// Where the hub's chats start (ChatHub's defaults): the chat home's footer.
+private const val CHAT_HOME_DIR = "/root"
 
 class MainActivity : Activity(), FrontActivity {
     private lateinit var terminalView: TerminalView
@@ -135,10 +142,19 @@ class MainActivity : Activity(), FrontActivity {
     private var home: HomeView? = null
     private var chat: ChatView? = null
     private var chatHistory: ChatHistoryView? = null
+    private var chatHomeView: ChatHomeView? = null
+    // The chat home's Send made this chat: its prompt goes once the sign-in check says it can.
+    private var firstPrompt: Pair<ChatController, String>? = null
     // After Chat's Sign in or Install opens a tab: Back returns to the chat, to check again.
     private var chatAfterTab = false
-    private val chatListener: (ChatController, ChatState) -> Unit = { controller, state -> chat?.show(state, controller) }
-    private val chatHistoryListener: () -> Unit = { chatHistory?.update() }
+    private val chatListener: (ChatController, ChatState) -> Unit = { controller, state ->
+        chat?.show(state, controller)
+        sendFirstPrompt(controller, state)
+    }
+    private val chatHistoryListener: () -> Unit = {
+        chatHistory?.update()
+        if (chatHomeShown) chatHomeView?.refresh()
+    }
     private var touchView = false
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
@@ -156,8 +172,8 @@ class MainActivity : Activity(), FrontActivity {
                 when {
                     chatToShow -> openChatFromNotice()
                     s.chatPlace == ChatPlace.CHAT && s.chats.shown != null -> showChat()
-                    s.chatPlace != ChatPlace.NONE -> showChatHistory()
-                    else -> showHome()
+                    s.chatPlace == ChatPlace.HISTORY -> showChatHistory()
+                    else -> showChatHome()
                 }
             }
             chatToShow = false
@@ -250,6 +266,7 @@ class MainActivity : Activity(), FrontActivity {
         service.newSession(command)
         hideChat()
         hideChatHistory()
+        hideChatHome()
         hideHome()
     }
 
@@ -263,6 +280,7 @@ class MainActivity : Activity(), FrontActivity {
         service.selectShell(id)
         hideChat()
         hideChatHistory()
+        hideChatHome()
         hideHome()
     }
 
@@ -277,6 +295,7 @@ class MainActivity : Activity(), FrontActivity {
             if (homeShown) home?.refresh() // apps and games may have changed
             if (chatShown) service?.chats?.opened() // signed in or installed meanwhile?
             if (chatHistoryShown) chatHistory?.refresh()
+            if (chatHomeShown) chatHomeView?.refresh()
         }
         root.post(keyBarPoll)
         service?.cameOnScreen()
@@ -334,25 +353,128 @@ class MainActivity : Activity(), FrontActivity {
         goBack()
     }
 
-    // Touch mode: the terminal backs out to Home, Home up its lists, then the app is left;
-    // a chat backs out to the chat history, which backs out to Home.
+    // Touch mode: everything backs out to the chat home (a chat after its sheet,
+    // the history, Home's lists after their levels, the terminal unless a chat
+    // sent it there); the chat home closes its drawer, then the app is left.
     private fun goBack() {
         when {
             chatShown && chat?.sheetBack() == true -> Unit
-            chatShown -> showChatHistory()
-            chatHistoryShown -> {
-                hideChatHistory()
-                showHome()
-            }
+            chatShown -> showChatHome()
+            chatHomeShown && chatHomeView?.back() == true -> Unit
+            chatHomeShown -> moveTaskToBack(true)
+            chatHistoryShown -> showChatHome()
             homeShown && home?.back() == true -> Unit
-            !homeShown && touchView -> if (chatAfterTab) showChat() else showHome()
+            homeShown -> showChatHome()
+            touchView -> if (chatAfterTab) showChat() else showChatHome()
             else -> moveTaskToBack(true)
         }
+    }
+
+    /** Touch view's start: the chat home, over the terminal as Home is. Leaving a chat for it lets an idle chat's process go. */
+    private fun showChatHome() {
+        val view = chatHomeView ?: return
+        val service = service ?: return
+        hideHome()
+        hideChat()
+        hideChatHistory()
+        service.chats.leave()
+        chatAfterTab = false
+        service.chatPlace = ChatPlace.HOME
+        hideKeyboard()
+        view.visibility = View.VISIBLE
+        view.refresh()
+        view.requestFocus()
+    }
+
+    private fun hideChatHome() {
+        val service = service
+        if (service?.chatPlace == ChatPlace.HOME) service.chatPlace = ChatPlace.NONE
+        if (!chatHomeShown) return
+        hideKeyboard()
+        chatHomeView?.closeDrawer()
+        chatHomeView?.visibility = View.GONE
+        terminalView.requestFocus()
+    }
+
+    private val chatHomeShown get() = chatHomeView?.visibility == View.VISIBLE
+
+    private fun hideKeyboard() {
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
+    }
+
+    // Read off the main thread: the past chats (the hub's own thread), then Home's main
+    // list, the agent and the chat-mode setting (Debian's files).
+    private fun loadChatHome(done: (ChatHome) -> Unit) {
+        val service = service ?: return
+        val menus = homeMenus()
+        val active = service.servicesActive
+        val apps = WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools)
+        service.chats.history { rows ->
+            thread(name = "chat-home") {
+                val main = menus.items(HOME_MAIN)
+                val installed = agentBinary(apps, "claude") != null
+                val mode = runCatching { loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.chatMode }.getOrDefault("auto")
+                val model = chatHome(rows, main, active, installed, mode, CHAT_HOME_DIR, CHAT_HOME_DIR)
+                root.post { done(model) }
+            }
+        }
+    }
+
+    // A new chat, shown, with the home's box carried over.
+    private fun newChatFromHome(draft: String): ChatController? {
+        val controller = service?.chats?.newChat() ?: return null
+        showChat()
+        chat?.setDraft(draft)
+        return controller
+    }
+
+    private val chatHomeActions = object : ChatHomeActions {
+        override fun send(text: String) {
+            val controller = newChatFromHome(text) ?: return
+            firstPrompt = controller to text
+            sendFirstPrompt(controller, controller.state)
+        }
+
+        override fun addContext(draft: String) {
+            newChatFromHome(draft) ?: return
+            chat?.openSheet(ChatSheetPage.ADD)
+        }
+
+        override fun dictate(draft: String) {
+            newChatFromHome(draft) ?: return
+            chat?.toggleDictation()
+        }
+
+        override fun openChat(sessionId: String?) = this@MainActivity.openChat(sessionId)
+
+        override fun allChats() = showChatHistory()
+
+        override fun act(action: HomeAction) = onHomeAction(action)
+
+        override fun openList(menu: String, title: String) {
+            val view = home ?: return
+            view.showMenu(menu, title)
+            showHome()
+        }
+
+        override fun openServices() = openList("services", "Services")
+
+        override fun showTerminal() = hideChatHome()
+    }
+
+    // Sent once the new chat's check is done; if it can't run (not installed, not
+    // signed in), the text stays in its box under the chat's gate.
+    private fun sendFirstPrompt(controller: ChatController, state: ChatState) {
+        val (waiting, text) = firstPrompt ?: return
+        if (waiting !== controller || state.access == ChatAccess.CHECKING) return
+        firstPrompt = null
+        if (state.access == ChatAccess.READY && controller.send(text)) chat?.setDraft("")
     }
 
     /** Touch mode's Home, over the terminal, which keeps its size so tabs start as usual. */
     private fun showHome() {
         val view = home ?: return
+        hideChatHome()
         chatAfterTab = false
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
         view.visibility = View.VISIBLE
@@ -378,6 +500,7 @@ class MainActivity : Activity(), FrontActivity {
         val service = service ?: return
         if (service.chats.shown == null) return showChatHistory()
         hideHome()
+        hideChatHome()
         hideChatHistory()
         chatAfterTab = false
         service.chatPlace = ChatPlace.CHAT
@@ -404,6 +527,7 @@ class MainActivity : Activity(), FrontActivity {
         val view = chatHistory ?: return
         val service = service ?: return
         hideHome()
+        hideChatHome()
         hideChat()
         service.chats.leave()
         chatAfterTab = false
@@ -422,6 +546,7 @@ class MainActivity : Activity(), FrontActivity {
     }
 
     private fun hideChat() {
+        firstPrompt = null
         val service = service
         if (service?.chatPlace == ChatPlace.CHAT) service.chatPlace = ChatPlace.NONE
         if (!chatShown) return
@@ -474,6 +599,7 @@ class MainActivity : Activity(), FrontActivity {
             is HomeAction.Menu, HomeAction.None -> return
         }
         hideHome()
+        hideChatHome()
     }
 
     // Only for the "terminals running" notification; everything works without it.
@@ -527,7 +653,7 @@ class MainActivity : Activity(), FrontActivity {
             // A view with no height loses focus, and Android doesn't give it back:
             // the keyboard would type into nothing until the terminal is tapped.
             addOnLayoutChangeListener { view, _, top, _, bottom, _, oldTop, _, oldBottom ->
-                if (oldBottom == oldTop && bottom > top) view.post { if (currentFocus == null && !chatShown) view.requestFocus() }
+                if (oldBottom == oldTop && bottom > top) view.post { if (currentFocus == null && !chatShown && !chatHomeShown) view.requestFocus() }
             }
         }
         // Before attaching: the size decides the first rows and columns.
@@ -559,6 +685,8 @@ class MainActivity : Activity(), FrontActivity {
 
         home = HomeView(this, ::homeMenus, ::onHomeAction, ::hideHome).also {
             it.colors = strip
+            // Touch view reaches Home's lists from the chat home's drawer, and goes back there.
+            it.leave = ::showChatHome
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
@@ -583,6 +711,19 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
+        // The pixel style's own colours, not the theme's.
+        chatHomeView = ChatHomeView(this, ::loadChatHome, chatHomeActions) { context ->
+            ImageView(context).apply {
+                setImageResource(R.drawable.mynx_title)
+                contentDescription = getString(R.string.app_name)
+                adjustViewBounds = true
+                maxHeight = dp(40)
+            }
+        }.also {
+            it.visibility = View.GONE
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
         terminalView.attachSession(session)
         terminalView.requestFocus()
         renderStrip()
@@ -596,7 +737,7 @@ class MainActivity : Activity(), FrontActivity {
         stripRow.removeAllViews()
         if (touchView) stripRow.addView(stripText("⌂", strip.accent).apply {
             setPadding(dp(14), dp(8), dp(10), dp(8))
-            setOnClickListener { showHome() }
+            setOnClickListener { showChatHome() }
         })
         tabs.tabs.forEachIndexed { i, tab ->
             stripRow.addView(tabView(tab, selected = i == tabs.selectedIndex))
@@ -627,6 +768,7 @@ class MainActivity : Activity(), FrontActivity {
     fun onServicesChanged() {
         if (::terminalView.isInitialized) renderStrip()
         if (homeShown) home?.refresh()
+        if (chatHomeShown) chatHomeView?.refresh() // its ● N
     }
 
     private fun tabView(tab: Tab<TerminalSession>, selected: Boolean) = LinearLayout(this).apply {
@@ -1005,10 +1147,11 @@ class MainActivity : Activity(), FrontActivity {
         touchView = touch
         if (home == null) return
         if (touch) {
-            showHome()
+            showChatHome()
         } else {
             hideChat()
             hideChatHistory()
+            hideChatHome()
             hideHome()
         }
         renderStrip()
@@ -1040,7 +1183,10 @@ class MainActivity : Activity(), FrontActivity {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // A hardware keyboard must reach Chat's box, not the terminal under it.
         if (chatShown && chat?.hasFocus() != true) chat?.focusInput()
-        return (::keyBar.isInitialized && !homeShown && !chatShown && !chatHistoryShown && keyBar.onVolumeKey(event)) || super.dispatchKeyEvent(event)
+        // Typing on one, the chat home's box (the terminal under it may have the focus).
+        if (chatHomeShown && event.isPrintingKey && chatHomeView?.hasFocus() != true) chatHomeView?.focusInput()
+        return (::keyBar.isInitialized && !homeShown && !chatShown && !chatHistoryShown && !chatHomeShown && keyBar.onVolumeKey(event)) ||
+            super.dispatchKeyEvent(event)
     }
 
     /** A tap on a link opens it; anywhere else brings up the keyboard. */

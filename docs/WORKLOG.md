@@ -204,21 +204,36 @@ Left: other agents (Codex's `app-server`, Gemini's ACP), which need
 accounts to test; image thumbnails on attachment chips; the Model page
 lists fallback models until a session reports its own.
 
-### 4. Touch mode: chat first, with a drawer (planned, entry 185)
+### 4. Touch mode: chat first, with a drawer (entry 186, in progress)
 
-Decided by the maintainer (`docs/ROADMAP.md`, Touch mode). Not
-started. Design and pictures: `docs/TOUCH-DESIGN.md`, the spec to
-build from. A plan, about 2-3 PRs:
-1. In touch view, start on the chat home (the prompt box, live chats
-   above it) instead of Home's list; Back from a chat goes there.
-2. The drawer behind ☰ (tap only): New chat, latest chats, All chats
-   (the history screen, kept as it is), then Home's main items, then
-   Terminal. What it lists comes from `core` (`HomeMenus` plus
-   `ChatHub`'s rows), test-first; the view stays thin.
-3. Screenshots of both (`Screenshots.kt`), then a phone round.
-The style isn't decided (both are in `docs/TOUCH-DESIGN.md`): the
-"pixel style" from the logo matched it better than the first pass;
-ask the maintainer which, and which font, before building.
+Decided by the maintainer (`docs/ROADMAP.md`, Touch mode); the spec is
+`docs/TOUCH-DESIGN.md`. **Style: pixel, with Pixelify Sans** for
+labels, buttons and headings and JetBrains Mono for text (maintainer,
+2026-11-11); the touch screens use the logo's fixed palette, not the
+terminal theme.
+1. **PR 1, written** (branch `touch-chat-home`, entry 186): the font,
+   `PixelStyle.kt`, core's `chatHome()`, `ChatHomeView` with its
+   `DrawerView`, the wiring (`ChatPlace.HOME`, Back) and
+   `ChatHomeScreenshotTest`. Not compiled yet: push, fix what CI
+   finds, look at the `screenshots` artifact (`chat-home*.png`), then
+   a phone round:
+   - start in touch view: the chat home, no keyboard; ☰ opens the
+     drawer, the scrim and Back close it; ● N opens Services;
+   - Send from the home: a new chat with that prompt sent (also on a
+     fresh start, when the sign-in check is still running); + and the
+     mic carry the text into the new chat;
+   - the drawer's chats, All chats, each Linux item (lists open Home's
+     list, whose Back returns to the chat home), Terminal;
+   - Back from a chat, the history, a Home list and the terminal lands
+     on the chat home; from it, the app is left;
+   - the app recreated (rotate) comes back to the same screen;
+   - Claude Code not installed: the Install button.
+2. **PR 2:** the chat, the history, Home's lists and the + sheet in
+   the pixel style (`Pixel`), with the block icons.
+3. **Maybe, in core:** a first prompt waiting for the sign-in check
+   (MainActivity's `firstPrompt` for now: `ChatController.send()`
+   refuses while `CHECKING`); `ChatHub`'s home and cwd made public
+   (MainActivity copies "/root").
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -256,6 +271,32 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-11 (186): Chat home and drawer, pixel style (PR 1 written, not compiled)
+
+The maintainer chose the pixel style with Pixelify Sans and asked for
+the work to go to subagents. The lead wrote contracts (core's model,
+the `Pixel` kit, the views' API, the wiring) and four subagents built
+them in parallel on one branch, each in its own files:
+- core: `ChatHome.kt` (`chatHome()`: Continue rows, at most 3, working
+  or waiting; the drawer's chats, at most 5, live first; the Linux
+  items from Home's main list; the footer "claude code · auto · ~/"),
+  test-first, 9 tests.
+- `scripts/fetch-font.sh` also fetches Pixelify Sans (google/fonts at
+  `8b0a1d0`, a variable font, sha256 pinned) as `PixelifySans.ttf`;
+  credited in `COMPONENTS` with `OFL-1.1-pixelify-sans.txt`.
+  `PixelStyle.kt`: the palette, both fonts (falling back when the
+  assets are missing), square boxes with the pink hard shadow, block
+  icons on a 20-unit grid.
+- `ChatHomeView.kt`, `DrawerView.kt`: no slide animation (the
+  screenshots would catch it half way).
+- MainActivity: touch view starts on the chat home (`ChatPlace.HOME`),
+  everything backs out to it, HomeView's `leave` returns there from
+  its first level; a Send from the home waits for the new chat's
+  sign-in check (`firstPrompt`).
+- CI fetches the fonts before the tests now, so the screenshots use
+  them (both workflows).
+Left: CI's compile, the screenshots and the phone round ("Next" 4).
 
 ### 2026-11-11 (185): Touch mode design study; chat first with a drawer chosen
 

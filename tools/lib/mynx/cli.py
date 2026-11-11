@@ -1887,6 +1887,11 @@ COMPONENTS = [
      "source": "https://github.com/ryanoasis/nerd-fonts",
      "note": "The terminal font: JetBrains Mono "
              "(https://github.com/JetBrains/JetBrainsMono) patched by Nerd Fonts."},
+    {"name": "Pixelify Sans", "version": "1.000", "license": "OFL-1.1",
+     "source": "https://github.com/google/fonts",
+     "note": "The touch screens' headings and buttons: Pixelify Sans "
+             "(https://github.com/eifetx/Pixelify-Sans), from Google Fonts at commit "
+             "8b0a1d0. Its copyright is in the OFL-1.1-pixelify-sans text below."},
     {"name": "usb-serial-for-android", "version": "3.11.0", "license": "MIT",
      "source": "https://github.com/mik3y/usb-serial-for-android",
      "note": "The USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) behind "
@@ -1900,7 +1905,8 @@ COMPONENTS = [
 
 # The licence files in /opt/mynx/licenses/, in the order they're shown:
 # the app's own first.
-LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "MIT-usb-serial-for-android"]
+LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "OFL-1.1-pixelify-sans",
+                 "MIT-usb-serial-for-android"]
 
 
 def wrap(text, indent="  ", width=56):

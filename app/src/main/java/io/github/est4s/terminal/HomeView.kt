@@ -77,8 +77,19 @@ class HomeView(
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
     }
 
+    /**
+     * Set: Back (and ‹) from the list [showMenu] opened goes here instead of
+     * up to the main list (touch view's chat home, whose drawer lists it).
+     */
+    var leave: (() -> Unit)? = null
+
     /** One list up; false at the top. */
     fun back(): Boolean {
+        val leave = leave
+        if (leave != null && levels.size <= 2) {
+            leave()
+            return true
+        }
         if (levels.size == 1) return false
         levels.removeAt(levels.lastIndex)
         refresh()

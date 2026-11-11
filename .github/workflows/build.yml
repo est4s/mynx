@@ -43,6 +43,19 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Before the tests: the screenshots draw with the fonts.
+      # Cached so a GitHub release download outage (504s, 2026-11-08)
+      # can't block builds; the key changes with the pinned version.
+      - uses: actions/cache@v6
+        id: font-cache
+        with:
+          path: app/src/main/assets/fonts
+          key: font-${{ hashFiles('scripts/fetch-font.sh') }}
+
+      - name: Add the fonts
+        if: steps.font-cache.outputs.cache-hit != 'true'
+        run: scripts/fetch-font.sh app/src/main/assets/fonts
+
       - name: Test
         run: ./gradlew --no-daemon test
 
@@ -141,18 +154,6 @@ jobs:
         run: |
           notes=build/release-notes.json
           PRELOAD=build/libmynx-serial.so scripts/pack-tools.sh app/src/main/assets "$([ -f $notes ] && echo $notes)"
-
-      # Cached so a GitHub release download outage (504s, 2026-11-08)
-      # can't block builds; the key changes with the pinned version.
-      - uses: actions/cache@v6
-        id: font-cache
-        with:
-          path: app/src/main/assets/fonts
-          key: font-${{ hashFiles('scripts/fetch-font.sh') }}
-
-      - name: Add the terminal font
-        if: steps.font-cache.outputs.cache-hit != 'true'
-        run: scripts/fetch-font.sh app/src/main/assets/fonts
 
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug

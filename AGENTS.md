@@ -186,11 +186,16 @@ See `docs/ROADMAP.md` "How it works". The details:
   The app's own commands are **not** in the image (see "The app's
   tools"). Ship it compressed in the APK's assets and unpack it on first
   launch into the app's private storage.
-- **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
-  in CI by `scripts/fetch-font.sh` (release pinned by hash) into
-  `app/src/main/assets/fonts/` with its `OFL.txt`; never committed.
-  CI caches that folder (keyed on the script), so a GitHub download
-  outage only matters when the version changes.
+- **Fonts:** the terminal's is JetBrains Mono Nerd Font Mono (OFL-1.1);
+  touch mode's headings, labels and buttons are Pixelify Sans (OFL-1.1,
+  a variable font, `wght` 400-700; maintainer's decision, 2026-11-11),
+  through `PixelStyle.kt`'s `Pixel.label()`. `scripts/fetch-font.sh`
+  downloads both in CI (the Nerd Font's release and Google Fonts' file
+  at a pinned commit, each pinned by hash) into
+  `app/src/main/assets/fonts/`, with `OFL.txt` and
+  `PixelifySans-OFL.txt`; never committed. CI caches that folder (keyed
+  on the script), so a GitHub download outage only matters when a
+  version changes.
 - **Colours:** Termux's `colors.properties` format, parsed in `core`
   (`ColorScheme.kt`). Built-in themes are
   `core/src/main/resources/.../themes/NAME.colors.properties`, listed in
@@ -745,9 +750,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
   (maintainer's decision, 2026-11-10). The service keeps which chat
   screen shows (`chatPlace`) for a recreated activity.
-  **Next** (maintainer's decision, 2026-11-11): touch view starts on
-  the chat home, with the rest in a drawer behind ☰;
-  `docs/TOUCH-DESIGN.md` is the spec, with pictures.
+  **Chat home** (maintainer's decision, 2026-11-11; the spec is
+  `docs/TOUCH-DESIGN.md`): touch view starts on `ChatHomeView`
+  (`ChatPlace.HOME`), with the rest in its `DrawerView` behind ☰;
+  core's `chatHome()` decides what both list. Everything backs out to
+  it. **Pixel style** (`PixelStyle.kt`, `Pixel`): the logo's fixed
+  palette, not the theme's; Pixelify Sans for labels, buttons and
+  headings, JetBrains Mono for text; square boxes, 2 dp borders, the
+  pink hard shadow only on a screen's main action; block icons.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with

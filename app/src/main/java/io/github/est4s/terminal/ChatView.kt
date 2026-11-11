@@ -469,6 +469,12 @@ class ChatView(
         input.requestFocus()
     }
 
+    /** Puts [text] in the box with the cursor at its end: the chat home's draft, carried over. */
+    fun setDraft(text: String) {
+        input.setText(text)
+        input.setSelection(input.text.length)
+    }
+
     /** Back with a sheet open: its page before, or the chat. False when none was open. */
     fun sheetBack(): Boolean = sheets.back()
 
