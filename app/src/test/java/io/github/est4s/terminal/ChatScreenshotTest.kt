@@ -233,7 +233,7 @@ class ChatScreenshotTest {
                 attach = { _, _ -> },
                 dictation = FakeDictation(),
                 clock = { NOW_MS },
-            ).apply { colors = Screenshots.colors }
+            ).apply { colors = Pixel.COLORS }
         }
         val conversation = Conversation(items, queued = queued, running = running, model = model, mode = mode)
         view.show(ChatState(conversation, access, canRestart = false, busy = running, usage = usage, title = title))

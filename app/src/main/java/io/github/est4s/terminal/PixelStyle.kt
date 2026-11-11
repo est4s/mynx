@@ -11,7 +11,13 @@ import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.RippleDrawable
+import android.os.Build
+import android.text.TextPaint
+import android.text.style.MetricAffectingSpan
+import android.view.View
+import io.github.est4s.terminal.core.StripColors
 import kotlin.math.roundToInt
 
 private const val LABEL_FONT = "fonts/PixelifySans.ttf"
@@ -30,6 +36,9 @@ object Pixel {
     const val SCRIM: Int = 0xB30D0221.toInt()
 
     const val SHADOW_DP = 4
+
+    /** The palette as the views that took the theme's strip colours read it: Chat, its sheets, the history. */
+    val COLORS = StripColors(background = BACKGROUND, selectedBackground = CARD, accent = CYAN, mark = PINK, text = TEXT)
     private const val BORDER_DP = 2
 
     private val labels = HashMap<Int, Typeface>()
@@ -87,6 +96,13 @@ object Pixel {
     fun icon(context: Context, icon: PixelIcon, color: Int, sizeDp: Int = 20): Drawable =
         PixelIconDrawable(cells(icon), color, dp(context, sizeDp))
 
+    /** A square thumb in [LINE] for [view]'s scroll bar (API 29+; older phones keep theirs). */
+    fun scrollbar(view: View) {
+        if (Build.VERSION.SDK_INT < 29) return
+        view.verticalScrollbarThumbDrawable = ColorDrawable(LINE)
+        view.verticalScrollbarTrackDrawable = null
+    }
+
     fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).roundToInt()
 
@@ -116,6 +132,33 @@ object Pixel {
             5, 14, 4, 2, 5, 16, 2, 2,                             // its tail
             6, 7, 8, 2,                                           // a line of text
         )
+        PixelIcon.MORE -> intArrayOf(8, 2, 4, 4, 8, 8, 4, 4, 8, 14, 4, 4)
+        PixelIcon.CHECK -> intArrayOf(2, 10, 3, 3, 4, 12, 3, 3, 6, 14, 3, 3, 9, 11, 3, 3, 11, 8, 3, 3, 13, 5, 3, 3, 15, 3, 3, 3)
+        PixelIcon.CAMERA -> intArrayOf(
+            2, 6, 16, 2, 2, 15, 16, 2, 2, 6, 2, 11, 16, 6, 2, 11, // the body
+            7, 3, 6, 3,                                         // its top
+            8, 9, 4, 4,                                         // the lens
+        )
+        PixelIcon.IMAGE -> intArrayOf(
+            2, 3, 16, 2, 2, 15, 16, 2, 2, 3, 2, 14, 16, 3, 2, 14, // the frame
+            4, 11, 3, 4, 7, 8, 3, 7, 10, 11, 3, 4,                // a hill
+            12, 6, 3, 3,                                        // the sun
+        )
+        PixelIcon.FILE -> intArrayOf(
+            4, 2, 8, 2, 4, 2, 2, 16, 4, 16, 12, 2, 14, 6, 2, 12, // the page
+            10, 2, 2, 6, 10, 6, 6, 2,                           // its folded corner
+            7, 10, 5, 2, 7, 13, 5, 2,                           // two lines
+        )
+        PixelIcon.BOLT -> intArrayOf(11, 1, 3, 3, 9, 4, 3, 3, 7, 7, 3, 2, 7, 9, 8, 2, 11, 11, 3, 3, 9, 14, 3, 3, 7, 17, 3, 2)
+        PixelIcon.CHIP -> intArrayOf(
+            5, 5, 10, 10,                                       // the chip
+            7, 2, 2, 3, 11, 2, 2, 3, 7, 15, 2, 3, 11, 15, 2, 3, // its pins
+            2, 7, 3, 2, 2, 11, 3, 2, 15, 7, 3, 2, 15, 11, 3, 2,
+        )
+        PixelIcon.REFRESH -> intArrayOf(
+            4, 4, 10, 2, 4, 4, 2, 12, 4, 14, 12, 2, 14, 9, 2, 7, // the loop
+            14, 2, 2, 6, 16, 4, 2, 2,                           // its arrow
+        )
         PixelIcon.CLOSE -> IntArray(7 * 8).also { a ->
             for (k in 0 until 7) {
                 val i = 3 + 2 * k
@@ -125,7 +168,18 @@ object Pixel {
     }
 }
 
-enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE }
+enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, BOLT, CHIP, REFRESH }
+
+/** Text in another typeface (TypefaceSpan(Typeface) is API 28+): Pixelify Sans for headings in Chat's Markdown. */
+class PixelFontSpan(private val face: Typeface) : MetricAffectingSpan() {
+    override fun updateDrawState(paint: TextPaint) {
+        paint.typeface = face
+    }
+
+    override fun updateMeasureState(paint: TextPaint) {
+        paint.typeface = face
+    }
+}
 
 /** Fills [cells] (x, y, w, h on a 20-unit grid) scaled to its bounds, edges rounded to whole pixels so blocks stay crisp. */
 private class PixelIconDrawable(

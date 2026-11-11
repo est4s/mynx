@@ -228,8 +228,15 @@ terminal theme.
      on the chat home; from it, the app is left;
    - the app recreated (rotate) comes back to the same screen;
    - Claude Code not installed: the Install button.
-2. **PR 2:** the chat, the history, Home's lists and the + sheet in
-   the pixel style (`Pixel`), with the block icons.
+   Passed on the phone (maintainer, 2026-11-11: "everything seems to
+   be working").
+2. **PR 2, written** (entry 187, on the same branch): the chat, its
+   sheets and the history in the pixel style, with block icons. Look
+   at CI's `chat*.png` and `chat-history*.png`, then on the phone: a
+   chat while working (Stop pink, the box's shadow), a permission card
+   and its buttons, + and Usage, the history's rows and New chat.
+   Left for later: Home's lists (`HomeView`) and ⋮'s popup (Android's
+   own menu) still follow the theme.
 3. **Maybe, in core:** a first prompt waiting for the sign-in check
    (MainActivity's `firstPrompt` for now: `ChatController.send()`
    refuses while `CHECKING`); `ChatHub`'s home and cwd made public
@@ -271,6 +278,30 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-11 (187): Chat, its sheets and the history in the pixel style (written, not compiled)
+
+The maintainer tried PR 1 on the phone ("everything seems to be
+working") and asked for the chat and the history to match. On the same
+branch, by the lead alone:
+- `ChatView` takes `Pixel.COLORS` (the palette as `StripColors`), not
+  the theme's; all its text is JetBrains Mono, labels and buttons
+  Pixelify Sans, Markdown headings too (`PixelFontSpan`: the
+  `TypefaceSpan(Typeface)` constructor is API 28+). Inline code is
+  cyan (the text is all mono already). Boxes are square with 2 dp
+  borders; the input box, cards waiting for an answer and artifact
+  cards are cyan with the pink shadow (artifacts with a pink square of
+  the name's first letters, as in the mock-up). The header's ring is a
+  square meter with the percentage under it.
+- `ChatSheet`: square sheet with a cyan top line, block icons
+  (camera, image, file, bolt, chip, refresh, check: new `PixelIcon`s),
+  square usage bars. `res/drawable/chat_*.xml` deleted.
+- `ChatHistoryView` rewritten like the chat home's Continue rows,
+  titled "Chats", New chat cyan with the shadow; it no longer takes
+  colours.
+- `Pixel.scrollbar()`: a square thumb in the line colour (API 29+),
+  also on the drawer and chat home (PR 1's grey scrollbar nit).
+Left: CI's compile and screenshots, then the phone ("Next" 4).
 
 ### 2026-11-11 (186): Chat home and drawer, pixel style (PR 1 written, not compiled)
 

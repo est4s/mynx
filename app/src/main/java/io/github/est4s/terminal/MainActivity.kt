@@ -700,13 +700,12 @@ class MainActivity : Activity(), FrontActivity {
             attach = { source, done -> chatFiles.pick(source, done) },
             dictation = dictation,
         ).also {
-            it.colors = strip
+            it.colors = Pixel.COLORS
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
         chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }, ::chatHistoryToTerminal, ::openChat).also {
-            it.colors = strip
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
@@ -952,8 +951,6 @@ class MainActivity : Activity(), FrontActivity {
         stripScroll.setBackgroundColor(strip.background)
         keyBar.colors = strip
         home?.colors = strip
-        chat?.colors = strip
-        chatHistory?.colors = strip
         renderStrip()
         terminalView.onScreenUpdated()
     }

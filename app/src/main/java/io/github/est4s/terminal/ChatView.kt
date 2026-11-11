@@ -7,13 +7,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
-import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.graphics.drawable.RippleDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.text.Editable
 import android.text.InputType
@@ -23,7 +24,6 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
 import android.text.TextUtils
-import android.text.style.BackgroundColorSpan
 import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.LeadingMarginSpan
@@ -31,7 +31,6 @@ import android.text.style.QuoteSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
-import android.text.style.TypefaceSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ActionMode
@@ -76,6 +75,7 @@ import io.github.est4s.terminal.core.PermissionOptionKind
 import io.github.est4s.terminal.core.QuestionPicks
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.ToolCallInfo
+import io.github.est4s.terminal.core.ToolStatus
 import io.github.est4s.terminal.core.chatArtifactActions
 import io.github.est4s.terminal.core.chatArtifactLine
 import io.github.est4s.terminal.core.chatArtifactNote
@@ -96,7 +96,7 @@ import io.github.est4s.terminal.core.usageRing
 import kotlin.math.abs
 import kotlin.math.ceil
 
-private const val CHAT_TITLE = "Claude Code"
+private const val CHAT_TITLE = "claude code"
 private const val NEW_CHAT_TITLE = "New chat"
 // Attachments drawn with the photo icon.
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp")
@@ -107,6 +107,7 @@ private const val MORE_TO_TAB = 3
 private const val MORE_MODEL = 4
 private const val MORE_TERMINAL = 5
 private const val MORE_GREYED = 0x80808080.toInt()
+private val RIPPLE_ON_FILL = (Pixel.BACKGROUND and 0x00FFFFFF) or 0x40000000
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
 // One level of a list or quote.
@@ -194,8 +195,8 @@ private class ChatLink(private val url: String, private val color: Int, private 
 }
 
 /**
- * Touch mode's Chat: the hub's shown [ChatController] as rows over the
- * terminal, drawn from the [ChatState]s the activity passes to [show].
+ * Touch mode's Chat, in the pixel style ([Pixel]): the hub's shown
+ * [ChatController] as rows over the terminal, drawn from the [ChatState]s the activity passes to [show].
  * Rows only change in place (see [chatRowChanges]), so streaming touches
  * one row. [back] is ←, and [showTerminal] ⋮'s Terminal, as on Home;
  * [openTab] runs a command in a new tab (signing in, installing, an
@@ -226,24 +227,26 @@ class ChatView(
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(4), 0, dp(4))
     }
-    private val scroll = ChatScroll(context).apply { addView(rows) }
-    private val backButton = iconButton(R.drawable.chat_back, "Back") { back() }
+    private val scroll = ChatScroll(context).apply {
+        addView(rows)
+        Pixel.scrollbar(this)
+    }
+    private val backButton = iconButton(PixelIcon.BACK, Pixel.CYAN, "Back") { back() }
     private val titleText = headerText("New chat").apply {
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-        paint.isFakeBoldText = true
-        gravity = Gravity.CENTER
+        typeface = Pixel.label(context, 700)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
         ellipsize = TextUtils.TruncateAt.END
     }
-    // "Claude Code · " and the permission mode, under the title.
+    // "claude code · " and the permission mode, under the title.
     private val subtitleText = headerText("").apply {
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-        gravity = Gravity.CENTER
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         ellipsize = TextUtils.TruncateAt.END
     }
     private val titleColumn = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER
-        setPadding(0, dp(6), 0, dp(6))
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(4), dp(8), dp(4), dp(8))
         addView(titleText, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         addView(subtitleText, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
@@ -256,29 +259,31 @@ class ChatView(
         setOnClickListener { sheets.open(ChatSheetPage.USAGE) }
     }
     // Model…, To tab and Terminal.
-    private val moreButton = headerText("⋮").apply {
-        contentDescription = "More"
-        gravity = Gravity.CENTER
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-        setOnClickListener { showMore() }
-    }
+    private val moreButton = iconButton(PixelIcon.MORE, Pixel.TEXT, "More") { showMore() }
     private val header = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(56)
+        minimumHeight = dp(60)
+        // A 2 dp line under it, as on the chat home's drawer.
+        background = LayerDrawable(arrayOf(ColorDrawable(Pixel.LINE), ColorDrawable(Pixel.BACKGROUND))).apply {
+            setLayerInset(1, 0, 0, 0, dp(2))
+        }
+        setPadding(dp(4), 0, dp(4), dp(2))
         addView(backButton, LinearLayout.LayoutParams(dp(52), dp(52)))
-        // As wide as ring and ⋮ on the other side, so the title stays centred.
-        addView(View(context), LinearLayout.LayoutParams(dp(40), 0))
         addView(titleColumn, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        addView(ring, LinearLayout.LayoutParams(dp(44), dp(52)))
-        addView(moreButton, LinearLayout.LayoutParams(dp(48), dp(52)))
+        addView(ring, LinearLayout.LayoutParams(dp(56), dp(52)))
+        addView(moreButton, LinearLayout.LayoutParams(dp(44), dp(52)))
     }
     private val statusText = TextView(context).apply {
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         setPadding(dp(16), dp(4), dp(16), dp(4))
         visibility = View.GONE
     }
-    private val gateText = TextView(context).apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) }
+    private val gateText = TextView(context).apply {
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+    }
     // Styled as card buttons when the colours come.
     private val gateButton = TextView(context)
     private val gateSecond = TextView(context).apply { visibility = View.GONE }
@@ -296,10 +301,18 @@ class ChatView(
         inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         imeOptions = EditorInfo.IME_FLAG_NO_ENTER_ACTION
         maxLines = 6
-        hint = "Reply to Claude"
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        hint = "Reply to Claude…"
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         background = null
-        setPadding(dp(10), dp(12), dp(8), dp(12))
+        highlightColor = (Pixel.CYAN and 0x00FFFFFF) or 0x55000000
+        if (Build.VERSION.SDK_INT >= 29) {
+            textCursorDrawable = GradientDrawable().apply {
+                setColor(Pixel.CYAN)
+                setSize(dp(2), 0)
+            }
+        }
+        setPadding(dp(8), dp(12), dp(4), dp(12))
         addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
@@ -307,36 +320,44 @@ class ChatView(
         })
     }
     // + opens Add context: files, Permission and Model.
-    private val plusButton = roundButton(R.drawable.chat_plus, "Add") { sheets.open(ChatSheetPage.ADD) }
+    private val plusButton = iconButton(PixelIcon.PLUS, Pixel.TEXT, "Add") { sheets.open(ChatSheetPage.ADD) }
     // Send; while a turn runs and there's nothing to send, Stop.
-    private val sendButton = roundButton(R.drawable.chat_send, "Send") {
+    private val sendButton = iconButton(PixelIcon.SEND, Pixel.BACKGROUND, "Send") {
         if (showsStop) controller()?.cancel() else sendInput()
     }
     private var showsStop = false
     private var canSend = true
     // Dictation into the box; accent while it listens, hidden when the phone can't.
-    private val micButton = roundButton(R.drawable.chat_mic, "Dictate") { toggleDictation() }.apply {
+    private val micButton = iconButton(PixelIcon.MIC, Pixel.TEXT, "Dictate") { toggleDictation() }.apply {
         visibility = if (dictation?.available == true) View.VISIBLE else View.GONE
     }
     private var listening = false
+    // The screen's main action: the cyan box with the logo's shadow, as on the chat home.
     private val pill = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.BOTTOM
-        setPadding(dp(6), dp(6), dp(6), dp(6))
-        addView(plusButton, LinearLayout.LayoutParams(dp(40), dp(40)).apply { bottomMargin = dp(2) })
-        addView(input, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        addView(micButton, LinearLayout.LayoutParams(dp(40), dp(40)).apply {
-            bottomMargin = dp(2)
-            marginEnd = dp(6)
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.CYAN, shadow = true)
+        // The border inside, and the shadow's room right and bottom.
+        setPadding(dp(6), dp(6), dp(6) + dp(Pixel.SHADOW_DP), dp(6) + dp(Pixel.SHADOW_DP))
+        addView(TextView(context).apply {
+            text = ">"
+            typeface = Pixel.text(context)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTextColor(Pixel.CYAN)
+            setPadding(dp(8), dp(12), 0, dp(12))
         })
-        addView(sendButton, LinearLayout.LayoutParams(dp(40), dp(40)).apply { bottomMargin = dp(2) })
+        addView(input, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        addView(plusButton, LinearLayout.LayoutParams(dp(44), dp(44)))
+        addView(micButton, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(4) })
+        addView(sendButton, LinearLayout.LayoutParams(dp(44), dp(44)))
     }
     // What + added for the next prompt, each with ×.
     private val attachments = ArrayList<ChatAttachment>()
     private val chips = ButtonFlow(context, dp(6)).apply { visibility = View.GONE }
     private val inputRow = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(12), dp(4), dp(12), dp(8))
+        // The shadow sticks out 4 dp: keep the box's own edge 16 dp from the screen's.
+        setPadding(dp(16), dp(4), dp(16) - dp(Pixel.SHADOW_DP), dp(10))
         addView(chips, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(6) })
         addView(pill, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
@@ -379,25 +400,15 @@ class ChatView(
             field = value
             value ?: return
             setBackgroundColor(value.background)
-            backButton.tint(value.text)
             titleText.setTextColor(value.text)
-            moreButton.setTextColor(value.text)
-            ring.setColors(value)
             statusText.setTextColor(value.accent)
-            subtitleText.setTextColor(faded(value.text, 0xB0))
+            subtitleText.setTextColor(Pixel.DIM)
             drawnLine = null
             gateText.setTextColor(value.text)
             styleButton(gateButton, true, value)
             styleButton(gateSecond, false, value)
             input.setTextColor(value.text)
-            input.setHintTextColor(faded(value.text, 0x90))
-            pill.background = GradientDrawable().apply {
-                setColor(value.selectedBackground)
-                cornerRadius = dp(28).toFloat()
-                setStroke(dp(1), faded(value.text, 0x30))
-            }
-            plusButton.background = circle(faded(value.text, 0x1C))
-            plusButton.tint(value.text)
+            input.setHintTextColor(Pixel.DIM)
             renderMic()
             sheets.colors = value
             renderChips()
@@ -574,7 +585,7 @@ class ChatView(
     }
 
     private fun cellParams() = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-        setMargins(dp(12), dp(4), dp(12), dp(4))
+        setMargins(dp(16), dp(6), dp(16), dp(6))
     }
 
     private fun renderControls(state: ChatState, colors: StripColors) {
@@ -622,16 +633,22 @@ class ChatView(
         val running = latest?.conversation?.running == true
         val empty = input.text.isNullOrBlank() && attachments.isEmpty()
         val stop = running && empty
-        if (stop != showsStop || sendButton.background == null) {
-            showsStop = stop
-            (sendButton.getChildAt(0) as ImageView).setImageResource(if (stop) R.drawable.chat_stop else R.drawable.chat_send)
-            sendButton.contentDescription = if (stop) "Stop" else "Send"
-        }
-        sendButton.background = circle(if (stop) colors.mark else colors.accent)
-        sendButton.tint(colors.background)
+        showsStop = stop
+        sendButton.contentDescription = if (stop) "Stop" else "Send"
         val usable = stop || (canSend && !empty)
         sendButton.isEnabled = stop || canSend
-        sendButton.alpha = if (usable) 1f else 0.4f
+        // Filled when it does something now (pink for Stop); an empty square when it can't.
+        val fill = when {
+            stop -> colors.mark
+            usable -> colors.accent
+            else -> null
+        }
+        sendButton.icon(if (stop) PixelIcon.STOP else PixelIcon.SEND, if (fill != null) colors.background else Pixel.DIM)
+        sendButton.background = if (fill != null) {
+            Pixel.box(context, fill = fill, border = 0, ripple = RIPPLE_ON_FILL)
+        } else {
+            Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
+        }
     }
 
     // The files + added, each a chip with ×.
@@ -674,11 +691,11 @@ class ChatView(
         val colors = colors ?: return
         // Listening: ringed in the accent, so it isn't mistaken for Send beside it.
         micButton.background = if (listening) {
-            circle(faded(colors.accent, 0x40)).apply { setStroke(dp(2), colors.accent) }
+            Pixel.box(context, fill = faded(colors.accent, 0x30), border = colors.accent, ripple = Pixel.LINE)
         } else {
-            circle(faded(colors.text, 0x1C))
+            pixelRipple()
         }
-        micButton.tint(if (listening) colors.accent else colors.text)
+        micButton.icon(PixelIcon.MIC, if (listening) colors.accent else colors.text)
         micButton.contentDescription = if (listening) "Stop dictating" else "Dictate"
     }
 
@@ -695,15 +712,13 @@ class ChatView(
         LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            background = GradientDrawable().apply {
-                setColor(colors.selectedBackground)
-                cornerRadius = dp(16).toFloat()
-                setStroke(dp(1), faded(colors.text, 0x30))
-            }
+            background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
             setPadding(dp(10), 0, if (remove == null) dp(12) else 0, 0)
             minimumHeight = dp(36)
-            addView(chatIcon(context, if (image) R.drawable.chat_photo else R.drawable.chat_attach, faded(colors.text, 0xC0), 16))
-            addView(plainText(colors.text, 14f).apply {
+            addView(ImageView(context).apply {
+                setImageDrawable(Pixel.icon(context, if (image) PixelIcon.IMAGE else PixelIcon.FILE, Pixel.DIM, 16))
+            }, LinearLayout.LayoutParams(dp(16), dp(16)))
+            addView(plainText(colors.text, 13f).apply {
                 text = name
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.MIDDLE
@@ -711,9 +726,7 @@ class ChatView(
                 setPadding(dp(6), 0, 0, 0)
             })
             remove?.let { onRemove ->
-                addView(iconButton(R.drawable.chat_close, "Remove $name", 16) { onRemove() }.apply {
-                    tint(faded(colors.text, 0xC0))
-                }, LinearLayout.LayoutParams(dp(36), dp(36)))
+                addView(iconButton(PixelIcon.CLOSE, Pixel.DIM, "Remove $name", 14) { onRemove() }, LinearLayout.LayoutParams(dp(36), dp(36)))
             }
         }
 
@@ -723,8 +736,7 @@ class ChatView(
         if (!line.highlighted) return shown
         val text = SpannableString(shown)
         val start = shown.length - line.mode.length
-        text.setSpan(ForegroundColorSpan(colors.mark), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        text.setSpan(StyleSpan(Typeface.BOLD), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        text.setSpan(ForegroundColorSpan(Pixel.PINK_TEXT), start, text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         return text
     }
 
@@ -785,9 +797,10 @@ class ChatView(
 
     // A queued prompt is dimmed under a "Queued" label until the agent takes it.
     private fun userCell(colors: StripColors, queued: Boolean = false): Cell {
-        val bubble = selectableText(colors.text, 16f).apply {
-            background = rounded(colors.selectedBackground)
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+        val bubble = selectableText(colors.text, 15f).apply {
+            background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
+            setLineSpacing(0f, 1.15f)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
             if (queued) alpha = 0.55f
         }
         // The files sent with it, a chip each, over the text.
@@ -800,7 +813,7 @@ class ChatView(
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
             setPadding(dp(48), 0, 0, 0)
-            if (queued) addView(plainText(faded(colors.text, 0xB0), 12f).apply {
+            if (queued) addView(plainText(Pixel.DIM, 12f).apply {
                 text = "Queued"
                 setPadding(0, 0, dp(4), dp(2))
             })
@@ -863,7 +876,7 @@ class ChatView(
     }
 
     private fun mdParams(row: MdRow, before: MdRow?): LinearLayout.LayoutParams {
-        val height = if (row is MdRow.Rule) dp(1) else WRAP_CONTENT
+        val height = if (row is MdRow.Rule) dp(2) else WRAP_CONTENT
         return LinearLayout.LayoutParams(MATCH_PARENT, height).apply {
             topMargin = when {
                 before == null -> 0
@@ -880,14 +893,11 @@ class ChatView(
         is MdRow.Text -> mdTextCell(row, colors)
         is MdRow.Code -> mdCodeCell(row, colors)
         is MdRow.Table -> mdTableCell(row, colors)
-        is MdRow.Rule -> MdCell(row.javaClass, View(context).apply {
-            setBackgroundColor(colors.accent)
-            alpha = 0.4f
-        }) { }
+        is MdRow.Rule -> MdCell(row.javaClass, View(context).apply { setBackgroundColor(Pixel.LINE) }) { }
     }
 
     private fun mdTextCell(first: MdRow.Text, colors: StripColors): MdCell {
-        val text = selectableText(colors.text, 16f, links = true)
+        val text = selectableText(colors.text, 15f, links = true).apply { setLineSpacing(0f, 1.15f) }
         return MdCell(first.javaClass, text) { row -> text.text = mdText(row as MdRow.Text, text, colors) }
     }
 
@@ -899,7 +909,7 @@ class ChatView(
         val end = out.length
         if (end == 0) return out
         if (row.heading > 0) {
-            out.setSpan(StyleSpan(Typeface.BOLD), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            out.setSpan(PixelFontSpan(Pixel.label(context, 700)), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             out.setSpan(RelativeSizeSpan(MD_HEADING_SCALE[row.heading - 1]), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         repeat(row.quote) {
@@ -925,7 +935,8 @@ class ChatView(
                 MdStyleKind.BOLD -> listOf(StyleSpan(Typeface.BOLD))
                 MdStyleKind.ITALIC -> listOf(StyleSpan(Typeface.ITALIC))
                 MdStyleKind.STRIKE -> listOf(StrikethroughSpan())
-                MdStyleKind.CODE -> listOf(TypefaceSpan("monospace"), BackgroundColorSpan(colors.selectedBackground))
+                // All of it is in the mono font already: code stands out in cyan, as in the mock-up.
+                MdStyleKind.CODE -> listOf(ForegroundColorSpan(colors.accent))
                 MdStyleKind.LINK -> listOf(ChatLink(style.url.orEmpty(), colors.accent) { url -> openLink(url) })
             }
             spans.forEach { out.setSpan(it, style.start, style.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
@@ -945,7 +956,7 @@ class ChatView(
 
     private fun mdCodeCell(first: MdRow.Code, colors: StripColors): MdCell {
         var code = ""
-        val language = plainText(colors.accent, 12f)
+        val language = plainText(Pixel.DIM, 12f).apply { typeface = Pixel.label(context, 500) }
         val copy = linkButton("Copy", colors) { }
         copy.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
         copy.setPadding(dp(6), dp(8), dp(6), dp(8))
@@ -959,17 +970,16 @@ class ChatView(
         val head = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), 0, dp(4), 0)
+            setPadding(dp(12), dp(2), dp(4), 0)
             addView(language, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             addView(copy)
         }
         val body = selectableText(colors.text, 13f).apply {
-            typeface = Typeface.MONOSPACE
-            setPadding(dp(10), 0, dp(10), dp(10))
+            setPadding(dp(12), 0, dp(12), dp(12))
         }
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(colors.selectedBackground)
+            background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
             addView(head)
             addView(ChatSideScroll(context).apply { addView(body) })
         }
@@ -984,8 +994,8 @@ class ChatView(
     private fun mdTableCell(first: MdRow.Table, colors: StripColors): MdCell {
         val grid = TableLayout(context).apply {
             setDividerDrawable(GradientDrawable().apply {
-                setColor(colors.selectedBackground)
-                setSize(1, dp(1))
+                setColor(Pixel.LINE)
+                setSize(1, dp(2))
             })
             setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE)
         }
@@ -1023,14 +1033,12 @@ class ChatView(
 
     private fun toolCell(colors: StripColors): Cell {
         var call: ToolCallInfo? = null
-        val title = plainText(colors.text, 14f).apply {
-            typeface = Typeface.MONOSPACE
+        val title = plainText(Pixel.DIM, 13f).apply {
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
-        val status = plainText(colors.accent, 13f)
-        val body = selectableText(colors.text, 13f).apply {
-            typeface = Typeface.MONOSPACE
+        val status = plainText(colors.accent, 12f)
+        val body = selectableText(colors.text, 12f).apply {
             setPadding(0, dp(8), 0, 0)
             visibility = View.GONE
         }
@@ -1038,12 +1046,15 @@ class ChatView(
             val current = call ?: return
             val expanded = current.id in expandedTools
             title.text = current.title
-            status.text = chatToolStatus(current) + if (expanded) "  ▾" else "  ▸"
+            status.text = "[" + chatToolStatus(current) + "]" + if (expanded) "  ▾" else "  ▸"
+            status.setTextColor(if (current.status == ToolStatus.FAILED) Pixel.PINK_TEXT else colors.accent)
             title.maxLines = if (expanded) Int.MAX_VALUE else 2
             body.visibility = if (expanded) View.VISIBLE else View.GONE
             if (expanded) body.text = chatToolBody(current)
         }
-        val card = cardColumn(colors)
+        val card = cardColumn(colors).apply {
+            background = Pixel.box(context, fill = colors.background, border = Pixel.LINE, ripple = Pixel.LINE)
+        }
         val top = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(title)
@@ -1066,11 +1077,11 @@ class ChatView(
         val card = cardColumn(colors)
         fun draw(request: ChatItem.Permission) {
             card.removeAllViews()
-            card.addView(plainText(colors.accent, 13f).apply { text = "Permission needed · " + request.call.name })
+            styleCard(card, main = request.outcome == null)
+            card.addView(cardLabel("Permission needed · " + request.call.name))
             val cut = chatReviewCut(request.review)
             val whole = request.id in expandedReviews
-            card.addView(selectableText(colors.text, 14f).apply {
-                typeface = Typeface.MONOSPACE
+            card.addView(selectableText(colors.text, 13f).apply {
                 text = if (whole) request.review else cut.text
                 setPadding(0, dp(4), 0, dp(2))
             })
@@ -1108,15 +1119,15 @@ class ChatView(
         val card = cardColumn(colors)
         fun draw(request: ChatItem.Question) {
             card.removeAllViews()
+            styleCard(card, main = request.outcome == null)
             val current = questionPicks.getOrPut(request.id) { QuestionPicks(request.questions) }
             request.questions.forEachIndexed { q, question ->
                 question.header?.let { head ->
-                    card.addView(plainText(colors.accent, 13f).apply {
-                        text = head
+                    card.addView(cardLabel(head).apply {
                         if (q > 0) setPadding(0, dp(10), 0, 0)
                     })
                 }
-                card.addView(plainText(colors.text, 16f).apply {
+                card.addView(plainText(colors.text, 15f).apply {
                     text = question.question
                     setPadding(0, if (q > 0 && question.header == null) dp(10) else dp(2), 0, dp(2))
                 })
@@ -1156,12 +1167,13 @@ class ChatView(
         return Cell(card) { item ->
             val request = item as ChatItem.Plan
             card.removeAllViews()
-            card.addView(plainText(colors.accent, 13f).apply { text = "Plan" })
-            card.addView(selectableText(colors.text, 15f).apply {
+            styleCard(card, main = request.outcome == null)
+            card.addView(cardLabel("Plan"))
+            card.addView(selectableText(colors.text, 14f).apply {
                 text = request.plan
                 setPadding(0, dp(4), 0, dp(2))
             })
-            request.planFilePath?.let { path -> card.addView(plainText(colors.accent, 12f).apply { text = path }) }
+            request.planFilePath?.let { path -> card.addView(plainText(Pixel.DIM, 12f).apply { text = path }) }
             val outcome = request.outcome
             if (outcome != null) {
                 card.addView(answeredText(chatOutcomeText(outcome), colors))
@@ -1185,7 +1197,7 @@ class ChatView(
             text.text = notice.text
             text.setTextColor(
                 when (notice.kind) {
-                    NoticeKind.ERROR -> colors.mark
+                    NoticeKind.ERROR -> Pixel.PINK_TEXT
                     NoticeKind.SIGN_IN -> colors.accent
                     NoticeKind.INFO -> colors.text
                 },
@@ -1199,11 +1211,32 @@ class ChatView(
             val artifact = (item as ChatItem.Artifact).artifact
             val install = installApk
             card.removeAllViews()
-            card.addView(plainText(colors.text, 16f).apply { text = artifact.label })
-            card.addView(plainText(colors.accent, 13f).apply {
-                text = chatArtifactLine(artifact, CHAT_HOME)
-                maxLines = 2
-                ellipsize = TextUtils.TruncateAt.MIDDLE
+            styleCard(card, main = true)
+            card.addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(context).apply {
+                    text = artifact.label.filter { it.isLetterOrDigit() }.take(2).uppercase()
+                    typeface = Pixel.label(context, 700)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                    setTextColor(Pixel.BACKGROUND)
+                    gravity = Gravity.CENTER
+                    setBackgroundColor(Pixel.PINK)
+                }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(plainText(colors.text, 17f).apply {
+                        text = artifact.label
+                        typeface = Pixel.label(context, 700)
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    })
+                    addView(plainText(Pixel.DIM, 12f).apply {
+                        text = chatArtifactLine(artifact, CHAT_HOME)
+                        maxLines = 2
+                        ellipsize = TextUtils.TruncateAt.MIDDLE
+                    })
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
             })
             val flow = buttonFlow()
             chatArtifactActions(artifact, canInstall = install != null).forEachIndexed { i, action ->
@@ -1226,16 +1259,23 @@ class ChatView(
 
     private fun cardColumn(colors: StripColors) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(colors.selectedBackground)
-        setPadding(dp(12), dp(10), dp(12), dp(10))
+        background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
+        setPadding(dp(14), dp(12), dp(14), dp(12))
     }
 
-    private fun rounded(color: Int) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(10).toFloat()
+    // A card waiting on the user is the screen's main action: cyan, with the shadow
+    // (and room for it right and bottom); once answered, it's outlined like the rest.
+    private fun styleCard(card: LinearLayout, main: Boolean) {
+        val shadow = if (main) dp(Pixel.SHADOW_DP) else 0
+        card.background = Pixel.box(context, fill = Pixel.CARD, border = if (main) Pixel.CYAN else Pixel.LINE, shadow = main)
+        card.setPadding(dp(14), dp(12), dp(14) + shadow, dp(12) + shadow)
     }
+
+    // A card's heading: "PERMISSION NEEDED · BASH", "PLAN", as the chat home's sections.
+    private fun cardLabel(text: String) = sectionLabel(context, text).apply { setPadding(0, 0, 0, dp(4)) }
 
     private fun plainText(color: Int, sp: Float) = TextView(context).apply {
+        typeface = Pixel.text(context)
         setTextColor(color)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
     }
@@ -1286,7 +1326,7 @@ class ChatView(
         row.post { if (row.isFocused && !row.hasSelection()) input.requestFocus() }
     }
 
-    private fun answeredText(text: String, colors: StripColors) = plainText(faded(colors.text, 0xA0), 14f).apply {
+    private fun answeredText(text: String, @Suppress("UNUSED_PARAMETER") colors: StripColors) = plainText(Pixel.DIM, 13f).apply {
         this.text = text
         setPadding(0, dp(6), 0, 0)
     }
@@ -1303,10 +1343,18 @@ class ChatView(
             setOnClickListener { onTap() }
         }
 
+    // Square, in Pixelify Sans: the primary one filled with [tone], the others outlined, their text in [tone]
+    // when it's a warning (pink), else plain.
     private fun styleButton(button: TextView, primary: Boolean, colors: StripColors, tone: Int = colors.accent) {
-        val radius = dp(8).toFloat()
+        button.typeface = Pixel.label(context, 600)
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-        button.setTextColor(if (primary) colors.background else tone)
+        button.setTextColor(
+            when {
+                primary -> colors.background
+                tone == colors.accent -> colors.text
+                else -> Pixel.PINK_TEXT
+            },
+        )
         button.gravity = Gravity.CENTER
         button.minHeight = dp(48)
         button.minWidth = dp(72)
@@ -1314,26 +1362,16 @@ class ChatView(
         button.ellipsize = TextUtils.TruncateAt.END
         button.setPadding(dp(16), dp(6), dp(16), dp(6))
         button.isFocusable = true
-        val shape = GradientDrawable().apply {
-            cornerRadius = radius
-            if (primary) {
-                setColor(tone)
-            } else {
-                setColor(Color.TRANSPARENT)
-                setStroke(dp(1), faded(tone, 0xB0))
-            }
+        button.background = if (primary) {
+            Pixel.box(context, fill = tone, border = 0, ripple = RIPPLE_ON_FILL)
+        } else {
+            Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
         }
-        // Outlined buttons are see-through: the mask keeps the ripple to the whole button.
-        val mask = GradientDrawable().apply {
-            cornerRadius = radius
-            setColor(faded(tone, 0xFF))
-        }
-        val ripple = if (primary) faded(colors.background, 0x40) else faded(tone, 0x40)
-        button.background = RippleDrawable(ColorStateList.valueOf(ripple), shape, mask)
     }
 
     // A quiet action inside a card's text (Show all): no outline, the same touch size.
     private fun linkButton(label: String, colors: StripColors, onTap: () -> Unit) = plainText(colors.accent, 14f).apply {
+        typeface = Pixel.label(context, 600)
         text = label
         gravity = Gravity.CENTER_VERTICAL
         minHeight = dp(48)
@@ -1350,15 +1388,11 @@ class ChatView(
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = dp(48)
             setPadding(dp(4), dp(6), dp(8), dp(6))
-            val mask = GradientDrawable().apply {
-                cornerRadius = dp(8).toFloat()
-                setColor(faded(colors.text, 0xFF))
-            }
-            background = RippleDrawable(ColorStateList.valueOf(faded(colors.accent, 0x40)), null, mask)
+            background = pixelRipple()
             isClickable = true
             isFocusable = true
             setOnClickListener { onTap() }
-            addView(plainText(if (picked) colors.accent else faded(colors.text, 0xB0), 18f).apply {
+            addView(plainText(if (picked) colors.accent else Pixel.DIM, 18f).apply {
                 text = mark
                 gravity = Gravity.CENTER
             }, LinearLayout.LayoutParams(dp(28), WRAP_CONTENT).apply { marginEnd = dp(8) })
@@ -1366,7 +1400,7 @@ class ChatView(
                 orientation = LinearLayout.VERTICAL
                 addView(plainText(colors.text, 15f).apply { text = label })
                 description?.let { more ->
-                    addView(plainText(faded(colors.text, 0x99), 13f).apply {
+                    addView(plainText(Pixel.DIM, 12f).apply {
                         text = more
                         setPadding(0, dp(1), 0, 0)
                     })
@@ -1374,7 +1408,7 @@ class ChatView(
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }
 
-    // A theme colour with another opacity: the only colours not straight from the theme.
+    // A palette colour with another opacity.
     private fun faded(color: Int, alpha: Int) = (color and 0x00FFFFFF) or (alpha shl 24)
 
     private fun headerText(text: String) = TextView(context).apply {
@@ -1383,30 +1417,23 @@ class ChatView(
         maxLines = 1
     }
 
-    // An icon (tinted later, with tint()) in a touch area as big as its layout params.
-    private fun iconButton(icon: Int, description: String, sizeDp: Int = 24, onTap: () -> Unit) = FrameLayout(context).apply {
+    // A block icon in a touch area as big as its layout params, pressed with the pixel ripple.
+    private fun iconButton(icon: PixelIcon, color: Int, description: String, sizeDp: Int = 20, onTap: () -> Unit) = FrameLayout(context).apply {
         contentDescription = description
         isClickable = true
         isFocusable = true
+        background = pixelRipple()
         setOnClickListener { onTap() }
         addView(ImageView(context).apply {
-            setImageResource(icon)
+            setImageDrawable(Pixel.icon(context, icon, color, sizeDp))
             scaleType = ImageView.ScaleType.FIT_CENTER
         }, FrameLayout.LayoutParams(dp(sizeDp), dp(sizeDp), Gravity.CENTER))
     }
 
-    // The box's + and Send: an icon in a circle (its background, set with the colours).
-    private fun roundButton(icon: Int, description: String, onTap: () -> Unit) = iconButton(icon, description, 22, onTap)
-
-    private fun FrameLayout.tint(color: Int) {
-        (getChildAt(0) as? ImageView)?.imageTintList = ColorStateList.valueOf(color)
-        background = background ?: RippleDrawable(ColorStateList.valueOf(faded(color, 0x30)), null, null)
+    private fun FrameLayout.icon(icon: PixelIcon, color: Int) {
+        val image = getChildAt(0) as? ImageView ?: return
+        image.setImageDrawable(Pixel.icon(context, icon, color, Math.round(image.layoutParams.width / resources.displayMetrics.density)))
     }
 
-    private fun circle(color: Int) = GradientDrawable().apply {
-        shape = GradientDrawable.OVAL
-        setColor(color)
-    }
-
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int) = Pixel.dp(context, value)
 }

@@ -129,6 +129,7 @@ class ChatHomeView(
     }
     private val scroll = ScrollView(context).apply {
         isFillViewport = true
+        Pixel.scrollbar(this)
         addView(middle, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         // The keyboard shrinks it: keep the bottom (the last Continue row) in sight.
         addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->

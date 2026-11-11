@@ -50,7 +50,10 @@ class DrawerView(
         addView(sectionLabel(context, "Linux"), labelParams())
         addView(linux, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
     }
-    private val scroll = ScrollView(context).apply { addView(column) }
+    private val scroll = ScrollView(context).apply {
+        addView(column)
+        Pixel.scrollbar(this)
+    }
 
     init {
         orientation = VERTICAL
