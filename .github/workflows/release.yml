@@ -67,6 +67,7 @@ jobs:
 
       - name: Shell tests
         run: |
+          sudo apt-get update -qq >/dev/null
           sudo apt-get install -y -qq bats >/dev/null
           bats tests/shell
 
