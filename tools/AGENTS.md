@@ -257,11 +257,11 @@ One `key = value` per line; `mynx settings` describes each.
   Back again to Home. Several chats can work at once, each its own
   Claude Code: one left while it works keeps going, one left idle is
   stopped and goes on (`--resume`) with its next message. The other
-  agents run in a tab. A chat's ⋮ → Open in a tab moves it to a
-  terminal tab (`claude --resume`); one session runs in one place at a
-  time. Each of Claude's replies has Copy under it. When Claude Code
-  makes or changes an app in `~/apps` or `~/terminal-apps`, writes an
-  APK or writes a Markdown (`.md`) file,
+  agents run in a tab. In a chat's ⋮,
+  Open in a tab moves it to a terminal tab (`claude --resume`); one
+  session runs in one place at a time. Each of Claude's replies has
+  Copy under it. When Claude Code makes or changes an app in `~/apps`
+  or `~/terminal-apps`, writes an APK or writes a Markdown (`.md`) file,
   the chat shows a card for it: Open (a web app), Run (a terminal app,
   in a tab), Copy (a Markdown file's text), Share.
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:

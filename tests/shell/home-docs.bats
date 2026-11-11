@@ -292,7 +292,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide says a chat can go on in a tab, one session in one place" {
-    grep -qF -- "To tab moves it to a terminal tab" "$GUIDE"
+    grep -qF -- "Open in a tab moves it to a terminal tab" "$GUIDE"
 }
 
 @test "the guide says the chat shows a card for an app the agent makes" {
