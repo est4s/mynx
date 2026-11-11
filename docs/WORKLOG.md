@@ -206,7 +206,7 @@ lists fallback models until a session reports its own.
 
 ### 4. Touch mode: chat first, with a drawer (planned, entry 185)
 
-The maintainer chose option 1A (`docs/ROADMAP.md`, Touch mode). Not
+Decided by the maintainer (`docs/ROADMAP.md`, Touch mode). Not
 started. A plan, about 2-3 PRs:
 1. In touch view, start on the chat home (the prompt box, live chats
    above it) instead of Home's list; Back from a chat goes there.
@@ -215,9 +215,11 @@ started. A plan, about 2-3 PRs:
    Terminal view. What it lists comes from `core` (`HomeMenus` plus
    `ChatHub`'s rows), test-first; the view stays thin.
 3. Screenshots of both (`Screenshots.kt`), then a phone round.
-The style isn't decided: the study's "Pixel style" (the logo's three
-colours, square corners, its hard pink shadow) was liked better than
-the first pass; ask before choosing a font (JetBrains Mono everywhere
+The style isn't decided. The mock-ups tried two: rounded cards in
+Neon's colours, and a "pixel style" taken from the logo (only its
+three colours, `#0D0221`, `#00F3FF`, `#FF0BBB`; square corners; its
+hard pink drop shadow on the main action; icons drawn from blocks),
+which matched the logo better; ask before choosing a font (JetBrains Mono everywhere
 was the agent's suggestion).
 
 ### Regression checks (steps 4-6)
@@ -259,13 +261,15 @@ Ctrl+Shift).
 
 ### 2026-11-11 (185): Touch mode design study; chat first with a drawer chosen
 
-A design study of touch mode (no code), as phone mock-ups on a design
-canvas for the maintainer: agent first (1A a drawer, 1B a launcher
-sheet beside the prompt box, 1C chat as the first tab) and launcher
-first (2A a home grid and dock, 2B a dashboard, 2C a command bar), a
-second version of each in a style taken from the logo, and the
-launcher in three themes. The maintainer chose **1A** (roadmap, Touch
-mode; "Next" 4). Also discussed, not decided (in the roadmap's "Later"
+A design study of touch mode (no code), as phone mock-ups on a
+design canvas in the maintainer's claude.ai account (private, not in
+the repo: these docs say what was decided without it). Six layouts:
+chat first with a drawer, chat first with a launcher sheet beside the
+prompt box, chat as the first tab; and launcher first as a home grid
+with a dock, a dashboard, or a command bar. A second version of each
+in a style taken from the logo, and the launcher in three themes. The
+maintainer chose **chat first with a drawer** (roadmap, Touch mode;
+"Next" 4). Also discussed, not decided (in the roadmap's "Later"
 line): a launcher mode (a second activity with the Home category, off
 by default, asking for the home role; must never wait for Debian),
 themes as folders with a `launcher.conf`, and a second phone as a
