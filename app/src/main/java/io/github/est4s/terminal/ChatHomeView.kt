@@ -195,7 +195,7 @@ class ChatHomeView(
         setTextColor(Pixel.BACKGROUND)
         gravity = Gravity.CENTER
         minHeight = dp(52) + dp(Pixel.SHADOW_DP)
-        background = Pixel.box(context, fill = Pixel.CYAN, border = 0, shadow = true, ripple = RIPPLE_ON_CYAN)
+        background = Pixel.box(context, fill = Pixel.CYAN, border = 0, shadow = true, ripple = Pixel.RIPPLE_ON_CYAN)
         setPadding(dp(16), dp(8), dp(16) + dp(Pixel.SHADOW_DP), dp(8) + dp(Pixel.SHADOW_DP))
         isFocusable = true
         visibility = View.GONE
@@ -345,7 +345,7 @@ class ChatHomeView(
         sendButton.isEnabled = ready
         sendButton.setImageDrawable(Pixel.icon(context, PixelIcon.SEND, if (ready) Pixel.BACKGROUND else Pixel.DIM))
         sendButton.background = if (ready) {
-            Pixel.box(context, fill = Pixel.CYAN, border = 0, ripple = RIPPLE_ON_CYAN)
+            Pixel.box(context, fill = Pixel.CYAN, border = 0, ripple = Pixel.RIPPLE_ON_CYAN)
         } else {
             Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE)
         }
@@ -397,7 +397,6 @@ class ChatHomeView(
     private companion object {
         const val DRAWER_SHARE = 0.82f
         const val DRAWER_MAX_DP = 360
-        val RIPPLE_ON_CYAN = (Pixel.BACKGROUND and 0x00FFFFFF) or 0x40000000
     }
 }
 

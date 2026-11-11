@@ -101,7 +101,7 @@ private const val NEW_CHAT_TITLE = "New chat"
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp")
 // Root's home, as the chat runs in it (ChatController's default).
 private const val CHAT_HOME = "/root"
-private val RIPPLE_ON_FILL = (Pixel.BACKGROUND and 0x00FFFFFF) or 0x40000000
+private val RIPPLE_ON_FILL: Int get() = Pixel.RIPPLE_ON_CYAN
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
 // One level of a list or quote.

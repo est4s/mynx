@@ -76,6 +76,7 @@ import io.github.est4s.terminal.core.hostPath
 import io.github.est4s.terminal.core.linkAt
 import io.github.est4s.terminal.core.loadColorScheme
 import io.github.est4s.terminal.core.loadSettings
+import io.github.est4s.terminal.core.pixelPalette
 import io.github.est4s.terminal.core.setSetting
 import io.github.est4s.terminal.core.stripColors
 import java.io.File
@@ -171,8 +172,14 @@ class MainActivity : Activity(), FrontActivity {
             s.chats.listener = chatListener
             s.chats.historyListener = chatHistoryListener
             if (touchView && shellToShow == null && tabToOpen == null) {
+                val homeLevels = s.homeLevels
+                s.homeLevels = null
                 when {
                     chatToShow -> openChatFromNotice()
+                    homeLevels != null -> {
+                        home?.restore(homeLevels)
+                        showHome()
+                    }
                     s.chatPlace == ChatPlace.CHAT && s.chats.shown != null -> showChat()
                     s.chatPlace == ChatPlace.HISTORY -> showChatHistory()
                     else -> showChatHome()
@@ -697,7 +704,8 @@ class MainActivity : Activity(), FrontActivity {
         })
 
         home = HomeView(this, ::homeMenus, ::onHomeAction) { name, args ->
-            service?.configRequest(name, args) ?: "the app isn't ready yet"
+            val running = service
+            if (running == null) "the app isn't ready yet" else running.configRequest(name, args)
         }.also {
             // Touch view reaches Home's lists from the chat home's drawer, and goes back there.
             it.leave = ::showChatHome
@@ -945,6 +953,12 @@ class MainActivity : Activity(), FrontActivity {
         }
         shownColorProblems = parsed.problems
         showScheme(parsed.scheme)
+        // The touch screens follow the theme: built again in its colours, Home on the same list.
+        val colors = File(installer.rootfs, COLORS_FILE).takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }
+        if (Pixel.use(pixelPalette(colors)) && home != null) {
+            if (homeShown) service?.homeLevels = home?.saveLevels()
+            recreate()
+        }
     }
 
     /** Shows colours that aren't saved (the theme editor's preview) until the next reload. */

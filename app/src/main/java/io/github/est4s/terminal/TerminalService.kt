@@ -351,6 +351,9 @@ class TerminalService : Service() {
             if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
         }
     }
+    /** Home's lists to open again once the activity is built anew (a theme changed its colours); null: none. */
+    var homeLevels: List<Pair<String, String>>? = null
+
     /** Why the app's tools couldn't be updated, for the activity to show. */
     var toolsError: String? = null
         private set

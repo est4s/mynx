@@ -111,6 +111,16 @@ class HomeView(
         return true
     }
 
+    /** The lists open, main first, as menu and title (a text input left out): for [restore]. */
+    fun saveLevels(): List<Pair<String, String>> = levels.filter { it.input == null }.map { it.menu to it.title }
+
+    /** Opens the lists [saveLevels] gave, for the next [refresh]. */
+    fun restore(saved: List<Pair<String, String>>) {
+        if (saved.isEmpty()) return
+        levels.clear()
+        saved.forEach { (menu, title) -> levels.add(Level(menu, title)) }
+    }
+
     /** Makes [menu] the list on show, directly above the main one, for the next [refresh]. */
     fun showMenu(menu: String, title: String) {
         levels.subList(1, levels.size).clear()
@@ -355,7 +365,7 @@ class HomeView(
         gravity = Gravity.CENTER
         minWidth = dp(120) + dp(Pixel.SHADOW_DP)
         minHeight = dp(48) + dp(Pixel.SHADOW_DP)
-        background = Pixel.box(context, fill = Pixel.CYAN, border = 0, shadow = true, ripple = RIPPLE_ON_CYAN)
+        background = Pixel.box(context, fill = Pixel.CYAN, border = 0, shadow = true, ripple = Pixel.RIPPLE_ON_CYAN)
         setPadding(dp(20), 0, dp(20) + dp(Pixel.SHADOW_DP), dp(Pixel.SHADOW_DP))
         isFocusable = true
         setOnClickListener { onTap() }
@@ -366,8 +376,4 @@ class HomeView(
     }
 
     private fun dp(value: Int) = Pixel.dp(context, value)
-
-    private companion object {
-        val RIPPLE_ON_CYAN = (Pixel.BACKGROUND and 0x00FFFFFF) or 0x40000000
-    }
 }

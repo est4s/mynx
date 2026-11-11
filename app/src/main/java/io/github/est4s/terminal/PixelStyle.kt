@@ -24,28 +24,47 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
+import io.github.est4s.terminal.core.LOGO_PALETTE
+import io.github.est4s.terminal.core.PixelPalette
 import io.github.est4s.terminal.core.StripColors
 import kotlin.math.roundToInt
 
 private const val LABEL_FONT = "fonts/PixelifySans.ttf"
 private const val TEXT_FONT = "fonts/JetBrainsMonoNerdFontMono-Regular.ttf"
 
-/** Touch mode's pixel style, from the logo (docs/TOUCH-DESIGN.md "Style"). */
+/**
+ * Touch mode's pixel style, from the logo (docs/TOUCH-DESIGN.md "Style"),
+ * in the terminal theme's colours (core's [pixelPalette]; Neon's are the
+ * logo's). Views read the colours as they're built: after [use] changes
+ * them, the activity builds its touch screens again.
+ */
 object Pixel {
-    const val BACKGROUND: Int = 0xFF0D0221.toInt()
-    const val CARD: Int = 0xFF170838.toInt()
-    const val LINE: Int = 0xFF3D2A70.toInt()
-    const val TEXT: Int = 0xFFF2ECFF.toInt()
-    const val DIM: Int = 0xFFB3A6DC.toInt()
-    const val CYAN: Int = 0xFF00F3FF.toInt()
-    const val PINK: Int = 0xFFFF0BBB.toInt()
-    const val PINK_TEXT: Int = 0xFFFF7FDC.toInt()
-    const val SCRIM: Int = 0xB30D0221.toInt()
+    var palette: PixelPalette = LOGO_PALETTE
+        private set
+
+    val BACKGROUND: Int get() = palette.background
+    val CARD: Int get() = palette.card
+    val LINE: Int get() = palette.line
+    val TEXT: Int get() = palette.text
+    val DIM: Int get() = palette.dim
+    val CYAN: Int get() = palette.accent
+    val PINK: Int get() = palette.mark
+    val PINK_TEXT: Int get() = palette.markText
+    val SCRIM: Int get() = palette.scrim
+    /** A pressed main (cyan) button: the background, see-through. */
+    val RIPPLE_ON_CYAN: Int get() = (BACKGROUND and 0x00FFFFFF) or 0x40000000
 
     const val SHADOW_DP = 4
 
+    /** Makes [next] the palette; true if it changed. */
+    fun use(next: PixelPalette): Boolean {
+        if (next == palette) return false
+        palette = next
+        return true
+    }
+
     /** The palette as the views that took the theme's strip colours read it: Chat, its sheets, the history. */
-    val COLORS = StripColors(background = BACKGROUND, selectedBackground = CARD, accent = CYAN, mark = PINK, text = TEXT)
+    val COLORS: StripColors get() = StripColors(background = BACKGROUND, selectedBackground = CARD, accent = CYAN, mark = PINK, text = TEXT)
     private const val BORDER_DP = 2
 
     private val labels = HashMap<Int, Typeface>()

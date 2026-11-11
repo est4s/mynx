@@ -209,8 +209,8 @@ lists fallback models until a session reports its own.
 Decided by the maintainer (`docs/ROADMAP.md`, Touch mode); the spec is
 `docs/TOUCH-DESIGN.md`. **Style: pixel, with Pixelify Sans** for
 labels, buttons and headings and JetBrains Mono for text (maintainer,
-2026-11-11); the touch screens use the logo's fixed palette, not the
-terminal theme.
+2026-11-11); the touch screens take the terminal theme's colours, Neon
+keeping the logo's palette (entry 190).
 1. **PR 1, written** (branch `touch-chat-home`, entry 186): the font,
    `PixelStyle.kt`, core's `chatHome()`, `ChatHomeView` with its
    `DrawerView`, the wiring (`ChatPlace.HOME`, Back) and
@@ -251,7 +251,13 @@ terminal theme.
    size (a bad one shows the reason), Undo → Undo last change, System
    info, Help's pages, Report a bug → Next opens a tab with the
    report; the default model's first choice reads "Claude Code
-   decides".
+   decides". Entry 189 on the phone: every change said "the app isn't
+   ready yet" and the list didn't redraw (fixed in entry 190), and the
+   maintainer wanted themes to colour the touch screens too (entry
+   190). Again on the phone: change settings (no message, the value
+   changes at once), pick themes (the touch screens follow, Home stays
+   on Theme; Neon gives the logo's colours back), CI's
+   `home-themes-solarized-light.png`.
 3. **Maybe, in core:** a first prompt waiting for the sign-in check
    (MainActivity's `firstPrompt` for now: `ChatController.send()`
    refuses while `CHECKING`); `ChatHub`'s home and cwd made public
@@ -293,6 +299,24 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-11 (190): Settings changes answer right; themes colour the touch screens (written, not compiled)
+
+The maintainer on entry 189's build: every change said "the app isn't
+ready yet" though it applied, and the list only showed it after going
+back; and themes should apply to the app too. The first was a bug:
+`configRequest()` returns null on success, and the activity's `?:`
+turned that into its "not ready" text, so `HomeView` took every change
+as refused (a toast, no redraw). Now only a missing service says so.
+- core, test-first: `pixelPalette()` (`PixelPalette.kt`): no colours
+  file or Neon → `LOGO_PALETTE`; another theme → its background, text,
+  colour 6 as the accent, 5 as the mark (13 its text), cards, lines and
+  dim text mixed between background and text.
+- app: `Pixel`'s colours read the current palette (`Pixel.use()`);
+  `applyColors()` sets it and, when it changed with the screens built,
+  `recreate()`s the activity, saving Home's lists in the service
+  (`homeLevels`). The cached ripple colours became getters.
+Left: CI, then the phone ("Next" 4).
 
 ### 2026-11-11 (189): Settings as touch lists; "Claude Code decides" (written, not compiled)
 

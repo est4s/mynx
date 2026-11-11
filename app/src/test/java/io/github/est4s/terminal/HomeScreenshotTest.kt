@@ -3,7 +3,10 @@ package io.github.est4s.terminal
 import android.app.Application
 import io.github.est4s.terminal.core.HomeMenus
 import io.github.est4s.terminal.core.HomeService
+import io.github.est4s.terminal.core.LOGO_PALETTE
 import io.github.est4s.terminal.core.SystemFacts
+import io.github.est4s.terminal.core.builtInThemeText
+import io.github.est4s.terminal.core.pixelPalette
 import io.github.est4s.terminal.core.WebApps
 import android.view.View
 import android.view.ViewGroup
@@ -34,6 +37,7 @@ class HomeScreenshotTest {
 
     @After
     fun cleanUp() {
+        Pixel.use(LOGO_PALETTE)
         // No links in it, so this can't reach outside it.
         top.deleteRecursively()
     }
@@ -93,6 +97,13 @@ class HomeScreenshotTest {
     fun themes() {
         write(".config/mynx/colors.properties", "# theme: nord\n")
         shoot(home(1080, 2400), "home-themes", "themes", "Theme")
+    }
+
+    @Test
+    fun themedSettings() {
+        Pixel.use(pixelPalette("# theme: solarized-light\n" + builtInThemeText("solarized-light")))
+        write(".config/mynx/colors.properties", "# theme: solarized-light\n")
+        shoot(home(1080, 2400), "home-themes-solarized-light", "themes", "Theme")
     }
 
     @Test

@@ -762,8 +762,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   `docs/TOUCH-DESIGN.md`): touch view starts on `ChatHomeView`
   (`ChatPlace.HOME`), with the rest in its `DrawerView` behind ☰;
   core's `chatHome()` decides what both list. Everything backs out to
-  it. **Pixel style** (`PixelStyle.kt`, `Pixel`): the logo's fixed
-  palette, not the theme's; Pixelify Sans for labels, buttons and
+  it. **Pixel style** (`PixelStyle.kt`, `Pixel`): the terminal theme's
+  colours (maintainer, 2026-11-11: themes apply to the app too), as
+  core's `pixelPalette()` derives them; Neon, the default, keeps the
+  logo's palette. A theme change rebuilds the activity (`recreate()`),
+  Home back on its list (`TerminalService.homeLevels`), since views
+  read `Pixel`'s colours as they're built. Pixelify Sans for labels, buttons and
   headings, JetBrains Mono for text; square boxes, 2 dp borders, the
   pink hard shadow only on a screen's main action; block icons.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,

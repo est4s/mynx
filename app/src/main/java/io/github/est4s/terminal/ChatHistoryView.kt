@@ -59,7 +59,7 @@ class ChatHistoryView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER
         minimumHeight = dp(52) + dp(Pixel.SHADOW_DP)
-        background = Pixel.box(context, fill = Pixel.CYAN, border = 0, shadow = true, ripple = RIPPLE_ON_CYAN)
+        background = Pixel.box(context, fill = Pixel.CYAN, border = 0, shadow = true, ripple = Pixel.RIPPLE_ON_CYAN)
         setPadding(dp(16), 0, dp(16) + dp(Pixel.SHADOW_DP), dp(Pixel.SHADOW_DP))
         isFocusable = true
         contentDescription = "New chat"
@@ -192,8 +192,4 @@ class ChatHistoryView(
     }
 
     private fun dp(value: Int) = Pixel.dp(context, value)
-
-    private companion object {
-        val RIPPLE_ON_CYAN = (Pixel.BACKGROUND and 0x00FFFFFF) or 0x40000000
-    }
 }
