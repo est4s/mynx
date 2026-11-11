@@ -204,21 +204,64 @@ Left: other agents (Codex's `app-server`, Gemini's ACP), which need
 accounts to test; image thumbnails on attachment chips; the Model page
 lists fallback models until a session reports its own.
 
-### 4. Touch mode: chat first, with a drawer (planned, entry 185)
+### 4. Touch mode: chat first, with a drawer (entry 186, in progress)
 
-Decided by the maintainer (`docs/ROADMAP.md`, Touch mode). Not
-started. Design and pictures: `docs/TOUCH-DESIGN.md`, the spec to
-build from. A plan, about 2-3 PRs:
-1. In touch view, start on the chat home (the prompt box, live chats
-   above it) instead of Home's list; Back from a chat goes there.
-2. The drawer behind ☰ (tap only): New chat, latest chats, All chats
-   (the history screen, kept as it is), then Home's main items, then
-   Terminal. What it lists comes from `core` (`HomeMenus` plus
-   `ChatHub`'s rows), test-first; the view stays thin.
-3. Screenshots of both (`Screenshots.kt`), then a phone round.
-The style isn't decided (both are in `docs/TOUCH-DESIGN.md`): the
-"pixel style" from the logo matched it better than the first pass;
-ask the maintainer which, and which font, before building.
+Decided by the maintainer (`docs/ROADMAP.md`, Touch mode); the spec is
+`docs/TOUCH-DESIGN.md`. **Style: pixel, with Pixelify Sans** for
+labels, buttons and headings and JetBrains Mono for text (maintainer,
+2026-11-11); the touch screens take the terminal theme's colours, Neon
+keeping the logo's palette (entry 190).
+1. **PR 1, written** (branch `touch-chat-home`, entry 186): the font,
+   `PixelStyle.kt`, core's `chatHome()`, `ChatHomeView` with its
+   `DrawerView`, the wiring (`ChatPlace.HOME`, Back) and
+   `ChatHomeScreenshotTest`. Not compiled yet: push, fix what CI
+   finds, look at the `screenshots` artifact (`chat-home*.png`), then
+   a phone round:
+   - start in touch view: the chat home, no keyboard; ☰ opens the
+     drawer, the scrim and Back close it; ● N opens Services;
+   - Send from the home: a new chat with that prompt sent (also on a
+     fresh start, when the sign-in check is still running); + and the
+     mic carry the text into the new chat;
+   - the drawer's chats, All chats, each Linux item (lists open Home's
+     list, whose Back returns to the chat home), Terminal;
+   - Back from a chat, the history, a Home list and the terminal lands
+     on the chat home; from it, the app is left;
+   - the app recreated (rotate) comes back to the same screen;
+   - Claude Code not installed: the Install button.
+   Passed on the phone (maintainer, 2026-11-11: "everything seems to
+   be working").
+2. **PR 2, written** (entry 187, on the same branch): the chat, its
+   sheets and the history in the pixel style, with block icons. Look
+   at CI's `chat*.png` and `chat-history*.png`, then on the phone: a
+   chat while working (Stop pink, the box's shadow), a permission card
+   and its buttons, + and Usage, the history's rows and New chat.
+   Then (entry 188): the default model, Copy, Markdown cards, Home's
+   lists and ⋮ in the pixel style, no Terminal buttons. On the phone:
+   + → Model → Default for new chats (then a new chat starts with it:
+   the line under the title), Copy under a reply, a card after Claude
+   writes a `.md` file (Copy, Share), ⋮ → Open in a tab, the drawer's
+   Linux lists. Entry 188 compiled and its screenshots looked right
+   (run 43074583752).
+   Then (entry 189): Settings, System info and Help as touch lists.
+   Look at CI's `home-settings*.png`, `home-themes.png`,
+   `home-setting-*.png`, `home-system-info.png`,
+   `home-release-notes.png`, `home-help.png` and `home-report.png`,
+   then on the phone: drawer → Settings; flip an on/off setting (Swipe
+   between tabs), pick a theme (the terminal changes), type a text
+   size (a bad one shows the reason), Undo → Undo last change, System
+   info, Help's pages, Report a bug → Next opens a tab with the
+   report; the default model's first choice reads "Claude Code
+   decides". Entry 189 on the phone: every change said "the app isn't
+   ready yet" and the list didn't redraw (fixed in entry 190), and the
+   maintainer wanted themes to colour the touch screens too (entry
+   190). Again on the phone: change settings (no message, the value
+   changes at once), pick themes (the touch screens follow, Home stays
+   on Theme; Neon gives the logo's colours back), CI's
+   `home-themes-solarized-light.png`.
+3. **Maybe, in core:** a first prompt waiting for the sign-in check
+   (MainActivity's `firstPrompt` for now: `ChatController.send()`
+   refuses while `CHECKING`); `ChatHub`'s home and cwd made public
+   (MainActivity copies "/root").
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -256,6 +299,118 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-11 (190): Settings changes answer right; themes colour the touch screens (written, not compiled)
+
+The maintainer on entry 189's build: every change said "the app isn't
+ready yet" though it applied, and the list only showed it after going
+back; and themes should apply to the app too. The first was a bug:
+`configRequest()` returns null on success, and the activity's `?:`
+turned that into its "not ready" text, so `HomeView` took every change
+as refused (a toast, no redraw). Now only a missing service says so.
+- core, test-first: `pixelPalette()` (`PixelPalette.kt`): no colours
+  file or Neon → `LOGO_PALETTE`; another theme → its background, text,
+  colour 6 as the accent, 5 as the mark (13 its text), cards, lines and
+  dim text mixed between background and text.
+- app: `Pixel`'s colours read the current palette (`Pixel.use()`);
+  `applyColors()` sets it and, when it changed with the screens built,
+  `recreate()`s the activity, saving Home's lists in the service
+  (`homeLevels`). The cached ripple colours became getters.
+Left: CI, then the phone ("Next" 4).
+
+### 2026-11-11 (189): Settings as touch lists; "Claude Code decides" (written, not compiled)
+
+The maintainer: the default model's "Default" choice didn't make sense
+(renamed, their pick: "Claude Code decides", saying it may change), and
+everything under Settings should be touch menus, not terminal programs
+(their pick: menus, with Update all and GitHub setup still in a tab).
+Entry 188's CI first failed installing `bats` (the runners couldn't
+resolve `security.ubuntu.com`, `apt-get update` didn't help): CI now
+takes bats-core v1.13.0 from GitHub, pinned by hash, in `build.yml` and
+`release.yml`. The guide then lacked `chat-model` (the docs test
+caught it).
+- core, test-first: `chatDefaultModelChoices()`; `HomeSettings.kt`:
+  Settings' lists (`HOME_SETTING_GROUPS`, every setting in one, labels),
+  choices pages, Theme (colours as swatches), Undo (its steps),
+  System info (`SystemFacts`), Help (a touch Getting started, release
+  notes made plain, About, Report a bug typed in). `HomeItem` gained
+  `detail`, `checked`, `swatch` and `kind`; `HomeAction` gained
+  `Config` (a `mynx` request), `Input` and `Link`;
+  `homeInputAction()` says what typed text does.
+- app: `TerminalService.configRequest()` runs a request in-process as
+  `mynx` does (undo records it) and applies it as `processRequests()`
+  does; `HomeView` draws the new rows and a text input page.
+Left: CI's compile and screenshots, then the phone ("Next" 4).
+
+### 2026-11-11 (188): Default model, Copy, Markdown cards, the rest in pixel (written, not compiled)
+
+The maintainer, after trying entry 187's build: ⋮'s Model… was
+useless (+ has Model), there was no way to set the default model (theirs
+picked up a model they didn't want), they wanted Copy on Markdown, all
+menus in the pixel style, and no Terminal buttons (the drawer has one).
+Asked which Copy: both, under each reply and on cards for `.md` files.
+- core, test-first: the `chat-model` setting (`default`: no flag; else
+  a name `--model` takes); `ChatHost.chatDefaultModel()` and
+  `setChatDefaultModel()`, `ChatState.defaultModel`,
+  `ChatController`/`ChatHub.setDefaultModel()`. Only new chats take it:
+  a past one resumes with its own model. `ArtifactKind.MARKDOWN`: a
+  written `.md`/`.markdown` file anywhere (not one a command names),
+  looked for as soon as it's written; actions Copy and Share.
+- app: the Model sheet's "Default for new chats" page; Copy under each
+  reply (its Markdown) and on Markdown cards (the service reads the
+  file, 256 KB at most); ⋮ is a `pixelMenu()` with Open in a tab;
+  `HomeView` in the pixel style; no Terminal in Home, the history or ⋮.
+Left: CI's compile and screenshots, then the phone ("Next" 4).
+
+### 2026-11-11 (187): Chat, its sheets and the history in the pixel style (written, not compiled)
+
+The maintainer tried PR 1 on the phone ("everything seems to be
+working") and asked for the chat and the history to match. On the same
+branch, by the lead alone:
+- `ChatView` takes `Pixel.COLORS` (the palette as `StripColors`), not
+  the theme's; all its text is JetBrains Mono, labels and buttons
+  Pixelify Sans, Markdown headings too (`PixelFontSpan`: the
+  `TypefaceSpan(Typeface)` constructor is API 28+). Inline code is
+  cyan (the text is all mono already). Boxes are square with 2 dp
+  borders; the input box, cards waiting for an answer and artifact
+  cards are cyan with the pink shadow (artifacts with a pink square of
+  the name's first letters, as in the mock-up). The header's ring is a
+  square meter with the percentage under it.
+- `ChatSheet`: square sheet with a cyan top line, block icons
+  (camera, image, file, bolt, chip, refresh, check: new `PixelIcon`s),
+  square usage bars. `res/drawable/chat_*.xml` deleted.
+- `ChatHistoryView` rewritten like the chat home's Continue rows,
+  titled "Chats", New chat cyan with the shadow; it no longer takes
+  colours.
+- `Pixel.scrollbar()`: a square thumb in the line colour (API 29+),
+  also on the drawer and chat home (PR 1's grey scrollbar nit).
+Left: CI's compile and screenshots, then the phone ("Next" 4).
+
+### 2026-11-11 (186): Chat home and drawer, pixel style (PR 1 written, not compiled)
+
+The maintainer chose the pixel style with Pixelify Sans and asked for
+the work to go to subagents. The lead wrote contracts (core's model,
+the `Pixel` kit, the views' API, the wiring) and four subagents built
+them in parallel on one branch, each in its own files:
+- core: `ChatHome.kt` (`chatHome()`: Continue rows, at most 3, working
+  or waiting; the drawer's chats, at most 5, live first; the Linux
+  items from Home's main list; the footer "claude code · auto · ~/"),
+  test-first, 9 tests.
+- `scripts/fetch-font.sh` also fetches Pixelify Sans (google/fonts at
+  `8b0a1d0`, a variable font, sha256 pinned) as `PixelifySans.ttf`;
+  credited in `COMPONENTS` with `OFL-1.1-pixelify-sans.txt`.
+  `PixelStyle.kt`: the palette, both fonts (falling back when the
+  assets are missing), square boxes with the pink hard shadow, block
+  icons on a 20-unit grid.
+- `ChatHomeView.kt`, `DrawerView.kt`: no slide animation (the
+  screenshots would catch it half way).
+- MainActivity: touch view starts on the chat home (`ChatPlace.HOME`),
+  everything backs out to it, HomeView's `leave` returns there from
+  its first level; a Send from the home waits for the new chat's
+  sign-in check (`firstPrompt`).
+- CI fetches the fonts before the tests now, so the screenshots use
+  them (both workflows).
+Left: CI's compile, the screenshots and the phone round ("Next" 4).
 
 ### 2026-11-11 (185): Touch mode design study; chat first with a drawer chosen
 

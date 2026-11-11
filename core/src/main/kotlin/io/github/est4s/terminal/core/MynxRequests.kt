@@ -532,7 +532,7 @@ class MynxRequests(
 internal const val HAND_EDITS = "edits by hand"
 // The ids of requests run by [MynxRequests.call]: no process number, so [MynxRequests.sweep] leaves them be.
 private const val BRIDGE_ID = "bridge-"
-private const val UNDO_DIR = ".local/state/mynx/undo"
+internal const val UNDO_DIR = ".local/state/mynx/undo"
 
 private const val NEW_KEY_BAR = """# A key bar: one button per line, "label = keys". Buttons fill two
 # rows in this order, the first half on top. Format: see ~/AGENTS.md.

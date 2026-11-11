@@ -27,6 +27,7 @@ import io.github.est4s.terminal.core.Mic
 import io.github.est4s.terminal.core.Notice
 import io.github.est4s.terminal.core.Orientation
 import io.github.est4s.terminal.core.Phone
+import io.github.est4s.terminal.core.ReplySink
 import io.github.est4s.terminal.core.RotationLocks
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
@@ -83,6 +84,7 @@ import io.github.est4s.terminal.core.Updater
 import io.github.est4s.terminal.core.downloadApk
 import io.github.est4s.terminal.core.fetchLatestRelease
 import io.github.est4s.terminal.core.parseColorScheme
+import io.github.est4s.terminal.core.parseJson
 import io.github.est4s.terminal.core.Tabs
 import io.github.est4s.terminal.core.closesOnExit
 import io.github.est4s.terminal.core.debianTimeZone
@@ -169,8 +171,8 @@ const val EXTRA_CHAT_SESSION = "chat-session"
 // Past every range in use (web apps take 5000-5999).
 private const val CHAT_NOTICE_ID = 6000
 
-/** Which of touch mode's chat screens shows: none, the history, or a chat. */
-enum class ChatPlace { NONE, HISTORY, CHAT }
+/** Which of touch mode's chat screens shows: none, the chat home (touch view's start), the history, or a chat. */
+enum class ChatPlace { NONE, HOME, HISTORY, CHAT }
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -235,7 +237,7 @@ class TerminalService : Service() {
             picksFile = File(filesDir, "state/chat-picks"),
         )
     }
-    /** Which chat screen was showing, for a recreated activity: the history, the hub's shown chat, or neither. */
+    /** Which chat screen was showing, for a recreated activity: the chat home, the history, the hub's shown chat, or none. */
     var chatPlace = ChatPlace.NONE
     // A chat turn runs (ChatHub.working): auto holds the wakelock for it.
     private var chatWorking = false
@@ -330,11 +332,17 @@ class TerminalService : Service() {
         override fun chatDefaultMode(): String = currentSettings()?.chatMode ?: "auto"
 
         // As pinching writes font-size: undo records it at the next check.
-        override fun setChatDefaultMode(value: String) {
+        override fun setChatDefaultMode(value: String) = writeChatSetting("chat-mode", value)
+
+        override fun chatDefaultModel(): String = currentSettings()?.chatModel ?: "default"
+
+        override fun setChatDefaultModel(value: String) = writeChatSetting("chat-model", value)
+
+        private fun writeChatSetting(key: String, value: String) {
             val file = File(rootfs, "root/$CONFIG_DIR/settings.conf")
             runCatching {
                 file.parentFile?.mkdirs()
-                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "chat-mode", value).getOrThrow())
+                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), key, value).getOrThrow())
             }
         }
 
@@ -343,6 +351,9 @@ class TerminalService : Service() {
             if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
         }
     }
+    /** Home's lists to open again once the activity is built anew (a theme changed its colours); null: none. */
+    var homeLevels: List<Pair<String, String>>? = null
+
     /** Why the app's tools couldn't be updated, for the activity to show. */
     var toolsError: String? = null
         private set
@@ -803,18 +814,39 @@ class TerminalService : Service() {
         for (request in handled) {
             when (request.name) {
                 "preview-colors" -> activity?.previewColors(parseColorScheme(request.args.joinToString("\n"), NEON).scheme)
-                in RELOADING_REQUESTS -> {
-                    activity?.reloadConfig(quiet = true)
-                    // A hand edit to services.conf: tabs, mark and notification follow (only if it changed).
-                    runCatching { serviceManager.reload() }
-                    applySoundSetting()
-                    applyWakelockSetting()
-                    // android-bluetooth, or bluetooth.conf by hand (mynx check).
-                    runCatching { bluetooth.refresh() }
-                }
+                in RELOADING_REQUESTS -> applyConfigChange()
             }
         }
         scheduleSweep()
+    }
+
+    private fun applyConfigChange() {
+        activity?.reloadConfig(quiet = true)
+        // A hand edit to services.conf: tabs, mark and notification follow (only if it changed).
+        runCatching { serviceManager.reload() }
+        applySoundSetting()
+        applyWakelockSetting()
+        // android-bluetooth, or bluetooth.conf by hand (mynx check).
+        runCatching { bluetooth.refresh() }
+    }
+
+    /**
+     * Runs the config request [name] (touch Settings: `set`, `theme-set`,
+     * `undo`) as `mynx` would, recorded for undo, and applies it; the
+     * refusal's text, or null. Main thread.
+     */
+    fun configRequest(name: String, args: List<String>): String? {
+        var answered: String? = null
+        requests.call(name, args, object : ReplySink {
+            override fun waiting(seconds: Int?) {}
+            override fun line(json: String) {}
+            override fun answer(json: String) { answered = json }
+            override fun discard() {}
+        })
+        val reply = answered?.let { runCatching { parseJson(it) }.getOrNull() } as? Map<*, *>
+        if (reply?.get("ok") != true) return reply?.get("error") as? String ?: "$name failed"
+        if (name in RELOADING_REQUESTS) applyConfigChange()
+        return null
     }
 
     // Stops waiting requests that `mynx` cancelled or whose `mynx` has gone.
@@ -1324,10 +1356,23 @@ class TerminalService : Service() {
         return share(Share(listOf(file), null))
     }
 
+    /** A Markdown card's Copy: the file's text, or why not. Reads the file: off the main thread. */
+    fun debianFileText(guest: String): Result<String> {
+        val file = webAppFiles.host(guest)?.takeIf { it.isFile }
+            ?: return Result.failure(IllegalStateException("$guest isn't there any more"))
+        if (file.length() > CHAT_COPY_MAX) return Result.failure(IllegalStateException("${file.name} is too big to copy"))
+        return runCatching { file.readText() }
+    }
+
     /** A chat card's Install (debug builds only, as `mynx install-apk`); null when the installer opened. */
     fun installDebianApk(guest: String): String? {
         val file = webAppFiles.host(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
         return installApk(file)
+    }
+
+    private companion object {
+        // Android's clipboard goes through a binder transaction: keep well under its 1 MB.
+        const val CHAT_COPY_MAX = 256 * 1024L
     }
 
     // Answers `mynx install-apk`: null when the installer opened, else why not.

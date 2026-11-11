@@ -49,12 +49,29 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Before the tests: the screenshots draw with the fonts.
+      # Cached so a GitHub release download outage (504s, 2026-11-08)
+      # can't block builds; the key changes with the pinned version.
+      - uses: actions/cache@v6
+        id: font-cache
+        with:
+          path: app/src/main/assets/fonts
+          key: font-${{ hashFiles('scripts/fetch-font.sh') }}
+
+      - name: Add the fonts
+        if: steps.font-cache.outputs.cache-hit != 'true'
+        run: scripts/fetch-font.sh app/src/main/assets/fonts
+
       - name: Test
         run: ./gradlew --no-daemon test
 
       - name: Shell tests
         run: |
-          sudo apt-get install -y -qq bats >/dev/null
+          # bats-core from GitHub, pinned by hash: Ubuntu's mirror was unreachable from runners.
+          curl -fsSLo /tmp/bats.tar.gz https://github.com/bats-core/bats-core/archive/refs/tags/v1.13.0.tar.gz
+          echo "a85e12b8828271a152b338ca8109aa23493b57950987c8e6dff97ba492772ff3  /tmp/bats.tar.gz" | sha256sum -c -
+          tar xzf /tmp/bats.tar.gz -C /tmp
+          sudo /tmp/bats-core-1.13.0/install.sh /usr/local >/dev/null
           bats tests/shell
 
       - name: mynx tests
@@ -132,18 +149,6 @@ jobs:
 
       - name: Add the app's tools (mynx, editors, themes, release notes)
         run: PRELOAD=build/libmynx-serial.so scripts/pack-tools.sh app/src/main/assets build/release-notes.json
-
-      # Cached so a GitHub release download outage (504s, 2026-11-08)
-      # can't block builds; the key changes with the pinned version.
-      - uses: actions/cache@v6
-        id: font-cache
-        with:
-          path: app/src/main/assets/fonts
-          key: font-${{ hashFiles('scripts/fetch-font.sh') }}
-
-      - name: Add the terminal font
-        if: steps.font-cache.outputs.cache-hit != 'true'
-        run: scripts/fetch-font.sh app/src/main/assets/fonts
 
       - name: Build the signed release APK
         env:

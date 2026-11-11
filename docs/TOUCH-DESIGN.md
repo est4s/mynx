@@ -77,7 +77,9 @@ Both versions use the same layout. The pixel style matched the logo
 better in the study; the first pass is closer to today's screens.
 
 **Pixel style**, taken from `docs/images/mynx.svg`:
-- Colours: background `#0D0221`; cards and fields `#170838`; lines
+- Colours (Neon's; another terminal theme gives its own, worked
+  out by `pixelPalette()`: maintainer, 2026-11-11): background
+  `#0D0221`; cards and fields `#170838`; lines
   `#3D2A70`; text `#F2ECFF`, secondary text `#B3A6DC`; cyan `#00F3FF`
   (actions, "working", focus); pink `#FF0BBB` (the shadow, section
   labels, "waiting for you"; `#FF7FDC` for pink text on dark).

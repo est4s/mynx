@@ -186,11 +186,16 @@ See `docs/ROADMAP.md` "How it works". The details:
   The app's own commands are **not** in the image (see "The app's
   tools"). Ship it compressed in the APK's assets and unpack it on first
   launch into the app's private storage.
-- **Terminal font:** JetBrains Mono Nerd Font Mono (OFL-1.1), downloaded
-  in CI by `scripts/fetch-font.sh` (release pinned by hash) into
-  `app/src/main/assets/fonts/` with its `OFL.txt`; never committed.
-  CI caches that folder (keyed on the script), so a GitHub download
-  outage only matters when the version changes.
+- **Fonts:** the terminal's is JetBrains Mono Nerd Font Mono (OFL-1.1);
+  touch mode's headings, labels and buttons are Pixelify Sans (OFL-1.1,
+  a variable font, `wght` 400-700; maintainer's decision, 2026-11-11),
+  through `PixelStyle.kt`'s `Pixel.label()`. `scripts/fetch-font.sh`
+  downloads both in CI (the Nerd Font's release and Google Fonts' file
+  at a pinned commit, each pinned by hash) into
+  `app/src/main/assets/fonts/`, with `OFL.txt` and
+  `PixelifySans-OFL.txt`; never committed. CI caches that folder (keyed
+  on the script), so a GitHub download outage only matters when a
+  version changes.
 - **Colours:** Termux's `colors.properties` format, parsed in `core`
   (`ColorScheme.kt`). Built-in themes are
   `core/src/main/resources/.../themes/NAME.colors.properties`, listed in
@@ -739,15 +744,32 @@ See `docs/ROADMAP.md` "How it works". The details:
   `HomeMenus` takes a snapshot (`ServiceManager.homeServices()`) and
   `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
   thread; `ServiceHost.changed` refreshes it while it shows, and in
-  touch view the strip's `● N` opens it. AI agents → Claude Code
+  touch view the strip's `● N` opens it. **Settings, System info and
+  Help are touch lists** (`HomeSettings.kt`; maintainer's decision,
+  2026-11-11): each setting by group, its choices, a theme list with
+  swatches, Undo, text typed in a page of `HomeView`'s own. A change
+  is a `HomeAction.Config`, the `mynx` request run in the app
+  (`TerminalService.configRequest()`), so undo records it and it
+  applies as `mynx set` does; Update all, GitHub setup, the key bar
+  and menu editors and About's full list stay terminal programs in a
+  tab. AI agents → Claude Code
   (`HomeAction.Chat`) opens the agent's home, the chat history
   (`app/.../ChatHistoryView.kt`, over the terminal too): New chat, then
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
   (maintainer's decision, 2026-11-10). The service keeps which chat
   screen shows (`chatPlace`) for a recreated activity.
-  **Next** (maintainer's decision, 2026-11-11): touch view starts on
-  the chat home, with the rest in a drawer behind ☰;
-  `docs/TOUCH-DESIGN.md` is the spec, with pictures.
+  **Chat home** (maintainer's decision, 2026-11-11; the spec is
+  `docs/TOUCH-DESIGN.md`): touch view starts on `ChatHomeView`
+  (`ChatPlace.HOME`), with the rest in its `DrawerView` behind ☰;
+  core's `chatHome()` decides what both list. Everything backs out to
+  it. **Pixel style** (`PixelStyle.kt`, `Pixel`): the terminal theme's
+  colours (maintainer, 2026-11-11: themes apply to the app too), as
+  core's `pixelPalette()` derives them; Neon, the default, keeps the
+  logo's palette. A theme change rebuilds the activity (`recreate()`),
+  Home back on its list (`TerminalService.homeLevels`), since views
+  read `Pixel`'s colours as they're built. Pixelify Sans for labels, buttons and
+  headings, JetBrains Mono for text; square boxes, 2 dp borders, the
+  pink hard shadow only on a screen's main action; block icons.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with
@@ -777,13 +799,20 @@ See `docs/ROADMAP.md` "How it works". The details:
   new ones not in a transcript first. `app/.../ChatView.kt` draws the
   shown chat (one row per `ChatItem`,
   only changed rows are touched, `core/.../ChatScreen.kt`). **Layout**
-  (maintainer's request, 2026-11-10: like the Claude app, in the
-  theme's colours): ← and the title over "Claude Code · mode", the
-  context ring (`usageRing()`, tap: the Usage sheet from
-  `usageRows()`), ⋮ (Model…, To tab, Terminal); the box is a pill of
-  +, the input, the mic and one round button that is Stop while a turn
-  runs and the box is empty, Send otherwise (it follows each
-  keystroke). + is the Add context sheet (`ChatSheet.kt`, an overlay
+  (maintainer's request, 2026-11-10: like the Claude app; in the pixel
+  style since 2026-11-11, as the chat home, after
+  `docs/images/touch/chat-pixel.png`): ← and the title over "claude
+  code · mode", the context meter (`UsageRing`, a square bar over the
+  percentage from `usageRing()`; tap: the Usage sheet from
+  `usageRows()`), ⋮ (Open in a tab, in `pixelMenu()`: the touch
+  screens have no Terminal buttons, the drawer has one; maintainer,
+  2026-11-11); the box is the cyan
+  one with the shadow: the input, +, the mic and one square button
+  that is Stop (pink) while a turn runs and the box is empty, Send
+  (cyan) otherwise, an empty square when it can't send (it follows
+  each keystroke). Cards waiting for an answer (permission, question,
+  plan) and artifact cards get the cyan border and the shadow; tools
+  are quiet outlined rows. + is the Add context sheet (`ChatSheet.kt`, an overlay
   inside the view so screenshots draw it): Camera, Photos and Files
   (`ChatFiles.kt`, copied into the share folder as shares are, sent as
   paths, `promptWithAttachments()`), Permission (this chat's mode, and
@@ -832,8 +861,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   The history lists `claudeTranscriptDir`'s sessions (the 50 newest,
   first 16 KB each for the title). Claude names that folder by turning
   every character but ASCII letters and digits into `-` (read in its
-  binary). **Model and mode** (`core/.../ChatSettings.kt`): Model…
-  and Mode… in ⋮ go to a running process (`set_model`,
+  binary). **Model and mode** (`core/.../ChatSettings.kt`): Model
+  and Permission in + go to a running process (`set_model`,
   `set_permission_mode`) and are every launch's `--model` and
   `--permission-mode` for that chat (and its hand-off tab's) once
   Claude takes them (a refused one is dropped). What Claude reports
@@ -846,7 +875,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   them: `--resume` restores the model, not the mode. A new chat, or a
   past one with no picks kept, starts in the `chat-mode` setting
   (default `auto`, read through `ChatHost.chatDefaultMode()`; "Use as
-  default" writes it). **Usage** (`core/.../ChatUsage.kt`): each
+  default" writes it). A new chat (not a past one: `--resume` restores
+  its model) also starts with the `chat-model` setting (default
+  `default`, no flag: Claude's own; `ChatHost.chatDefaultModel()`), which
+  the Model sheet's "Default for new chats" writes (maintainer's
+  request, 2026-11-11: Claude's own default isn't always wanted).
+  Each of Claude's replies has Copy under it (its Markdown). **Usage** (`core/.../ChatUsage.kt`): each
   top-level `assistant` line's usage (input + cache read + cache
   written) is the chat's context, `result.modelUsage[model].contextWindow`
   its window (kept per model for resumed chats, whose context comes
@@ -870,7 +904,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`core/.../ChatArtifacts.kt`, its top comment is the contract): a
   turn's completed Write/Edit/NotebookEdit paths, and Bash's paths in
   the app folders or ending `.apk` (only if changed since the turn
-  started), are checked on disk off the main thread with Home's rules
+  started), and written `.md` files anywhere (Copy: the file's text,
+  up to 256 KB; Share), are checked on disk off the main thread with Home's rules
   (`WebApps`, `terminalAppLabel`); one `ChatItem.Artifact` per app per
   turn, changed in place; history gets them too (written files only).
   Run and Add to home screen are `menu --act` tabs; Install only in

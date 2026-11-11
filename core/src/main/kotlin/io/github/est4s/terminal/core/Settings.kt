@@ -45,6 +45,8 @@ data class Settings(
     val view: AppView = AppView.TERMINAL,
     /** The permission mode new chats of touch mode's Chat start in: one of [CHAT_MODES]. */
     val chatMode: String = "auto",
+    /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
+    val chatModel: String = "default",
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -70,6 +72,7 @@ data class Settings(
         "serial-names" to if (serialNames) "on" else "off",
         "view" to view.word,
         "chat-mode" to chatMode,
+        "chat-model" to chatModel,
     )
 }
 
@@ -249,7 +252,16 @@ val SETTINGS: List<SettingDef> = listOf(
         oneOf("chat-mode", CHAT_MODES.map { it.value }),
         { copy(chatMode = it) },
     ),
+    SettingDef(
+        "chat-model", "The model new chats in touch view's Chat start with: a name --model takes (opus, sonnet, haiku, or a full id like claude-sonnet-5-5), or default for Claude Code's own. A chat's own pick wins for that chat.",
+        "default", null,
+        { if (CHAT_MODEL_NAME.matches(it)) null else "chat-model must be a model's name, like opus or claude-sonnet-5-5, or default" },
+        { copy(chatModel = it) },
+    ),
 )
+
+// What `--model` takes: an alias or an id, with `[1m]` for the long context.
+private val CHAT_MODEL_NAME = Regex("[A-Za-z0-9._-]{1,64}(\\[1m])?")
 
 private val SETTINGS_BY_KEY = SETTINGS.associateBy { it.key }
 

@@ -25,6 +25,24 @@ class ChatSettingsTest {
     }
 
     @Test
+    fun `the default for new chats calls the default Claude Code's own pick`() {
+        val models = chatDefaultModelChoices(reported)
+        val first = models.first()
+        assertEquals("default", first.value)
+        assertEquals("Claude Code decides", first.name)
+        assertEquals("No model is set; Claude Code picks, and its pick can change with its updates.", first.description)
+        assertEquals(reported.drop(1), models.drop(1))
+        assertEquals(listOf("default", "opus", "sonnet", "haiku"), chatDefaultModelChoices(emptyList()).map { it.value })
+        assertEquals("Claude Code decides", chatDefaultModelChoices(emptyList()).first().name)
+    }
+
+    @Test
+    fun `the default for new chats offers Claude Code's pick even when the agent lists none`() {
+        val noDefault = reported.filter { it.value != "default" }
+        assertEquals(listOf("default") + noDefault.map { it.value }, chatDefaultModelChoices(noDefault).map { it.value })
+    }
+
+    @Test
     fun `nothing chosen or known is the default model, asking first`() {
         assertEquals(ChatStatusLine("Default model", "Asks first", highlighted = false), chatStatusLine(null, null, null, emptyList()))
         assertEquals("Default model · Asks first", chatStatusLine(null, null, "default", emptyList()).text)
