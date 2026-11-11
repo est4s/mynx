@@ -49,7 +49,6 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.TableLayout
 import android.widget.TableRow
@@ -102,11 +101,6 @@ private const val NEW_CHAT_TITLE = "New chat"
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp")
 // Root's home, as the chat runs in it (ChatController's default).
 private const val CHAT_HOME = "/root"
-// The header's ⋮ menu items, and how To tab looks when it can't go now.
-private const val MORE_TO_TAB = 3
-private const val MORE_MODEL = 4
-private const val MORE_TERMINAL = 5
-private const val MORE_GREYED = 0x80808080.toInt()
 private val RIPPLE_ON_FILL = (Pixel.BACKGROUND and 0x00FFFFFF) or 0x40000000
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
@@ -198,10 +192,11 @@ private class ChatLink(private val url: String, private val color: Int, private 
  * Touch mode's Chat, in the pixel style ([Pixel]): the hub's shown
  * [ChatController] as rows over the terminal, drawn from the [ChatState]s the activity passes to [show].
  * Rows only change in place (see [chatRowChanges]), so streaming touches
- * one row. [back] is ←, and [showTerminal] ⋮'s Terminal, as on Home;
+ * one row. [back] is ←; ⋮ has To tab (the terminal is the drawer's);
  * [openTab] runs a command in a new tab (signing in, installing, an
  * artifact card's Run). A card's Open is [openApp] (a web app's name),
- * Share [shareFile] and Install [installApk] (Debian paths); a null
+ * Share [shareFile], Copy [copyFile] (a Markdown file's text to the
+ * clipboard) and Install [installApk] (Debian paths); a null
  * [installApk] means this build can't install apps. [attach] picks files
  * for + (camera, photos, files) and hands them back copied into Debian;
  * null hides the tiles. [clock] is the time Usage's resets are told from.
@@ -211,10 +206,10 @@ class ChatView(
     context: Context,
     private val controller: () -> ChatController?,
     private val back: () -> Unit,
-    private val showTerminal: () -> Unit,
     private val openTab: (List<String>) -> Unit,
     private val openApp: (String) -> Unit,
     private val shareFile: (String) -> Unit,
+    private val copyFile: (String) -> Unit,
     private val installApk: ((String) -> Unit)?,
     attach: ((ChatAttachSource, (List<ChatAttachment>) -> Unit) -> Unit)? = null,
     private val dictation: ChatDictation? = null,
@@ -258,7 +253,7 @@ class ChatView(
         isFocusable = true
         setOnClickListener { sheets.open(ChatSheetPage.USAGE) }
     }
-    // Model…, To tab and Terminal.
+    // To tab: Model is +'s, the terminal the drawer's.
     private val moreButton = iconButton(PixelIcon.MORE, Pixel.TEXT, "More") { showMore() }
     private val header = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -752,25 +747,9 @@ class ChatView(
     }
 
     private fun showMore() {
-        val popup = PopupMenu(context, moreButton)
-        popup.menu.add(Menu.NONE, MORE_MODEL, Menu.NONE, "Model…")
         // Greyed when it can't go, but still tappable, to say why.
-        val toTab: CharSequence = if (controller()?.state?.handOffBlock == null) {
-            "To tab"
-        } else {
-            SpannableString("To tab").apply { setSpan(ForegroundColorSpan(MORE_GREYED), 0, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-        }
-        popup.menu.add(Menu.NONE, MORE_TO_TAB, Menu.NONE, toTab)
-        popup.menu.add(Menu.NONE, MORE_TERMINAL, Menu.NONE, "Terminal")
-        popup.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MORE_TO_TAB -> handOff()
-                MORE_MODEL -> sheets.open(ChatSheetPage.MODEL)
-                MORE_TERMINAL -> showTerminal()
-            }
-            true
-        }
-        popup.show()
+        val blocked = controller()?.state?.handOffBlock != null
+        pixelMenu(moreButton, listOf(PixelMenuEntry("Open in a tab", greyed = blocked) { handOff() }))
     }
 
     // Says why when it can't go now (a turn running, nothing to resume yet).
@@ -842,8 +821,18 @@ class ChatView(
         val parser = IncrementalMarkdown()
         val drawnCells = ArrayList<MdCell>()
         var drawnRows: List<MdRow> = emptyList()
-        return Cell(column) { item ->
-            val next = mdRows(parser.update((item as ChatItem.Agent).text))
+        // The reply as Claude wrote it (its Markdown), under the rows.
+        var source = ""
+        val copy = copyButton(colors) { source }
+        val outer = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(column)
+            addView(copy, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(2) })
+        }
+        return Cell(outer) { item ->
+            source = (item as ChatItem.Agent).text
+            copy.visibility = if (source.isBlank()) View.GONE else View.VISIBLE
+            val next = mdRows(parser.update(source))
             next.forEachIndexed { i, row ->
                 val before = next.getOrNull(i - 1)
                 val cell = drawnCells.getOrNull(i)
@@ -1246,6 +1235,7 @@ class ChatView(
                         ArtifactAction.ADD_TO_HOME -> openTab(chatArtifactShortcutCommand(artifact))
                         ArtifactAction.RUN -> openTab(chatArtifactRunCommand(artifact))
                         ArtifactAction.INSTALL -> install?.invoke(artifact.shareFile)
+                        ArtifactAction.COPY -> copyFile(artifact.shareFile)
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
@@ -1366,6 +1356,20 @@ class ChatView(
             Pixel.box(context, fill = tone, border = 0, ripple = RIPPLE_ON_FILL)
         } else {
             Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
+        }
+    }
+
+    // Copy: [text]'s at the time of the tap, on the clipboard; it says Copied for a moment.
+    private fun copyButton(colors: StripColors, text: () -> String) = linkButton("Copy", colors) { }.apply {
+        setTextColor(Pixel.DIM)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        minHeight = dp(40)
+        setPadding(dp(2), 0, dp(8), 0)
+        setOnClickListener {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("reply", text()))
+            this.text = "Copied"
+            postDelayed({ this.text = "Copy" }, 1500L)
         }
     }
 

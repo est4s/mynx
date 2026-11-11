@@ -792,7 +792,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   `docs/images/touch/chat-pixel.png`): ← and the title over "claude
   code · mode", the context meter (`UsageRing`, a square bar over the
   percentage from `usageRing()`; tap: the Usage sheet from
-  `usageRows()`), ⋮ (Model…, To tab, Terminal); the box is the cyan
+  `usageRows()`), ⋮ (Open in a tab, in `pixelMenu()`: the touch
+  screens have no Terminal buttons, the drawer has one; maintainer,
+  2026-11-11); the box is the cyan
   one with the shadow: the input, +, the mic and one square button
   that is Stop (pink) while a turn runs and the box is empty, Send
   (cyan) otherwise, an empty square when it can't send (it follows
@@ -847,8 +849,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   The history lists `claudeTranscriptDir`'s sessions (the 50 newest,
   first 16 KB each for the title). Claude names that folder by turning
   every character but ASCII letters and digits into `-` (read in its
-  binary). **Model and mode** (`core/.../ChatSettings.kt`): Model…
-  and Mode… in ⋮ go to a running process (`set_model`,
+  binary). **Model and mode** (`core/.../ChatSettings.kt`): Model
+  and Permission in + go to a running process (`set_model`,
   `set_permission_mode`) and are every launch's `--model` and
   `--permission-mode` for that chat (and its hand-off tab's) once
   Claude takes them (a refused one is dropped). What Claude reports
@@ -861,7 +863,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   them: `--resume` restores the model, not the mode. A new chat, or a
   past one with no picks kept, starts in the `chat-mode` setting
   (default `auto`, read through `ChatHost.chatDefaultMode()`; "Use as
-  default" writes it). **Usage** (`core/.../ChatUsage.kt`): each
+  default" writes it). A new chat (not a past one: `--resume` restores
+  its model) also starts with the `chat-model` setting (default
+  `default`, no flag: Claude's own; `ChatHost.chatDefaultModel()`), which
+  the Model sheet's "Default for new chats" writes (maintainer's
+  request, 2026-11-11: Claude's own default isn't always wanted).
+  Each of Claude's replies has Copy under it (its Markdown). **Usage** (`core/.../ChatUsage.kt`): each
   top-level `assistant` line's usage (input + cache read + cache
   written) is the chat's context, `result.modelUsage[model].contextWindow`
   its window (kept per model for resumed chats, whose context comes
@@ -885,7 +892,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`core/.../ChatArtifacts.kt`, its top comment is the contract): a
   turn's completed Write/Edit/NotebookEdit paths, and Bash's paths in
   the app folders or ending `.apk` (only if changed since the turn
-  started), are checked on disk off the main thread with Home's rules
+  started), and written `.md` files anywhere (Copy: the file's text,
+  up to 256 KB; Share), are checked on disk off the main thread with Home's rules
   (`WebApps`, `terminalAppLabel`); one `ChatItem.Artifact` per app per
   turn, changed in place; history gets them too (written files only).
   Run and Add to home screen are `menu --act` tabs; Install only in

@@ -29,7 +29,7 @@ import java.time.ZoneId
 enum class ChatAttachSource { CAMERA, PHOTOS, FILES }
 
 /** The bottom sheets over Chat; a sheet's sub page (Permission, Model) goes back to the one it came from. */
-enum class ChatSheetPage { ADD, PERMISSION, DEFAULT_MODE, MODEL, USAGE }
+enum class ChatSheetPage { ADD, PERMISSION, DEFAULT_MODE, MODEL, DEFAULT_MODEL, USAGE }
 
 /** One of Chat's block icons. */
 internal fun chatIcon(context: Context, icon: PixelIcon, color: Int, sizeDp: Int) = ImageView(context).apply {
@@ -195,6 +195,7 @@ class ChatSheetLayer(
             ChatSheetPage.PERMISSION -> permissionPage(now, colors)
             ChatSheetPage.DEFAULT_MODE -> defaultModePage(now, colors)
             ChatSheetPage.MODEL -> modelPage(now, colors)
+            ChatSheetPage.DEFAULT_MODEL -> defaultModelPage(now, colors)
             ChatSheetPage.USAGE -> usagePage(now, colors)
         }
         contentScroll.scrollTo(0, 0)
@@ -275,9 +276,27 @@ class ChatSheetLayer(
 
     private fun modelPage(state: ChatState?, colors: StripColors) {
         header("Model", colors)
+        content.addView(note("For this chat", colors))
         state?.models.orEmpty().forEach { model ->
             content.addView(choiceRow(model.name, model.description, state?.model == model.value, colors) {
                 chat()?.setModel(model.value)
+                back()
+            }, rowParams(0))
+        }
+        val current = state?.defaultModel ?: "default"
+        val name = state?.models.orEmpty().firstOrNull { it.value == current }?.name ?: current
+        content.addView(navRow(null, "Default for new chats", name, colors) {
+            open(ChatSheetPage.DEFAULT_MODEL)
+        }, rowParams().apply { topMargin = dp(12) })
+    }
+
+    private fun defaultModelPage(state: ChatState?, colors: StripColors) {
+        header("Default for new chats", colors)
+        content.addView(note("New chats start with this model; a chat's own pick wins for that chat.", colors))
+        val current = state?.defaultModel ?: "default"
+        state?.models.orEmpty().forEach { model ->
+            content.addView(choiceRow(model.name, model.description, current == model.value, colors) {
+                chat()?.setDefaultModel(model.value)
                 back()
             }, rowParams(0))
         }

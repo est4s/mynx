@@ -20,15 +20,14 @@ private const val HISTORY_TITLE = "Chats"
  * The agent's home in touch mode, in the pixel style: New chat, then its
  * chats ([ChatHub.rows]: the live ones with their marks, and the folder's
  * past ones), newest first. A row goes to [openChat] with its session id,
- * New chat with null. [back] is the header's ←, [showTerminal] its terminal
- * icon.
+ * New chat with null. [back] is the header's ←; the terminal is the chat
+ * home drawer's.
  */
 @SuppressLint("ViewConstructor")
 class ChatHistoryView(
     context: Context,
     private val hub: () -> ChatHub?,
     private val back: () -> Unit,
-    showTerminal: () -> Unit,
     private val openChat: (String?) -> Unit,
 ) : LinearLayout(context) {
     private val rows = LinearLayout(context).apply {
@@ -43,7 +42,7 @@ class ChatHistoryView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(60)
-        setPadding(dp(4), 0, dp(4), 0)
+        setPadding(dp(4), 0, dp(16), 0)
         addView(iconButton(PixelIcon.BACK, Pixel.CYAN, "Back") { back() }, LayoutParams(dp(52), dp(52)))
         addView(TextView(context).apply {
             text = HISTORY_TITLE
@@ -54,7 +53,6 @@ class ChatHistoryView(
             ellipsize = TextUtils.TruncateAt.END
             setPadding(dp(4), 0, dp(8), 0)
         }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        addView(iconButton(PixelIcon.TERMINAL, Pixel.TEXT, "Terminal") { showTerminal() }, LayoutParams(dp(52), dp(52)))
     }
     // The screen's main action: filled cyan, with the logo's shadow.
     private val newButton = LinearLayout(context).apply {

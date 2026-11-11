@@ -330,11 +330,17 @@ class TerminalService : Service() {
         override fun chatDefaultMode(): String = currentSettings()?.chatMode ?: "auto"
 
         // As pinching writes font-size: undo records it at the next check.
-        override fun setChatDefaultMode(value: String) {
+        override fun setChatDefaultMode(value: String) = writeChatSetting("chat-mode", value)
+
+        override fun chatDefaultModel(): String = currentSettings()?.chatModel ?: "default"
+
+        override fun setChatDefaultModel(value: String) = writeChatSetting("chat-model", value)
+
+        private fun writeChatSetting(key: String, value: String) {
             val file = File(rootfs, "root/$CONFIG_DIR/settings.conf")
             runCatching {
                 file.parentFile?.mkdirs()
-                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "chat-mode", value).getOrThrow())
+                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), key, value).getOrThrow())
             }
         }
 
@@ -1324,10 +1330,23 @@ class TerminalService : Service() {
         return share(Share(listOf(file), null))
     }
 
+    /** A Markdown card's Copy: the file's text, or why not. Reads the file: off the main thread. */
+    fun debianFileText(guest: String): Result<String> {
+        val file = webAppFiles.host(guest)?.takeIf { it.isFile }
+            ?: return Result.failure(IllegalStateException("$guest isn't there any more"))
+        if (file.length() > CHAT_COPY_MAX) return Result.failure(IllegalStateException("${file.name} is too big to copy"))
+        return runCatching { file.readText() }
+    }
+
     /** A chat card's Install (debug builds only, as `mynx install-apk`); null when the installer opened. */
     fun installDebianApk(guest: String): String? {
         val file = webAppFiles.host(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
         return installApk(file)
+    }
+
+    private companion object {
+        // Android's clipboard goes through a binder transaction: keep well under its 1 MB.
+        const val CHAT_COPY_MAX = 256 * 1024L
     }
 
     // Answers `mynx install-apk`: null when the installer opened, else why not.

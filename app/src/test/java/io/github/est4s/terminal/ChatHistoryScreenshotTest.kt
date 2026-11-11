@@ -27,7 +27,7 @@ private fun sampleRows(now: Long) = listOf(
 class ChatHistoryScreenshotTest {
     private fun shoot(w: Int, h: Int, name: String, rows: List<ChatHistoryRow>? = sampleRows(System.currentTimeMillis())) {
         val view = Screenshots.open(w, h) { activity ->
-            ChatHistoryView(activity, hub = { null }, back = {}, showTerminal = {}, openChat = {})
+            ChatHistoryView(activity, hub = { null }, back = {}, openChat = {})
         }
         rows?.let { view.show(it) }
         Screenshots.settle()

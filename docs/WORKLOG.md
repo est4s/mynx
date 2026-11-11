@@ -235,8 +235,12 @@ terminal theme.
    at CI's `chat*.png` and `chat-history*.png`, then on the phone: a
    chat while working (Stop pink, the box's shadow), a permission card
    and its buttons, + and Usage, the history's rows and New chat.
-   Left for later: Home's lists (`HomeView`) and ⋮'s popup (Android's
-   own menu) still follow the theme.
+   Then (entry 188): the default model, Copy, Markdown cards, Home's
+   lists and ⋮ in the pixel style, no Terminal buttons. On the phone:
+   + → Model → Default for new chats (then a new chat starts with it:
+   the line under the title), Copy under a reply, a card after Claude
+   writes a `.md` file (Copy, Share), ⋮ → Open in a tab, the drawer's
+   Linux lists.
 3. **Maybe, in core:** a first prompt waiting for the sign-in check
    (MainActivity's `firstPrompt` for now: `ChatController.send()`
    refuses while `CHECKING`); `ChatHub`'s home and cwd made public
@@ -278,6 +282,26 @@ Ctrl+Shift).
 ---
 
 ## Log
+
+### 2026-11-11 (188): Default model, Copy, Markdown cards, the rest in pixel (written, not compiled)
+
+The maintainer, after trying entry 187's build: ⋮'s Model… was
+useless (+ has Model), there was no way to set the default model (theirs
+picked up a model they didn't want), they wanted Copy on Markdown, all
+menus in the pixel style, and no Terminal buttons (the drawer has one).
+Asked which Copy: both, under each reply and on cards for `.md` files.
+- core, test-first: the `chat-model` setting (`default`: no flag; else
+  a name `--model` takes); `ChatHost.chatDefaultModel()` and
+  `setChatDefaultModel()`, `ChatState.defaultModel`,
+  `ChatController`/`ChatHub.setDefaultModel()`. Only new chats take it:
+  a past one resumes with its own model. `ArtifactKind.MARKDOWN`: a
+  written `.md`/`.markdown` file anywhere (not one a command names),
+  looked for as soon as it's written; actions Copy and Share.
+- app: the Model sheet's "Default for new chats" page; Copy under each
+  reply (its Markdown) and on Markdown cards (the service reads the
+  file, 256 KB at most); ⋮ is a `pixelMenu()` with Open in a tab;
+  `HomeView` in the pixel style; no Terminal in Home, the history or ⋮.
+Left: CI's compile and screenshots, then the phone ("Next" 4).
 
 ### 2026-11-11 (187): Chat, its sheets and the history in the pixel style (written, not compiled)
 

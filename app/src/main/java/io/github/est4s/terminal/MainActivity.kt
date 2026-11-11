@@ -2,6 +2,8 @@ package io.github.est4s.terminal
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
@@ -559,9 +561,18 @@ class MainActivity : Activity(), FrontActivity {
         terminalView.requestFocus()
     }
 
-    private fun chatHistoryToTerminal() {
-        hideChatHistory()
-        terminalView.requestFocus()
+    // A Markdown card's Copy: the file is read off the main thread.
+    private fun copyDebianFile(path: String) {
+        val service = service ?: return
+        thread(name = "chat-copy") {
+            val text = service.debianFileText(path)
+            runOnUiThread {
+                text.onSuccess {
+                    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText(path.substringAfterLast('/'), it))
+                    Toast.makeText(this, "Copied ${path.substringAfterLast('/')}", Toast.LENGTH_SHORT).show()
+                }.onFailure { toastError(it.message ?: "Couldn't read $path") }
+            }
+        }
     }
 
     /** The chat was handed to a tab, which the service has opened: show it; Back comes back to the chat. */
@@ -683,8 +694,7 @@ class MainActivity : Activity(), FrontActivity {
             addView(keyBar, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
 
-        home = HomeView(this, ::homeMenus, ::onHomeAction, ::hideHome).also {
-            it.colors = strip
+        home = HomeView(this, ::homeMenus, ::onHomeAction).also {
             // Touch view reaches Home's lists from the chat home's drawer, and goes back there.
             it.leave = ::showChatHome
             it.visibility = View.GONE
@@ -692,9 +702,10 @@ class MainActivity : Activity(), FrontActivity {
         }
 
         chat = ChatView(
-            this, { service?.chats?.shown }, { goBack() }, ::chatToTerminal, ::openTabFromChat,
+            this, { service?.chats?.shown }, { goBack() }, ::openTabFromChat,
             openApp = { name -> startActivity(WebAppActivity.shortcutIntent(this, name)) },
             shareFile = { path -> toastError(service?.shareDebianFile(path)) },
+            copyFile = ::copyDebianFile,
             // As `mynx install-apk`: only debug builds install other apps.
             installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
             attach = { source, done -> chatFiles.pick(source, done) },
@@ -705,7 +716,7 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }, ::chatHistoryToTerminal, ::openChat).also {
+        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }, ::openChat).also {
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
@@ -950,7 +961,6 @@ class MainActivity : Activity(), FrontActivity {
         terminalView.setBackgroundColor(next.background)
         stripScroll.setBackgroundColor(strip.background)
         keyBar.colors = strip
-        home?.colors = strip
         renderStrip()
         terminalView.onScreenUpdated()
     }

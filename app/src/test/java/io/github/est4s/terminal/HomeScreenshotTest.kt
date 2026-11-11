@@ -39,8 +39,7 @@ class HomeScreenshotTest {
             activity,
             menus = { HomeMenus(WebApps(home, rootfs.path, tools), servicesActive = 1, services = services) },
             act = {},
-            showTerminal = {},
-        ).apply { colors = Screenshots.colors }
+        )
     }
 
     private fun shoot(view: HomeView, name: String, menu: String? = null, title: String = "") {

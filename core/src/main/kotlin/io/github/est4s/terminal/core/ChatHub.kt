@@ -153,6 +153,13 @@ class ChatHub(
         if (chat != null) chat.setDefaultMode(value) else host.setChatDefaultMode(value)
     }
 
+    /** The model's "Default for new chats": the `chat-model` setting. */
+    fun setDefaultModel(value: String) {
+        if (value.isBlank()) return
+        val chat = shown
+        if (chat != null) chat.setDefaultModel(value) else host.setChatDefaultModel(value)
+    }
+
     /** The app is exiting: every chat stops. */
     fun shutdown() {
         chats.toList().forEach { it.shutdown() }
@@ -257,6 +264,10 @@ class ChatHub(
         override fun chatDefaultMode(): String? = host.chatDefaultMode()
 
         override fun setChatDefaultMode(value: String) = host.setChatDefaultMode(value)
+
+        override fun chatDefaultModel(): String? = host.chatDefaultModel()
+
+        override fun setChatDefaultModel(value: String) = host.setChatDefaultModel(value)
 
         override fun workingChanged(working: Boolean) {
             val now = this@ChatHub.working

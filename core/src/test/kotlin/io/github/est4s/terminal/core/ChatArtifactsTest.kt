@@ -226,4 +226,30 @@ class ChatArtifactsTest {
         assertEquals(runThenShell("keybar menu menu --act 'app:/root/terminal-apps/t'"), chatArtifactRunCommand(tool))
         assertEquals(runThenShell("keybar menu menu --act 'shortcut:demo'"), chatArtifactShortcutCommand(web))
     }
+
+    @Test
+    fun `a Markdown file the agent wrote counts anywhere, and is looked for as soon as it's written`() {
+        write("/root/notes/plan.md", "# Plan")
+        write("/root/README.MARKDOWN", "x")
+        assertEquals(
+            listOf(
+                ChatArtifact(ArtifactKind.MARKDOWN, "/root/notes/plan.md", "plan.md", "/root/notes/plan.md"),
+                ChatArtifact(ArtifactKind.MARKDOWN, "/root/README.MARKDOWN", "README.MARKDOWN", "/root/README.MARKDOWN"),
+            ),
+            finder.find(
+                listOf("/root/notes/plan.md", "/root/README.MARKDOWN", "/root/gone.md").map { ArtifactHint(it, false) },
+                null,
+            ),
+        )
+        assertTrue(ArtifactHint("/root/notes/plan.md", false).direct("/root"))
+        assertEquals(emptyList(), hints(call("Bash", "cat /root/notes/plan.md")), "a command's .md is no hint")
+    }
+
+    @Test
+    fun `a Markdown card's line and buttons`() {
+        val md = ChatArtifact(ArtifactKind.MARKDOWN, "/root/notes/plan.md", "plan.md", "/root/notes/plan.md")
+        assertEquals("Markdown · ~/notes/plan.md", chatArtifactLine(md, "/root"))
+        assertEquals(listOf(ArtifactAction.COPY, ArtifactAction.SHARE), chatArtifactActions(md, canInstall = true))
+        assertEquals("Copy", ArtifactAction.COPY.label)
+    }
 }

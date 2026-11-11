@@ -16,7 +16,14 @@ import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.text.TextPaint
 import android.text.style.MetricAffectingSpan
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.LinearLayout
+import android.widget.PopupWindow
+import android.widget.TextView
 import io.github.est4s.terminal.core.StripColors
 import kotlin.math.roundToInt
 
@@ -166,6 +173,45 @@ object Pixel {
             }
         }
     }
+}
+
+/** One row of [pixelMenu]; a [greyed] one still answers a tap (to say why it can't go). */
+class PixelMenuEntry(val label: String, val greyed: Boolean = false, val onTap: () -> Unit)
+
+/** A small menu in the pixel style, dropped from [anchor]'s end: Android's PopupMenu takes the system theme. */
+fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
+    val context = anchor.context
+    val dp = { v: Int -> Pixel.dp(context, v) }
+    val shadow = dp(Pixel.SHADOW_DP)
+    val column = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.CYAN, shadow = true)
+        // Inside the 2 dp border, and the shadow's room right and bottom.
+        setPadding(dp(2), dp(2), dp(2) + shadow, dp(2) + shadow)
+        minimumWidth = dp(200)
+    }
+    val popup = PopupWindow(column, WRAP_CONTENT, WRAP_CONTENT, true).apply {
+        setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        isOutsideTouchable = true
+    }
+    entries.forEach { entry ->
+        column.addView(TextView(context).apply {
+            text = entry.label
+            typeface = Pixel.label(context, 500)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextColor(if (entry.greyed) Pixel.DIM else Pixel.TEXT)
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = dp(48)
+            setPadding(dp(16), 0, dp(16), 0)
+            background = pixelRipple()
+            isFocusable = true
+            setOnClickListener {
+                popup.dismiss()
+                entry.onTap()
+            }
+        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+    }
+    popup.showAsDropDown(anchor, 0, 0, Gravity.END)
 }
 
 enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, BOLT, CHIP, REFRESH }
