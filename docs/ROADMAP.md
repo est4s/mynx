@@ -70,6 +70,24 @@ and either view switches to the other.
   as the agent's home, queued prompts, and a layout like Claude's app
   (+ sheet with files and permission, usage ring, dictation): passed
   on the phone (2026-11-10).
+- **Chat first, with a drawer** (maintainer's decision, 2026-11-11,
+  option 1A of the design study): in touch view, mynx opens on the
+  agent's chat home: a prompt box at the bottom, the chats working or
+  waiting for you above it. The rest of the app is one menu, a drawer
+  behind ☰ (tap only: a swipe from the left edge is Android's Back):
+  New chat, the latest chats and All chats, then Shell, Apps, Games,
+  Files, Services (with its count), Settings, and switching to the
+  terminal view. Its lists come from `core` (`HomeMenus` and the
+  chats), so the drawer stays a thin view; the chat history stays a
+  screen of its own. A launcher sheet next to the prompt box (option
+  1B) was the alternative; if it's chosen instead, switch before touch
+  mode's first release, while nobody has learned the drawer.
+- **Later, not decided** (the design study, 2026-11-11): a
+  "run, open or ask" box (open an app, run a command in a tab, or
+  ask the agent); a launcher mode (mynx as Android's home app, off by
+  default, with Android's apps beside Debian's); themes that change
+  the launcher too (wallpaper, a bar, terminal panels); a second
+  phone as an extra screen for a tab or an app.
 - Sign-in is the terminal's: Chat opens a tab when it's needed
   (maintainer's decision, 2026-11-09).
 - The agent widget could open straight into a chat.
