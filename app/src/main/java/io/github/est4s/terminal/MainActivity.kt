@@ -708,6 +708,7 @@ class MainActivity : Activity(), FrontActivity {
             installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
             attach = { source, done -> chatFiles.pick(source, done) },
             dictation = dictation,
+            thumbnails = ChatThumbnails(this, { path -> File(hostPath(path, installer.rootfs.path) ?: path) }),
         ).also {
             it.colors = Pixel.COLORS
             it.visibility = View.GONE
