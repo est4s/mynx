@@ -329,6 +329,61 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `a prompt sent when checked waits for the check, then goes`() {
+        host.answering = false
+        var sent = 0
+        chat.sendWhenChecked("hello") { sent++ }
+        chat.opened()
+        assertTrue(host.launches.isEmpty())
+        host.checks.single()(ChatAccess.READY)
+        assertEquals(1, sent)
+        assertEquals(1, host.launches.size)
+        drain()
+        assertEquals(listOf("hello"), chat.state.conversation.items.filterIsInstance<ChatItem.User>().map { it.text })
+        chat.opened()
+        assertEquals(1, sent, "sent once")
+    }
+
+    @Test
+    fun `a prompt sent when checked goes at once when ready`() {
+        ready()
+        var sent = 0
+        chat.sendWhenChecked("hello") { sent++ }
+        assertEquals(1, sent)
+        assertEquals(1, host.launches.size)
+    }
+
+    @Test
+    fun `a prompt sent when checked is dropped when the chat can't run`() {
+        for (blocked in listOf(ChatAccess.NOT_SIGNED_IN, ChatAccess.NOT_INSTALLED)) {
+            shared.ready = null // the last round's check found it ready
+            next()
+            host.answering = false
+            var sent = 0
+            chat.sendWhenChecked("hello") { sent++ }
+            chat.opened()
+            host.checks.last()(blocked)
+            host.answering = true
+            chat.opened() // signed in or installed since: the text stays in its box
+            assertEquals(ChatAccess.READY, chat.state.access)
+            assertEquals(0, sent, "$blocked")
+            assertTrue(host.launches.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a waiting prompt can be dropped`() {
+        host.answering = false
+        var sent = 0
+        chat.sendWhenChecked("hello") { sent++ }
+        chat.opened()
+        chat.dropWaiting()
+        host.checks.single()(ChatAccess.READY)
+        assertEquals(0, sent)
+        assertTrue(host.launches.isEmpty())
+    }
+
+    @Test
     fun `not signed in or not installed blocks, and coming back checks again`() {
         for (blocked in listOf(ChatAccess.NOT_SIGNED_IN, ChatAccess.NOT_INSTALLED)) {
             host.access = blocked

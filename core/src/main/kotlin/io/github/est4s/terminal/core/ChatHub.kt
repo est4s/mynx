@@ -69,8 +69,10 @@ internal fun promptTitle(prompt: String?): String =
 class ChatHub(
     private val host: ChatHost,
     private val post: (() -> Unit) -> Unit,
-    private val home: String = "/root",
-    private val cwd: String = "/root",
+    /** Root's home in Debian, where its transcripts are found. */
+    val home: String = "/root",
+    /** Where the chat's agent runs. */
+    val cwd: String = "/root",
     private val artifacts: ArtifactLookup? = null,
     private val now: () -> Long = System::currentTimeMillis,
     /** Where each session's picks are kept for the next start ([ChatShared]); in memory only without it. */

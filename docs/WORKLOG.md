@@ -44,10 +44,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - Other agents in Chat (Codex's `app-server`, Gemini's ACP), which
   need accounts to test; image thumbnails on attachment chips; the
   Model page lists fallback models until a session reports its own.
-- Maybe, in core: a first prompt waiting for the sign-in check
-  (MainActivity's `firstPrompt` for now: `ChatController.send()`
-  refuses while `CHECKING`); `ChatHub`'s home and cwd made public
-  (MainActivity copies "/root").
 
 ### 3. Smaller things
 
@@ -80,6 +76,20 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-20 (195): Touch mode cleanups in core (PR open)
+
+- The chat home's first prompt now waits for the sign-in check in
+  core: `ChatController.sendWhenChecked(text, sent)` sends at once if
+  the chat can run, or once the check (or a restart after signing in
+  again) says it can, and drops the prompt if it can't, leaving the
+  text in its box. `dropWaiting()` forgets it when the chat is hidden.
+  MainActivity's `firstPrompt` is gone.
+- `ChatHub` and `ChatController` expose `home` and `cwd`; MainActivity
+  and ChatView no longer copy "/root".
+- To check on the phone: Send from the chat home, both signed in
+  (the prompt goes and the box empties) and signed out (the gate shows
+  and the text stays).
 
 ### 2026-11-20 (194): Roadmap cleaned up
 
