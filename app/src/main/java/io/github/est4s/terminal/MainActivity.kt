@@ -42,7 +42,6 @@ import com.termux.terminal.TerminalColors
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
-import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatHome
 import io.github.est4s.terminal.core.ChatState
@@ -97,8 +96,6 @@ private const val KEY_BAR_POLL_MS = 250L
 // Rows the terminal keeps when the screen is squeezed (the library's own minimum).
 private const val TERMINAL_MIN_ROWS = 4
 private const val LINK_ROWS = 12 // how far up and down a tapped link may go on
-// Where the hub's chats start (ChatHub's defaults): the chat home's footer.
-private const val CHAT_HOME_DIR = "/root"
 
 class MainActivity : Activity(), FrontActivity {
     private lateinit var terminalView: TerminalView
@@ -146,13 +143,10 @@ class MainActivity : Activity(), FrontActivity {
     private var chat: ChatView? = null
     private var chatHistory: ChatHistoryView? = null
     private var chatHomeView: ChatHomeView? = null
-    // The chat home's Send made this chat: its prompt goes once the sign-in check says it can.
-    private var firstPrompt: Pair<ChatController, String>? = null
     // After Chat's Sign in or Install opens a tab: Back returns to the chat, to check again.
     private var chatAfterTab = false
     private val chatListener: (ChatController, ChatState) -> Unit = { controller, state ->
         chat?.show(state, controller)
-        sendFirstPrompt(controller, state)
     }
     private val chatHistoryListener: () -> Unit = {
         chatHistory?.update()
@@ -423,7 +417,7 @@ class MainActivity : Activity(), FrontActivity {
                 val main = menus.items(HOME_MAIN)
                 val installed = agentBinary(apps, "claude") != null
                 val mode = runCatching { loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.chatMode }.getOrDefault("auto")
-                val model = chatHome(rows, main, active, installed, mode, CHAT_HOME_DIR, CHAT_HOME_DIR)
+                val model = chatHome(rows, main, active, installed, mode, service.chats.cwd, service.chats.home)
                 root.post { done(model) }
             }
         }
@@ -439,9 +433,10 @@ class MainActivity : Activity(), FrontActivity {
 
     private val chatHomeActions = object : ChatHomeActions {
         override fun send(text: String) {
+            // Sent once the new chat's check is done; if it can't run (not installed, not
+            // signed in), the text stays in its box under the chat's gate.
             val controller = newChatFromHome(text) ?: return
-            firstPrompt = controller to text
-            sendFirstPrompt(controller, controller.state)
+            controller.sendWhenChecked(text) { chat?.setDraft("") }
         }
 
         override fun addContext(draft: String) {
@@ -469,15 +464,6 @@ class MainActivity : Activity(), FrontActivity {
         override fun openServices() = openList("services", "Services")
 
         override fun showTerminal() = hideChatHome()
-    }
-
-    // Sent once the new chat's check is done; if it can't run (not installed, not
-    // signed in), the text stays in its box under the chat's gate.
-    private fun sendFirstPrompt(controller: ChatController, state: ChatState) {
-        val (waiting, text) = firstPrompt ?: return
-        if (waiting !== controller || state.access == ChatAccess.CHECKING) return
-        firstPrompt = null
-        if (state.access == ChatAccess.READY && controller.send(text)) chat?.setDraft("")
     }
 
     /** Touch mode's Home, over the terminal, which keeps its size so tabs start as usual. */
@@ -555,7 +541,7 @@ class MainActivity : Activity(), FrontActivity {
     }
 
     private fun hideChat() {
-        firstPrompt = null
+        service?.chats?.shown?.dropWaiting()
         val service = service
         if (service?.chatPlace == ChatPlace.CHAT) service.chatPlace = ChatPlace.NONE
         if (!chatShown) return

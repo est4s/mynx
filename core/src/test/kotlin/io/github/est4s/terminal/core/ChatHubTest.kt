@@ -153,6 +153,15 @@ class ChatHubTest {
     }
 
     @Test
+    fun `chats start in root's home, and the app can ask where`() {
+        assertEquals("/root", hub.home)
+        assertEquals("/root", hub.cwd)
+        val chat = hub.newChat()
+        assertEquals("/root", chat.home)
+        assertEquals("/root", chat.cwd)
+    }
+
+    @Test
     fun `a new chat is shown and the screen hears it with its controller`() {
         val chat = hub.newChat()
         assertSame(chat, hub.shown)

@@ -217,8 +217,10 @@ enum class ChatRowState { WORKING, WAITING, IDLE }
 class ChatController(
     private val host: ChatHost,
     private val post: (() -> Unit) -> Unit,
-    private val home: String = "/root",
-    private val cwd: String = "/root",
+    /** Root's home in Debian, where its transcripts are found. */
+    val home: String = "/root",
+    /** Where the chat's agent runs. */
+    val cwd: String = "/root",
     /** Finds the apps and APKs a turn made, for artifact cards; none without it. */
     private val artifacts: ArtifactLookup? = null,
     private val now: () -> Long = System::currentTimeMillis,
@@ -266,6 +268,8 @@ class ChatController(
     // A past chat resumed: it runs the model it ran before, which isn't the default.
     private val pastChat = resumeId != null
     private var firstPrompt: String? = null
+    // Sent once the sign-in check is done (sendWhenChecked), with what to do when it went.
+    private var waiting: Pair<String, () -> Unit>? = null
     // The transcript's first prompt, for a resumed chat.
     private var historyTitle: String? = null
     private var context: ContextUse? = null
@@ -378,7 +382,30 @@ class ChatController(
             if (result == ChatAccess.READY) signInLost = false
             access = result
         }
+        sendWaiting()
         changed()
+    }
+
+    /**
+     * Sends [text] now if the chat can run, or once its sign-in check says it
+     * can, then calls [sent]. If the check says it can't (not installed, not
+     * signed in), it's dropped: the text stays where the user wrote it.
+     */
+    fun sendWhenChecked(text: String, sent: () -> Unit) {
+        waiting = text to sent
+        sendWaiting()
+    }
+
+    /** Forgets a prompt [sendWhenChecked] keeps: the chat left the screen. */
+    fun dropWaiting() {
+        waiting = null
+    }
+
+    private fun sendWaiting() {
+        val (text, sent) = waiting ?: return
+        if (waitingForExit || access == ChatAccess.CHECKING) return
+        waiting = null
+        if (send(text)) sent()
     }
 
     /** Sends a prompt, starting the process if there is none; false, and nothing done, if it can't. */
@@ -686,6 +713,7 @@ class ChatController(
                 if (waitingForExit) {
                     waitingForExit = false
                     access = ChatAccess.READY
+                    sendWaiting()
                 } else {
                     canRestart = !event.stopped
                 }

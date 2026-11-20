@@ -99,8 +99,6 @@ private const val CHAT_TITLE = "claude code"
 private const val NEW_CHAT_TITLE = "New chat"
 // Attachments drawn with the photo icon.
 private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp")
-// Root's home, as the chat runs in it (ChatController's default).
-private const val CHAT_HOME = "/root"
 private val RIPPLE_ON_FILL: Int get() = Pixel.RIPPLE_ON_CYAN
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
@@ -1221,7 +1219,7 @@ class ChatView(
                         ellipsize = TextUtils.TruncateAt.END
                     })
                     addView(plainText(Pixel.DIM, 12f).apply {
-                        text = chatArtifactLine(artifact, CHAT_HOME)
+                        text = chatArtifactLine(artifact, controller()?.home ?: "/root")
                         maxLines = 2
                         ellipsize = TextUtils.TruncateAt.MIDDLE
                     })
