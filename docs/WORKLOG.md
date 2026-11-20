@@ -81,6 +81,14 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
+### 2026-11-20 (194): Roadmap cleaned up
+
+- `docs/ROADMAP.md` keeps only what's planned: the done sections (web
+  apps, development boards, Bluetooth) and touch mode's built parts
+  are gone, listed in its "Done" line instead. Left: file manager,
+  agent widget, touch mode's other agents and undecided ideas, more of
+  the phone, raw USB hotplug.
+
 ### 2026-11-20 (193): Two flaky tests made sturdy (merged, PR #87)
 
 - `ProcessAgentTransportTest`'s "a process that has died accepts
