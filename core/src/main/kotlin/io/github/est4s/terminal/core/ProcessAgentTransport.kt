@@ -14,11 +14,13 @@ private val WRITER_END = Any()
  * spawning and stopping are the app's: [spawn] runs off the caller's
  * thread and may throw, [stop] runs on a thread of its own, may block and
  * must end the process (see [stopAgentProot]). Everything here is plain
- * threads over a [Process], so it's tested with real shells.
+ * threads over a [Process], so it's tested with real shells. After the
+ * process ends, its exit waits up to [readerWaitMs] for stdout to close.
  */
 class ProcessAgentTransport(
     private val spawn: () -> Process,
     private val stop: (Process) -> Unit,
+    private val readerWaitMs: Long = READER_WAIT_MS,
 ) : AgentTransport {
     private val queue = LinkedBlockingQueue<Any>()
     private val stateLock = Any()
@@ -73,7 +75,7 @@ class ProcessAgentTransport(
         val code = runCatching { child.waitFor() }.getOrDefault(-1)
         // A program left behind may hold the pipes open for long: don't wait for it.
         runCatching {
-            reader.join(READER_WAIT_MS)
+            reader.join(readerWaitMs)
             errors.join(STDERR_WAIT_MS)
         }
         finish(code, synchronized(tail) { tail.toString() })

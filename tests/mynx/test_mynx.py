@@ -2,6 +2,7 @@
 
 Run: python3 -m unittest discover -s tests/mynx
 """
+import calendar
 import contextlib
 import json
 import os
@@ -946,10 +947,11 @@ class MynxTest(unittest.TestCase):
         self.assertEqual((run.returncode, run.stdout), (1, "Nothing to undo\n"))
 
     def test_undo_list(self):
-        noon = time.mktime((2026, 10, 4, 12, 5, 0, 0, 0, -1)) * 1000
+        # mynx shows local times; pin its zone so the test passes in any zone.
+        noon = calendar.timegm((2026, 10, 4, 12, 5, 0)) * 1000
         self.start_app({"undo-list": {"ok": True, "keep": 3, "steps": [
             {"reason": "theme set nord", "time": noon}, {"reason": "edits by hand", "time": noon}]}})
-        run = self.mynx("undo", "--list")
+        run = self.mynx("undo", "--list", env={"TZ": "UTC"})
         self.assertEqual(run.stdout.splitlines(), [
             "1. theme set nord  (12:05)", "2. edits by hand  (12:05)", "mynx undo takes back 1. (keeps 3: undo-keep)"])
 
