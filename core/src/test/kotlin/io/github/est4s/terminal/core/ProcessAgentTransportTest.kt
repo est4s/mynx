@@ -1,6 +1,8 @@
 package io.github.est4s.terminal.core
 
+import java.io.File
 import java.io.IOException
+import java.nio.file.Files
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -151,14 +153,29 @@ class ProcessAgentTransportTest {
 
     @Test
     fun `a process that has died accepts nothing, even before its exit is reported`() {
-        val rec = Recorder()
-        val agent = transport("sleep 4 & exit 0")
-        agent.start(rec)
-        val limit = System.currentTimeMillis() + 1800
-        while (agent.accepting && System.currentTimeMillis() < limit) Thread.sleep(20)
-        assertTrue(!agent.accepting, "still accepting after the process ended")
-        assertTrue(rec.exits.isEmpty(), "the exit came first, so this proves nothing")
-        rec.awaitExit()
+        // A child left behind holds stdout until the flag exists, and the
+        // transport waits long for it, so the exit can't be reported before
+        // the check however slow the machine is.
+        val dir = Files.createTempDirectory("agent-transport").toFile()
+        val flag = File(dir, "flag")
+        try {
+            val rec = Recorder()
+            val agent = ProcessAgentTransport(
+                shell("(while [ ! -e '${flag.path}' ]; do sleep 0.05; done) & exit 0"),
+                stop = { it.destroy() },
+                readerWaitMs = 60_000,
+            )
+            agent.start(rec)
+            val limit = System.currentTimeMillis() + 15_000
+            while (agent.accepting && System.currentTimeMillis() < limit) Thread.sleep(20)
+            assertTrue(!agent.accepting, "still accepting after the process ended")
+            assertTrue(rec.exits.isEmpty(), "the exit came first, so this proves nothing")
+            flag.createNewFile()
+            rec.awaitExit()
+        } finally {
+            flag.createNewFile()
+            dir.deleteRecursively()
+        }
     }
 
     @Test

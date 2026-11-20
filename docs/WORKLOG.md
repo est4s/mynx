@@ -62,11 +62,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - The interrupted-install check (swipe the app away while unpacking,
   reopen) hasn't been tried on the phone.
 - htop's CPU bars are static (fake `/proc/stat`, as in proot-distro).
-- `ProcessAgentTransportTest`'s "a process that has died accepts
-  nothing…" can fail on a busy CI runner (entry 191); make it sturdier
-  if it happens again.
-- `test_undo_list` (tests/mynx) fails in the phone's time zone (it
-  expects UTC times; CI is UTC): `TZ=UTC` passes it.
 
 ### Regression checks
 - **Config:** `mynx theme set` for a dark and a light theme (strip
@@ -85,6 +80,18 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-20 (193): Two flaky tests made sturdy (PR open)
+
+- `ProcessAgentTransportTest`'s "a process that has died accepts
+  nothing…" raced the transport's 2 s wait for stdout (entry 191's CI
+  failure). Now `ProcessAgentTransport` takes `readerWaitMs` (default
+  unchanged), the test sets it to 60 s, and the child left behind
+  holds stdout until the test makes a flag file: the window no longer
+  depends on the machine's speed. Passed three runs under CPU load.
+- `test_undo_list` built 12:05 in the caller's `TZ` while the `mynx`
+  it ran (clean env) used the system zone, so it failed on the phone
+  (`TZ=Europe/Helsinki`). Both sides are UTC now; passes in any zone.
 
 ### 2026-11-20 (192): Instruction files slimmed (merged, PR #85; passed)
 
