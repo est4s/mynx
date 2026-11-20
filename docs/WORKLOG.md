@@ -77,7 +77,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-20 (196): Image thumbnails on attachment chips (PR open, to test)
+### 2026-11-20 (196): Image thumbnails on attachment chips (merged, PR #91; passed)
 
 - Chat's attachment chips (in the box and in sent bubbles) show an
   image's picture, a 28 dp square, in place of the photo icon.
@@ -88,10 +88,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   turns it by its EXIF orientation and caches 64. A file that's gone
   or can't be decoded keeps the icon.
 - The chat screenshots now attach a real (generated) portrait photo.
-- **To check in mynx dev:** attach a portrait photo from the camera
-  and one from Photos: the chips show them upright, cropped square;
-  after sending, the bubble's chips show them too, and scrolling a
-  long chat stays smooth. A non-image file keeps its file icon.
+- Passed in mynx dev (build 44824382998): the thumbnails show in the
+  box and in sent bubbles.
 
 ### 2026-11-20 (195): Touch mode cleanups in core (merged, PR #90; passed)
 
