@@ -197,7 +197,8 @@ private class ChatLink(private val url: String, private val color: Int, private 
  * clipboard) and Install [installApk] (Debian paths); a null
  * [installApk] means this build can't install apps. [attach] picks files
  * for + (camera, photos, files) and hands them back copied into Debian;
- * null hides the tiles. [clock] is the time Usage's resets are told from.
+ * null hides the tiles. [thumbnails] draws images' chips with the picture
+ * (null: the photo icon). [clock] is the time Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ChatView(
@@ -211,6 +212,7 @@ class ChatView(
     private val installApk: ((String) -> Unit)?,
     attach: ((ChatAttachSource, (List<ChatAttachment>) -> Unit) -> Unit)? = null,
     private val dictation: ChatDictation? = null,
+    private val thumbnails: ChatThumbnails? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
@@ -649,7 +651,7 @@ class ChatView(
         val colors = colors ?: return
         chips.removeAllViews()
         attachments.toList().forEach { file ->
-            chips.addView(attachmentChip(file.name, file.image, colors) {
+            chips.addView(attachmentChip(file.path, file.name, file.image, colors) {
                 attachments.remove(file)
                 renderChips()
                 renderSend()
@@ -700,17 +702,24 @@ class ChatView(
         input.requestFocus()
     }
 
-    // A file's name with its icon; [remove] adds × (the box's chips), none in a sent bubble.
-    private fun attachmentChip(name: String, image: Boolean, colors: StripColors, remove: (() -> Unit)? = null) =
+    // A file's name with its icon, or an image's thumbnail once it's decoded; [remove] adds × (the box's chips), none in a sent bubble.
+    private fun attachmentChip(path: String, name: String, image: Boolean, colors: StripColors, remove: (() -> Unit)? = null) =
         LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
             setPadding(dp(10), 0, if (remove == null) dp(12) else 0, 0)
             minimumHeight = dp(36)
-            addView(ImageView(context).apply {
+            val chip = this
+            val icon = ImageView(context).apply {
                 setImageDrawable(Pixel.icon(context, if (image) PixelIcon.IMAGE else PixelIcon.FILE, Pixel.DIM, 16))
-            }, LinearLayout.LayoutParams(dp(16), dp(16)))
+            }
+            addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
+            if (image) thumbnails?.load(path) { bitmap ->
+                icon.setImageBitmap(bitmap)
+                icon.layoutParams = LinearLayout.LayoutParams(dp(CHAT_THUMBNAIL_DP), dp(CHAT_THUMBNAIL_DP))
+                chip.setPadding(dp(4), 0, chip.paddingRight, 0)
+            }
             addView(plainText(colors.text, 13f).apply {
                 text = name
                 maxLines = 1
@@ -804,7 +813,7 @@ class ChatView(
             files.removeAllViews()
             paths.forEach { path ->
                 val name = path.substringAfterLast('/')
-                files.addView(attachmentChip(name, chatImageName(name), colors), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                files.addView(attachmentChip(path, name, chatImageName(name), colors), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                     bottomMargin = dp(4)
                 })
             }

@@ -42,7 +42,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ### 2. Touch mode: what's left
 
 - Other agents in Chat (Codex's `app-server`, Gemini's ACP), which
-  need accounts to test; image thumbnails on attachment chips; the
+  need accounts to test; the
   Model page lists fallback models until a session reports its own.
 
 ### 3. Smaller things
@@ -76,6 +76,20 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-20 (196): Image thumbnails on attachment chips (merged, PR #91; passed)
+
+- Chat's attachment chips (in the box and in sent bubbles) show an
+  image's picture, a 28 dp square, in place of the photo icon.
+  `ChatThumbnails` (app) maps the Debian path to the app's file
+  (`hostPath`), decodes it on one app-wide worker thread at
+  `thumbnailSampleSize()` (core, tested: the largest power of two
+  keeping the short side at the square's size), crops it square,
+  turns it by its EXIF orientation and caches 64. A file that's gone
+  or can't be decoded keeps the icon.
+- The chat screenshots now attach a real (generated) portrait photo.
+- Passed in mynx dev (build 44824382998): the thumbnails show in the
+  box and in sent bubbles.
 
 ### 2026-11-20 (195): Touch mode cleanups in core (merged, PR #90; passed)
 

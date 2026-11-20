@@ -738,7 +738,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   the app copies into Debian go as `[Attached image|file: PATH]` lines
   after the text and a blank line (Claude reads them with Read), so
   echoes and transcripts keep them; `splitAttachments()` reads them
-  back, and titles leave them out. **One session, one program:** nothing stops two programs
+  back, and titles leave them out. An image's chip shows the
+  picture (`ChatThumbnails`: decoded off the main thread at
+  `thumbnailSampleSize()`, cropped square, turned by its EXIF
+  orientation, cached; the icon until then or if it can't be read).
+  **One session, one program:** nothing stops two programs
   driving one session (the transcript forks), so a session has one
   controller at a time (the hub's), which stops its process and waits
   for `ProcessEnded` before a new launch or "To tab" runs anything; the

@@ -1,6 +1,10 @@
 package io.github.est4s.terminal
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -23,6 +27,9 @@ import io.github.est4s.terminal.core.ToolCallInfo
 import io.github.est4s.terminal.core.ToolKind
 import io.github.est4s.terminal.core.ToolStatus
 import io.github.est4s.terminal.core.promptWithAttachments
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.Executor
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -184,6 +191,19 @@ private val FILES = listOf(
     ChatAttachment("/root/Shared/notes.md", "notes.md", image = false),
 )
 
+/** FILES' photo, portrait as a phone's camera takes it: sky, a sun and a field, so the crop shows. */
+private val PHOTOS: File by lazy {
+    Files.createTempDirectory("chat-photos").toFile().also { dir ->
+        val bitmap = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888)
+        Canvas(bitmap).apply {
+            drawColor(Color.rgb(120, 180, 240))
+            drawCircle(150f, 150f, 50f, Paint().apply { color = Color.rgb(250, 210, 60) })
+            drawRect(0f, 250f, 300f, 400f, Paint().apply { color = Color.rgb(70, 150, 70) })
+        }
+        File(dir, FILES[0].name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+    }
+}
+
 /** A prompt sent with a photo and a file. */
 private val WITH_FILES = listOf(
     ChatItem.User("user-1", promptWithAttachments("What's in this photo? Compare it with my notes.", FILES)),
@@ -236,6 +256,8 @@ class ChatScreenshotTest {
                 installApk = {},
                 attach = { _, _ -> },
                 dictation = FakeDictation(),
+                // Decoded at once, so the screenshot has them.
+                thumbnails = ChatThumbnails(activity, { path -> File(PHOTOS, path.substringAfterLast('/')) }, Executor { it.run() }),
                 clock = { NOW_MS },
             ).apply { colors = Pixel.COLORS }
         }

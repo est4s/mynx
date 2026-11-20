@@ -38,4 +38,18 @@ class ChatAttachmentsTest {
         val odd = ChatAttachment("/root/Shared/a\nb.txt", "a\nb.txt", image = false)
         assertEquals("hi\n\n[Attached file: /root/Shared/a b.txt]", promptWithAttachments("hi", listOf(odd)))
     }
+
+    @Test
+    fun `a thumbnail decodes at the largest halving that still covers its square`() {
+        // A 12 MP photo for a 96 px square: its short side halves five times to 94, so four (189).
+        assertEquals(16, thumbnailSampleSize(4032, 3024, 96))
+        assertEquals(16, thumbnailSampleSize(3024, 4032, 96))
+        assertEquals(2, thumbnailSampleSize(200, 1000, 96))
+        assertEquals(2, thumbnailSampleSize(192, 192, 96))
+        assertEquals(1, thumbnailSampleSize(191, 191, 96))
+        assertEquals(1, thumbnailSampleSize(50, 40, 96))
+        // A size the decoder couldn't read.
+        assertEquals(1, thumbnailSampleSize(-1, -1, 96))
+        assertEquals(1, thumbnailSampleSize(4032, 3024, 0))
+    }
 }

@@ -39,3 +39,16 @@ internal fun promptTitleText(prompt: String): String {
     val (text, paths) = splitAttachments(prompt)
     return text.ifBlank { paths.firstOrNull()?.substringAfterLast('/') ?: text }
 }
+
+/**
+ * The decoder's sample size (a power of two) for a [width]×[height] image
+ * shown cropped to a [size]-pixel square: the largest that keeps the
+ * short side at least [size], so the thumbnail is sharp but small.
+ */
+fun thumbnailSampleSize(width: Int, height: Int, size: Int): Int {
+    if (size <= 0) return 1
+    val short = minOf(width, height)
+    var sample = 1
+    while (short / (sample * 2) >= size) sample *= 2
+    return sample
+}
