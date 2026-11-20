@@ -55,9 +55,36 @@ Chat for Claude Code with its cards and hand-off, are built.
   "run, open or ask" box (open an app, run a command in a tab, or
   ask the agent); a launcher mode (mynx as Android's home app, off by
   default, with Android's apps beside Debian's); themes that change
-  the launcher too (wallpaper, a bar, terminal panels); a second
-  phone as an extra screen for a tab or an app.
+  the launcher too (wallpaper, a bar, terminal panels).
 - The agent widget could open straight into a chat.
+
+### Desktop mode
+Debian's graphical programs (a desktop such as XFCE, a browser, an
+IDE) on the phone, through **Termux:X11**, an X server for Android.
+- A third view, `view = desktop`, beside `terminal` and `touch`, and
+  switching between them like the other two.
+- Termux:X11 is GPL-3.0: keep it a separate program, as proot is
+  (credited in About, its source linked), or ask users to install its
+  APK, as with the agent CLIs.
+- `mynx desktop start | stop`, with a session that starts a chosen
+  desktop and sets `DISPLAY` in new tabs; sound through the existing
+  sound device.
+- Works with an external display and a keyboard and mouse (Android's
+  desktop windowing), where it's most useful.
+- To check first, in a spike: whether its X server runs for an app
+  that isn't Termux, from under proot, and how fast it draws.
+
+### Extended screen
+Another Android phone (or tablet) as a second screen: it shows a tab,
+a web app or the desktop while the first phone keeps the rest.
+- The second phone runs mynx (or opens a page in its browser) and
+  pairs with the first over Wi-Fi (the same network or a hotspot),
+  by a code or QR code; perhaps USB later.
+- Terminal tabs travel as text (the terminal's output), not pictures,
+  so they stay sharp and light; web apps load from the first phone;
+  the desktop is an X11 display of its own, or the first one's
+  stretched across both.
+- Typing on either phone goes to what it shows.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
