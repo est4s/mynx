@@ -82,23 +82,24 @@ IDE) on the phone, through **Termux:X11**, an X server for Android.
 
 ### Extended screen
 Another Android phone (or tablet) next to the first one makes the
-screen bigger: one picture spread across both.
-- **In desktop mode:** one desktop spans both phones placed side by
-  side: its left half shows on one phone, its right half on the
-  other. Windows can be dragged from one to the other and the pointer
-  crosses the edge, as with two monitors on a PC. The X server draws
-  one wide screen with two monitors (RandR), sized to the two
-  displays, and the second phone shows its half.
-- Also, outside desktop mode: the second phone shows a tab or a web
-  app while the first keeps the rest. Terminal tabs travel as text
-  (the terminal's output), not pictures, so they stay sharp and light.
-- The second phone runs mynx (or opens a page in its browser) and
-  pairs with the first over Wi-Fi (the same network or a hotspot),
-  by a code or QR code; perhaps USB later.
-- Typing and touch on either phone go to what it shows.
-- To check: how fast the second half can be sent (compressed frames
-  of the changed areas over Wi-Fi), and lining the halves up when the
-  phones' screens differ in size or density.
+screen bigger. Two ways, equally wanted; which comes first is decided
+later:
+- **One desktop across both** (desktop mode): the phones side by
+  side, the desktop's left half on one and its right half on the
+  other. Windows drag from one to the other and the pointer crosses
+  the edge, as with two monitors on a PC. The X server draws one wide
+  screen with two monitors (RandR), sized to the two displays, and
+  the second phone shows its half.
+- **A tab or a web app on the second phone**, while the first keeps
+  the rest. Terminal tabs travel as text (the terminal's output), not
+  pictures, so they stay sharp and light.
+- Both: the second phone runs mynx (or opens a page in its browser)
+  and pairs with the first over Wi-Fi (the same network or a
+  hotspot), by a code or QR code; perhaps USB later. Typing and touch
+  on either phone go to what it shows.
+- To check: how fast the second half of a desktop can be sent
+  (compressed frames of the changed areas over Wi-Fi), and lining the
+  halves up when the phones' screens differ in size or density.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
