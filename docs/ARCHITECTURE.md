@@ -742,6 +742,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   picture (`ChatThumbnails`: decoded off the main thread at
   `thumbnailSampleSize()`, cropped square, turned by its EXIF
   orientation, cached; the icon until then or if it can't be read).
+  Tapping an image's chip (in the box or a sent bubble) opens it full
+  screen: `ImageViewActivity` (`app/.../ImageViewActivity.kt`), on black,
+  decoded off the main thread at `viewerSampleSize()` (core: long side
+  within twice the screen's, at most 4096), upright by EXIF; pinch,
+  double-tap and drag go through core's `ImageZoom` (fitted, never
+  blown up, up to 8×, kept on screen); a tap hides the bar (← and the
+  name); a file it can't show says so on screen.
   **One session, one program:** nothing stops two programs
   driving one session (the transcript forks), so a session has one
   controller at a time (the hub's), which stops its process and waits
@@ -757,7 +764,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   turn's completed Write/Edit/NotebookEdit paths, and Bash's paths in
   the app folders or ending `.apk` (only if changed since the turn
   started), and written `.md` files anywhere (Copy: the file's text,
-  up to 256 KB; Share), are checked on disk off the main thread with Home's rules
+  up to 256 KB; Share), and pictures (`chatImageFile()`) outside the app
+  folders, written or named by Bash and changed (View: full screen;
+  Share; the card shows the picture, `ChatThumbnails.preview()`, keyed
+  by the file's time, `ChatArtifact.version`, so one drawn again changes
+  its card), are checked on disk off the main thread with Home's rules
   (`WebApps`, `terminalAppLabel`); one `ChatItem.Artifact` per app per
   turn, changed in place; history gets them too (written files only).
   Run and Add to home screen are `menu --act` tabs; Install only in

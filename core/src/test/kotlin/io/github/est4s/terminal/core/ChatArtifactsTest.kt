@@ -252,4 +252,50 @@ class ChatArtifactsTest {
         assertEquals(listOf(ArtifactAction.COPY, ArtifactAction.SHARE), chatArtifactActions(md, canInstall = true))
         assertEquals("Copy", ArtifactAction.COPY.label)
     }
+
+    @Test
+    fun `an image the agent made counts anywhere, written or named in a command that changed it`() {
+        val plot = write("/root/work/plot.png", "png")
+        val old = write("/root/work/old.JPG", "jpg")
+        write("/root/apps/demo/index.html", "<title>Demo</title>")
+        write("/root/apps/demo/logo.png", "png")
+        plot.setLastModified(5_000_000L)
+        old.setLastModified(1_000_000L)
+        assertEquals(
+            listOf(
+                ArtifactHint("/root/work/plot.png", true),
+                ArtifactHint("/root/work/old.JPG", true),
+            ),
+            hints(call("Bash", "python3 plot.py -o plot.png && cp old.JPG /tmp/x.txt")),
+        )
+        assertTrue(ArtifactHint("/root/work/plot.png", false).direct("/root"))
+        val image = ChatArtifact(ArtifactKind.IMAGE, "/root/work/plot.png", "plot.png", "/root/work/plot.png", version = 5_000_000L)
+        assertEquals(
+            listOf(image),
+            finder.find(listOf("/root/work/plot.png", "/root/work/old.JPG").map { ArtifactHint(it, true) }, 2_000_000L),
+        )
+        assertEquals(listOf(image), finder.find(listOf(ArtifactHint("/root/work/plot.png", false)), null), "written: no turn start needed")
+        assertEquals(
+            listOf(ArtifactKind.WEB_APP),
+            finder.find(listOf(ArtifactHint("/root/apps/demo/logo.png", false)), null).map { it.kind },
+            "an app's picture is the app's card",
+        )
+        assertEquals(emptyList(), finder.find(listOf(ArtifactHint("/root/work/gone.png", false)), null))
+    }
+
+    @Test
+    fun `an image drawn again changes its card`() {
+        val image = ChatArtifact(ArtifactKind.IMAGE, "/root/plot.png", "plot.png", "/root/plot.png", version = 1L)
+        val items = listOf<ChatItem>(ChatItem.User("u1", "plot"), ChatItem.Artifact("card-1", image))
+        val redrawn = image.copy(version = 2L)
+        assertEquals(listOf(ChatItem.User("u1", "plot"), ChatItem.Artifact("card-1", redrawn)), withArtifactCards(items, listOf(redrawn)) { "new" })
+    }
+
+    @Test
+    fun `an image card's line and buttons`() {
+        val image = ChatArtifact(ArtifactKind.IMAGE, "/root/work/plot.png", "plot.png", "/root/work/plot.png", version = 1L)
+        assertEquals("Image · ~/work/plot.png", chatArtifactLine(image, "/root"))
+        assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.SHARE), chatArtifactActions(image, canInstall = true))
+        assertEquals("View", ArtifactAction.VIEW.label)
+    }
 }

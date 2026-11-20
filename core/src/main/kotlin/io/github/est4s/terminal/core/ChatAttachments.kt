@@ -52,3 +52,26 @@ fun thumbnailSampleSize(width: Int, height: Int, size: Int): Int {
     while (short / (sample * 2) >= size) sample *= 2
     return sample
 }
+
+// What Android's decoder reads (HEIC from Android 9); SVG isn't a picture it can decode.
+private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp")
+
+/** Whether [name] (a file's name or path) is a picture the chat can show. */
+fun chatImageFile(name: String): Boolean {
+    val file = name.substringAfterLast('/')
+    return file.contains('.') && file.substringAfterLast('.').lowercase() in IMAGE_EXTENSIONS
+}
+
+/**
+ * The decoder's sample size (a power of two) for a [width]×[height] image
+ * shown full screen: the smallest that keeps the long side within
+ * [maxSide] pixels (as the decoder rounds, up), so a huge picture can't
+ * run the app out of memory or pass what the screen can draw.
+ */
+fun viewerSampleSize(width: Int, height: Int, maxSide: Int): Int {
+    if (maxSide <= 0) return 1
+    val long = maxOf(width, height)
+    var sample = 1
+    while ((long + sample - 1) / sample > maxSide) sample *= 2
+    return sample
+}

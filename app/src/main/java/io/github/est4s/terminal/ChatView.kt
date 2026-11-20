@@ -55,9 +55,11 @@ import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import io.github.est4s.terminal.core.ArtifactAction
+import io.github.est4s.terminal.core.ArtifactKind
 import io.github.est4s.terminal.core.CLAUDE_INSTALL_COMMAND
 import io.github.est4s.terminal.core.CLAUDE_SIGN_IN_COMMAND
 import io.github.est4s.terminal.core.ChatAccess
+import io.github.est4s.terminal.core.ChatArtifact
 import io.github.est4s.terminal.core.ChatAttachment
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatItem
@@ -80,6 +82,7 @@ import io.github.est4s.terminal.core.chatArtifactLine
 import io.github.est4s.terminal.core.chatArtifactNote
 import io.github.est4s.terminal.core.chatArtifactRunCommand
 import io.github.est4s.terminal.core.chatArtifactShortcutCommand
+import io.github.est4s.terminal.core.chatImageFile
 import io.github.est4s.terminal.core.chatFit
 import io.github.est4s.terminal.core.chatOutcomeText
 import io.github.est4s.terminal.core.chatRenderDelay
@@ -97,8 +100,8 @@ import kotlin.math.ceil
 
 private const val CHAT_TITLE = "claude code"
 private const val NEW_CHAT_TITLE = "New chat"
-// Attachments drawn with the photo icon.
-private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp")
+// An image card's picture, at most this high.
+private const val IMAGE_PREVIEW_DP = 240
 private val RIPPLE_ON_FILL: Int get() = Pixel.RIPPLE_ON_CYAN
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
@@ -198,7 +201,9 @@ private class ChatLink(private val url: String, private val color: Int, private 
  * [installApk] means this build can't install apps. [attach] picks files
  * for + (camera, photos, files) and hands them back copied into Debian;
  * null hides the tiles. [thumbnails] draws images' chips with the picture
- * (null: the photo icon). [clock] is the time Usage's resets are told from.
+ * (null: the photo icon), and image cards' previews. [viewImage] shows a
+ * picture full screen (a Debian path): tapping an image's chip or card,
+ * or the card's View. [clock] is the time Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ChatView(
@@ -213,6 +218,7 @@ class ChatView(
     attach: ((ChatAttachSource, (List<ChatAttachment>) -> Unit) -> Unit)? = null,
     private val dictation: ChatDictation? = null,
     private val thumbnails: ChatThumbnails? = null,
+    private val viewImage: ((String) -> Unit)? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
@@ -711,6 +717,10 @@ class ChatView(
             setPadding(dp(10), 0, if (remove == null) dp(12) else 0, 0)
             minimumHeight = dp(36)
             val chip = this
+            if (image && viewImage != null) {
+                setOnClickListener { viewImage?.invoke(path) }
+                contentDescription = "View $name"
+            }
             val icon = ImageView(context).apply {
                 setImageDrawable(Pixel.icon(context, if (image) PixelIcon.IMAGE else PixelIcon.FILE, Pixel.DIM, 16))
             }
@@ -813,14 +823,12 @@ class ChatView(
             files.removeAllViews()
             paths.forEach { path ->
                 val name = path.substringAfterLast('/')
-                files.addView(attachmentChip(path, name, chatImageName(name), colors), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                files.addView(attachmentChip(path, name, chatImageFile(name), colors), LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                     bottomMargin = dp(4)
                 })
             }
         }
     }
-
-    private fun chatImageName(name: String) = name.substringAfterLast('.', "").lowercase() in IMAGE_EXTENSIONS
 
     // Rows that didn't change keep their views, and any selection in them.
     private fun agentCell(colors: StripColors): Cell {
@@ -1208,6 +1216,9 @@ class ChatView(
             val install = installApk
             card.removeAllViews()
             styleCard(card, main = true)
+            if (artifact.kind == ArtifactKind.IMAGE) card.addView(imagePreview(artifact), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+                bottomMargin = dp(10)
+            })
             card.addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -1243,6 +1254,7 @@ class ChatView(
                         ArtifactAction.RUN -> openTab(chatArtifactRunCommand(artifact))
                         ArtifactAction.INSTALL -> install?.invoke(artifact.shareFile)
                         ArtifactAction.COPY -> copyFile(artifact.shareFile)
+                        ArtifactAction.VIEW -> viewImage?.invoke(artifact.shareFile)
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
@@ -1251,6 +1263,21 @@ class ChatView(
             chatArtifactNote(artifact, canInstall = install != null)?.let { note ->
                 card.addView(answeredText(note, colors))
             }
+        }
+    }
+
+    // The picture, as large as the card is wide (up to IMAGE_PREVIEW_DP high), once decoded; a tap views it.
+    private fun imagePreview(artifact: ChatArtifact) = ImageView(context).apply {
+        scaleType = ImageView.ScaleType.FIT_START
+        adjustViewBounds = true
+        maxHeight = dp(IMAGE_PREVIEW_DP)
+        visibility = View.GONE
+        contentDescription = "View ${artifact.label}"
+        setOnClickListener { viewImage?.invoke(artifact.shareFile) }
+        val view = this
+        thumbnails?.preview(artifact.shareFile, artifact.version) { bitmap ->
+            view.setImageBitmap(bitmap)
+            view.visibility = View.VISIBLE
         }
     }
 
