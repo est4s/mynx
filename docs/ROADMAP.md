@@ -63,16 +63,22 @@ Debian's graphical programs (a desktop such as XFCE, a browser, an
 IDE) on the phone, through **Termux:X11**, an X server for Android.
 - A third view, `view = desktop`, beside `terminal` and `touch`, and
   switching between them like the other two.
-- Termux:X11 is GPL-3.0: keep it a separate program, as proot is
-  (credited in About, its source linked), or ask users to install its
-  APK, as with the agent CLIs.
+- **Shipped like proot** (maintainer's decision, 2026-11-20):
+  Termux:X11 is GPL-3.0, so it stays a separate program, built from
+  its source in CI (like `scripts/build-proot.sh`), shipped as a
+  native library run from `nativeLibraryDir`, credited in About
+  (`COMPONENTS`) with its licence in `tools/licenses/` and its source
+  linked. Nothing for users to install.
 - `mynx desktop start | stop`, with a session that starts a chosen
   desktop and sets `DISPLAY` in new tabs; sound through the existing
   sound device.
 - Works with an external display and a keyboard and mouse (Android's
   desktop windowing), where it's most useful.
 - To check first, in a spike: whether its X server runs for an app
-  that isn't Termux, from under proot, and how fast it draws.
+  that isn't Termux, from under proot, and how fast it draws; and how
+  its Android side (the view that shows the screen, Java) stays
+  separate too: a process of its own talking to ours, not GPL code
+  in mynx's own classes.
 
 ### Extended screen
 Another Android phone (or tablet) next to the first one makes the
