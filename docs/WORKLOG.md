@@ -261,10 +261,8 @@ keeping the logo's palette (entry 190).
    43104362055) and passed on the phone (maintainer, 2026-11-20:
    "everything looks good"). About says 0.0.1 in mynx dev, as every
    debug build does; the maintainer is fine with that (2026-11-20).
-   Then (entry 191): the launcher's Touch view and Settings grouped
-   by view; on the phone: Touch view from the terminal's menu, then
-   drawer → Settings: Appearance (View, Theme), AI agents, Terminal
-   (no theme). Then merge PR #83.
+   Then (entry 191): the launcher's Settings → Touch view and touch
+   Settings grouped by view (screenshots checked). Then merge PR #83.
 3. **Maybe, in core:** a first prompt waiting for the sign-in check
    (MainActivity's `firstPrompt` for now: `ChatController.send()`
    refuses while `CHECKING`); `ChatHub`'s home and cwd made public
@@ -313,9 +311,10 @@ The maintainer, after entry 190 passed: the terminal launcher had no
 easy way into touch view (only `view` deep in `mynx edit`), and the
 theme sat under touch Settings' Terminal though it colours both views.
 Their rule: a setting both views use doesn't go under Terminal.
-- Launcher: a `touch-view` menu action (`Touch view`, after Settings
-  in the built-in `menu.conf`) runs `mynx set view touch`, which the
-  app applies at once. Home leaves it out, as it does Exit. In the
+- Launcher: Settings → Touch view (maintainer's pick, after first
+  trying it in the main menu) runs `mynx set view touch`, which the
+  app applies at once. It's also a `touch-view` action a user's
+  `menu.conf` can use; Home leaves it out, as it does Exit. In the
   shared fixture, so both suites check it; the editor's action list
   and the guide have it.
 - Touch Settings (`HOME_SETTING_GROUPS`): Appearance (View, Theme),
@@ -325,8 +324,7 @@ Their rule: a setting both views use doesn't go under Terminal.
   from the maintainer's rule.
 - Screenshots: `home-settings-appearance.png`, and
   `home-settings-agents.png` in place of `home-settings-chat.png`.
-Left: CI, then the phone: the launcher's Touch view (a user's own
-`menu.conf` won't have it), the Settings lists.
+Left: CI.
 
 ### 2026-11-11 (190): Settings changes answer right; themes colour the touch screens (passed on the phone 2026-11-20)
 

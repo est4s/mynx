@@ -36,8 +36,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Touch view Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings touchview quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -55,7 +55,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Touch view Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -126,8 +126,8 @@ keys() {
 @test "settings menu" {
     source "$MENU"
     menu_items settings
-    [ "${ITEMS[*]}" = "App settings System Help" ]
-    [ "${ACTS[*]}" = "settings menu:system menu:help" ]
+    [ "${ITEMS[*]}" = "App settings Touch view System Help" ]
+    [ "${ACTS[*]}" = "settings touchview menu:system menu:help" ]
 }
 
 @test "system menu" {
@@ -145,27 +145,27 @@ keys() {
 }
 
 @test "Release notes shows mynx notes" {
-    run keys 832
+    run keys 842
     [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 834
+    run keys 844
     [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "Help has Getting started" {
-    run keys 831xxxxxxqqq
+    run keys 841xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 833
+    run keys 843
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 823
+    run keys 833
     [[ $output == *"RUN: mynx github"* ]]
 }
 
@@ -173,7 +173,7 @@ keys() {
     rm "$HOME/.config/gh/hosts.yml"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Terminal apps Games Files Settings Touch view Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Terminal apps Games Files Settings Exit" ]
     [ "${ACTS[2]}" = github ]
     menu_items system
     [ "${ITEMS[*]}" = "Update all System info" ]
@@ -553,7 +553,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 'k\n'  # up from the first item wraps to the last, Exit
+    run keys 9
     [ "$status" -eq 10 ]
 }
 
@@ -788,7 +788,7 @@ no_services_mynx() {
 }
 
 @test "Update all runs apt" {
-    run keys 821
+    run keys 831
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 
@@ -886,8 +886,8 @@ no_services_mynx() {
     [[ "$output" == *"RUN: files"* ]]
 }
 
-@test "Touch view is the 9th item" {
-    run keys 9
+@test "Touch view is in Settings" {
+    run keys 82
     [[ $output == *"RUN: mynx set view touch"* ]]
 }
 

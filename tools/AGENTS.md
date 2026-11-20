@@ -247,7 +247,7 @@ One `key = value` per line; `mynx settings` describes each.
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
 - `view`: `terminal` (default) or `touch`: what the app shows (the
-  launcher menu's Touch view switches to it). `touch`
+  launcher menu's Settings → Touch view switches to it). `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Its
   Settings are lists to tap too: Appearance (the view and the theme,
@@ -1274,7 +1274,7 @@ line, in order; labels up to 20 characters. Actions:
 | `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps"), then **Add to home screen…** |
 | `terminal-apps` | the Terminal apps menu (see "Terminal apps" under "More of the setup") |
 | `games` | the Games menu |
-| `settings` | the Settings menu: App settings, System, Help |
+| `settings` | the Settings menu: App settings, Touch view, System, Help |
 | `app-settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
 | `services` | the background services with their state; each offers Open, Start or Stop, Restart and Log |

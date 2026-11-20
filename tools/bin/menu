@@ -290,8 +290,8 @@ main_menu_file() { # fills ITEMS and ACTS: the user's file, else the built-in on
     read_menu_file "$file"
     ((${#ITEMS[@]})) && return
   done
-  ITEMS=(Shell "AI agents" Services Apps "Terminal apps" Games Files Settings "Touch view" Exit)
-  ACTS=(exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings touchview quit_session)
+  ITEMS=(Shell "AI agents" Services Apps "Terminal apps" Games Files Settings Exit)
+  ACTS=(exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session)
 }
 
 main_menu_has() { # main_menu_has <action>: whether the main menu's items have it
@@ -424,8 +424,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         off) ITEMS+=("Autostart: off") ACTS+=(svcauto:on) ;;
       esac ;;
     settings)
-      ITEMS=("App settings" System Help)
-      ACTS=(settings menu:system menu:help) ;;
+      ITEMS=("App settings" "Touch view" System Help)
+      ACTS=(settings touchview menu:system menu:help) ;;
     system)
       ITEMS=("Update all" "System info")
       ACTS=(update info)
