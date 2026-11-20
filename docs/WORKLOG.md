@@ -77,7 +77,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-20 (195): Touch mode cleanups in core (PR open)
+### 2026-11-20 (195): Touch mode cleanups in core (merged, PR #90; passed)
 
 - The chat home's first prompt now waits for the sign-in check in
   core: `ChatController.sendWhenChecked(text, sent)` sends at once if
@@ -87,9 +87,9 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   MainActivity's `firstPrompt` is gone.
 - `ChatHub` and `ChatController` expose `home` and `cwd`; MainActivity
   and ChatView no longer copy "/root".
-- To check on the phone: Send from the chat home, both signed in
-  (the prompt goes and the box empties) and signed out (the gate shows
-  and the text stays).
+- Passed in mynx dev (build 44814577070): Send from the chat home
+  signed in (the prompt went, the box emptied) and signed out (the
+  gate showed, the text stayed).
 
 ### 2026-11-20 (194): Roadmap cleaned up
 
