@@ -86,7 +86,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-20 (192): Instruction files slimmed (branch `slim-instructions`)
+### 2026-11-20 (192): Instruction files slimmed (merged, PR #85; passed)
 
 What every agent session loads was about 160 KB (~40k tokens), plus
 this log's 126 KB at the start. The maintainer asked for all four
@@ -108,8 +108,9 @@ fixes:
   each topic file. `home-docs.bats` checks the guide and its topic
   files together, caps the core at 40 KB, and checks the core names
   every topic file. `pack-tools.sh` already ships all of `tools/`.
-Left: CI; then on the phone, an agent in a fresh session should find
-a topic file when asked (e.g. "flash my ESP32").
+Passed: a fresh session here no longer lists `/root/CLAUDE.md` in
+`/memory`; in mynx dev (build 44721124656), an agent asked how to flash
+an ESP32 read `/opt/mynx/docs/usb.md` on its own.
 
 ### 2026-11-20 (191): Touch view in the launcher; Settings grouped by view (merged, PR #83)
 
