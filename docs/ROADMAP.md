@@ -75,16 +75,24 @@ IDE) on the phone, through **Termux:X11**, an X server for Android.
   that isn't Termux, from under proot, and how fast it draws.
 
 ### Extended screen
-Another Android phone (or tablet) as a second screen: it shows a tab,
-a web app or the desktop while the first phone keeps the rest.
+Another Android phone (or tablet) next to the first one makes the
+screen bigger: one picture spread across both.
+- **In desktop mode:** one desktop spans both phones placed side by
+  side: its left half shows on one phone, its right half on the
+  other. Windows can be dragged from one to the other and the pointer
+  crosses the edge, as with two monitors on a PC. The X server draws
+  one wide screen with two monitors (RandR), sized to the two
+  displays, and the second phone shows its half.
+- Also, outside desktop mode: the second phone shows a tab or a web
+  app while the first keeps the rest. Terminal tabs travel as text
+  (the terminal's output), not pictures, so they stay sharp and light.
 - The second phone runs mynx (or opens a page in its browser) and
   pairs with the first over Wi-Fi (the same network or a hotspot),
   by a code or QR code; perhaps USB later.
-- Terminal tabs travel as text (the terminal's output), not pictures,
-  so they stay sharp and light; web apps load from the first phone;
-  the desktop is an X11 display of its own, or the first one's
-  stretched across both.
-- Typing on either phone goes to what it shows.
+- Typing and touch on either phone go to what it shows.
+- To check: how fast the second half can be sent (compressed frames
+  of the changed areas over Wi-Fi), and lining the halves up when the
+  phones' screens differ in size or density.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
