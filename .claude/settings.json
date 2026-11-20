@@ -1,4 +1,7 @@
 {
+  "claudeMdExcludes": [
+    "/root/CLAUDE.md"
+  ],
   "hooks": {
     "SessionStart": [
       {

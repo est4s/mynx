@@ -833,7 +833,7 @@ def apps_table(apps):
     """NAME LABEL KIND in 56 columns, each app's app.conf problems under it."""
     if not apps:
         return ("No apps yet. Make one: a folder in ~/apps with an\n"
-                "index.html (see \"Apps\" in /opt/mynx/AGENTS.md).")
+                "index.html (see /opt/mynx/docs/apps.md).")
     lines = [f"{'NAME':<16} {'LABEL':<20} KIND"]
     for app in apps:
         lines.append(f"{app['name']:<16} {app['label']:<20} {app['kind']}")
