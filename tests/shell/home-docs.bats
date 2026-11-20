@@ -3,8 +3,32 @@
 # it updates with the app) must keep up with the setup it describes. Root's
 # home (rootfs/root/) has short AGENTS.md / CLAUDE.md files pointing to it.
 
+# The guide is split: AGENTS.md (loaded into every agent session, so kept
+# small) and topic files in tools/docs/ (/opt/mynx/docs/) it points to.
+# Checks of what's documented read all of it.
+
 ROOT="$BATS_TEST_DIRNAME/../../rootfs/root"
-GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
+CORE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
+DOCS="$BATS_TEST_DIRNAME/../../tools/docs"
+
+setup() {
+    GUIDE="$BATS_TEST_TMPDIR/guide.md"
+    cat "$CORE" "$DOCS"/*.md >"$GUIDE"
+}
+
+@test "the core guide stays small: agents load it into every session" {
+    size=$(wc -c <"$CORE")
+    [ "$size" -le 40000 ] || { echo "tools/AGENTS.md is $size bytes (40000 at most)"; false; }
+}
+
+@test "the core guide points to every topic file, and each one it names exists" {
+    for f in "$DOCS"/*.md; do
+        grep -qF "/opt/mynx/docs/$(basename "$f")" "$CORE" || { echo "not in the core guide: $f"; false; }
+    done
+    for name in $(grep -ohE '/opt/mynx/docs/[a-z-]+\.md' "$CORE" "$DOCS"/*.md | sort -u); do
+        [ -f "$DOCS/${name#/opt/mynx/docs/}" ] || { echo "no such file: $name"; false; }
+    done
+}
 
 @test "the home's CLAUDE.md imports its AGENTS.md and the guide" {
     grep -qx '@AGENTS.md' "$ROOT/CLAUDE.md"
@@ -199,7 +223,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide says how tools reach raw USB devices" {
-    for text in "### Raw USB devices" "/dev/bus/usb/BBB/DDD" "/sys/bus/usb/devices" \
+    for text in "# Raw USB devices" "/dev/bus/usb/BBB/DDD" "/sys/bus/usb/devices" \
         "picotool load -x" "mynx usb allow DEVICE" "driver: null" "tick \"always\" once per board" \
         "/tmp/.mynx/serial/usb.log"; do
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
@@ -207,7 +231,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide says how to use Bluetooth serial devices" {
-    for text in "### Bluetooth serial devices" "mynx bt settings" "mynx bt bind DEVICE" \
+    for text in "# Bluetooth serial devices" "mynx bt settings" "mynx bt bind DEVICE" \
         "~/.config/mynx/bluetooth.conf" "/dev/serial/rfcomm0" "/dev/rfcomm0" "mynx usb monitor rfcomm0" \
         "as Linux's \`rfcomm bind\`" "No baud rate, DTR or RTS over Bluetooth" "\`android-bluetooth\`" \
         "app must be on screen" "Bluetooth Low Energy" "rfc2217://localhost:2317" \
@@ -217,7 +241,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide says how to use Bluetooth LE devices" {
-    for text in "### Bluetooth LE devices" "mynx ble scan" "mynx ble services DEVICE" "mynx ble connect DEVICE" \
+    for text in "# Bluetooth LE devices" "mynx ble scan" "mynx ble services DEVICE" "mynx ble connect DEVICE" \
         "--no-response" "SERVICE/CHAR" "float32" "At most 5 scans in 30 s" "use \`--name\` or \`--service\`" \
         "Android 8" "no BlueZ" "\`bluetoothctl\`" "Nordic UART"; do
         grep -qF -- "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }
@@ -243,7 +267,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide explains apps: the folder, app.conf, where they run, the log, served apps" {
-    for text in "### Apps" "\`~/apps/NAME/\`" "\`app.conf\`" "https://NAME.mynx.invalid/" \
+    for text in "# Apps" "\`~/apps/NAME/\`" "\`app.conf\`" "https://NAME.mynx.invalid/" \
         "/tmp/.mynx/apps/NAME.log" "mynx app log NAME" "\`--- opened\`" "/opt/mynx/apps/sketch" \
         "**only if opening it started it**" "\`autostart = yes\`" "The phone from JavaScript" \
         "reloads by itself" "\`terminal-apps\`" "Terminal apps → Serial monitor"; do
@@ -252,7 +276,7 @@ GUIDE="$BATS_TEST_DIRNAME/../../tools/AGENTS.md"
 }
 
 @test "the guide explains the phone from JavaScript: loading mynx.js, errors, the origin, permissions" {
-    for text in "#### The phone from JavaScript" '<script src="https://mynx.invalid/mynx.js"></script>' \
+    for text in "# The phone from JavaScript" '<script src="https://mynx.invalid/mynx.js"></script>' \
         "for await" "s.stop()" "\`denied\`" "\`refused\`" "\`closed\`" "\`no-bridge\`" \
         "**while its own \`service\` runs**" "~/.config/mynx/app-permissions.conf" \
         "mynx app permissions NAME reset" "16 MB" "env(safe-area-inset-top)" "\`screen-awake = yes\`" \
