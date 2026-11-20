@@ -162,6 +162,10 @@ private val CARDS = listOf(
         "artifact-2",
         ChatArtifact(ArtifactKind.TERMINAL_APP, "/root/apps/tip", "tip", "/root/apps/tip"),
     ),
+    ChatItem.Artifact(
+        "artifact-3",
+        ChatArtifact(ArtifactKind.MARKDOWN, "/root/tip/NOTES.md", "NOTES.md", "/root/tip/NOTES.md"),
+    ),
 )
 
 /** Usage as the maintainer's screenshots had it: context 15%, the session 13% (resets today), the week 40%. */
@@ -225,15 +229,15 @@ class ChatScreenshotTest {
                 activity,
                 controller = { null },
                 back = {},
-                showTerminal = {},
                 openTab = {},
                 openApp = {},
                 shareFile = {},
+                copyFile = {},
                 installApk = {},
                 attach = { _, _ -> },
                 dictation = FakeDictation(),
                 clock = { NOW_MS },
-            ).apply { colors = Screenshots.colors }
+            ).apply { colors = Pixel.COLORS }
         }
         val conversation = Conversation(items, queued = queued, running = running, model = model, mode = mode)
         view.show(ChatState(conversation, access, canRestart = false, busy = running, usage = usage, title = title))
@@ -322,6 +326,12 @@ class ChatScreenshotTest {
 
     @Test
     fun modelSheet() = shoot(1080, 2400, "chat-sheet-model", SHORT, running = false, sheets = listOf(ChatSheetPage.MODEL))
+
+    @Test
+    fun defaultModelSheet() = shoot(
+        1080, 2400, "chat-sheet-default-model", SHORT, running = false,
+        sheets = listOf(ChatSheetPage.MODEL, ChatSheetPage.DEFAULT_MODEL),
+    )
 
     @Test
     fun usageSheet() = shoot(1080, 2400, "chat-sheet-usage", SHORT, running = false, sheets = listOf(ChatSheetPage.USAGE))

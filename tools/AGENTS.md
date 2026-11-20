@@ -246,9 +246,14 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
-- `view`: `terminal` (default) or `touch`: what the app shows. `touch`
+- `view`: `terminal` (default) or `touch`: what the app shows (the
+  launcher menu's Settings → Touch view switches to it). `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
-  same `menu.conf` and app folders; programs open in a tab. Terminal
+  same `menu.conf` and app folders; programs open in a tab. Its
+  Settings are lists to tap too: Appearance (the view and the theme,
+  for both views), AI agents, Terminal, Phone access, Background, undo,
+  System info and Help (Update all, GitHub setup and the key bar and
+  menu editors still run in a tab). Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
   back to Home. In `touch`, Home's AI agents opens an installed Claude
   Code's chat history: New chat, then its chats in `/root`, newest
@@ -257,17 +262,25 @@ One `key = value` per line; `mynx settings` describes each.
   Back again to Home. Several chats can work at once, each its own
   Claude Code: one left while it works keeps going, one left idle is
   stopped and goes on (`--resume`) with its next message. The other
-  agents run in a tab. A chat's To tab moves it to a terminal tab
-  (`claude --resume`); one session runs in one place at a time. When
-  Claude Code makes or changes an app in `~/apps` or `~/terminal-apps`,
-  or writes an APK, the chat shows a card for it: Open (a web app),
-  Run (a terminal app, in a tab), Share.
+  agents run in a tab. In a chat's ⋮,
+  Open in a tab moves it to a terminal tab (`claude --resume`); one
+  session runs in one place at a time. Each of Claude's replies has
+  Copy under it. When Claude Code makes or changes an app in `~/apps`
+  or `~/terminal-apps`, writes an APK or writes a Markdown (`.md`) file,
+  the chat shows a card for it: Open (a web app), Run (a terminal app,
+  in a tab), Copy (a Markdown file's text), Share.
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
   the permission mode new chats of touch view's Chat start in. `auto`
   lets Claude Code decide what's safe to run, asking less; `default`
   asks first. A mode picked in a chat stays with that chat, also after
   leaving it; the chat's "Use as default" sets this setting. Never
   `bypassPermissions`.
+- `chat-model`: `default` (default) or a model's name (`opus`,
+  `sonnet`, `haiku`, or a full one like `claude-sonnet-5-5`): the
+  model new chats of touch view's Chat start with. `default` passes
+  none, so Claude Code uses its own. A model picked in a chat stays
+  with that chat, and a past chat keeps the one it ran; the chat's
+  + → Model → "Default for new chats" sets this setting.
 - `wakelock`: `auto` (default), `on` or `off`: whether the app keeps
   the phone's CPU awake, so servers and long jobs (builds, downloads)
   don't pause when the screen goes off. `auto` holds it only while a
@@ -1261,13 +1274,14 @@ line, in order; labels up to 20 characters. Actions:
 | `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps"), then **Add to home screen…** |
 | `terminal-apps` | the Terminal apps menu (see "Terminal apps" under "More of the setup") |
 | `games` | the Games menu |
-| `settings` | the Settings menu: App settings, System, Help |
+| `settings` | the Settings menu: App settings, Touch view, System, Help |
 | `app-settings` | the settings editors (`mynx edit`) |
 | `agents` | AI agents: start one, or install it (`mynx agent start`) |
 | `services` | the background services with their state; each offers Open, Start or Stop, Restart and Log |
 | `system` | Update all, System info, and GitHub setup (`mynx github`) once GitHub is set up |
 | `help` | Getting started (`mynx welcome`), Release notes (`mynx notes`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
+| `touch-view` | switch the app to touch view (`mynx set view touch`); touch view leaves it out |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
 

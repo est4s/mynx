@@ -293,7 +293,8 @@ class MynxTest(unittest.TestCase):
 
     # --- about -------------------------------------------------------------
 
-    LICENSES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "MIT-usb-serial-for-android"]
+    LICENSES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "OFL-1.1-pixelify-sans",
+                "MIT-usb-serial-for-android"]
 
     def write_about_files(self):
         with open(os.path.join(self.tools, ".version"), "w") as f:
@@ -314,6 +315,7 @@ class MynxTest(unittest.TestCase):
                      "talloc", "LGPL-3.0", "https://www.samba.org/ftp/talloc/",
                      "terminal-view", "v0.118.3", "https://github.com/termux/termux-app", "Apache-2.0",
                      "JetBrains Mono Nerd Font", "OFL-1.1",
+                     "Pixelify Sans", "https://github.com/google/fonts",
                      "usb-serial-for-android", "https://github.com/mik3y/usb-serial-for-android",
                      "Debian", "/usr/share/doc/", "PulseAudio",
                      "separate program", "https://github.com/est4s/mynx/tree/main/proot"]:

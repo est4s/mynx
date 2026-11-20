@@ -2,13 +2,10 @@ package io.github.est4s.terminal
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.res.ColorStateList
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.RectF
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.LayerDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -24,6 +21,7 @@ import io.github.est4s.terminal.core.CHAT_MODES
 import io.github.est4s.terminal.core.ChatController
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.StripColors
+import io.github.est4s.terminal.core.chatDefaultModelChoices
 import io.github.est4s.terminal.core.chatModeName
 import io.github.est4s.terminal.core.usageRows
 import java.time.ZoneId
@@ -32,43 +30,35 @@ import java.time.ZoneId
 enum class ChatAttachSource { CAMERA, PHOTOS, FILES }
 
 /** The bottom sheets over Chat; a sheet's sub page (Permission, Model) goes back to the one it came from. */
-enum class ChatSheetPage { ADD, PERMISSION, DEFAULT_MODE, MODEL, USAGE }
+enum class ChatSheetPage { ADD, PERMISSION, DEFAULT_MODE, MODEL, DEFAULT_MODEL, USAGE }
 
-// A theme colour with another opacity: the only colours not straight from the theme.
-internal fun fadedColor(color: Int, alpha: Int) = (color and 0x00FFFFFF) or (alpha shl 24)
-
-// Halfway between two theme colours: the sheet stands out from the chat under it.
-private fun mixColor(a: Int, b: Int) = Color.rgb(
-    (Color.red(a) + Color.red(b)) / 2,
-    (Color.green(a) + Color.green(b)) / 2,
-    (Color.blue(a) + Color.blue(b)) / 2,
-)
-
-/** One of Chat's icons (`res/drawable/chat_*.xml`), tinted. */
-internal fun chatIcon(context: Context, res: Int, color: Int, sizeDp: Int) = ImageView(context).apply {
-    setImageResource(res)
-    imageTintList = ColorStateList.valueOf(color)
+/** One of Chat's block icons. */
+internal fun chatIcon(context: Context, icon: PixelIcon, color: Int, sizeDp: Int) = ImageView(context).apply {
+    setImageDrawable(Pixel.icon(context, icon, color, sizeDp))
     scaleType = ImageView.ScaleType.FIT_CENTER
-    val size = (sizeDp * resources.displayMetrics.density).toInt()
+    val size = Pixel.dp(context, sizeDp)
     layoutParams = LinearLayout.LayoutParams(size, size)
 }
 
 /**
- * The header's context use: a thin ring, filled as far as [percent]
- * (an empty ring when it isn't known yet).
+ * The header's context use, as in the pixel mock-up: a square meter filled
+ * as far as [percent] in cyan, with the number under it (an empty meter
+ * when it isn't known yet). The view keeps its name from the ring it was.
  */
 class UsageRing(context: Context) : View(context) {
     private val density = resources.displayMetrics.density
-    private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val frame = Paint().apply {
         style = Paint.Style.STROKE
-        strokeWidth = 2.5f * density
+        strokeWidth = 2 * density
+        color = Pixel.LINE
     }
-    private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = 2.5f * density
-        strokeCap = Paint.Cap.ROUND
+    private val fill = Paint().apply { color = Pixel.CYAN }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Pixel.DIM
+        textSize = 11 * resources.displayMetrics.scaledDensity
+        textAlign = Paint.Align.CENTER
+        typeface = Pixel.text(context)
     }
-    private val box = RectF()
 
     var percent: Int? = null
         set(value) {
@@ -78,23 +68,24 @@ class UsageRing(context: Context) : View(context) {
             invalidate()
         }
 
-    fun setColors(colors: StripColors) {
-        track.color = fadedColor(colors.text, 0x40)
-        arc.color = colors.accent
-        invalidate()
-    }
-
     override fun onDraw(canvas: Canvas) {
-        val size = 20f * density
-        val left = (width - size) / 2
-        val top = (height - size) / 2
-        val inset = track.strokeWidth / 2
-        box.set(left + inset, top + inset, left + size - inset, top + size - inset)
-        canvas.drawOval(box, track)
-        val shown = percent ?: return
+        val w = 36 * density
+        val h = 12 * density
+        val shown = percent
+        val text = label.fontMetrics
+        val textHeight = text.descent - text.ascent
+        val gap = 3 * density
+        val top = ((height - h - (if (shown != null) gap + textHeight else 0f)) / 2).toInt().toFloat()
+        val left = ((width - w) / 2).toInt().toFloat()
+        val border = frame.strokeWidth
+        canvas.drawRect(left + border / 2, top + border / 2, left + w - border / 2, top + h - border / 2, frame)
+        shown ?: return
         // A sliver even at 0%, so a known value looks different from an unknown one.
-        val sweep = (shown.coerceIn(0, 100) * 3.6f).coerceAtLeast(6f)
-        canvas.drawArc(box, -90f, sweep, false, arc)
+        val inner = w - 2 * border - 2 * density
+        val filled = maxOf(density, inner * shown.coerceIn(0, 100) / 100f).toInt().toFloat()
+        val inside = border + density
+        canvas.drawRect(left + inside, top + inside, left + inside + filled, top + h - inside, fill)
+        canvas.drawText("$shown%", width / 2f, top + h + gap - text.ascent, label)
     }
 }
 
@@ -128,7 +119,7 @@ class ChatSheetLayer(
     private val stack = ArrayList<ChatSheetPage>()
     private var drawnState: ChatState? = null
     private val scrim = View(context).apply {
-        setBackgroundColor(0x99000000.toInt())
+        setBackgroundColor(Pixel.SCRIM)
         setOnClickListener { close() }
     }
     private val content = LinearLayout(context).apply {
@@ -190,20 +181,14 @@ class ChatSheetLayer(
         val page = stack.lastOrNull() ?: return
         val now = state()
         drawnState = now
-        sheet.background = GradientDrawable().apply {
-            setColor(mixColor(colors.background, colors.selectedBackground))
-            val r = dp(24).toFloat()
-            cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+        // Square, on the background, with a cyan line along its top.
+        sheet.background = LayerDrawable(arrayOf(ColorDrawable(Pixel.CYAN), ColorDrawable(colors.background))).apply {
+            setLayerInset(1, 0, dp(2), 0, 0)
         }
         sheet.removeAllViews()
-        sheet.addView(View(context).apply {
-            background = GradientDrawable().apply {
-                setColor(fadedColor(colors.text, 0x50))
-                cornerRadius = dp(2).toFloat()
-            }
-        }, LinearLayout.LayoutParams(dp(36), dp(4)).apply {
+        sheet.addView(View(context).apply { setBackgroundColor(Pixel.LINE) }, LinearLayout.LayoutParams(dp(36), dp(4)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = dp(8)
+            topMargin = dp(10)
         })
         content.removeAllViews()
         when (page) {
@@ -211,6 +196,7 @@ class ChatSheetLayer(
             ChatSheetPage.PERMISSION -> permissionPage(now, colors)
             ChatSheetPage.DEFAULT_MODE -> defaultModePage(now, colors)
             ChatSheetPage.MODEL -> modelPage(now, colors)
+            ChatSheetPage.DEFAULT_MODEL -> defaultModelPage(now, colors)
             ChatSheetPage.USAGE -> usagePage(now, colors)
         }
         contentScroll.scrollTo(0, 0)
@@ -221,14 +207,14 @@ class ChatSheetLayer(
     private fun header(title: String, colors: StripColors, end: View? = null) {
         val bar = FrameLayout(context).apply { minimumHeight = dp(56) }
         val sub = stack.size > 1
-        bar.addView(iconButton(if (sub) R.drawable.chat_back else R.drawable.chat_close, if (sub) "Back" else "Close", colors.text) {
+        bar.addView(iconButton(if (sub) PixelIcon.BACK else PixelIcon.CLOSE, if (sub) "Back" else "Close", if (sub) Pixel.CYAN else colors.text) {
             if (sub) back() else close()
         }, FrameLayout.LayoutParams(dp(56), dp(56), Gravity.START or Gravity.CENTER_VERTICAL))
         bar.addView(TextView(context).apply {
             text = title
             setTextColor(colors.text)
+            typeface = Pixel.label(context, 700)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 19f)
-            paint.isFakeBoldText = true
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER
@@ -243,9 +229,9 @@ class ChatSheetLayer(
         attach?.let { pick ->
             val tiles = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
             listOf(
-                Triple(ChatAttachSource.CAMERA, R.drawable.chat_camera, "Camera"),
-                Triple(ChatAttachSource.PHOTOS, R.drawable.chat_photo, "Photos"),
-                Triple(ChatAttachSource.FILES, R.drawable.chat_file, "Files"),
+                Triple(ChatAttachSource.CAMERA, PixelIcon.CAMERA, "Camera"),
+                Triple(ChatAttachSource.PHOTOS, PixelIcon.IMAGE, "Photos"),
+                Triple(ChatAttachSource.FILES, PixelIcon.FILE, "Files"),
             ).forEachIndexed { i, (source, icon, label) ->
                 tiles.addView(tile(icon, label, colors) {
                     close()
@@ -254,10 +240,10 @@ class ChatSheetLayer(
             }
             content.addView(tiles, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(12) })
         }
-        content.addView(navRow(R.drawable.chat_bolt, "Permission", modeLabel(state?.mode ?: "auto"), colors) {
+        content.addView(navRow(PixelIcon.BOLT, "Permission", modeLabel(state?.mode ?: "auto"), colors) {
             open(ChatSheetPage.PERMISSION)
         }, rowParams())
-        content.addView(navRow(R.drawable.chat_model, "Model", state?.let(::modelLabel) ?: "Default", colors) {
+        content.addView(navRow(PixelIcon.CHIP, "Model", state?.let(::modelLabel) ?: "Default", colors) {
             open(ChatSheetPage.MODEL)
         }, rowParams())
     }
@@ -291,26 +277,41 @@ class ChatSheetLayer(
 
     private fun modelPage(state: ChatState?, colors: StripColors) {
         header("Model", colors)
+        content.addView(note("For this chat", colors))
         state?.models.orEmpty().forEach { model ->
             content.addView(choiceRow(model.name, model.description, state?.model == model.value, colors) {
                 chat()?.setModel(model.value)
                 back()
             }, rowParams(0))
         }
+        val current = state?.defaultModel ?: "default"
+        val name = chatDefaultModelChoices(state?.models.orEmpty()).firstOrNull { it.value == current }?.name ?: current
+        content.addView(navRow(null, "Default for new chats", name, colors) {
+            open(ChatSheetPage.DEFAULT_MODEL)
+        }, rowParams().apply { topMargin = dp(12) })
+    }
+
+    private fun defaultModelPage(state: ChatState?, colors: StripColors) {
+        header("Default for new chats", colors)
+        content.addView(note("New chats start with this model; a chat's own pick wins for that chat.", colors))
+        val current = state?.defaultModel ?: "default"
+        chatDefaultModelChoices(state?.models.orEmpty()).forEach { model ->
+            content.addView(choiceRow(model.name, model.description, current == model.value, colors) {
+                chat()?.setDefaultModel(model.value)
+                back()
+            }, rowParams(0))
+        }
     }
 
     private fun usagePage(state: ChatState?, colors: StripColors) {
-        header("Usage", colors, iconButton(R.drawable.chat_refresh, "Refresh", colors.text) { draw() })
+        header("Usage", colors, iconButton(PixelIcon.REFRESH, "Refresh", colors.text) { draw() })
         val usage = state?.usage ?: return
         var section: String? = null
         usageRows(usage, clock(), ZoneId.systemDefault()).forEach { row ->
             if (row.section != section) {
                 section = row.section
-                content.addView(TextView(context).apply {
-                    text = row.section
-                    setTextColor(fadedColor(colors.text, 0xB0))
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    setPadding(dp(8), dp(12), dp(8), dp(8))
+                content.addView(sectionLabel(context, row.section).apply {
+                    setPadding(0, dp(12), 0, dp(8))
                 })
             }
             content.addView(usageCard(row.label, row.percent, row.detail, colors), rowParams())
@@ -319,7 +320,7 @@ class ChatSheetLayer(
 
     private fun usageCard(label: String, percent: Int?, detail: String, colors: StripColors) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
-        background = rounded(colors.selectedBackground, 16)
+        background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
         setPadding(dp(16), dp(14), dp(16), dp(14))
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -327,6 +328,7 @@ class ChatSheetLayer(
             addView(TextView(context).apply {
                 text = label
                 setTextColor(colors.text)
+                typeface = Pixel.label(context, 600)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
@@ -334,81 +336,82 @@ class ChatSheetLayer(
             percent?.let { p ->
                 addView(TextView(context).apply {
                     text = "$p% used"
-                    setTextColor(fadedColor(colors.text, 0xB0))
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setTextColor(Pixel.DIM)
+                    typeface = Pixel.text(context)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                     setPadding(dp(8), 0, 0, 0)
                 })
             }
         })
         percent?.let { p ->
-            addView(UsageBar(context, p.coerceIn(0, 100), colors), LinearLayout.LayoutParams(MATCH_PARENT, dp(6)).apply {
+            addView(UsageBar(context, p.coerceIn(0, 100)), LinearLayout.LayoutParams(MATCH_PARENT, dp(14)).apply {
                 topMargin = dp(12)
                 bottomMargin = dp(10)
             })
         }
         if (detail.isNotEmpty()) addView(TextView(context).apply {
             text = detail
-            setTextColor(fadedColor(colors.text, 0xB0))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Pixel.DIM)
+            typeface = Pixel.text(context)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             if (percent == null) setPadding(0, dp(6), 0, 0)
         })
     }
 
-    private class UsageBar(context: Context, private val percent: Int, colors: StripColors) : View(context) {
-        private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fadedColor(colors.accent, 0x40) }
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = colors.accent }
-        private val box = RectF()
+    // As the header's meter: a 2 dp frame, filled in cyan 2 dp inside it.
+    private class UsageBar(context: Context, private val percent: Int) : View(context) {
+        private val density = resources.displayMetrics.density
+        private val frame = Paint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2 * density
+            color = Pixel.LINE
+        }
+        private val fill = Paint().apply { color = Pixel.CYAN }
 
         override fun onDraw(canvas: Canvas) {
-            val r = height / 2f
-            box.set(0f, 0f, width.toFloat(), height.toFloat())
-            canvas.drawRoundRect(box, r, r, track)
+            val b = frame.strokeWidth
+            canvas.drawRect(b / 2, b / 2, width - b / 2, height - b / 2, frame)
             if (percent == 0) return
-            box.right = maxOf(height.toFloat(), width * percent / 100f)
-            canvas.drawRoundRect(box, r, r, fill)
+            val inside = b + density
+            val filled = ((width - 2 * inside) * percent / 100f).toInt().toFloat()
+            canvas.drawRect(inside, inside, inside + filled, height - inside, fill)
         }
     }
 
-    private fun tile(icon: Int, label: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
+    private fun tile(icon: PixelIcon, label: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
-        val shape = GradientDrawable().apply {
-            cornerRadius = dp(16).toFloat()
-            setStroke(dp(1), fadedColor(colors.text, 0x50))
-        }
-        background = RippleDrawable(ColorStateList.valueOf(fadedColor(colors.accent, 0x40)), shape, rounded(colors.text, 16))
+        background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
         isClickable = true
         isFocusable = true
         contentDescription = label
         setOnClickListener { onTap() }
-        addView(chatIcon(context, icon, colors.text, 28))
+        addView(chatIcon(context, icon, Pixel.CYAN, 28))
         addView(TextView(context).apply {
             text = label
             setTextColor(colors.text)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            typeface = Pixel.label(context, 600)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             maxLines = 1
             setPadding(0, dp(8), 0, 0)
             gravity = Gravity.CENTER
         })
     }
 
-    // A card row that leads to a sub page: an icon in a circle, the name over its value, and ›.
-    private fun navRow(icon: Int?, title: String, value: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
+    // A card row that leads to a sub page: an icon in a square, the name over its value, and ›.
+    private fun navRow(icon: PixelIcon?, title: String, value: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(64)
         setPadding(dp(12), dp(10), dp(12), dp(10))
-        background = RippleDrawable(ColorStateList.valueOf(fadedColor(colors.accent, 0x40)), rounded(colors.selectedBackground, 16), null)
+        background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
         isClickable = true
         isFocusable = true
         setOnClickListener { onTap() }
         icon?.let {
             addView(FrameLayout(context).apply {
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(fadedColor(colors.text, 0x1C))
-                }
-                addView(chatIcon(context, it, colors.text, 22), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+                background = Pixel.box(context, fill = colors.background, border = Pixel.LINE)
+                addView(chatIcon(context, it, Pixel.CYAN, 20), FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER))
             }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
         }
         addView(LinearLayout(context).apply {
@@ -416,19 +419,21 @@ class ChatSheetLayer(
             addView(TextView(context).apply {
                 text = title
                 setTextColor(colors.text)
+                typeface = Pixel.label(context, 600)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
             })
             addView(TextView(context).apply {
                 text = value
-                setTextColor(fadedColor(colors.text, 0xA0))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Pixel.DIM)
+                typeface = Pixel.text(context)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
             })
         }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { if (icon == null) marginStart = dp(4) })
-        addView(chatIcon(context, R.drawable.chat_chevron, fadedColor(colors.text, 0xA0), 20))
+        addView(chatIcon(context, PixelIcon.CHEVRON, Pixel.DIM, 20))
     }
 
     // One choice: a tick on the one in use, the name, and under it what it does.
@@ -438,7 +443,7 @@ class ChatSheetLayer(
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = dp(52)
             setPadding(dp(8), dp(8), dp(8), dp(8))
-            background = RippleDrawable(ColorStateList.valueOf(fadedColor(colors.accent, 0x40)), null, rounded(colors.text, 12))
+            background = pixelRipple()
             isClickable = true
             isFocusable = true
             setOnClickListener { onTap() }
@@ -447,47 +452,45 @@ class ChatSheetLayer(
                 addView(TextView(context).apply {
                     text = label
                     setTextColor(if (ticked) colors.accent else colors.text)
+                    typeface = Pixel.label(context, 600)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
                 })
                 description?.let { more ->
                     addView(TextView(context).apply {
                         text = more
-                        setTextColor(fadedColor(colors.text, 0x99))
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        setTextColor(Pixel.DIM)
+                        typeface = Pixel.text(context)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                     })
                 }
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(4) })
-            addView(chatIcon(context, R.drawable.chat_check, colors.accent, 22).apply {
+            addView(chatIcon(context, PixelIcon.CHECK, colors.accent, 20).apply {
                 visibility = if (ticked) View.VISIBLE else View.INVISIBLE
             })
         }
 
     private fun note(text: String, colors: StripColors) = TextView(context).apply {
         this.text = text
-        setTextColor(fadedColor(colors.text, 0xA0))
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        setTextColor(Pixel.DIM)
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         setPadding(dp(8), dp(4), dp(8), dp(8))
     }
 
-    private fun iconButton(icon: Int, description: String, color: Int, onTap: () -> Unit) = FrameLayout(context).apply {
+    private fun iconButton(icon: PixelIcon, description: String, color: Int, onTap: () -> Unit) = FrameLayout(context).apply {
         contentDescription = description
         isClickable = true
         isFocusable = true
-        background = RippleDrawable(ColorStateList.valueOf(fadedColor(color, 0x30)), null, null)
+        background = pixelRipple()
         setOnClickListener { onTap() }
-        addView(chatIcon(context, icon, color, 24), FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
+        addView(chatIcon(context, icon, color, 20), FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER))
     }
 
     private fun rowParams(gap: Int = 8) = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(gap) }
 
-    private fun rounded(color: Int, radiusDp: Int) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(radiusDp).toFloat()
-    }
-
     private fun modeLabel(value: String) = chatModeName(value)
 
-    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+    private fun dp(value: Int) = Pixel.dp(context, value)
 }
 
 /** The Model row's value: the picked model's name, else what the line under the title says. */

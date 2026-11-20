@@ -29,6 +29,8 @@ data class ChatState(
     val line: ChatStatusLine = chatStatusLine(null, conversation.model, conversation.mode, models),
     /** The `chat-mode` setting, the mode new chats start in. */
     val defaultMode: String = "default",
+    /** The `chat-model` setting, the model new chats start with (`default`: Claude's own). */
+    val defaultModel: String = "default",
     /** The chat's title: its first prompt (as the history row has it), null for a new empty chat. */
     val title: String? = null,
     /** This chat's context, and the plan's usage as any chat last heard it. */
@@ -99,6 +101,12 @@ interface ChatHost {
 
     /** Writes the `chat-mode` setting ("Use as default"); [value] is one of [CHAT_MODES]. */
     fun setChatDefaultMode(value: String) {}
+
+    /** The `chat-model` setting: the model new chats launch with; null or `default` for no flag. */
+    fun chatDefaultModel(): String? = null
+
+    /** Writes the `chat-model` setting (Model's "Default for new chats"). */
+    fun setChatDefaultModel(value: String) {}
 }
 
 /** A chat's own picks: the model and permission mode its launches take as flags, null for none. */
@@ -127,6 +135,8 @@ class ChatShared(private val picksFile: File? = null) {
     internal var ready: ChatCheck? = null
     /** The `chat-mode` setting as last read; null: no flag. */
     internal var defaultMode: String? = null
+    /** The `chat-model` setting as last read; null: no flag. */
+    internal var defaultModel: String? = null
     internal var plan: List<PlanWindow> = emptyList()
     internal var planSeenMs: Long? = null
     /** Context windows Claude reported, by model: a resumed chat's ring before its first reply. */
@@ -276,12 +286,15 @@ class ChatController(
             loadHistory(resumeId)
         }
         shared.defaultMode = host.chatDefaultMode()?.takeIf(::chatModeOffered)
+        shared.defaultModel = host.chatDefaultModel()?.takeIf { it.isNotBlank() && it != "default" }
         val kept = resumeId?.let(shared::picks)
         if (kept != null) {
             model = kept.model
             mode = kept.mode
         } else {
             mode = shared.defaultMode
+            // A past chat resumes with the model it ran: `--resume` restores it.
+            if (resumeId == null) model = shared.defaultModel
         }
     }
 
@@ -321,6 +334,7 @@ class ChatController(
                 mode = mode ?: "default",
                 line = chatStatusLine(model, conversation.model, mode, models, pastChat),
                 defaultMode = shared.defaultMode ?: "default",
+                defaultModel = shared.defaultModel ?: "default",
                 title = title,
                 usage = ChatUsage(context, shared.plan, shared.planSeenMs),
             )
@@ -515,6 +529,14 @@ class ChatController(
         if (!chatModeOffered(value)) return
         host.setChatDefaultMode(value)
         shared.defaultMode = value
+        changed()
+    }
+
+    /** The model's "Default for new chats": the `chat-model` setting; this chat's own pick stays. */
+    fun setDefaultModel(value: String) {
+        if (value.isBlank()) return
+        host.setChatDefaultModel(value)
+        shared.defaultModel = value.takeIf { it != "default" }
         changed()
     }
 

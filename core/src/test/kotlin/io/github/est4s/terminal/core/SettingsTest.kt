@@ -63,7 +63,7 @@ class SettingsTest {
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
-                "update-check", "serial-preload", "serial-names", "view", "chat-mode"),
+                "update-check", "serial-preload", "serial-names", "view", "chat-mode", "chat-model"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -82,12 +82,12 @@ class SettingsTest {
                 "android-bluetooth" to "off",
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off", "view" to "touch",
-                "chat-mode" to "plan",
+                "chat-mode" to "plan", "chat-model" to "opus",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
-                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH, chatMode = "plan").values(),
+                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH, chatMode = "plan", chatModel = "opus").values(),
         )
     }
 
@@ -241,6 +241,16 @@ class SettingsTest {
         val parsed = parseSettings("chat-mode = acceptEdits\nchat-mode = bypassPermissions\n")
         assertEquals("acceptEdits", parsed.settings.chatMode)
         assertEquals(listOf("line 2: chat-mode must be one of: auto, default, plan, acceptEdits"), parsed.problems)
+    }
+
+    @Test
+    fun `chat-model is Claude's own default unless a model is named`() {
+        assertEquals("default", Settings().chatModel)
+        assertEquals("default", SETTINGS.single { it.key == "chat-model" }.default)
+        assertEquals("claude-opus-5-5[1m]", parseSettings("chat-model = claude-opus-5-5[1m]\n").settings.chatModel)
+        val parsed = parseSettings("chat-model = sonnet\nchat-model = two words\n")
+        assertEquals("sonnet", parsed.settings.chatModel)
+        assertEquals(listOf("line 2: chat-model must be a model's name, like opus or claude-sonnet-5-5, or default"), parsed.problems)
     }
 
     @Test

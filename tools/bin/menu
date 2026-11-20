@@ -102,7 +102,7 @@ theme_name() { # the theme the colours file was set from (see mynx theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, touch-view, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -134,6 +134,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       system) action=menu:system ;;
       help) action=menu:help ;;
       welcome) action=welcome ;;
+      touch-view) action=touchview ;;
       exit) action=quit_session ;;
       run) PROBLEMS+=("line $n: run needs a command"); continue ;;
       run\ *) action="cmd:${action#run }" ;;
@@ -423,8 +424,8 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         off) ITEMS+=("Autostart: off") ACTS+=(svcauto:on) ;;
       esac ;;
     settings)
-      ITEMS=("App settings" System Help)
-      ACTS=(settings menu:system menu:help) ;;
+      ITEMS=("App settings" "Touch view" System Help)
+      ACTS=(settings touchview menu:system menu:help) ;;
     system)
       ITEMS=("Update all" "System info")
       ACTS=(update info)
@@ -616,6 +617,7 @@ act_none() { :; }
 act_welcome() { welcome_page; }
 act_files() { run files; }
 act_settings() { run mynx edit; }
+act_touchview() { run mynx set view touch || pause; }  # the app switches at once; a failure stays on screen
 act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   run bash -c "$1"
   local rc=$?

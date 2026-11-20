@@ -63,7 +63,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, touch-view, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -126,8 +126,8 @@ keys() {
 @test "settings menu" {
     source "$MENU"
     menu_items settings
-    [ "${ITEMS[*]}" = "App settings System Help" ]
-    [ "${ACTS[*]}" = "settings menu:system menu:help" ]
+    [ "${ITEMS[*]}" = "App settings Touch view System Help" ]
+    [ "${ACTS[*]}" = "settings touchview menu:system menu:help" ]
 }
 
 @test "system menu" {
@@ -145,27 +145,27 @@ keys() {
 }
 
 @test "Release notes shows mynx notes" {
-    run keys 832
+    run keys 842
     [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 834
+    run keys 844
     [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "Help has Getting started" {
-    run keys 831xxxxxxqqq
+    run keys 841xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 833
+    run keys 843
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 823
+    run keys 833
     [[ $output == *"RUN: mynx github"* ]]
 }
 
@@ -788,7 +788,7 @@ no_services_mynx() {
 }
 
 @test "Update all runs apt" {
-    run keys 821
+    run keys 831
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 
@@ -874,8 +874,8 @@ no_services_mynx() {
 @test "the menu file both views read parses to the same items" {
     source "$MENU"
     read_menu_file "$BATS_TEST_DIRNAME/../fixtures/menu.conf"
-    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Leave" ]
-    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files quit_session" ]
+    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Touch Leave" ]
+    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files touchview quit_session" ]
 }
 
 @test "--act runs one action and leaves" {
@@ -884,6 +884,17 @@ no_services_mynx() {
     [[ "$output" == *"RUN: play /x/my-game"* ]]
     run bash -c "MENU_DRYRUN=1 bash '$MENU' --act files 2>&1 </dev/null"
     [[ "$output" == *"RUN: files"* ]]
+}
+
+@test "Touch view is in Settings" {
+    run keys 82
+    [[ $output == *"RUN: mynx set view touch"* ]]
+}
+
+@test "Touch view switches the app to touch view" {
+    run bash -c "MENU_DRYRUN=1 bash '$MENU' --act touchview 2>&1 </dev/null"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RUN: mynx set view touch"* ]]
 }
 
 @test "--act refuses what isn't an action" {

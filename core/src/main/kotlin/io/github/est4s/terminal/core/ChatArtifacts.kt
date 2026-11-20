@@ -5,8 +5,9 @@ import java.nio.file.LinkOption
 
 /*
  * Artifact cards: when the agent makes or changes an app in `~/apps` or
- * `~/terminal-apps`, or writes an APK, the chat shows a card for it with
- * what can be done with it (Open, Run, Install, Share).
+ * `~/terminal-apps`, or writes an APK or a Markdown file, the chat shows a
+ * card for it with what can be done with it (Open, Run, Install, Copy,
+ * Share).
  *
  * - Hints ([artifactHints]) come from a turn's completed tool calls: the
  *   paths of Write, Edit and NotebookEdit (relative ones against the
@@ -16,14 +17,15 @@ import java.nio.file.LinkOption
  *   rules Home and the menu use: a web app is what [WebApps] lists from
  *   `~/apps` (also a file written through a link there), a terminal app
  *   an executable file right in `~/terminal-apps` or `~/apps`, labelled
- *   as the menu labels it. A command's path counts only if it changed
+ *   as the menu labels it. A Markdown file (`.md`, `.markdown`) counts
+ *   anywhere, but only when written (Write, Edit), not named in a command. A command's path counts only if it changed
  *   since the turn started (a command that just reads an app gives no
  *   card), so history, with no turn times, only goes by written files.
  * - One card per app per turn (the items after the last prompt), changed
  *   in place when the app changes again ([withArtifactCards]).
  */
 
-enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK }
+enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN }
 
 /**
  * What a card is about. [path] is the Debian path as found (the app's
@@ -74,9 +76,11 @@ fun artifactHints(calls: List<ToolCallInfo>, cwd: String, home: String): List<Ar
 /** Clocks and file times may differ a little: a turn counts as starting this much earlier. */
 const val ARTIFACT_CLOCK_SLACK_MS = 2_000L
 
-/** Worth a look as soon as its call completes: in an app folder, or an APK. */
+/** Worth a look as soon as its call completes: in an app folder, an APK, or Markdown. */
 internal fun ArtifactHint.direct(home: String) =
-    fromCommand || inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true)
+    fromCommand || inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || markdown(path)
+
+private fun markdown(path: String) = path.endsWith(".md", ignoreCase = true) || path.endsWith(".markdown", ignoreCase = true)
 
 private fun inAppFolder(path: String, home: String) =
     path.startsWith("$home/$APPS/") || path.startsWith("$home/$TERMINAL_APPS/")
@@ -116,7 +120,8 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         val found = LinkedHashMap<String, ChatArtifact>()
         for (hint in hints) {
             if (hint.fromCommand && (since == null || !changedSince(hint.path, since))) continue
-            val artifact = artifactAt(hint.path, home) { webApps } ?: continue
+            val artifact = (if (!hint.fromCommand && markdown(hint.path)) markdownAt(hint.path) else artifactAt(hint.path, home) { webApps })
+                ?: continue
             if (artifact.path !in found) found[artifact.path] = artifact
         }
         return found.values.toList()
@@ -144,6 +149,12 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         // A file written through a link: `~/apps/hero` → `~/hero`.
         val resolved = apps.resolve(path) ?: return null
         return webApps().firstOrNull { resolved == it.root || resolved.startsWith(it.root.trimEnd('/') + "/") }?.let(::web)
+    }
+
+    private fun markdownAt(path: String): ChatArtifact? {
+        val resolved = apps.resolve(path) ?: return null
+        if (apps.host(resolved)?.isFile != true) return null
+        return ChatArtifact(ArtifactKind.MARKDOWN, path, path.substringAfterLast('/'), resolved)
     }
 
     private fun web(app: WebApp): ChatArtifact {
@@ -203,7 +214,7 @@ fun withHistoryArtifacts(items: List<ChatItem>, lookup: ArtifactLookup, cwd: Str
 
 /** What a card's buttons do. */
 enum class ArtifactAction(val label: String) {
-    OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), SHARE("Share"),
+    OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), COPY("Copy"), SHARE("Share"),
 }
 
 /** [canInstall]: this build may open Android's installer for a file (debug builds only). */
@@ -211,6 +222,8 @@ fun chatArtifactActions(artifact: ChatArtifact, canInstall: Boolean): List<Artif
     ArtifactKind.WEB_APP -> listOf(ArtifactAction.OPEN, ArtifactAction.ADD_TO_HOME, ArtifactAction.SHARE)
     ArtifactKind.TERMINAL_APP -> listOf(ArtifactAction.RUN, ArtifactAction.SHARE)
     ArtifactKind.APK -> if (canInstall) listOf(ArtifactAction.INSTALL, ArtifactAction.SHARE) else listOf(ArtifactAction.SHARE)
+    // Copy puts the file's text on the clipboard ([shareFile]).
+    ArtifactKind.MARKDOWN -> listOf(ArtifactAction.COPY, ArtifactAction.SHARE)
 }
 
 const val CHAT_APK_NO_INSTALL = "mynx can't install apps itself: Share it to a file manager, or open it from the Files app, to install it."
@@ -225,6 +238,7 @@ fun chatArtifactLine(artifact: ChatArtifact, home: String): String {
         ArtifactKind.WEB_APP -> "Web app"
         ArtifactKind.TERMINAL_APP -> "Terminal app"
         ArtifactKind.APK -> "APK"
+        ArtifactKind.MARKDOWN -> "Markdown"
     }
     val path = if (artifact.path.startsWith("$home/")) "~" + artifact.path.removePrefix(home) else artifact.path
     return "$kind · $path"

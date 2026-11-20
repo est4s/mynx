@@ -74,6 +74,15 @@ class ChatHubTest {
             defaultsSet += value
             defaultMode = value
         }
+
+        var defaultModel: String? = null
+        val defaultModelsSet = mutableListOf<String>()
+        override fun chatDefaultModel() = defaultModel
+
+        override fun setChatDefaultModel(value: String) {
+            defaultModelsSet += value
+            defaultModel = value
+        }
     }
 
     inner class Tab : ChatTab {
@@ -439,5 +448,42 @@ class ChatHubTest {
         hub.setDefaultMode("bypassPermissions")
         assertEquals(listOf("acceptEdits"), host.defaultsSet, "only modes Chat offers")
         assertEquals("acceptEdits", hub.newChat().state.mode)
+    }
+
+    @Test
+    fun `a new chat starts with the default model the host gives`() {
+        host.defaultModel = "opus"
+        val chat = hub.newChat()
+        assertEquals("opus", chat.state.model)
+        assertEquals("opus", chat.state.defaultModel)
+        start(chat)
+        assertEquals("opus", flag("--model"))
+    }
+
+    @Test
+    fun `the default model named default passes no flag`() {
+        host.defaultModel = "default"
+        val chat = hub.newChat()
+        assertEquals("default", chat.state.defaultModel)
+        start(chat)
+        assertEquals(null, flag("--model"))
+    }
+
+    @Test
+    fun `a past chat keeps the model it ran, not the default`() {
+        host.defaultModel = "opus"
+        val chat = hub.open("11111111-1111-1111-1111-111111111111")
+        assertEquals("default", chat.state.model)
+    }
+
+    @Test
+    fun `the default model is written through the host`() {
+        val chat = hub.newChat()
+        hub.setDefaultModel("sonnet")
+        assertEquals(listOf("sonnet"), host.defaultModelsSet)
+        assertEquals("sonnet", chat.state.defaultModel)
+        assertEquals("sonnet", hub.newChat().state.model)
+        hub.setDefaultModel(" ")
+        assertEquals(listOf("sonnet"), host.defaultModelsSet, "not a blank name")
     }
 }
