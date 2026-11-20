@@ -5,33 +5,38 @@ import java.nio.file.LinkOption
 
 /*
  * Artifact cards: when the agent makes or changes an app in `~/apps` or
- * `~/terminal-apps`, or writes an APK or a Markdown file, the chat shows a
- * card for it with what can be done with it (Open, Run, Install, Copy,
- * Share).
+ * `~/terminal-apps`, or writes an APK, a Markdown file or a picture, the
+ * chat shows a card for it with what can be done with it (Open, Run,
+ * Install, Copy, View, Share).
  *
  * - Hints ([artifactHints]) come from a turn's completed tool calls: the
  *   paths of Write, Edit and NotebookEdit (relative ones against the
  *   chat's folder, `~/` against home), and, only as a hint, paths a Bash
- *   command names in the app folders or ending in `.apk`.
+ *   command names in the app folders or ending in `.apk` or a picture's
+ *   extension ([chatImageFile]).
  * - [ArtifactFinder] checks them on disk (off the main thread) with the
  *   rules Home and the menu use: a web app is what [WebApps] lists from
  *   `~/apps` (also a file written through a link there), a terminal app
  *   an executable file right in `~/terminal-apps` or `~/apps`, labelled
  *   as the menu labels it. A Markdown file (`.md`, `.markdown`) counts
- *   anywhere, but only when written (Write, Edit), not named in a command. A command's path counts only if it changed
+ *   anywhere, but only when written (Write, Edit), not named in a command.
+ *   A picture outside the app folders counts anywhere, written or named
+ *   (a picture in an app folder is the app's card); its [ChatArtifact.version]
+ *   is the file's time, so a picture drawn again changes its card. A command's path counts only if it changed
  *   since the turn started (a command that just reads an app gives no
  *   card), so history, with no turn times, only goes by written files.
  * - One card per app per turn (the items after the last prompt), changed
  *   in place when the app changes again ([withArtifactCards]).
  */
 
-enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN }
+enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN, IMAGE }
 
 /**
  * What a card is about. [path] is the Debian path as found (the app's
  * folder in `~/apps`, the terminal app's file, the APK); [shareFile] the
  * link-free Debian path of what Share sends (a web app's `index.html`,
- * else its `app.conf`); [appName] a web app's name, for its screen.
+ * else its `app.conf`); [appName] a web app's name, for its screen;
+ * [version] a picture's file time (else 0), so its card shows it anew.
  */
 data class ChatArtifact(
     val kind: ArtifactKind,
@@ -39,6 +44,7 @@ data class ChatArtifact(
     val label: String,
     val shareFile: String,
     val appName: String? = null,
+    val version: Long = 0L,
 )
 
 /** A path a tool call touched; [fromCommand]: named in a Bash command, so only a hint. */
@@ -66,7 +72,9 @@ fun artifactHints(calls: List<ToolCallInfo>, cwd: String, home: String): List<Ar
                 val token = word.substringAfterLast('=')
                 if (token.isEmpty() || token.indexOfAny(GLOB_CHARS) >= 0) continue
                 val path = debianPath(token, cwd, home) ?: continue
-                if (inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true)) hints += ArtifactHint(path, true)
+                if (inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || chatImageFile(path)) {
+                    hints += ArtifactHint(path, true)
+                }
             }
         }
     }
@@ -76,9 +84,9 @@ fun artifactHints(calls: List<ToolCallInfo>, cwd: String, home: String): List<Ar
 /** Clocks and file times may differ a little: a turn counts as starting this much earlier. */
 const val ARTIFACT_CLOCK_SLACK_MS = 2_000L
 
-/** Worth a look as soon as its call completes: in an app folder, an APK, or Markdown. */
+/** Worth a look as soon as its call completes: in an app folder, an APK, Markdown or a picture. */
 internal fun ArtifactHint.direct(home: String) =
-    fromCommand || inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || markdown(path)
+    fromCommand || inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || markdown(path) || chatImageFile(path)
 
 private fun markdown(path: String) = path.endsWith(".md", ignoreCase = true) || path.endsWith(".markdown", ignoreCase = true)
 
@@ -120,8 +128,11 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         val found = LinkedHashMap<String, ChatArtifact>()
         for (hint in hints) {
             if (hint.fromCommand && (since == null || !changedSince(hint.path, since))) continue
-            val artifact = (if (!hint.fromCommand && markdown(hint.path)) markdownAt(hint.path) else artifactAt(hint.path, home) { webApps })
-                ?: continue
+            val artifact = when {
+                !hint.fromCommand && markdown(hint.path) -> markdownAt(hint.path)
+                chatImageFile(hint.path) && !inAppFolder(hint.path, home) -> imageAt(hint.path)
+                else -> artifactAt(hint.path, home) { webApps }
+            } ?: continue
             if (artifact.path !in found) found[artifact.path] = artifact
         }
         return found.values.toList()
@@ -155,6 +166,12 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         val resolved = apps.resolve(path) ?: return null
         if (apps.host(resolved)?.isFile != true) return null
         return ChatArtifact(ArtifactKind.MARKDOWN, path, path.substringAfterLast('/'), resolved)
+    }
+
+    private fun imageAt(path: String): ChatArtifact? {
+        val resolved = apps.resolve(path) ?: return null
+        val file = apps.host(resolved)?.takeIf { it.isFile } ?: return null
+        return ChatArtifact(ArtifactKind.IMAGE, path, path.substringAfterLast('/'), resolved, version = file.lastModified())
     }
 
     private fun web(app: WebApp): ChatArtifact {
@@ -214,7 +231,7 @@ fun withHistoryArtifacts(items: List<ChatItem>, lookup: ArtifactLookup, cwd: Str
 
 /** What a card's buttons do. */
 enum class ArtifactAction(val label: String) {
-    OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), COPY("Copy"), SHARE("Share"),
+    OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), COPY("Copy"), VIEW("View"), SHARE("Share"),
 }
 
 /** [canInstall]: this build may open Android's installer for a file (debug builds only). */
@@ -224,6 +241,8 @@ fun chatArtifactActions(artifact: ChatArtifact, canInstall: Boolean): List<Artif
     ArtifactKind.APK -> if (canInstall) listOf(ArtifactAction.INSTALL, ArtifactAction.SHARE) else listOf(ArtifactAction.SHARE)
     // Copy puts the file's text on the clipboard ([shareFile]).
     ArtifactKind.MARKDOWN -> listOf(ArtifactAction.COPY, ArtifactAction.SHARE)
+    // View shows it full screen; the card shows it too.
+    ArtifactKind.IMAGE -> listOf(ArtifactAction.VIEW, ArtifactAction.SHARE)
 }
 
 const val CHAT_APK_NO_INSTALL = "mynx can't install apps itself: Share it to a file manager, or open it from the Files app, to install it."
@@ -239,6 +258,7 @@ fun chatArtifactLine(artifact: ChatArtifact, home: String): String {
         ArtifactKind.TERMINAL_APP -> "Terminal app"
         ArtifactKind.APK -> "APK"
         ArtifactKind.MARKDOWN -> "Markdown"
+        ArtifactKind.IMAGE -> "Image"
     }
     val path = if (artifact.path.startsWith("$home/")) "~" + artifact.path.removePrefix(home) else artifact.path
     return "$kind · $path"

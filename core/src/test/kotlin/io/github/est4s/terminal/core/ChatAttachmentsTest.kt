@@ -2,6 +2,8 @@ package io.github.est4s.terminal.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ChatAttachmentsTest {
     private val photo = ChatAttachment("/root/Shared/photo (2).jpg", "photo (2).jpg", image = true)
@@ -51,5 +53,25 @@ class ChatAttachmentsTest {
         // A size the decoder couldn't read.
         assertEquals(1, thumbnailSampleSize(-1, -1, 96))
         assertEquals(1, thumbnailSampleSize(4032, 3024, 0))
+    }
+
+    @Test
+    fun `image files are told by their extension`() {
+        assertTrue(chatImageFile("IMG_1.JPG"))
+        assertTrue(chatImageFile("/root/out/plot.png"))
+        assertTrue(chatImageFile("a.webp"))
+        assertFalse(chatImageFile("notes.txt"))
+        assertFalse(chatImageFile("png"))
+        assertFalse(chatImageFile("logo.svg"), "Android can't decode SVG")
+    }
+
+    @Test
+    fun `the viewer decodes at the smallest halving that fits its limit`() {
+        assertEquals(1, viewerSampleSize(4032, 3024, 4096))
+        assertEquals(2, viewerSampleSize(8192, 6144, 4096))
+        assertEquals(4, viewerSampleSize(8193, 100, 4096))
+        assertEquals(2, viewerSampleSize(100, 5000, 4096))
+        assertEquals(1, viewerSampleSize(-1, -1, 4096))
+        assertEquals(1, viewerSampleSize(5000, 5000, 0))
     }
 }

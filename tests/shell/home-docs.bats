@@ -327,6 +327,11 @@ setup() {
     grep -qF -- "Copy (a Markdown file's text)" "$GUIDE"
 }
 
+@test "the guide says a picture Claude makes gets a card, and pictures open full screen" {
+    grep -qF -- "View (a picture, shown in" "$GUIDE"
+    grep -qF -- "shows it full screen" "$GUIDE"
+}
+
 @test "the guide says touch view's Settings are lists to tap" {
     grep -qF -- "Settings are lists to tap too" "$GUIDE"
 }

@@ -17,8 +17,9 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   is the release, updated through `mynx update`.
 - **Done, confirmed on the phone and merged since:** web apps parts 1
   and 2 (PR #59, #64), the services count in the menu (#58), touch
-  mode's Home and Services, Chat for Claude Code (#67-#81), and touch
-  mode's chat home with its drawer and the pixel style (#83). Every
+  mode's Home and Services, Chat for Claude Code (#67-#81), touch
+  mode's chat home with its drawer and the pixel style (#83), and
+  Chat's pictures (thumbnails #91, full screen and image cards #92). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -76,6 +77,29 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-21 (197): Pictures full screen, and image cards (merged, PR #92; passed)
+
+The maintainer asked to see sent pictures full screen and the pictures
+Claude makes in the chat.
+- **Full screen:** tapping an image's chip (in the box or in a sent
+  bubble) opens `ImageViewActivity`: the picture on black, pinch,
+  double-tap and drag to zoom (core's `ImageZoom`, tested), a tap
+  hides the bar (← and the name). Decoded off the main thread at
+  `viewerSampleSize()` (core, tested), upright by EXIF; a file that's
+  gone or can't be decoded says so on screen.
+- **Image cards:** a new `ArtifactKind.IMAGE` (core, tested): a
+  picture (`chatImageFile()`: jpg, png, gif, webp, heic, bmp; not SVG)
+  written anywhere, or named by a Bash command and changed in the turn;
+  one in an app folder stays the app's card. The card shows the
+  picture (`ChatThumbnails.preview()`, up to 240 dp high) with View and
+  Share; tapping the picture views it too. `ChatArtifact.version` (the
+  file's time) changes the card when the picture is drawn again.
+- Limits: a picture a script saves under a name its command doesn't
+  show gets no card; the viewer has no Share (the card has).
+- The cards screenshot (`chat-cards`) has an image card now.
+- Passed in mynx dev (build 44828924601): sent photos open full
+  screen from their chips, and a picture Claude drew got its card.
 
 ### 2026-11-20 (196): Image thumbnails on attachment chips (merged, PR #91; passed)
 

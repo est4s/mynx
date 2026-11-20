@@ -173,6 +173,10 @@ private val CARDS = listOf(
         "artifact-3",
         ChatArtifact(ArtifactKind.MARKDOWN, "/root/tip/NOTES.md", "NOTES.md", "/root/tip/NOTES.md"),
     ),
+    ChatItem.Artifact(
+        "artifact-4",
+        ChatArtifact(ArtifactKind.IMAGE, "/root/tip/$CHART", CHART, "/root/tip/$CHART", version = 1L),
+    ),
 )
 
 /** Usage as the maintainer's screenshots had it: context 15%, the session 13% (resets today), the week 40%. */
@@ -191,7 +195,10 @@ private val FILES = listOf(
     ChatAttachment("/root/Shared/notes.md", "notes.md", image = false),
 )
 
-/** FILES' photo, portrait as a phone's camera takes it: sky, a sun and a field, so the crop shows. */
+/** CARDS' picture the agent drew: a wide bar chart, so the card shows it whole. */
+private const val CHART = "tips-by-day.png"
+
+/** FILES' photo, portrait as a phone's camera takes it: sky, a sun and a field, so the crop shows; and CARDS' chart. */
 private val PHOTOS: File by lazy {
     Files.createTempDirectory("chat-photos").toFile().also { dir ->
         val bitmap = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888)
@@ -201,6 +208,15 @@ private val PHOTOS: File by lazy {
             drawRect(0f, 250f, 300f, 400f, Paint().apply { color = Color.rgb(70, 150, 70) })
         }
         File(dir, FILES[0].name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        val chart = Bitmap.createBitmap(800, 450, Bitmap.Config.ARGB_8888)
+        Canvas(chart).apply {
+            drawColor(Color.WHITE)
+            val bar = Paint().apply { color = Color.rgb(60, 120, 200) }
+            listOf(120, 260, 180, 340, 300, 400, 220).forEachIndexed { i, height ->
+                drawRect(60f + i * 100f, 420f - height, 130f + i * 100f, 420f, bar)
+            }
+        }
+        File(dir, CHART).outputStream().use { chart.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }
 
@@ -298,7 +314,7 @@ class ChatScreenshotTest {
 
     /** The other cards, answered ones, and the sign-in gate over the box. */
     @Test
-    fun cards() = shoot(1080, 4200, "chat-cards", CARDS, running = false, access = ChatAccess.NOT_SIGNED_IN)
+    fun cards() = shoot(1080, 4900, "chat-cards", CARDS, running = false, access = ChatAccess.NOT_SIGNED_IN)
 
     /** Landscape with the keyboard up: what chatFit keeps of a short height. */
     @Test

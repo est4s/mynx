@@ -227,9 +227,12 @@ One `key = value` per line; `mynx settings` describes each.
   Open in a tab moves it to a terminal tab (`claude --resume`); one
   session runs in one place at a time. Each of Claude's replies has
   Copy under it. When Claude Code makes or changes an app in `~/apps`
-  or `~/terminal-apps`, writes an APK or writes a Markdown (`.md`) file,
+  or `~/terminal-apps`, writes an APK or a Markdown (`.md`) file, or
+  makes a picture (PNG, JPEG, GIF, WebP…; a path its command names),
   the chat shows a card for it: Open (a web app), Run (a terminal app,
-  in a tab), Copy (a Markdown file's text), Share.
+  in a tab), Copy (a Markdown file's text), View (a picture, shown in
+  the card too), Share. Tapping a picture, a card's or one attached to
+  a message, shows it full screen (pinch or double-tap to zoom).
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
   the permission mode new chats of touch view's Chat start in. `auto`
   lets Claude Code decide what's safe to run, asking less; `default`

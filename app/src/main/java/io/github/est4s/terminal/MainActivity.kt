@@ -709,6 +709,9 @@ class MainActivity : Activity(), FrontActivity {
             attach = { source, done -> chatFiles.pick(source, done) },
             dictation = dictation,
             thumbnails = ChatThumbnails(this, { path -> File(hostPath(path, installer.rootfs.path) ?: path) }),
+            viewImage = { path ->
+                startActivity(ImageViewActivity.intent(this, File(hostPath(path, installer.rootfs.path) ?: path), path.substringAfterLast('/')))
+            },
         ).also {
             it.colors = Pixel.COLORS
             it.visibility = View.GONE

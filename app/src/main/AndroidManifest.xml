@@ -90,6 +90,12 @@
             android:autoRemoveFromRecents="true"
             android:exported="false" />
 
+        <!-- Chat's pictures full screen. -->
+        <activity
+            android:name=".ImageViewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:exported="false" />
+
         <!-- Other apps share files and text into Debian's share folder. -->
         <activity
             android:name=".ShareActivity"
