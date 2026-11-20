@@ -38,7 +38,7 @@ class HomeTest {
     }
 
     @Test
-    fun `the menu file reads as the launcher menu reads it, without Exit`() {
+    fun `the menu file reads as the launcher menu reads it, without Exit or Touch view`() {
         gitHubReady()
         File(fixturesDir(), "menu.conf").copyTo(File(home, ".config/mynx/menu.conf"))
         assertEquals(

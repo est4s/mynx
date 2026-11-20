@@ -88,9 +88,15 @@ class HomeScreenshotTest {
     }
 
     @Test
+    fun appearanceSettings() {
+        write(".config/mynx/settings.conf", "view = touch\n")
+        shoot(home(1080, 2400), "home-settings-appearance", "settings:appearance", "Appearance")
+    }
+
+    @Test
     fun chatSettings() {
         write(".config/mynx/settings.conf", "view = touch\nchat-model = opus\n")
-        shoot(home(1080, 2400), "home-settings-chat", "settings:chat", "Chat")
+        shoot(home(1080, 2400), "home-settings-agents", "settings:agents", "AI agents")
     }
 
     @Test

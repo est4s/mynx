@@ -246,10 +246,12 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
-- `view`: `terminal` (default) or `touch`: what the app shows. `touch`
+- `view`: `terminal` (default) or `touch`: what the app shows (the
+  launcher menu's Touch view switches to it). `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Its
-  Settings are lists to tap too: each setting, the theme, undo,
+  Settings are lists to tap too: Appearance (the view and the theme,
+  for both views), AI agents, Terminal, Phone access, Background, undo,
   System info and Help (Update all, GitHub setup and the key bar and
   menu editors still run in a tab). Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
@@ -1279,6 +1281,7 @@ line, in order; labels up to 20 characters. Actions:
 | `system` | Update all, System info, and GitHub setup (`mynx github`) once GitHub is set up |
 | `help` | Getting started (`mynx welcome`), Release notes (`mynx notes`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
+| `touch-view` | switch the app to touch view (`mynx set view touch`); touch view leaves it out |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
 

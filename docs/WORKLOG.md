@@ -204,7 +204,7 @@ Left: other agents (Codex's `app-server`, Gemini's ACP), which need
 accounts to test; image thumbnails on attachment chips; the Model page
 lists fallback models until a session reports its own.
 
-### 4. Touch mode: chat first, with a drawer (entry 186, in progress)
+### 4. Touch mode: chat first, with a drawer (entries 186-190, passed on the phone)
 
 Decided by the maintainer (`docs/ROADMAP.md`, Touch mode); the spec is
 `docs/TOUCH-DESIGN.md`. **Style: pixel, with Pixelify Sans** for
@@ -257,7 +257,14 @@ keeping the logo's palette (entry 190).
    190). Again on the phone: change settings (no message, the value
    changes at once), pick themes (the touch screens follow, Home stays
    on Theme; Neon gives the logo's colours back), CI's
-   `home-themes-solarized-light.png`.
+   `home-themes-solarized-light.png`. Entry 190 compiled (run
+   43104362055) and passed on the phone (maintainer, 2026-11-20:
+   "everything looks good"). About says 0.0.1 in mynx dev, as every
+   debug build does; the maintainer is fine with that (2026-11-20).
+   Then (entry 191): the launcher's Touch view and Settings grouped
+   by view; on the phone: Touch view from the terminal's menu, then
+   drawer → Settings: Appearance (View, Theme), AI agents, Terminal
+   (no theme). Then merge PR #83.
 3. **Maybe, in core:** a first prompt waiting for the sign-in check
    (MainActivity's `firstPrompt` for now: `ChatController.send()`
    refuses while `CHECKING`); `ChatHub`'s home and cwd made public
@@ -300,7 +307,28 @@ Ctrl+Shift).
 
 ## Log
 
-### 2026-11-11 (190): Settings changes answer right; themes colour the touch screens (written, not compiled)
+### 2026-11-20 (191): Touch view in the launcher; Settings grouped by view (written, not compiled)
+
+The maintainer, after entry 190 passed: the terminal launcher had no
+easy way into touch view (only `view` deep in `mynx edit`), and the
+theme sat under touch Settings' Terminal though it colours both views.
+Their rule: a setting both views use doesn't go under Terminal.
+- Launcher: a `touch-view` menu action (`Touch view`, after Settings
+  in the built-in `menu.conf`) runs `mynx set view touch`, which the
+  app applies at once. Home leaves it out, as it does Exit. In the
+  shared fixture, so both suites check it; the editor's action list
+  and the guide have it.
+- Touch Settings (`HOME_SETTING_GROUPS`): Appearance (View, Theme),
+  AI agents (permission mode, model, and notifications, which cover
+  terminal agents too: hence not "Chat"), Terminal (text size, font,
+  cursor, swipe, key bars and menu), then as before. Agent's grouping,
+  from the maintainer's rule.
+- Screenshots: `home-settings-appearance.png`, and
+  `home-settings-agents.png` in place of `home-settings-chat.png`.
+Left: CI, then the phone: the launcher's Touch view (a user's own
+`menu.conf` won't have it), the Settings lists.
+
+### 2026-11-11 (190): Settings changes answer right; themes colour the touch screens (passed on the phone 2026-11-20)
 
 The maintainer on entry 189's build: every change said "the app isn't
 ready yet" though it applied, and the list only showed it after going

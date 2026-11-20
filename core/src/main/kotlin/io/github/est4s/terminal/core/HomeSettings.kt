@@ -12,7 +12,9 @@ import java.util.Locale
 data class HomeSettingGroup(val menu: String, val title: String, val keys: List<String>)
 
 val HOME_SETTING_GROUPS = listOf(
-    HomeSettingGroup("settings:chat", "Chat", listOf("view", "chat-mode", "chat-model", "agent-notify", "agent-notify-after")),
+    // What both views share comes first; Terminal holds only what the terminal alone uses (maintainer, 2026-11-20).
+    HomeSettingGroup("settings:appearance", "Appearance", listOf("view")),
+    HomeSettingGroup("settings:agents", "AI agents", listOf("chat-mode", "chat-model", "agent-notify", "agent-notify-after")),
     HomeSettingGroup("settings:terminal", "Terminal", listOf("font-size", "font", "cursor-style", "cursor-blink", "tab-swipe")),
     HomeSettingGroup(
         "settings:phone", "Phone access",
@@ -66,7 +68,7 @@ private val TOUCH_WELCOME = listOf(
     "The drawer" to "☰ opens it: your chats, the Linux side (apps, games, services, files, settings) and Terminal.",
     "Terminal" to "Terminal shows the tabs, each a real bash with apt and thousands of programs. " +
         "What you install stays. Back comes back here.",
-    "Settings" to "The chat's defaults, the terminal's theme and font, what programs may use on the phone, " +
+    "Settings" to "The view and the theme, the agents' defaults, the terminal's font, what programs may use on the phone, " +
         "and what runs in the background. Every setting is also a line in ~/.config/mynx/settings.conf, " +
         "which `mynx set` changes.",
 )
@@ -122,8 +124,8 @@ internal class HomeSettings(
             HomeItem("System", HomeAction.Menu("system")),
             HomeItem("Help", HomeAction.Menu("help")),
         )
-        menu == "settings:terminal" -> listOf(HomeItem("Theme", HomeAction.Menu("themes"), detail = currentTheme())) +
-            group(menu) + HomeItem("Key bars and launcher menu", menuActTab("settings"))
+        menu == "settings:appearance" -> group(menu) + HomeItem("Theme", HomeAction.Menu("themes"), detail = currentTheme())
+        menu == "settings:terminal" -> group(menu) + HomeItem("Key bars and launcher menu", menuActTab("settings"))
         menu.startsWith("settings:") -> HOME_SETTING_GROUPS.firstOrNull { it.menu == menu }?.let { group(menu) }
         menu.startsWith("setting:") -> choices(menu.removePrefix("setting:"))
         menu == "themes" -> themes()

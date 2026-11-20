@@ -39,7 +39,8 @@ class HomeSettingsTest {
     fun `settings opens touch lists, with System and Help`() {
         assertEquals(
             listOf(
-                HomeItem("Chat", HomeAction.Menu("settings:chat")),
+                HomeItem("Appearance", HomeAction.Menu("settings:appearance")),
+                HomeItem("AI agents", HomeAction.Menu("settings:agents")),
                 HomeItem("Terminal", HomeAction.Menu("settings:terminal")),
                 HomeItem("Phone access", HomeAction.Menu("settings:phone")),
                 HomeItem("Background", HomeAction.Menu("settings:background")),
@@ -102,13 +103,21 @@ class HomeSettingsTest {
     }
 
     @Test
-    fun `chat's list has the view, the mode and the model, named as the chat names them`() {
-        settings("chat-mode = plan\nchat-model = opus\nview = touch\n")
-        val chat = items("settings:chat")
-        assertEquals(listOf("View", "Permission mode", "Model for new chats", "Notifications", "Notify after (seconds)"), chat.map { it.label })
-        assertEquals("Touch", chat[0].detail)
-        assertEquals(chatModeName("plan"), chat[1].detail)
-        assertEquals("Opus", chat[2].detail)
+    fun `appearance has what both views share, the view and the theme`() {
+        settings("view = touch\n")
+        val look = items("settings:appearance")
+        assertEquals(listOf("View", "Theme"), look.map { it.label })
+        assertEquals("Touch", look[0].detail)
+        assertEquals(HomeItem("Theme", HomeAction.Menu("themes"), detail = "neon"), look[1])
+    }
+
+    @Test
+    fun `agents' list has the mode and the model, named as the chat names them, and notifications`() {
+        settings("chat-mode = plan\nchat-model = opus\n")
+        val chat = items("settings:agents")
+        assertEquals(listOf("Permission mode", "Model for new chats", "Notifications", "Notify after (seconds)"), chat.map { it.label })
+        assertEquals(chatModeName("plan"), chat[0].detail)
+        assertEquals("Opus", chat[1].detail)
         val modes = items("setting:chat-mode").drop(1)
         assertEquals(CHAT_MODES.map { chatModeName(it.value) }, modes.map { it.label })
         assertTrue(modes.single { it.checked }.label == chatModeName("plan"))
@@ -122,14 +131,17 @@ class HomeSettingsTest {
         assertEquals(HomeAction.Config("set", listOf("chat-model", "sonnet"), back = true), models[2].action)
         assertEquals("set:chat-model", (models.last().action as HomeAction.Input).target)
         settings("chat-model = claude-sonnet-5-5\n")
-        assertEquals("claude-sonnet-5-5", item("settings:chat", "Model for new chats").detail)
+        assertEquals("claude-sonnet-5-5", item("settings:agents", "Model for new chats").detail)
         assertEquals("claude-sonnet-5-5", (items("setting:chat-model").last().action as HomeAction.Input).value)
     }
 
     @Test
-    fun `terminal's list starts with the theme and ends with the key bar and menu editors`() {
+    fun `terminal's list has only the terminal's settings, then the key bar and menu editors`() {
         val terminal = items("settings:terminal")
-        assertEquals(HomeItem("Theme", HomeAction.Menu("themes"), detail = "neon"), terminal.first())
+        assertEquals(
+            listOf("Text size", "Font", "Cursor", "Cursor blinks", "Swipe between tabs", "Key bars and launcher menu"),
+            terminal.map { it.label },
+        )
         assertEquals(HomeItem("Key bars and launcher menu", act("settings")), terminal.last())
     }
 

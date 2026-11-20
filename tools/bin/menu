@@ -102,7 +102,7 @@ theme_name() { # the theme the colours file was set from (see mynx theme)
 }
 
 # --- menu file -------------------------------------------------------------
-MENU_ACTIONS="shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND"
+MENU_ACTIONS="shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, touch-view, exit or run COMMAND"
 
 read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
   local line label action n=0
@@ -134,6 +134,7 @@ read_menu_file() { # read_menu_file <file>: fills ITEMS, ACTS and PROBLEMS
       system) action=menu:system ;;
       help) action=menu:help ;;
       welcome) action=welcome ;;
+      touch-view) action=touchview ;;
       exit) action=quit_session ;;
       run) PROBLEMS+=("line $n: run needs a command"); continue ;;
       run\ *) action="cmd:${action#run }" ;;
@@ -289,8 +290,8 @@ main_menu_file() { # fills ITEMS and ACTS: the user's file, else the built-in on
     read_menu_file "$file"
     ((${#ITEMS[@]})) && return
   done
-  ITEMS=(Shell "AI agents" Services Apps "Terminal apps" Games Files Settings Exit)
-  ACTS=(exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session)
+  ITEMS=(Shell "AI agents" Services Apps "Terminal apps" Games Files Settings "Touch view" Exit)
+  ACTS=(exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings touchview quit_session)
 }
 
 main_menu_has() { # main_menu_has <action>: whether the main menu's items have it
@@ -616,6 +617,7 @@ act_none() { :; }
 act_welcome() { welcome_page; }
 act_files() { run files; }
 act_settings() { run mynx edit; }
+act_touchview() { run mynx set view touch || pause; }  # the app switches at once; a failure stays on screen
 act_cmd() { # a menu.conf "run" item; a failure would otherwise flash past
   run bash -c "$1"
   local rc=$?

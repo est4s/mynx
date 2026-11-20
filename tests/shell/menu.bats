@@ -36,8 +36,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Touch view Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings touchview quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -55,7 +55,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Touch view Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -63,7 +63,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, touch-view, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -173,7 +173,7 @@ keys() {
     rm "$HOME/.config/gh/hosts.yml"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Terminal apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Terminal apps Games Files Settings Touch view Exit" ]
     [ "${ACTS[2]}" = github ]
     menu_items system
     [ "${ITEMS[*]}" = "Update all System info" ]
@@ -553,7 +553,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 9
+    run keys 'k\n'  # up from the first item wraps to the last, Exit
     [ "$status" -eq 10 ]
 }
 
@@ -874,8 +874,8 @@ no_services_mynx() {
 @test "the menu file both views read parses to the same items" {
     source "$MENU"
     read_menu_file "$BATS_TEST_DIRNAME/../fixtures/menu.conf"
-    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Leave" ]
-    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files quit_session" ]
+    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Touch Leave" ]
+    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files touchview quit_session" ]
 }
 
 @test "--act runs one action and leaves" {
@@ -884,6 +884,17 @@ no_services_mynx() {
     [[ "$output" == *"RUN: play /x/my-game"* ]]
     run bash -c "MENU_DRYRUN=1 bash '$MENU' --act files 2>&1 </dev/null"
     [[ "$output" == *"RUN: files"* ]]
+}
+
+@test "Touch view is the 9th item" {
+    run keys 9
+    [[ $output == *"RUN: mynx set view touch"* ]]
+}
+
+@test "Touch view switches the app to touch view" {
+    run bash -c "MENU_DRYRUN=1 bash '$MENU' --act touchview 2>&1 </dev/null"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RUN: mynx set view touch"* ]]
 }
 
 @test "--act refuses what isn't an action" {

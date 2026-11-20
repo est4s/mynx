@@ -168,7 +168,7 @@ class HomeMenus(
 
     private fun item(label: String, action: String): HomeItem? = when (action) {
         "shell" -> HomeItem(label, HomeAction.Shell)
-        "exit" -> null
+        "exit", "touch-view" -> null // Home is touch view already
         "services" -> HomeItem(
             if (servicesActive > 0) "$label ● $servicesActive" else label,
             HomeAction.Menu("services"),
@@ -272,5 +272,5 @@ private fun parseMenuFile(text: String): List<Pair<String, String>> = text.lines
 
 private val MENU_ACTIONS = setOf(
     "shell", "files", "apps", "terminal-apps", "games", "settings", "app-settings", "agents", "services",
-    "system", "help", "welcome", "exit",
+    "system", "help", "welcome", "touch-view", "exit",
 )
