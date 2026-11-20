@@ -204,69 +204,21 @@ Left: other agents (Codex's `app-server`, Gemini's ACP), which need
 accounts to test; image thumbnails on attachment chips; the Model page
 lists fallback models until a session reports its own.
 
-### 4. Touch mode: chat first, with a drawer (entries 186-190, passed on the phone)
+### 4. Touch mode: chat first, with a drawer, done
 
-Decided by the maintainer (`docs/ROADMAP.md`, Touch mode); the spec is
-`docs/TOUCH-DESIGN.md`. **Style: pixel, with Pixelify Sans** for
-labels, buttons and headings and JetBrains Mono for text (maintainer,
-2026-11-11); the touch screens take the terminal theme's colours, Neon
-keeping the logo's palette (entry 190).
-1. **PR 1, written** (branch `touch-chat-home`, entry 186): the font,
-   `PixelStyle.kt`, core's `chatHome()`, `ChatHomeView` with its
-   `DrawerView`, the wiring (`ChatPlace.HOME`, Back) and
-   `ChatHomeScreenshotTest`. Not compiled yet: push, fix what CI
-   finds, look at the `screenshots` artifact (`chat-home*.png`), then
-   a phone round:
-   - start in touch view: the chat home, no keyboard; ☰ opens the
-     drawer, the scrim and Back close it; ● N opens Services;
-   - Send from the home: a new chat with that prompt sent (also on a
-     fresh start, when the sign-in check is still running); + and the
-     mic carry the text into the new chat;
-   - the drawer's chats, All chats, each Linux item (lists open Home's
-     list, whose Back returns to the chat home), Terminal;
-   - Back from a chat, the history, a Home list and the terminal lands
-     on the chat home; from it, the app is left;
-   - the app recreated (rotate) comes back to the same screen;
-   - Claude Code not installed: the Install button.
-   Passed on the phone (maintainer, 2026-11-11: "everything seems to
-   be working").
-2. **PR 2, written** (entry 187, on the same branch): the chat, its
-   sheets and the history in the pixel style, with block icons. Look
-   at CI's `chat*.png` and `chat-history*.png`, then on the phone: a
-   chat while working (Stop pink, the box's shadow), a permission card
-   and its buttons, + and Usage, the history's rows and New chat.
-   Then (entry 188): the default model, Copy, Markdown cards, Home's
-   lists and ⋮ in the pixel style, no Terminal buttons. On the phone:
-   + → Model → Default for new chats (then a new chat starts with it:
-   the line under the title), Copy under a reply, a card after Claude
-   writes a `.md` file (Copy, Share), ⋮ → Open in a tab, the drawer's
-   Linux lists. Entry 188 compiled and its screenshots looked right
-   (run 43074583752).
-   Then (entry 189): Settings, System info and Help as touch lists.
-   Look at CI's `home-settings*.png`, `home-themes.png`,
-   `home-setting-*.png`, `home-system-info.png`,
-   `home-release-notes.png`, `home-help.png` and `home-report.png`,
-   then on the phone: drawer → Settings; flip an on/off setting (Swipe
-   between tabs), pick a theme (the terminal changes), type a text
-   size (a bad one shows the reason), Undo → Undo last change, System
-   info, Help's pages, Report a bug → Next opens a tab with the
-   report; the default model's first choice reads "Claude Code
-   decides". Entry 189 on the phone: every change said "the app isn't
-   ready yet" and the list didn't redraw (fixed in entry 190), and the
-   maintainer wanted themes to colour the touch screens too (entry
-   190). Again on the phone: change settings (no message, the value
-   changes at once), pick themes (the touch screens follow, Home stays
-   on Theme; Neon gives the logo's colours back), CI's
-   `home-themes-solarized-light.png`. Entry 190 compiled (run
-   43104362055) and passed on the phone (maintainer, 2026-11-20:
-   "everything looks good"). About says 0.0.1 in mynx dev, as every
-   debug build does; the maintainer is fine with that (2026-11-20).
-   Then (entry 191): the launcher's Settings → Touch view and touch
-   Settings grouped by view (screenshots checked). Then merge PR #83.
-3. **Maybe, in core:** a first prompt waiting for the sign-in check
-   (MainActivity's `firstPrompt` for now: `ChatController.send()`
-   refuses while `CHECKING`); `ChatHub`'s home and cwd made public
-   (MainActivity copies "/root").
+Passed on the phone and merged (PR #83, 2026-11-20, entries 186-191):
+the chat home with its drawer, the pixel style (Pixelify Sans, the
+theme's colours, Neon keeping the logo's), the chat and its sheets
+restyled, a default model, Copy and `.md` cards, Settings, System info
+and Help as touch lists grouped by view (Appearance, AI agents,
+Terminal, …), and the terminal launcher's Settings → Touch view. The
+spec is `docs/TOUCH-DESIGN.md`; the step-by-step phone checks: `git
+show 5d94b04:docs/WORKLOG.md`.
+
+Left, maybe, in core: a first prompt waiting for the sign-in check
+(MainActivity's `firstPrompt` for now: `ChatController.send()` refuses
+while `CHECKING`); `ChatHub`'s home and cwd made public (MainActivity
+copies "/root").
 
 ### Regression checks (steps 4-6)
 - **Step 6:** `mynx theme set` for a dark and a light theme (strip
@@ -298,6 +250,9 @@ Ctrl+Shift).
 - Step 1.4's interrupted-install check (swipe the app away while unpacking,
   reopen) hasn't been tried on the phone.
 - htop's CPU bars are static (fake `/proc/stat`, as in proot-distro).
+- `ProcessAgentTransportTest`'s "a process that has died accepts
+  nothing…" can fail on a busy CI runner (entry 191); make it sturdier
+  if it happens again.
 - `test_undo_list` (tests/mynx) fails in the phone's time zone (it
   expects UTC times; CI is UTC): `TZ=UTC` passes it.
 
@@ -305,7 +260,7 @@ Ctrl+Shift).
 
 ## Log
 
-### 2026-11-20 (191): Touch view in the launcher; Settings grouped by view (written, not compiled)
+### 2026-11-20 (191): Touch view in the launcher; Settings grouped by view (merged, PR #83)
 
 The maintainer, after entry 190 passed: the terminal launcher had no
 easy way into touch view (only `view` deep in `mynx edit`), and the
@@ -324,7 +279,11 @@ Their rule: a setting both views use doesn't go under Terminal.
   from the maintainer's rule.
 - Screenshots: `home-settings-appearance.png`, and
   `home-settings-agents.png` in place of `home-settings-chat.png`.
-Left: CI.
+Merged without a phone round (maintainer's call: the screenshots
+showed the groups, and Touch view runs the `mynx set view` the View
+setting already uses). CI's first run failed on
+`ProcessAgentTransportTest`'s "a process that has died…" (a timing
+race: the exit was reported within its 1.8 s); the re-run passed.
 
 ### 2026-11-11 (190): Settings changes answer right; themes colour the touch screens (passed on the phone 2026-11-20)
 
