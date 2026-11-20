@@ -81,7 +81,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-20 (193): Two flaky tests made sturdy (PR open)
+### 2026-11-20 (193): Two flaky tests made sturdy (merged, PR #87)
 
 - `ProcessAgentTransportTest`'s "a process that has died accepts
   nothing…" raced the transport's 2 s wait for stdout (entry 191's CI
