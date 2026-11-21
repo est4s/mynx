@@ -85,7 +85,8 @@ sensors, microphone, speaker and flashlight.
   and your own programs can each have their own. A bar can make the
   volume keys send keys too.
 - **Viewers for your files:** text and source code (highlighted, with
-  an editor), Markdown, audio and video open in mynx's own viewers,
+  an editor), Markdown, PDF, HTML pages, audio and video open in
+  mynx's own viewers,
   from the terminal (`mynx open FILE`) or a file manager; audio keeps
   playing in the background. Or pick another app per kind.
 - **A ready setup:** a launcher menu, a file manager

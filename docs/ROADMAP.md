@@ -10,7 +10,8 @@ polish (first run, icon, updates from GitHub Releases), background
 services, development boards (USB serial, raw USB, UF2), Bluetooth
 (serial, BLE, BLE UART ports), web apps, and touch mode's Home and
 Chat for Claude Code (with artifact cards and the hand-off to a tab),
-and viewers for text, code, Markdown, audio and video.
+and viewers for text, code, Markdown, audio, video, PDF and HTML,
+with a turn's changes as diffs in chat.
 
 ---
 
@@ -24,10 +25,9 @@ and viewers for text, code, Markdown, audio and video.
 - nnn in the terminal: open other files in an Android app, share.
 
 ### Viewers
-Built (see `docs/TOUCH-DESIGN.md`, "Viewers"). Suggested next, not
-decided: a diff view of a turn's changes in chat, a PDF viewer
-(Android's `PdfRenderer`), HTML files in the web apps' WebView, and
-opening files from other apps in mynx's viewers.
+Built (see `docs/TOUCH-DESIGN.md`, "Viewers" and "More viewers"),
+with a turn's changes in chat, PDF and HTML files. Suggested next, not
+decided: opening files from other apps in mynx's viewers.
 
 ### Agent widget
 A home screen widget that starts a chat with an AI agent, even when
