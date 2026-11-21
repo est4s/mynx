@@ -12,8 +12,10 @@ import java.io.File
 enum class Viewer { IMAGE, TEXT, MEDIA, PDF, WEB }
 
 /** The viewer of mynx's that opens a file of [kind] with [with]; null: another app opens it. */
-fun viewerFor(kind: FileKind?, with: OpenWith): Viewer? = when {
+fun viewerFor(kind: FileKind?, with: OpenWith, edit: Boolean = false): Viewer? = when {
     kind == null || with == OpenWith.ANDROID -> null
+    // To edit a page is to edit its source.
+    kind == FileKind.HTML && edit -> Viewer.TEXT
     kind == FileKind.PICTURE -> Viewer.IMAGE
     kind == FileKind.AUDIO || kind == FileKind.VIDEO -> Viewer.MEDIA
     kind == FileKind.PDF -> Viewer.PDF
@@ -74,4 +76,14 @@ fun chatFilePath(text: String, cwd: String, home: String): String? {
     if (name.none { it.isLetter() } || name == "~") return null
     if ('/' !in raw && fileKindOf(name) == null) return null
     return debianPath(raw, cwd, home)
+}
+
+/**
+ * The web app whose folder in `~/apps` holds the page at [path] (its
+ * name), else null: such a page opens as its app, which is how it's
+ * meant to run (with its bridge), not as a file.
+ */
+fun pageApp(path: String, home: String): String? {
+    val rest = path.removePrefix("$home/apps/").takeIf { it != path } ?: return null
+    return rest.substringBefore('/').takeIf { '/' in rest && it.isNotEmpty() }
 }

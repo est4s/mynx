@@ -74,4 +74,20 @@ class ViewersTest {
             assertNull(path(text), text)
         }
     }
+
+    @Test
+    fun `an HTML file to edit opens its source, and edit changes nothing else`() {
+        assertEquals(Viewer.TEXT, viewerFor(FileKind.HTML, OpenWith.MYNX, edit = true))
+        assertEquals(Viewer.WEB, viewerFor(FileKind.HTML, OpenWith.MYNX, edit = false))
+        assertEquals(Viewer.PDF, viewerFor(FileKind.PDF, OpenWith.MYNX, edit = true))
+        assertNull(viewerFor(FileKind.HTML, OpenWith.ANDROID, edit = true))
+    }
+
+    @Test
+    fun `a page in an app's folder belongs to the app`() {
+        assertEquals("tip", pageApp("/root/apps/tip/index.html", "/root"))
+        assertEquals("tip", pageApp("/root/apps/tip/sub/a.html", "/root"))
+        assertNull(pageApp("/root/apps/x.html", "/root"))
+        assertNull(pageApp("/root/site/a.html", "/root"))
+    }
 }
