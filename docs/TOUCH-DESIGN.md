@@ -427,7 +427,18 @@ on the phone test.
   (core's `ImageZoom` or the like), a page indicator ("3 / 12") that
   fades, ⋮: Go to page, Share, Open with another app. A
   password-protected or broken PDF says so on screen, with Open with
-  another app. No text search or selection (`PdfRenderer` can't).
+  another app.
+- **Selecting text (Android 15+):** API 35 gave `PdfRenderer.Page`
+  text (`selectContent()`, `getTextContents()`), so on Android 15
+  and later a long press on a page selects the word under it (a drag
+  on extends it); the selection is tinted in the accent, with a handle
+  at each end to drag it further within that page (not across pages).
+  A bar above it (below it without room there, else at the top):
+  Copy (the clipboard, "Copied"), Select all (the page's
+  text), ✕. A tap elsewhere, Back or Esc clears it; Ctrl+C copies.
+  Zoom and scroll keep working, the selection following. Older
+  Androids show the pages only. No text search yet (`searchText()`
+  could do it on 15+).
 - **Chat:** a PDF Claude writes or makes (named in a command and
   changed in the turn, as pictures) gets a card with View and Share;
   chips open in the viewer.

@@ -1,5 +1,6 @@
 package io.github.est4s.terminal
 
+import android.annotation.TargetApi
 import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
@@ -7,7 +8,11 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Point
 import android.graphics.pdf.PdfRenderer
+import android.graphics.pdf.content.PdfPageTextContent
+import android.graphics.pdf.models.selection.PageSelection
+import android.graphics.pdf.models.selection.SelectionBoundary
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -19,13 +24,18 @@ import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.Toast
 import android.window.OnBackInvokedDispatcher
+import io.github.est4s.terminal.core.PdfPoint
+import io.github.est4s.terminal.core.PdfRect
 import io.github.est4s.terminal.core.PdfRenderSize
+import io.github.est4s.terminal.core.PdfSelection
 import io.github.est4s.terminal.core.RootfsInstaller
+import io.github.est4s.terminal.core.pdfSelectionText
 import io.github.est4s.terminal.core.pixelPalette
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.roundToInt
 
 private const val EXTRA_FILE = "file"
 private const val EXTRA_PATH = "path"
@@ -38,6 +48,8 @@ private const val COLORS_FILE = "root/.config/mynx/colors.properties"
  * open at a time and isn't thread-safe: everything that touches it
  * (opening, measuring the pages, rendering, closing) runs there, in
  * order. A PDF with a password, or one it can't read, says so on screen.
+ * On Android 15+ the renderer also selects a page's text ([PdfText]),
+ * on the same thread.
  * Share and Open with another app go through the service, so this is a
  * [FrontActivity], bound to the service if it runs.
  */
@@ -82,7 +94,7 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
         setContentView(root)
         applySystemInsets(root)
         if (Build.VERSION.SDK_INT >= 33) {
-            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { finish() }
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT) { back() }
         }
         bound = runCatching { bindService(Intent(this, TerminalService::class.java), connection, 0) }.getOrDefault(false)
         open()
@@ -90,7 +102,12 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
 
     @Deprecated("Replaced by OnBackInvokedDispatcher on API 33+")
     override fun onBackPressed() {
-        finish()
+        back()
+    }
+
+    // Back clears a selection first.
+    private fun back() {
+        if (!view.clearSelection()) finish()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean = view.onKey(event) || super.dispatchKeyEvent(event)
@@ -156,6 +173,7 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
         val name = path.substringAfterLast('/')
         worker.execute {
             var aspects: List<Float>? = null
+            var widths: List<Float> = emptyList()
             val problem: String? = try {
                 when {
                     hostFile.isDirectory -> "$name is a folder."
@@ -165,14 +183,17 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
                         descriptor = fd
                         val opened = PdfRenderer(fd)
                         renderer = opened
+                        val pageWidths = ArrayList<Float>()
                         aspects = List(opened.pageCount) { index ->
                             val page = opened.openPage(index)
                             try {
+                                pageWidths += page.width.toFloat()
                                 if (page.width > 0) page.height.toFloat() / page.width else 1.4142f
                             } finally {
                                 page.close()
                             }
                         }
+                        widths = pageWidths
                         null
                     }
                 }
@@ -190,9 +211,10 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
                 descriptor = null
             }
             val pages = aspects
+            val pointWidths = widths
             runOnUiThread {
                 if (isDestroyed) return@runOnUiThread
-                if (pages != null) view.showPages(pages) else view.showError(problem ?: "Can't open $name.")
+                if (pages != null) view.showPages(pages, pointWidths) else view.showError(problem ?: "Can't open $name.")
             }
         }
     }
@@ -229,6 +251,27 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
         }
     }
 
+    override val canSelect: Boolean get() = Build.VERSION.SDK_INT >= 35
+
+    override fun select(page: Int, start: PdfPoint, stop: PdfPoint, done: (PdfSelection?) -> Unit) =
+        onWorker(done) { current -> if (Build.VERSION.SDK_INT >= 35) PdfText.select(current, page, start, stop) else null }
+
+    override fun selectAll(page: Int, done: (PdfSelection?) -> Unit) =
+        onWorker(done) { current -> if (Build.VERSION.SDK_INT >= 35) PdfText.all(current, page) else null }
+
+    // [work] on the worker with the renderer, then [done] with what it gave (null when it threw).
+    private fun onWorker(done: (PdfSelection?) -> Unit, work: (PdfRenderer) -> PdfSelection?) {
+        val sent = runCatching {
+            worker.execute {
+                val current = renderer
+                val found = if (current == null) null else runCatching { work(current) }.getOrNull()
+                runOnUiThread { if (!isDestroyed) done(found) }
+            }
+        }
+        // Refused once the activity is going.
+        if (sent.isFailure) done(null)
+    }
+
     override fun share() {
         val running = service ?: return toast("mynx isn't running: open it, then try again.")
         running.shareDebianFile(path)?.let(::toast)
@@ -256,6 +299,38 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
             }
             insets
         }
+    }
+
+    /** Android 15's text on a page, in its PDF points; every call on the worker, which owns the renderer. */
+    @TargetApi(35)
+    private object PdfText {
+        fun select(renderer: PdfRenderer, page: Int, start: PdfPoint, stop: PdfPoint): PdfSelection? {
+            val opened = renderer.openPage(page)
+            try {
+                val chosen: PageSelection? = opened.selectContent(SelectionBoundary(point(start)), SelectionBoundary(point(stop)))
+                return chosen?.let { selected(page, it.selectedTextContents) }
+            } finally {
+                opened.close()
+            }
+        }
+
+        fun all(renderer: PdfRenderer, page: Int): PdfSelection? {
+            val opened = renderer.openPage(page)
+            try {
+                return selected(page, opened.textContents)
+            } finally {
+                opened.close()
+            }
+        }
+
+        private fun selected(page: Int, contents: List<PdfPageTextContent>): PdfSelection? {
+            val text = pdfSelectionText(contents.map { it.text })
+            if (text.isBlank()) return null
+            val rects = contents.flatMap { content -> content.bounds.map { PdfRect(it.left, it.top, it.right, it.bottom) } }
+            return PdfSelection(page, text, rects)
+        }
+
+        private fun point(at: PdfPoint) = Point(at.x.roundToInt(), at.y.roundToInt())
     }
 
     companion object {
