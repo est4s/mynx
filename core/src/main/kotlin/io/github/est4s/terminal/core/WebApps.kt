@@ -111,6 +111,16 @@ import java.nio.file.Files
  *   (so a reload sees edits). 404 and 405 have a short plain-text body.
  *   No Range requests in part 1 (whole files only).
  *
+ * HTML FILES
+ *
+ * The page viewer (an HTML file anywhere else, docs/TOUCH-DESIGN.md
+ * "More viewers") loads [htmlFileUrl], `https://page.files.mynx.invalid/NAME`
+ * ([HTML_FILE_HOST]), and hands that host's requests to
+ * [WebApps.respondFolder] with the file's folder: the rules above, with
+ * the folder (resolved; not a folder: 404) as the root, and one more: a
+ * segment starting with `.` is 404, so a page in `~` can't read `~/.ssh`
+ * or `~/.config`. No bridge (`mynx.js`): a file isn't an app.
+ *
  * SERVED APPS
  *
  * The origin is the `url`'s (`http://127.0.0.1:PORT`), and the screen
@@ -318,6 +328,22 @@ fun webAppNameOfHost(host: String): String? {
     val lower = host.lowercase()
     if (!lower.endsWith(".$WEB_APP_DOMAIN")) return null
     return lower.removeSuffix(".$WEB_APP_DOMAIN").takeIf(::isWebAppName)
+}
+
+/**
+ * The page viewer's host (see HTML FILES): two labels under
+ * [WEB_APP_DOMAIN], so no app can have it ([webAppNameOfHost] is null).
+ */
+const val HTML_FILE_HOST = "page.files.$WEB_APP_DOMAIN"
+
+/** Where the page viewer loads the HTML file [path] (a Debian path): its name, encoded, on [HTML_FILE_HOST]. */
+fun htmlFileUrl(path: String): String {
+    val encoded = StringBuilder()
+    for (byte in path.substringAfterLast('/').toByteArray(Charsets.UTF_8)) {
+        val c = (byte.toInt() and 0xff).toChar()
+        if (c.isLetterOrDigit() && c.code < 0x80 || c in "-._~") encoded.append(c) else encoded.append("%%%02X".format(c.code))
+    }
+    return "https://$HTML_FILE_HOST/$encoded"
 }
 
 private val MIME_TYPES = mapOf(
@@ -657,6 +683,23 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
             return plain(405, "Method Not Allowed", "only GET and HEAD\n", mapOf("Allow" to "GET, HEAD"))
         }
         if (app.kind != WebAppKind.STATIC) return notFound()
+        return serve(app.root, encodedPath, hidden = true)
+    }
+
+    /**
+     * The page viewer's answer to [method] on [encodedPath] of [folder] (a
+     * Debian path: an HTML file's folder): see HTML FILES.
+     */
+    fun respondFolder(folder: String, method: String, encodedPath: String): WebAppResponse {
+        if (method != "GET" && method != "HEAD") {
+            return plain(405, "Method Not Allowed", "only GET and HEAD\n", mapOf("Allow" to "GET, HEAD"))
+        }
+        val root = resolve(folder)?.takeIf { host(it)?.isDirectory == true } ?: return notFound()
+        return serve(root, encodedPath, hidden = false)
+    }
+
+    // [encodedPath] in the resolved folder [root], confined to it; [hidden]: dot files are served too.
+    private fun serve(root: String, encodedPath: String, hidden: Boolean): WebAppResponse {
         val raw = encodedPath.removePrefix("/").split('/')
         val segments = mutableListOf<String>()
         for (encoded in raw) {
@@ -665,11 +708,12 @@ class WebApps(val home: File, val rootfs: String, val toolsDir: File) {
             if (segment == "." || segment == ".." || '/' in segment || '\u0000' in segment || segment.startsWith(L2S)) {
                 return notFound()
             }
+            if (!hidden && segment.startsWith(".")) return notFound()
             segments += segment
         }
         if (raw.last().isEmpty()) segments += "index.html"
-        val guest = resolve(app.root + "/" + segments.joinToString("/")) ?: return notFound()
-        if (!inside(guest, app.root)) return notFound()
+        val guest = resolve(root.trimEnd('/') + "/" + segments.joinToString("/")) ?: return notFound()
+        if (!inside(guest, root)) return notFound()
         val file = host(guest)?.takeIf { it.isFile } ?: return notFound()
         val mime = webAppMimeType(segments.last())
         return WebAppResponse(200, "OK", mime, if (isTextMime(mime)) "utf-8" else null, NO_STORE, file = file)

@@ -418,6 +418,58 @@ class WebAppsTest {
     }
 
     @Test
+    fun `an HTML file's folder is served for the page viewer`() {
+        write("site/index.html", "<p>hi</p>")
+        write("site/style.css", "p {}")
+        write("site/img/a b.png", "png")
+        val page = apps.respondFolder("/root/site", "GET", "/index.html")
+        assertEquals(200, page.status)
+        assertEquals("text/html", page.mime)
+        assertEquals("utf-8", page.encoding)
+        assertEquals("no-store", page.headers["Cache-Control"])
+        assertEquals("<p>hi</p>", page.file!!.readText())
+        assertEquals(page.file, apps.respondFolder("/root/site", "GET", "/").file)
+        assertEquals("text/css", apps.respondFolder("/root/site", "HEAD", "/style.css").mime)
+        val png = apps.respondFolder("/root/site/", "GET", "/img/a%20b.png")
+        assertEquals("image/png", png.mime)
+        assertNull(png.encoding)
+        assertEquals(405, apps.respondFolder("/root/site", "POST", "/index.html").status)
+    }
+
+    @Test
+    fun `an HTML file's folder is confined as an app's is, and hides dot files`() {
+        write("site/index.html", "<p>hi</p>")
+        write("site/.env", "TOKEN=1")
+        write("site/.git/config", "[core]")
+        write("site/sub/page.html", "<p>sub</p>")
+        link("site/out.txt", "../secret.txt")
+        link("site/inside.css", "sub/page.html")
+        link("page", "site")
+        assertEquals(200, apps.respondFolder("/root/site", "GET", "/inside.css").status)
+        assertEquals(200, apps.respondFolder("/root/page", "GET", "/sub/page.html").status, "a linked folder is its target")
+        assertEquals(200, apps.respondFolder("/root/site/sub", "GET", "/page.html").status)
+        for (path in listOf(
+            "/out.txt", "/../secret.txt", "/%2e%2e/secret.txt", "/sub/%2e%2e/%2e%2e/secret.txt", "/a%2fb", "/%00",
+            "/.env", "/.git/config", "/%2eenv", "/sub", "/nope.html", "/.l2s.x",
+        )) {
+            val response = apps.respondFolder("/root/site", "GET", path)
+            assertEquals(404, response.status, path)
+            assertNull(response.file, path)
+        }
+        assertEquals(404, apps.respondFolder("/root/site/sub", "GET", "/../index.html").status)
+        assertEquals(404, apps.respondFolder("/root/gone", "GET", "/index.html").status)
+        assertEquals(404, apps.respondFolder("root/site", "GET", "/index.html").status, "a Debian path is absolute")
+    }
+
+    @Test
+    fun `an HTML file's address on the page viewer's host`() {
+        assertEquals("https://$HTML_FILE_HOST/index.html", htmlFileUrl("/root/site/index.html"))
+        assertEquals("https://$HTML_FILE_HOST/a%20b%23%C3%A7%3F.htm", htmlFileUrl("/root/a b#ç?.htm"))
+        assertNull(webAppNameOfHost(HTML_FILE_HOST), "no app has its host")
+        assertTrue(HTML_FILE_HOST.endsWith(".$WEB_APP_DOMAIN"))
+    }
+
+    @Test
     fun `a served app's files aren't served`() {
         assertEquals(404, get("served", "/app.conf").status)
     }
