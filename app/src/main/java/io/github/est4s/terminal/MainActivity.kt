@@ -814,6 +814,7 @@ class MainActivity : Activity(), FrontActivity {
                 toastError(if (running == null) "the app isn't ready yet" else running.openDebianFileWith(path, with))
             },
             hostFile = { path -> hostPath(path, installer.rootfs.path)?.let(::File) },
+            diffs = TranscriptDiffs(this, { service?.chats?.shown }, installer.rootfs.path),
         ).also {
             it.colors = Pixel.COLORS
             it.visibility = View.GONE
