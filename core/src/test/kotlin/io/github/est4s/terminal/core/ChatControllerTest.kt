@@ -902,14 +902,15 @@ class ChatControllerTest {
         tool("t3", "Write", """{"file_path":"/root/notes.txt","content":"x"}""")
         done()
         work()
-        assertEquals(listOf("Demo 2"), cards().map { it.artifact.label })
-        val first = cards().single().id
+        assertEquals(listOf("Demo 2", "Changed files"), cards().map { it.artifact.label }, "notes.txt is a changed file")
+        assertEquals(listOf("/root/notes.txt"), cards().last().artifact.files)
+        val first = cards().first().id
         chat.send("again")
         drain()
         tool("t4", "Write", """{"file_path":"/root/apps/demo/index.html","content":"x"}""")
         done()
         work()
-        assertEquals(2, cards().size, "a new turn, a new card")
+        assertEquals(3, cards().size, "a new turn, a new card")
         assertEquals(first, cards().first().id)
         assertTrue(cards().last().id != first)
     }
