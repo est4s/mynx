@@ -17,7 +17,7 @@ Chat for Claude Code (with artifact cards and the hand-off to a tab).
 
 ### File manager
 - Touch view has its own (Files: copy, move, rename, delete, open,
-  share, chat or terminal here). Still to do: thumbnails; a chat
+  share, chat or terminal here). Still to do: a chat
   history that lists other folders' chats; asking for Android's
   storage permission, so the phone's storage shows in full.
 - nnn in the terminal: open other files in an Android app, share.

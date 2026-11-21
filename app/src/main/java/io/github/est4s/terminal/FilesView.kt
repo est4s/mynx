@@ -61,7 +61,9 @@ interface FilesActions {
  * here. [list] reads a folder, hidden names too, off the main thread (the
  * view hides them itself, so a job's taken names are complete); every
  * change is a core [FileJob] that [FilesActions.run] runs in Debian, one
- * at a time, its output on screen if it fails.
+ * at a time, its output on screen if it fails. A picture's row shows its
+ * [thumbnails] square once the row scrolls into sight: a folder of
+ * photos would otherwise decode every one of them up front.
  */
 @SuppressLint("ViewConstructor")
 class FilesView(
@@ -71,6 +73,8 @@ class FilesView(
     /** Root's home as Debian sees it, the crumbs' ~. */
     private val home: String,
     private val actions: FilesActions,
+    /** Pictures' squares, [FILES_THUMBNAIL_DP]; null: icons only. */
+    private val thumbnails: ChatThumbnails? = null,
 ) : LinearLayout(context) {
     /** The folder on show. */
     var folder: String = home
@@ -83,6 +87,8 @@ class FilesView(
     private var clip: FileClip? = null
     private var running: FileJob.Run? = null
     private var asked = 0
+    // Pictures' rows not yet asked for their square: their icon, and the entry.
+    private val waitingThumbnails = ArrayList<Pair<ImageView, FileEntry>>()
 
     private val backButton = iconButton(PixelIcon.BACK, Pixel.CYAN, "Back") { if (!back()) actions.close() }
     private val crumbsRow = LinearLayout(context).apply {
@@ -142,6 +148,7 @@ class FilesView(
     private val scroll = ScrollView(context).apply {
         addView(rows)
         Pixel.scrollbar(this)
+        setOnScrollChangeListener { _, _, _, _, _ -> loadVisibleThumbnails() }
     }
 
     private val jobText = TextView(context).apply {
@@ -351,6 +358,7 @@ class FilesView(
 
     private fun renderRows() {
         rows.removeAllViews()
+        waitingThumbnails.clear()
         val all = entries
         val why = problem
         when {
@@ -371,6 +379,8 @@ class FilesView(
                 if (visible.size > MAX_ROWS) {
                     rows.addView(note("…and ${visible.size - MAX_ROWS} more: Terminal here lists them all."))
                 }
+                // Once laid out: which rows are in sight is only known then.
+                rows.post { loadVisibleThumbnails() }
             }
         }
     }
@@ -391,9 +401,12 @@ class FilesView(
             isPictureName(entry.name) -> PixelIcon.IMAGE to Pixel.PINK
             else -> PixelIcon.FILE to Pixel.DIM
         }
-        addView(ImageView(context).apply {
+        val iconView = ImageView(context).apply {
             setImageDrawable(Pixel.icon(context, icon, color))
-        }, LayoutParams(dp(20), dp(20)).apply { marginEnd = dp(14) })
+            scaleType = ImageView.ScaleType.CENTER
+        }
+        addView(iconView, LayoutParams(dp(FILES_THUMBNAIL_DP), dp(FILES_THUMBNAIL_DP)).apply { marginEnd = dp(12) })
+        if (!picked && !entry.folder && thumbnails != null && isPictureName(entry.name)) waitingThumbnails += iconView to entry
         addView(LinearLayout(context).apply {
             orientation = VERTICAL
             addView(TextView(context).apply {
@@ -421,6 +434,30 @@ class FilesView(
         setOnLongClickListener {
             toggle(entry)
             true
+        }
+    }
+
+    // Asks for the squares of the waiting rows now in sight (and a screen below, to scroll into).
+    internal fun loadVisibleThumbnails() {
+        val thumbnails = thumbnails ?: return
+        if (waitingThumbnails.isEmpty() || scroll.height == 0) return
+        val top = scroll.scrollY - rows.top
+        val bottom = top + 2 * scroll.height
+        val iterator = waitingThumbnails.iterator()
+        while (iterator.hasNext()) {
+            val (view, entry) = iterator.next()
+            val row = view.parent as? View ?: continue
+            if (row.bottom < top || row.top > bottom) continue
+            iterator.remove()
+            val key = entry.path + "\u0000" + entry.modified
+            view.tag = key
+            thumbnails.load(entry.path, entry.modified) { bitmap ->
+                // Not if the row was drawn anew meanwhile (another folder, a selection).
+                if (view.tag == key) {
+                    view.scaleType = ImageView.ScaleType.CENTER_CROP
+                    view.setImageBitmap(bitmap)
+                }
+            }
         }
     }
 
@@ -646,8 +683,10 @@ class FilesView(
 
     private fun dp(value: Int) = Pixel.dp(context, value)
 
-    private companion object {
+    companion object {
         // A LinearLayout draws every row: past this, the terminal lists the rest.
-        const val MAX_ROWS = 500
+        private const val MAX_ROWS = 500
+        /** A row's icon and a picture's square. */
+        const val FILES_THUMBNAIL_DP = 40
     }
 }

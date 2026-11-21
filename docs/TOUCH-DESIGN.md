@@ -115,8 +115,9 @@ places.
 - Places, a row of chips under it: Home, Download, Phone, Debian
   (`FILE_PLACES`).
 - The list: folders first, then files, by name ignoring case; each
-  row an icon (folder, picture, file, link), the name, and size ·
-  date. Hidden (dot) names only when shown. An empty folder says so;
+  row an icon (folder, file, link) or a picture's thumbnail (a 40 dp
+  square, decoded once its row scrolls into sight), the name, and
+  size · date. Hidden (dot) names only when shown. An empty folder says so;
   one that can't be read says why.
 - Tap a folder: opens it. Tap a picture: `ImageViewActivity`. Tap
   another file: Android's "open with" (`ACTION_VIEW` through

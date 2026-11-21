@@ -630,7 +630,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   `--link2symlink` fakes hard links with `.l2s.*` files holding host
   paths, and `deleteRecursively()` follows links. Delete is permanent,
   after a confirmation. Chat here is `ChatHub.newChat(cwd)`; Terminal
-  here a tab started in the folder.
+  here a tab started in the folder. Pictures' thumbnails come from a
+  `ChatThumbnails` of its own (40 dp), only for rows near sight.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with

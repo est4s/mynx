@@ -1,6 +1,10 @@
 package io.github.est4s.terminal
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import io.github.est4s.terminal.core.ClipOp
 import io.github.est4s.terminal.core.FileClip
 import io.github.est4s.terminal.core.FileEntry
@@ -10,6 +14,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.io.File
+import java.nio.file.Files
+import java.util.concurrent.Executor
 
 private const val HOUR = 3_600_000L
 private const val FOLDER = "/root/projects/tip-calc"
@@ -22,6 +29,24 @@ private val noFileActions = object : FilesActions {
     override fun share(paths: List<String>) = Unit
     override fun run(job: FileJob.Run, done: (Int, String) -> Unit) = Unit
     override fun close() = Unit
+}
+
+/** The sample pictures, drawn: logo.png a pink block on dark, the screenshot a sky and a field. */
+private val PICTURES: File by lazy {
+    Files.createTempDirectory("files-pictures").toFile().also { dir ->
+        val logo = Bitmap.createBitmap(200, 200, Bitmap.Config.ARGB_8888)
+        Canvas(logo).apply {
+            drawColor(Color.rgb(13, 2, 33))
+            drawRect(50f, 50f, 150f, 150f, Paint().apply { color = Color.rgb(255, 11, 187) })
+        }
+        File(dir, "logo.png").outputStream().use { logo.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val shot = Bitmap.createBitmap(300, 400, Bitmap.Config.ARGB_8888)
+        Canvas(shot).apply {
+            drawColor(Color.rgb(120, 180, 240))
+            drawRect(0f, 250f, 300f, 400f, Paint().apply { color = Color.rgb(70, 150, 70) })
+        }
+        File(dir, "screenshot-2026-11-20.jpg").outputStream().use { shot.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+    }
 }
 
 // Folders first, then files, as core sorts them: one of each kind, a link and a hidden one.
@@ -56,9 +81,18 @@ class FilesScreenshotTest {
         clip: FileClip? = null,
     ) {
         val view = Screenshots.open(w, h) { activity ->
-            FilesView(activity, list = { _, _ -> }, home = "/root", actions = noFileActions)
+            val thumbnails = ChatThumbnails(
+                activity,
+                { path -> File(PICTURES, path.substringAfterLast('/')) },
+                Executor { it.run() },
+                FilesView.FILES_THUMBNAIL_DP,
+            )
+            FilesView(activity, list = { _, _ -> }, home = "/root", actions = noFileActions, thumbnails = thumbnails)
         }
         view.show(FOLDER, entries, selection, clip)
+        Screenshots.settle()
+        // As the post after layout does on a phone: the rows have their places now.
+        view.loadVisibleThumbnails()
         Screenshots.settle()
         Screenshots.save(view, name)
     }

@@ -34,7 +34,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 Built, core tested; `app/` not compiled yet (CI). Push, open the PR,
 `scripts/deliver.sh`, then on the phone check: drawer → Files opens
 at `~`; places (Download, Phone: what shows without a storage
-permission?); open a folder, a picture, a PDF ("open with"); select,
+permission?); thumbnails (scroll a folder of photos: smooth?); open a folder, a
+picture, a PDF ("open with"); select,
 Copy/Cut → Paste here (a "(2)" name), Rename, Delete (asks), New
 folder, Share; a failing job (e.g. paste into `/proc`) shows its
 output; Chat here (the chat runs there: ask `pwd`); Terminal here;
@@ -107,8 +108,11 @@ listing, crumbs, places, names, jobs; `HomeAction.Files`;
   `java.io.File`: proot's faked hard links (`.l2s.*`, never listed).
 - Back stops at a place (`filesBack()`), not climbing into
   `/storage/emulated`.
+- Pictures' rows show a thumbnail (`ChatThumbnails` with 40 dp
+  squares, cached by path and file time), asked for only once the row
+  is within a screen of sight: DCIM would decode every photo up front.
 - Limits: a chat started elsewhere isn't in the history once it's
-  done (the history lists `/root`'s); no thumbnails; storage shows
+  done (the history lists `/root`'s); storage shows
   only what Android allows without a storage permission.
 
 ### 2026-11-21 (197): Pictures full screen, and image cards (merged, PR #92; passed)

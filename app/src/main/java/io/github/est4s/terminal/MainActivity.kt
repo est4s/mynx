@@ -834,7 +834,13 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        filesView = FilesView(this, ::listFiles, filesApps.guestHome, filesActions).also {
+        // Its own cache, of bigger squares; links followed as Debian sees them.
+        val filesThumbnails = ChatThumbnails(
+            this,
+            { path -> filesApps.host(filesApps.resolve(path) ?: path) ?: File(path) },
+            sizeDp = FilesView.FILES_THUMBNAIL_DP,
+        )
+        filesView = FilesView(this, ::listFiles, filesApps.guestHome, filesActions, filesThumbnails).also {
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
