@@ -21,6 +21,8 @@ class ViewersTest {
         assertEquals(Viewer.IMAGE, viewerFor(FileKind.PICTURE, OpenWith.MYNX))
         for (kind in listOf(FileKind.MARKDOWN, FileKind.CODE, FileKind.TEXT)) assertEquals(Viewer.TEXT, viewerFor(kind, OpenWith.MYNX))
         for (kind in listOf(FileKind.AUDIO, FileKind.VIDEO)) assertEquals(Viewer.MEDIA, viewerFor(kind, OpenWith.MYNX))
+        assertEquals(Viewer.PDF, viewerFor(FileKind.PDF, OpenWith.MYNX))
+        assertEquals(Viewer.WEB, viewerFor(FileKind.HTML, OpenWith.MYNX))
     }
 
     @Test
@@ -38,6 +40,8 @@ class ViewersTest {
         assertEquals("mynx's text viewer", viewerName(FileKind.TEXT))
         assertEquals("mynx's audio player", viewerName(FileKind.AUDIO))
         assertEquals("mynx's video player", viewerName(FileKind.VIDEO))
+        assertEquals("mynx's PDF viewer", viewerName(FileKind.PDF))
+        assertEquals("mynx's page viewer", viewerName(FileKind.HTML))
     }
 
     @Test
@@ -69,5 +73,21 @@ class ViewersTest {
         for (text in listOf("", "--md", "mynx open", "mynx", "https://x.y/a.md", "~/apps/*", "\$HOME/x", "a b.md", "~", "/", "folder/", "..", "1/2")) {
             assertNull(path(text), text)
         }
+    }
+
+    @Test
+    fun `an HTML file to edit opens its source, and edit changes nothing else`() {
+        assertEquals(Viewer.TEXT, viewerFor(FileKind.HTML, OpenWith.MYNX, edit = true))
+        assertEquals(Viewer.WEB, viewerFor(FileKind.HTML, OpenWith.MYNX, edit = false))
+        assertEquals(Viewer.PDF, viewerFor(FileKind.PDF, OpenWith.MYNX, edit = true))
+        assertNull(viewerFor(FileKind.HTML, OpenWith.ANDROID, edit = true))
+    }
+
+    @Test
+    fun `a page in an app's folder belongs to the app`() {
+        assertEquals("tip", pageApp("/root/apps/tip/index.html", "/root"))
+        assertEquals("tip", pageApp("/root/apps/tip/sub/a.html", "/root"))
+        assertNull(pageApp("/root/apps/x.html", "/root"))
+        assertNull(pageApp("/root/site/a.html", "/root"))
     }
 }

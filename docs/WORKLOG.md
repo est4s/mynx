@@ -24,17 +24,26 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   audio and video (#94). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
+- **Waiting for the phone test:** a turn's changes in chat, PDF and
+  HTML files (branch `more-viewers`).
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
   PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
 
-### 0. Viewers: suggested next (the maintainer picks)
+### 0. More viewers: the maintainer's test in mynx dev
 
-Not decided (roadmap "Viewers"): a diff view of a turn's changes in
-chat, a PDF viewer, HTML files in the web apps' WebView, opening files
-from other apps in mynx's viewers.
+Install the branch's build and check: chat's Changed files card shows
+`+N −M` per file and a tap opens the diff (two edits to one file read
+as one; a new file all added; Share the diff; Open file); a PDF opens
+from Files (scroll, pinch and double-tap zoom, the page counter, Go to
+page, a protected PDF says so); an HTML file opens rendered with its
+CSS and pictures, View source, web links in the browser, Back through
+its history; `~/apps/NAME/index.html` opens as the app; `mynx open
+page.html --edit` opens the source; the PDF and HTML cards in chat;
+the Default apps settings for both. Wrap is on in the diff view, off
+in the code viewer: ask whether that's right. Then merge.
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -85,6 +94,26 @@ from other apps in mynx's viewers.
 ---
 
 ## Log
+
+### 2026-11-21 (200): A turn's changes in chat, PDF and HTML files (branch `more-viewers`; to test)
+
+The maintainer asked for three of the viewers' "later" ideas: the diff
+view in chat, a PDF viewer and HTML files. Choices were the lead's
+(`docs/TOUCH-DESIGN.md`, "More viewers"), for the phone test to settle.
+- Built by agents in waves against that design: core-diff (`Diff.kt`,
+  `readFileEdits()`, tool call IDs on changed files), core-kinds (the
+  PDF and HTML kinds, `open-pdf`/`open-html`, their cards and View
+  source, `respondFolder()`, `mynx open`, the guide), app-diff
+  (`DiffViewActivity`, `DiffView`, the card's `+N −M`), app-pdf
+  (`PdfViewActivity`), app-html (`HtmlViewActivity`); the lead wired
+  the opener (`pageApp()`, an HTML file to edit opens its source), the
+  cards, and the docs.
+- Found on the way: Claude's transcripts hold `originalFile` and
+  `structuredPatch` for every Write and Edit, so diffs are exact; a
+  served page's folder must hide dot files (`~/.ssh`).
+- Limits: no text search or selection in PDFs (`PdfRenderer` can't);
+  all HTML files share one origin and its storage; a file a command
+  also wrote in the turn gets no diff.
 
 ### 2026-11-21 (199): Viewers for text, code, Markdown, audio and video (PR #94; passed)
 

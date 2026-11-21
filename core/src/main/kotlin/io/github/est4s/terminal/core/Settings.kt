@@ -47,13 +47,15 @@ data class Settings(
     val chatMode: String = "auto",
     /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
     val chatModel: String = "default",
-    /** Where pictures open: mynx's viewer or another app (`open-pictures`; the five after it likewise). */
+    /** Where pictures open: mynx's viewer or another app (`open-pictures`; the seven after it likewise). */
     val openPictures: OpenWith = OpenWith.MYNX,
     val openMarkdown: OpenWith = OpenWith.MYNX,
     val openCode: OpenWith = OpenWith.MYNX,
     val openText: OpenWith = OpenWith.MYNX,
     val openAudio: OpenWith = OpenWith.MYNX,
     val openVideo: OpenWith = OpenWith.MYNX,
+    val openPdf: OpenWith = OpenWith.MYNX,
+    val openHtml: OpenWith = OpenWith.MYNX,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -86,6 +88,8 @@ data class Settings(
         "open-text" to openText.word,
         "open-audio" to openAudio.word,
         "open-video" to openVideo.word,
+        "open-pdf" to openPdf.word,
+        "open-html" to openHtml.word,
     )
 }
 
@@ -277,6 +281,8 @@ val SETTINGS: List<SettingDef> = listOf(
     openSetting("open-text", "text files (.txt, .log, .csv, and others that are text)") { copy(openText = it) },
     openSetting("open-audio", "audio (.mp3, .m4a, .ogg, .flac, .wav, …)") { copy(openAudio = it) },
     openSetting("open-video", "video (.mp4, .webm, .mkv, .3gp, .mov)") { copy(openVideo = it) },
+    openSetting("open-pdf", "PDF files (.pdf)") { copy(openPdf = it) },
+    openSetting("open-html", "HTML pages (.html, .htm; those in ~/apps stay web apps)") { copy(openHtml = it) },
 )
 
 private fun openSetting(key: String, what: String, apply: Settings.(OpenWith) -> Settings) = SettingDef(

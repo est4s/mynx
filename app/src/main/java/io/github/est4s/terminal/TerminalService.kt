@@ -79,6 +79,7 @@ import io.github.est4s.terminal.core.OpenWith
 import io.github.est4s.terminal.core.Viewer
 import io.github.est4s.terminal.core.fileKindOfFile
 import io.github.est4s.terminal.core.openWith
+import io.github.est4s.terminal.core.pageApp
 import io.github.est4s.terminal.core.viewerFor
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.NEON
@@ -1463,12 +1464,19 @@ class TerminalService : Service() {
     // Opens [file] (the host file of [guest]) of [kind] in its viewer, or another app's.
     private fun openDebianFileAs(guest: String, file: File, kind: FileKind?, with: OpenWith?, edit: Boolean): String? {
         val choice = with ?: kind?.let { currentSettings()?.openWith(it) } ?: OpenWith.MYNX
-        val viewer = viewerFor(kind, choice) ?: return openDebianFile(guest)
+        val viewer = viewerFor(kind, choice, edit) ?: return openDebianFile(guest)
         val shown = front()?.activity ?: return "the app must be on screen to open files"
-        val intent = when (viewer) {
-            Viewer.IMAGE -> ImageViewActivity.intent(shown, file, guest.substringAfterLast('/'))
-            Viewer.TEXT -> TextViewActivity.intent(shown, file, guest, edit)
-            Viewer.MEDIA -> MediaViewActivity.intent(shown, file, guest)
+        // A page in an app's folder runs as its app, with its bridge.
+        val app = if (viewer == Viewer.WEB) pageApp(guest, webAppFiles.guestHome)?.let(webAppFiles::find) else null
+        val intent = when {
+            app != null -> WebAppActivity.shortcutIntent(shown, app.name)
+            else -> when (viewer) {
+                Viewer.IMAGE -> ImageViewActivity.intent(shown, file, guest.substringAfterLast('/'))
+                Viewer.TEXT -> TextViewActivity.intent(shown, file, guest, edit)
+                Viewer.MEDIA -> MediaViewActivity.intent(shown, file, guest)
+                Viewer.PDF -> PdfViewActivity.intent(shown, file, guest)
+                Viewer.WEB -> HtmlViewActivity.intent(shown, guest)
+            }
         }
         return try {
             shown.startActivity(intent)

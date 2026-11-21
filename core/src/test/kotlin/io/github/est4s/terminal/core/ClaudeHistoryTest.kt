@@ -267,4 +267,63 @@ class ClaudeHistoryTest {
         val file = File(top, "t.jsonl").apply { writeText(user(1, withText) + "\n") }
         assertEquals("What is this?", claudeSessionTitle(file))
     }
+
+    // A Write's or an Edit's result line, as Claude 2.1 writes them (`toolUseResult` beside the tool_result).
+    private fun result(id: String, result: String, error: Boolean = false) =
+        """{"type":"user","message":{"role":"user","content":[{"tool_use_id":"$id","type":"tool_result","content":"done"${if (error) ""","is_error":true""" else ""}}]},"uuid":"r-$id","toolUseResult":$result}"""
+
+    private val created = result(
+        "w1",
+        """{"type":"create","filePath":"/root/a.txt","content":"one\n","structuredPatch":[],"originalFile":null,"userModified":false}""",
+    )
+    private val edited = result(
+        "e1",
+        """{"filePath":"/root/a.txt","oldString":"one","newString":"two","originalFile":"one\n","structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-one","+two"]}],"userModified":false,"replaceAll":false}""",
+    )
+    private val rewritten = result(
+        "w2",
+        """{"type":"update","filePath":"/root/b.txt","content":"two","structuredPatch":[{"oldStart":1,"oldLines":1,"newStart":1,"newLines":1,"lines":["-one","\\ No newline at end of file","+two","\\ No newline at end of file"]}],"originalFile":"one","userModified":false}""",
+    )
+
+    @Test
+    fun `a turn's Write and Edit results are read by tool call, in order`() {
+        val lines = sequenceOf(user(1, "go"), created, agent(2, "now edit"), edited, rewritten)
+        assertEquals(
+            listOf(
+                FileEdit("w1", "/root/a.txt", null, "one\n", emptyList()),
+                FileEdit("e1", "/root/a.txt", "one\n", null, listOf(PatchHunk(1, 1, 1, 1, listOf("-one", "+two")))),
+            ),
+            readFileEdits(lines, setOf("w1", "e1")),
+        )
+        assertEquals(
+            listOf(
+                FileEdit(
+                    "w2", "/root/b.txt", "one", "two",
+                    listOf(PatchHunk(1, 1, 1, 1, listOf("-one", "\\ No newline at end of file", "+two", "\\ No newline at end of file"))),
+                ),
+            ),
+            readFileEdits(lines, setOf("w2")),
+        )
+        assertEquals(diffLines("", "two\n").copy(isNew = true), turnDiff(readFileEdits(lines, setOf("w1", "e1"))))
+    }
+
+    @Test
+    fun `failed calls, other tools' results and broken lines give no edits`() {
+        val lines = sequenceOf(
+            result("x1", "\"Error: String to replace not found in file.\"", error = true),
+            result("x2", """{"filePath":"/root/a.txt","originalFile":"a","structuredPatch":[]}""", error = true),
+            result("n1", """{"new_source":"print(1)","cell_id":"c1","notebook_path":"/root/n.ipynb"}"""),
+            result("b1", """{"stdout":"","stderr":"","interrupted":false}"""),
+            edited.dropLast(10),
+            """{"type":"user","message":{"role":"user","content":[{"tool_use_id":"e2","type":"tool_result","content":"ok"}]},"toolUseResult":{"filePath":"/root/c.txt","originalFile":"a\n","structuredPatch":[{"oldStart":"x","lines":[]}]}}""",
+        )
+        assertEquals(emptyList(), readFileEdits(lines, setOf("x1", "x2", "n1", "b1", "e1", "e2")))
+    }
+
+    @Test
+    fun `a file's edits are read from the transcript file`() {
+        val file = File(top, "t.jsonl").apply { writeText(listOf(created, edited).joinToString("\n") + "\n") }
+        assertEquals(listOf("w1", "e1"), readFileEdits(file, setOf("e1", "w1")).map { it.toolId })
+        assertEquals(emptyList(), readFileEdits(File(top, "missing.jsonl"), setOf("e1")), "no transcript (yet): no edits")
+    }
 }

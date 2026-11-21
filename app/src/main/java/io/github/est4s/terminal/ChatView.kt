@@ -56,8 +56,11 @@ import io.github.est4s.terminal.core.ChatStatusLine
 import io.github.est4s.terminal.core.ChatTabHold
 import io.github.est4s.terminal.core.FileKind
 import io.github.est4s.terminal.core.OpenWith
+import io.github.est4s.terminal.core.ChangedFileRow
+import io.github.est4s.terminal.core.SyntaxKind
 import io.github.est4s.terminal.core.changedFileRows
 import io.github.est4s.terminal.core.fileKindOf
+import io.github.est4s.terminal.core.syntaxColor
 import io.github.est4s.terminal.core.IncrementalMarkdown
 import io.github.est4s.terminal.core.MdRow
 import io.github.est4s.terminal.core.NoticeKind
@@ -178,7 +181,9 @@ private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(con
  * setting): another file's chip, a Markdown card's View, an audio or
  * video card's Play, a changed files card's rows, and file paths in
  * replies (underlined when [hostFile], a Debian path's file on the phone,
- * says they're there). [clock] is the time
+ * says they're there). [diffs] gives a changed file's `+N −M` and opens
+ * its diff view (rows with no diff, or no [diffs]: [openFile]).
+ * [openSource] shows an HTML card's page as code. [clock] is the time
  * Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -197,6 +202,8 @@ class ChatView(
     private val viewImage: ((String) -> Unit)? = null,
     private val openFile: ((path: String, with: OpenWith?) -> Unit)? = null,
     private val hostFile: ((String) -> File?)? = null,
+    private val diffs: ChatDiffs? = null,
+    private val openSource: ((String) -> Unit)? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
@@ -1106,14 +1113,14 @@ class ChatView(
                             openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
                         }
                         ArtifactAction.PLAY -> openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
+                        ArtifactAction.SOURCE -> openSource?.invoke(artifact.shareFile)
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
             }
             if (flow.childCount > 0) card.addView(flow, buttonFlowParams())
             if (artifact.kind == ArtifactKind.CHANGED_FILES) changedFileRows(artifact, controller()?.home ?: "/root").forEach { row ->
-                card.addView(changedFileRow(row.name, row.folder, colors) { openFile?.invoke(row.path, null) },
-                    LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+                card.addView(changedFileRow(row, colors), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
             }
             chatArtifactNote(artifact, canInstall = install != null)?.let { note ->
                 card.addView(answeredText(note, colors))
@@ -1126,7 +1133,7 @@ class ChatView(
         val icon = when (artifact.kind) {
             ArtifactKind.AUDIO -> PixelIcon.NOTE
             ArtifactKind.VIDEO -> PixelIcon.PLAY
-            ArtifactKind.CHANGED_FILES -> PixelIcon.FILE
+            ArtifactKind.CHANGED_FILES, ArtifactKind.PDF -> PixelIcon.FILE
             else -> null
         }
         if (icon != null) return ImageView(context).apply {
@@ -1144,25 +1151,57 @@ class ChatView(
         }
     }
 
-    // A changed file: its name, its folder dim under it; a tap opens it.
-    private fun changedFileRow(name: String, folder: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
+    // A changed file: its name, its folder dim under it, its `+N −M` once worked out; a tap opens its diff, else the file.
+    private fun changedFileRow(row: ChangedFileRow, colors: StripColors) = LinearLayout(context).apply {
+        val rowDiffs = diffs?.takeIf { row.toolIds.isNotEmpty() }
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
         background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
         setPadding(dp(12), dp(8), dp(12), dp(8))
         minimumHeight = dp(48)
         isFocusable = true
-        contentDescription = "Open $name"
-        setOnClickListener { onTap() }
-        addView(plainText(colors.text, 15f).apply {
-            text = name
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-        })
-        addView(plainText(Pixel.DIM, 12f).apply {
-            text = folder
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-        })
+        contentDescription = if (rowDiffs != null) "Changes to ${row.name}" else "Open ${row.name}"
+        setOnClickListener { if (rowDiffs?.open(row) != true) openFile?.invoke(row.path, null) }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(plainText(colors.text, 15f).apply {
+                text = row.name
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.MIDDLE
+            })
+            addView(plainText(Pixel.DIM, 12f).apply {
+                text = row.folder
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.MIDDLE
+            })
+        }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        if (rowDiffs != null) {
+            val summary = plainText(Pixel.DIM, 13f).apply {
+                maxLines = 1
+                setPadding(dp(8), 0, 0, 0)
+            }
+            addView(summary, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            val shown = rowDiffs.summary(row) { text -> summary.text = summarySpans(text, colors) }
+            if (shown != null) summary.text = summarySpans(shown, colors)
+        }
+    }
+
+    // A changed file's `+12 −3`: the numbers green and red, as the terminal's theme has them on the row; "new · …" green.
+    private fun summarySpans(summary: String, colors: StripColors): CharSequence {
+        val scheme = terminalColorScheme(context).copy(background = colors.selectedBackground)
+        val added = syntaxColor(SyntaxKind.ADDED, scheme)
+        val text = SpannableString(summary)
+        when {
+            summary.startsWith("+") -> {
+                val space = summary.indexOf(' ').takeIf { it > 0 } ?: summary.length
+                text.setSpan(ForegroundColorSpan(added), 0, space, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                if (space < summary.length) {
+                    text.setSpan(ForegroundColorSpan(syntaxColor(SyntaxKind.REMOVED, scheme)), space + 1, summary.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+            summary.startsWith("new") -> text.setSpan(ForegroundColorSpan(added), 0, summary.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return text
     }
 
     // The picture, as large as the card is wide (up to IMAGE_PREVIEW_DP high), once decoded; a tap views it.

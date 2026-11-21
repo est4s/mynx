@@ -248,7 +248,8 @@ def cmd_menu(args, as_json):
 
 OPEN_USAGE = "usage: mynx open URL | FILE [--with mynx|android] [--edit]"
 VIEWERS = {"picture": "mynx's picture viewer", "markdown": "mynx's Markdown viewer", "code": "mynx's code viewer",
-           "text": "mynx's text viewer", "audio": "mynx's audio player", "video": "mynx's video player"}
+           "text": "mynx's text viewer", "audio": "mynx's audio player", "video": "mynx's video player",
+           "pdf": "mynx's PDF viewer", "html": "mynx's page viewer"}
 
 
 def cmd_open(args, as_json):

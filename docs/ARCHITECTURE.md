@@ -658,6 +658,26 @@ See `docs/ROADMAP.md` "How it works". The details:
   (the media server can't open the app's files by path); audio lives
   in a foreground service (`mediaPlayback`, a framework `MediaSession`,
   notification ID 9000), video in the activity on a `SurfaceView`.
+- **More viewers: a turn's changes, PDF, HTML** (`core/.../Diff.kt`,
+  `DiffView.kt`, `ClaudeHistory.kt`'s `readFileEdits()`, `Pdf.kt`,
+  `WebApps.kt`'s `respondFolder()`; `app/.../DiffViewActivity.kt`,
+  `DiffView.kt`, `PdfViewActivity.kt`, `HtmlViewActivity.kt`; the spec
+  is `docs/TOUCH-DESIGN.md`, "More viewers"). **Diffs come from the
+  transcript**, not the stream: each Write and Edit result there has
+  `originalFile` and a `structuredPatch`, read by tool call ID
+  (`ChangedFileRow.toolIds`, from the hints) when a row needs it, off
+  the main thread. A turn's diff of a file is before = its first
+  call's `originalFile`, after = its last call's result (patch applied),
+  diffed again in core (Myers, linear space), so several edits read as
+  one. A file a command also wrote has no IDs: its row opens the file.
+  **PDF:** Android's `PdfRenderer`, one page open at a time, so every
+  render goes through one worker; pages near sight only. **HTML files**
+  are served from their folder on `page.files.mynx.invalid`
+  (`HTML_FILE_HOST`; can't clash with an app), confined as static apps
+  are, and dot files are never served (a page in `~` with web access
+  could otherwise read `~/.ssh`); no `mynx.js` bridge. All HTML files
+  share that origin (and its storage). A page in `~/apps/NAME/` opens
+  as its app (`pageApp()`); an HTML file to edit opens its source.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with
