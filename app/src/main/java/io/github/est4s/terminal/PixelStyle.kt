@@ -199,6 +199,28 @@ object Pixel {
                 intArrayOf(i, i, 2, 2, i, 18 - i, 2, 2).copyInto(a, k * 8)
             }
         }
+        PixelIcon.PLAY -> intArrayOf(4, 3, 2, 14, 6, 4, 2, 12, 8, 5, 2, 10, 10, 6, 2, 8, 12, 7, 2, 6, 14, 8, 2, 4, 16, 9, 2, 2)
+        PixelIcon.PAUSE -> intArrayOf(5, 3, 4, 14, 11, 3, 4, 14)
+        PixelIcon.NEXT -> intArrayOf(
+            3, 4, 2, 12, 5, 5, 2, 10, 7, 6, 2, 8, 9, 7, 2, 6, 11, 8, 2, 4, 13, 9, 2, 2, // a play
+            15, 4, 2, 12,                                                             // and a bar
+        )
+        PixelIcon.PREVIOUS -> mirrored(cells(PixelIcon.NEXT))
+        PixelIcon.REPLAY -> mirrored(cells(PixelIcon.REFRESH))
+        PixelIcon.NOTE -> intArrayOf(
+            5, 12, 6, 5, 4, 13, 8, 3, // the head
+            10, 3, 2, 11,             // the stem
+            12, 3, 4, 2, 15, 5, 2, 3, // the flag
+        )
+    }
+
+    // Turned left to right, for icons that go the other way.
+    private fun mirrored(cells: IntArray): IntArray = cells.copyOf().also { a ->
+        var i = 0
+        while (i + 3 < a.size) {
+            a[i] = 20 - a[i] - a[i + 2]
+            i += 4
+        }
     }
 }
 
@@ -241,7 +263,7 @@ fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
     popup.showAsDropDown(anchor, 0, 0, Gravity.END)
 }
 
-enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH }
+enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH, PLAY, PAUSE, NEXT, PREVIOUS, REPLAY, NOTE }
 
 /** Text in another typeface (TypefaceSpan(Typeface) is API 28+): Pixelify Sans for headings in Chat's Markdown. */
 class PixelFontSpan(private val face: Typeface) : MetricAffectingSpan() {

@@ -24,6 +24,8 @@
     <!-- mynx audio record; a recording started on screen keeps going in the background. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- mynx's audio player goes on playing with the screen off (MediaPlaybackService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Bluetooth serial ports (mynx bt) link to paired devices: asked on first use on
          Android 12+, granted with the app before. No scanning: pairing is in Android's Settings. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
@@ -96,6 +98,14 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false" />
 
+        <!-- mynx's player for audio and video files. Turning the phone mustn't restart the video;
+             singleTop: the media notification opens the one that's there. -->
+        <activity
+            android:name=".MediaViewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:launchMode="singleTop"
+            android:exported="false" />
+
         <!-- Other apps share files and text into Debian's share folder. -->
         <activity
             android:name=".ShareActivity"
@@ -162,5 +172,11 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps the user's terminal sessions (shell processes) running while the app is in the background, like a terminal emulator." />
         </service>
+
+        <!-- Audio from mynx's player, with the screen off or the app left. -->
+        <service
+            android:name=".MediaPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>
