@@ -218,7 +218,7 @@ another Android app.
   Enter takes the kind's setting. `--with mynx` or `--with android`
   doesn't ask; nor does a script or an agent (no terminal): the
   setting decides, so nothing waits. `--edit` opens text, code and
-  Markdown ready to edit. The app must be on screen. `--json` gives
+  Markdown ready to edit, and an HTML file's source. The app must be on screen. `--json` gives
   `{"ok": true, "with": "mynx", "kind": "code"}` (kinds: `picture`,
   `markdown`, `code`, `text`, `audio`, `video`, `pdf`, `html`, or
   `null`).

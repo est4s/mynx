@@ -133,7 +133,7 @@ their own.
 | `mynx notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
 | `mynx undo` | take back the last config change (`mynx undo --list` shows what it can take back) |
 | `mynx open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
-| `mynx open FILE` | open a file in mynx's viewer (text, code, Markdown, pictures, audio, video) or another app; asks which in a terminal, `--with mynx\|android` says, `--edit` opens text to edit (`/opt/mynx/docs/phone.md`) |
+| `mynx open FILE` | open a file in mynx's viewer (text, code, Markdown, pictures, audio, video, PDF, HTML) or another app; asks which in a terminal, `--with mynx\|android` says, `--edit` opens text to edit (`/opt/mynx/docs/phone.md`) |
 | `mynx vibrate`, `clipboard`, `share`, `location`, `sensor`, `battery`, `camera`, `torch`, `rotation`, `audio`, `sound` | the phone: vibration, clipboard, share sheet, GPS, sensors, battery, camera, flashlight, screen rotation, sound files and the sound device (`/opt/mynx/docs/phone.md`) |
 | `mynx app` | apps in HTML and JavaScript: list, open, reload, log, home screen shortcut, permissions (`/opt/mynx/docs/apps.md`) |
 | `mynx service` | background services: list, add, start, stop, log, open as a tab, autostart, adopt a tab (`/opt/mynx/docs/services.md`) |
@@ -229,10 +229,11 @@ One `key = value` per line; `mynx settings` describes each.
   session runs in one place at a time. Each of Claude's replies has
   Copy under it. When Claude Code makes or changes an app in `~/apps`
   or `~/terminal-apps`, writes an APK or a Markdown (`.md`) file, or
-  makes a picture (PNG, JPEG, GIF, WebP…; a path its command names),
+  makes a picture (PNG, JPEG, GIF, WebP…; a path its command names)
+  or a PDF, or writes an HTML page outside the app folders,
   the chat shows a card for it: Open (a web app), Run (a terminal app,
   in a tab), Copy (a Markdown file's text), View (a picture, shown in
-  the card too), Share. Tapping a picture, a card's or one attached to
+  the card too; a PDF; a page, rendered), View source (a page), Share. Tapping a picture, a card's or one attached to
   a message, shows it full screen (pinch or double-tap to zoom).
   Touch view's Files is a file manager to tap (nnn is in Terminal
   apps): long-press to select, then Copy, Cut, Rename, Delete

@@ -333,6 +333,12 @@ setup() {
     grep -qF -- "shows it full screen" "$GUIDE"
 }
 
+@test "the guide says PDFs and HTML pages get cards and open in mynx's viewers" {
+    grep -qF -- "View source (a page)" "$GUIDE"
+    grep -qF -- "a PDF viewer" "$GUIDE"
+    grep -qF -- "and an HTML file's source" "$GUIDE"
+}
+
 @test "the guide says touch view's Settings are lists to tap" {
     grep -qF -- "Settings are lists to tap too" "$GUIDE"
 }
