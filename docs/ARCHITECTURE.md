@@ -675,7 +675,10 @@ See `docs/ROADMAP.md` "How it works". The details:
   text needs Android 15 (`selectContent()`, `getTextContents()` on
   the same worker, `PdfText`); core's `PdfSelection.kt` maps touches
   to a page's PDF points and places the handles and the bar; one
-  selection request in flight (`PdfLatest`). No search yet. **HTML files**
+  selection request in flight (`PdfLatest`). Find (Android 15 too)
+  runs `searchText()` one page per worker task, so renders go between;
+  core's `PdfSearch` collects the matches and picks the current one,
+  `pdfRevealBy()` scrolls to it. **HTML files**
   are served from their folder on `page.files.mynx.invalid`
   (`HTML_FILE_HOST`; can't clash with an app), confined as static apps
   are, and dot files are never served (a page in `~` with web access

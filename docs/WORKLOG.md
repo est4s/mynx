@@ -33,8 +33,10 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 0. Viewers: suggested next (the maintainer picks)
 
-Not decided: search in PDFs (Android 15's `searchText`, beside the
-selection), opening files from other apps in mynx's viewers, and
+**In progress (entry 202, branch `find-replace`):** PDF Find and the
+text viewers' Replace, written and core-tested, not yet built in CI
+nor tried on the phone: push, open a PR, deliver, and run its phone
+checks. Not decided: opening files from other apps in mynx's viewers, and
 whether the diff view should start unwrapped like the code viewer
 (it wraps; nobody has asked).
 
@@ -87,6 +89,30 @@ whether the diff view should start unwrapped like the code viewer
 ---
 
 ## Log
+
+### 2026-11-21 (202): Find in PDFs, Replace in the text viewers (branch `find-replace`; not built yet)
+
+The maintainer asked for search in PDFs and Replace in the text
+viewers' Find.
+- Core: `PdfSearch.kt` (pages searched one at a time in order, the
+  current match the first at or after the page in view, else the
+  first; "2/7…" while searching; `pdfRevealBy()` to scroll a match
+  into sight); `TextDoc.kt`'s `replaceMatch()`, `replaceAll()`,
+  `matchAtOrAfter()`. Tested.
+- App: `PdfView`'s Find bar (⋮ Find, Ctrl+F; Android 15+ only, via
+  `searchText()` one page per worker task so renders go between;
+  matches tinted, the current one pink); `TextViewerView`'s Replace row
+  (⋮ Replace, Ctrl+H, ⇄ in Find; switches to Edit; each Replace/All is
+  one Undo step). Screenshots `pdf-find` (stand-in matches) and
+  `text-replace`.
+- Docs: TOUCH-DESIGN.md, ARCHITECTURE.md, the guide (`phone.md`, its
+  check in `home-docs.bats`).
+- Not compiled here (app/ builds only in CI).
+- To test on the phone: PDF Find (type, count growing, ↑ ↓ across
+  pages and zoomed in, Enter, Back/Esc closing it, typing letters like
+  `g` in the field not opening Go to page); Replace in code, text and
+  Markdown (from View: it switches to Edit), Replace then the next,
+  All, Undo of each, Save; read-only (>1 MB) files have no Replace.
 
 ### 2026-11-21 (201): Selecting text in the PDF viewer (PR #95; passed)
 

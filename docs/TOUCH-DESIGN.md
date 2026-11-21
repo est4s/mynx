@@ -239,7 +239,7 @@ else (no kind, a binary file) opens with Android, else Share, as today.
 ### The text viewer (`TextViewActivity`: text, code, Markdown)
 
 - Top bar: ←, the file name (the folder under it, dim), **Edit**, ⋮
-  (Wrap lines, Find, Share, Open with…, Copy path). Markdown adds a
+  (Wrap lines, Find, Replace, Share, Open with…, Copy path). Markdown adds a
   **View / Edit** switch in place of Edit.
 - **View:** read-only, selectable. Code and text in the terminal's
   font with line numbers, horizontally scrolled unless Wrap is on
@@ -262,7 +262,13 @@ else (no kind, a binary file) opens with Android, else Share, as today.
   newline are kept as they were.
 - **Find** (⋮ or Ctrl+F): a bar with the matches' count, ↑ ↓, case
   ignored.
-- Keyboard: Ctrl+S saves, Ctrl+F finds, Esc leaves Edit (asks if
+- **Replace** (⋮, Ctrl+H, or ⇄ in the Find bar; not for read-only
+  files): a second row under Find, "Replace with", **Replace** (the
+  current match, then on to the next; Enter does it too) and **All**
+  ("Replaced 5"). It switches to Edit first, since it changes the
+  text: Save writes it, and each Replace or All is one Undo step.
+  Leaving Edit hides the row.
+- Keyboard: Ctrl+S saves, Ctrl+F finds, Ctrl+H replaces, Esc leaves Edit (asks if
   changed), as the keyboard-first rule wants.
 
 ### The media player (`MediaViewActivity`: audio and video)
@@ -308,7 +314,9 @@ else (no kind, a binary file) opens with Android, else Share, as today.
   read-only and why); `TextDoc` (text, saved text, dirty, the file's
   time when read); `saveText(doc, text): ByteArray` (line endings
   back as found); `saveJob(temp, path): FileJob`;
-  `findMatches(text, query): List<IntRange>`; `lineStarts(text)` for
+  `findMatches(text, query): List<IntRange>`; `replaceMatch()` and
+  `replaceAll()` (the new text, the edit, the next match);
+  `lineStarts(text)` for
   the numbers.
 - `Syntax.kt`: `highlight(text: String, language: String):
   List<SyntaxSpan>` (`start`, `end`, `kind`: KEYWORD, TYPE, STRING,
@@ -437,8 +445,16 @@ on the phone test.
   Copy (the clipboard, "Copied"), Select all (the page's
   text), ✕. A tap elsewhere, Back or Esc clears it; Ctrl+C copies.
   Zoom and scroll keep working, the selection following. Older
-  Androids show the pages only. No text search yet (`searchText()`
-  could do it on 15+).
+  Androids show the pages only.
+- **Find (Android 15+):** ⋮ Find or Ctrl+F: a bar at the bottom
+  (as the text viewer's) with the count, ↑ ↓ and ✕. It searches
+  `searchText()` a page at a time on the renderer's worker, so pages
+  keep rendering and the count grows ("2/7…" until every page is
+  done); typing searches again once it stops for 300 ms, Enter goes to
+  the next match. The current match is the first at or after the page
+  in view (else the first): pink, the others tinted in the accent;
+  ↑ ↓ scroll it into sight (a third down, centred across when zoomed).
+  Back or Esc closes it. Older Androids have no Find.
 - **Chat:** a PDF Claude writes or makes (named in a command and
   changed in the turn, as pictures) gets a card with View and Share;
   chips open in the viewer.

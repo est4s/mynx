@@ -203,8 +203,9 @@ rendered, with the files beside it (CSS, scripts, pictures) and the
 web reachable, but no phone access (that's for web apps in
 `~/apps`, which stay apps); its ⋮ has View source. Files open in them from touch
 view's Files, from chat and from the terminal; text, code and
-Markdown open to read, with an Edit button (Save, Undo, Find: Ctrl+S,
-Ctrl+F). Files over 1 MB open read-only. Any other file opens with
+Markdown open to read, with an Edit button (Save, Undo, Find, Replace:
+Ctrl+S, Ctrl+F, Ctrl+H). On Android 15 and later, PDFs' text can be
+selected and searched (⋮ Find, Ctrl+F). Files over 1 MB open read-only. Any other file opens with
 another Android app.
 
 - `mynx open FILE`: opens FILE (a relative one is against the current
@@ -240,7 +241,8 @@ another Android app.
   mov.
 - `open-pdf`: `mynx` (default) or `android`: `.pdf`. mynx's viewer
   shows the pages; on Android 15 and later a long press selects text
-  (drag the handles, then Copy). It can't search, nor open a PDF
-  with a password (Open with another app can).
+  (drag the handles, then Copy) and ⋮ Find (Ctrl+F) searches
+  the pages. It can't open a PDF with a password (Open with another
+  app can).
 - `open-html`: `mynx` (default) or `android`: `.html`, `.htm`,
   shown rendered (View source shows the code).
