@@ -916,6 +916,24 @@ class ChatControllerTest {
     }
 
     @Test
+    fun `a file a command writes gets a card, below the turn's last words once it ends`() {
+        ready()
+        chat.send("write a guide")
+        drain()
+        init()
+        file("/root/scripts/README.md", "# Guide").setLastModified(clock + 5_000)
+        tool("t1", "Bash", """{"command":"cd ~/scripts && cat > README.md <<'EOF'\n# Guide\nEOF"}""")
+        work()
+        assertEquals(listOf(ArtifactKind.MARKDOWN), cards().map { it.artifact.kind })
+        say("Wrote it.")
+        assertEquals("Agent", shown().last(), "during the turn, words come after the card")
+        done()
+        work()
+        assertEquals("Artifact", shown().last(), "at its end, the card is last")
+        assertEquals(1, cards().size)
+    }
+
+    @Test
     fun `a command's path counts when it changed during the turn`() {
         ready()
         chat.send("build it")

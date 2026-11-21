@@ -69,7 +69,7 @@ class ChatArtifactsTest {
         assertEquals(
             listOf(
                 ArtifactHint("/root/apps/demo", true),
-                ArtifactHint("/root/apps/demo/index.html", true),
+                ArtifactHint("/root/apps/demo/index.html", true, written = true),
                 ArtifactHint("/root/terminal-apps/tool.py", true),
                 ArtifactHint("/root/work/build/out.apk", true),
             ),
@@ -81,6 +81,42 @@ class ChatArtifactsTest {
                         "apksigner sign --out=build/out.apk build/aligned.apk.idsig /tmp/x",
                 ),
             ),
+        )
+    }
+
+    @Test
+    fun `files a command writes are written hints, wherever they are`() {
+        assertEquals(
+            listOf(
+                ArtifactHint("/root/scripts/phone-status.sh", true, written = true),
+                ArtifactHint("/root/scripts/README.md", true, written = true),
+                ArtifactHint("/root/log.txt", true, written = true),
+                ArtifactHint("/root/work/out.csv", true, written = true),
+            ),
+            hints(
+                call("Bash", "mkdir -p ~/scripts\ncat > ~/scripts/phone-status.sh <<'EOF'\necho hi > body.txt\nEOF"),
+                call("Bash", "cd ~/scripts && cat >README.md <<-EOF\n# a > b\n\tEOF\necho done"),
+                call("Bash", "date | tee -a ~/log.txt; make 2>&1 >/dev/null; ls > /tmp/list 2>/tmp/err"),
+                call("Bash", "python3 conv.py >> 'out.csv'; echo \$x > \$HOME/y"),
+            ),
+        )
+    }
+
+    @Test
+    fun `a file a command wrote in this turn is a Markdown card or a changed file`() {
+        val md = write("/root/scripts/README.md", "# Hi")
+        val sh = write("/root/scripts/run.sh", "echo hi")
+        val old = write("/root/scripts/old.sh", "echo old")
+        listOf(md, sh).forEach { it.setLastModified(5_000_000L) }
+        old.setLastModified(1_000_000L)
+        val hints = listOf("/root/scripts/README.md", "/root/scripts/run.sh", "/root/scripts/old.sh")
+            .map { ArtifactHint(it, true, written = true) }
+        assertEquals(
+            listOf(
+                ChatArtifact(ArtifactKind.MARKDOWN, "/root/scripts/README.md", "README.md", "/root/scripts/README.md"),
+                changed("/root/scripts/run.sh"),
+            ),
+            finder.find(hints, 2_000_000L),
         )
     }
 
@@ -181,20 +217,33 @@ class ChatArtifactsTest {
     private val apk = ChatArtifact(ArtifactKind.APK, "/root/a.apk", "a.apk", "/root/a.apk")
 
     @Test
+    fun `at the turn's end its cards move below its last words`() {
+        val before = listOf<ChatItem>(
+            ChatItem.User("u1", "make it"), ChatItem.Artifact("card-1", web), ChatItem.Agent("a1", "done"),
+        )
+        assertEquals(
+            listOf(ChatItem.User("u1", "make it"), ChatItem.Agent("a1", "done"), ChatItem.Artifact("card-1", web), ChatItem.Artifact("card-2", apk)),
+            withArtifactCards(before, listOf(web, apk), toEnd = true) { "card-2" },
+        )
+        val earlier = listOf<ChatItem>(ChatItem.Artifact("old", apk), ChatItem.User("u2", "again"), ChatItem.Agent("a2", "ok"))
+        assertSame(earlier, withArtifactCards(earlier, emptyList(), toEnd = true) { "x" }, "no cards in the turn: the same list")
+    }
+
+    @Test
     fun `cards join the turn's end, and change in place within the turn`() {
         var n = 0
         val newId = { "card-${++n}" }
         val before = listOf<ChatItem>(ChatItem.User("u1", "make it"), ChatItem.Agent("a1", "ok"))
-        val once = withArtifactCards(before, listOf(web), newId)
+        val once = withArtifactCards(before, listOf(web), newId = newId)
         assertEquals(before + ChatItem.Artifact("card-1", web), once)
-        assertSame(once, withArtifactCards(once, listOf(web), newId), "nothing new: the same list")
+        assertSame(once, withArtifactCards(once, listOf(web), newId = newId), "nothing new: the same list")
         val renamed = web.copy(label = "Demo 2")
-        val twice = withArtifactCards(once + ChatItem.Agent("a2", "more"), listOf(renamed, apk), newId)
+        val twice = withArtifactCards(once + ChatItem.Agent("a2", "more"), listOf(renamed, apk), newId = newId)
         assertEquals(
             before + ChatItem.Artifact("card-1", renamed) + ChatItem.Agent("a2", "more") + ChatItem.Artifact("card-2", apk),
             twice,
         )
-        val next = withArtifactCards(twice + ChatItem.User("u2", "again"), listOf(web), newId)
+        val next = withArtifactCards(twice + ChatItem.User("u2", "again"), listOf(web), newId = newId)
         assertEquals(ChatItem.Artifact("card-3", web), next.last(), "a new turn, a new card")
     }
 

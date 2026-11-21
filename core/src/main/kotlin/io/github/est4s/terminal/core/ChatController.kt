@@ -748,7 +748,7 @@ class ChatController(
                 val sameTurn = conversation.items.lastOrNull { it is ChatItem.User }?.id == turn
                 if (chat == conversations && sameTurn && check > artifactsApplied) {
                     artifactsApplied = check
-                    val items = withArtifactCards(conversation.items, found) { "artifact-${++cards}" }
+                    val items = withArtifactCards(conversation.items, found, toEnd = completed == null) { "artifact-${++cards}" }
                     if (items !== conversation.items) {
                         conversation = conversation.copy(items = items)
                         changed()
