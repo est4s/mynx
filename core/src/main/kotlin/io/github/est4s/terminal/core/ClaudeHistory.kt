@@ -165,6 +165,48 @@ fun readClaudeHistory(file: File, max: Int = CHAT_HISTORY_MAX): List<ChatItem> =
 fun readClaudeTranscript(file: File, max: Int = CHAT_HISTORY_MAX): ClaudeHistory =
     file.useLines { readClaudeTranscript(it, max) }
 
+/**
+ * The Write and Edit results in a transcript for the tool calls [toolIds],
+ * in transcript order, for a turn's diff ([turnDiff]): Claude Code puts
+ * each call's `toolUseResult` (`filePath`, `originalFile`,
+ * `structuredPatch`, and a Write's `content`) on the line with its
+ * `tool_result`. Failed calls, results of other kinds (a NotebookEdit's,
+ * with no patch) and lines that aren't whole JSON are skipped.
+ */
+fun readFileEdits(lines: Sequence<String>, toolIds: Set<String>): List<FileEdit> {
+    if (toolIds.isEmpty()) return emptyList()
+    val edits = ArrayList<FileEdit>()
+    for (text in lines) {
+        // Most lines are other kinds: skip them unparsed.
+        if (!text.contains("\"toolUseResult\"") || toolIds.none { text.contains(it) }) continue
+        val line = parseLine(text) ?: continue
+        if (line["type"] != "user") continue
+        val result = line["toolUseResult"] as? Map<*, *> ?: continue
+        val content = (line["message"] as? Map<*, *>)?.get("content") as? List<*> ?: continue
+        val block = content.filterIsInstance<Map<*, *>>().firstOrNull { it["type"] == "tool_result" } ?: continue
+        val id = block["tool_use_id"] as? String ?: continue
+        if (id !in toolIds || block["is_error"] == true) continue
+        fileEdit(id, result)?.let { edits += it }
+    }
+    return edits
+}
+
+/** [readFileEdits] of a transcript file, none when there's no file; call it off the main thread. */
+fun readFileEdits(file: File, toolIds: Set<String>): List<FileEdit> =
+    if (!file.isFile) emptyList() else file.useLines { readFileEdits(it, toolIds) }
+
+private fun fileEdit(id: String, result: Map<*, *>): FileEdit? {
+    val path = result["filePath"] as? String ?: return null
+    val patch = result["structuredPatch"] as? List<*> ?: return null
+    val hunks = patch.map { item ->
+        val hunk = item as? Map<*, *> ?: return null
+        fun number(key: String): Int? = (hunk[key] as? Long)?.toInt()
+        val lines = (hunk["lines"] as? List<*>)?.map { it as? String ?: return null } ?: return null
+        PatchHunk(number("oldStart") ?: return null, number("oldLines") ?: return null, number("newStart") ?: return null, number("newLines") ?: return null, lines)
+    }
+    return FileEdit(id, path, result["originalFile"] as? String, result["content"] as? String, hunks)
+}
+
 internal fun oneLine(text: String): String =
     text.take(CLAUDE_TITLE_MAX * 4).trim().replace(Regex("\\s+"), " ").take(CLAUDE_TITLE_MAX)
 
