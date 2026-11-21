@@ -24,7 +24,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   and video (#94), and a turn's changes in chat, PDF (with text
   selection) and HTML files (#95), with Find in PDFs and Replace in the text
   viewers (#96, into #95's branch), and the chat history listing
-  every folder's chats (#98). Every
+  every folder's chats (#98), and asking for all of the phone's
+  storage (#99). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -47,7 +48,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 2. Touch mode: what's left
 
-- **Test entry 205** (asking for all of the phone's storage) on the phone.
 - Other agents in Chat (Codex's `app-server`, Gemini's ACP), which
   need accounts to test; the
   Model page lists fallback models until a session reports its own.
@@ -84,7 +84,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-21 (205): Asking for all of the phone's storage (PR pending; to test)
+### 2026-11-21 (205): Asking for all of the phone's storage (PR #99; passed)
 
 The maintainer asked for the roadmap's last Files item: asking for
 Android's storage permission, so the phone's storage shows in full.
@@ -108,7 +108,7 @@ other apps' files (DCIM/Camera listed empty).
   README, ARCHITECTURE.md, TOUCH-DESIGN.md, the roadmap.
 - Local `test_serial_port` timing tests fail here on `main` too
   (`BusyTest`, `ControlTest`, flaky under load); not this change.
-- To test on the phone: Files → Phone (or Download): the bar shows;
+- Passed in mynx dev (build 44943733920): Files → Phone (or Download): the bar shows;
   Allow opens Android's page for mynx dev; turn it on, Back: the bar
   goes and DCIM/Camera lists the photos; `mynx storage` says all
   files; `ls /storage/emulated/0/DCIM/Camera` in a tab (a tab opened
