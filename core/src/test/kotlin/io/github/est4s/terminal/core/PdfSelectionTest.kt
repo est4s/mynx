@@ -123,6 +123,14 @@ class PdfSelectionTest {
     }
 
     @Test
+    fun `reading order is by x on one line, else by y`() {
+        assertEquals(true, pdfBefore(PdfPoint(10f, 103f), PdfPoint(50f, 100f), 5f), "same line, left")
+        assertEquals(false, pdfBefore(PdfPoint(60f, 97f), PdfPoint(50f, 100f), 5f), "same line, right")
+        assertEquals(true, pdfBefore(PdfPoint(500f, 50f), PdfPoint(50f, 100f), 5f), "a line above")
+        assertEquals(false, pdfBefore(PdfPoint(10f, 150f), PdfPoint(50f, 100f), 5f), "a line below")
+    }
+
+    @Test
     fun `the selection's box`() {
         near(PdfRect(50f, 10f, 300f, 32f), pdfBox(listOf(PdfRect(100f, 10f, 300f, 20f), PdfRect(50f, 22f, 200f, 32f)))!!, "box")
         assertNull(pdfBox(emptyList()))

@@ -1,5 +1,6 @@
 package io.github.est4s.terminal.core
 
+import kotlin.math.abs
 import kotlin.math.hypot
 
 /** A page's width in PDF points when the document didn't say: US Letter. */
@@ -102,6 +103,10 @@ fun pdfGrab(x: Float, y: Float, start: PdfPoint, stop: PdfPoint, slop: Float): P
         else -> null
     }
 }
+
+/** Whether [a] comes before [b] in reading order: by x when within [line] of each other's height, else by y. */
+fun pdfBefore(a: PdfPoint, b: PdfPoint, line: Float): Boolean =
+    if (abs(a.y - b.y) <= line) a.x < b.x else a.y < b.y
 
 /** The box around all [rects]. */
 fun pdfBox(rects: List<PdfRect>): PdfRect? {
