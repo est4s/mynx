@@ -51,3 +51,23 @@ private fun fileHead(file: File): ByteArray = file.inputStream().use { input ->
     }
     bytes.copyOf(n)
 }
+
+private val LINE_NUMBER = Regex(""":\d+(:\d+)?$""")
+private val NOT_IN_PATHS = Regex("""[\s$*?\[\]{}<>|;&'"`]""")
+
+/**
+ * The Debian path [text] (code in a chat reply, `~/scripts/run.sh`) names,
+ * against the chat's folder [cwd], or null when it doesn't look like a
+ * file: it needs a slash or a name with a kind ([fileKindOf]), and a
+ * letter in its last part; a `:line` or `:line:column` goes. Whether the
+ * file is there is the caller's to check.
+ */
+fun chatFilePath(text: String, cwd: String, home: String): String? {
+    val raw = text.trim().replace(LINE_NUMBER, "")
+    if (raw.isEmpty() || raw.startsWith("-") || raw.contains("://") || NOT_IN_PATHS.containsMatchIn(raw)) return null
+    if (raw.endsWith("/")) return null
+    val name = raw.substringAfterLast('/')
+    if (name.none { it.isLetter() } || name == "~") return null
+    if ('/' !in raw && fileKindOf(name) == null) return null
+    return debianPath(raw, cwd, home)
+}

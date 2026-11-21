@@ -39,8 +39,9 @@ mynx's viewers; Edit, Save (and a file changed meanwhile asks);
 undo/redo, Find, Wrap; Open with… → Another app; the Default apps
 settings switch a kind to Android; `mynx open FILE` in a tab asks,
 `--with android` and `--edit` work, `--json` doesn't ask; chat: a
-script and a Markdown file Claude writes give a Changed files card
-and a Markdown card (View); a sent .txt chip opens; audio keeps
+script and a Markdown file Claude writes (also through `cat >`) give
+a Changed files card and a Markdown card (View), below its last words
+once the turn ends; paths in its reply are underlined and open; a sent .txt chip opens; audio keeps
 playing with the screen off, the notification's controls and the
 lock screen work, headphones out pauses; a video turns with the
 phone and double-tap seeks. Fix what fails, then merge (docs are
@@ -122,6 +123,14 @@ tty or with `--json`, so agents don't wait). Design:
   card per turn; Markdown cards are View, Copy, Share. Card buttons
   (View, Play) always use mynx's viewer; chips, Files and the changed
   files' rows follow the setting.
+- The maintainer's first test (build 44891241402): everything passed
+  but chat's cards, which a script and a Markdown file Claude wrote with
+  `cat > FILE <<'EOF'` never got (only Write and Edit counted). Fixed:
+  a command's `>`, `>>` and `tee` targets count when they changed in
+  the turn (`commandWrites()`); cards move below the turn's last words
+  when it ends (`withArtifactCards(toEnd)`); and code in replies that
+  names a file that's there is an underlined link (`chatFilePath()`,
+  `MarkdownViews`' `fileAt`), the maintainer's choices.
 - Limits: highlighting stops past 256 KB, editing past 1 MB; web
   pictures in Markdown aren't fetched; the Open with… dialog has no
   screenshot (dialogs aren't captured); TextHistory's undo has no

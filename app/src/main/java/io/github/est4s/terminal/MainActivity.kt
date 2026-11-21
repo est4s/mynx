@@ -813,6 +813,7 @@ class MainActivity : Activity(), FrontActivity {
                 val running = service
                 toastError(if (running == null) "the app isn't ready yet" else running.openDebianFileWith(path, with))
             },
+            hostFile = { path -> hostPath(path, installer.rootfs.path)?.let(::File) },
         ).also {
             it.colors = Pixel.COLORS
             it.visibility = View.GONE

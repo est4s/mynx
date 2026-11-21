@@ -213,7 +213,15 @@ else (no kind, a binary file) opens with Android, else Share, as today.
   cards like pictures' (**Play**, Share); code and text files written
   or edited in a turn (and not already some card) get one
   **Changed files** card per turn: each file a row (name, folder)
-  that opens it in the code viewer.
+  that opens it in the code viewer. A file counts as written by Write
+  or Edit, or by a command's `>`, `>>` or `tee` (Claude often writes
+  with `cat > FILE <<'EOF'`) when it changed in the turn. When the turn
+  ends, its cards move below its last words (maintainer's test,
+  2026-11-21: they sat above them, out of sight).
+- **Paths in replies:** code in Claude's text that names a file that's
+  there (`~/scripts/run.sh`, `README.md`, `a.py:12`) is underlined, a
+  link that opens the file as its setting says (maintainer's decision,
+  2026-11-21: underlined, so it's clear it's a link).
 - **Terminal:** `mynx open URL | FILE [--with mynx|android] [--edit]`.
   A relative FILE is against the current folder. In a terminal, with
   no `--with`, it asks:

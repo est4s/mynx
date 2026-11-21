@@ -127,7 +127,9 @@ fun terminalColorScheme(context: Context): ColorScheme = TerminalScheme.get(cont
  * passes [terminalColorScheme]) checked against the block's own fill.
  * [loadImage] gets a picture's URL (as written: relative to the file) and
  * calls back on the main thread with it, or null; without it pictures
- * show as their alt text.
+ * show as their alt text. [fileAt] tells whether code in the text (`~/a.sh`)
+ * names a file that's there (its Debian path, else null): such code is
+ * underlined, a link that [openFile] opens.
  */
 class MarkdownViews(
     private val context: Context,
@@ -136,6 +138,8 @@ class MarkdownViews(
     private val openLink: (String) -> Unit,
     scheme: ColorScheme = terminalColorScheme(context),
     private val loadImage: ((String, (Bitmap?) -> Unit) -> Unit)? = null,
+    private val fileAt: ((String) -> String?)? = null,
+    private val openFile: ((String) -> Unit)? = null,
 ) {
     /** A row's views; [bind] shows a row of the same [type] in them again. */
     class Cell(val type: Class<*>, val view: View, val bind: (MdRow) -> Unit)
@@ -218,7 +222,10 @@ class MarkdownViews(
                 MdStyleKind.ITALIC -> listOf(StyleSpan(Typeface.ITALIC))
                 MdStyleKind.STRIKE -> listOf(StrikethroughSpan())
                 // All of it is in the mono font already: code stands out in cyan, as in the mock-up.
-                MdStyleKind.CODE -> listOf(ForegroundColorSpan(colors.accent))
+                MdStyleKind.CODE -> {
+                    val path = openFile?.let { fileAt?.invoke(styled.text.substring(style.start, style.end)) }
+                    if (path != null) listOf(MdLink(path, colors.accent, openFile!!)) else listOf(ForegroundColorSpan(colors.accent))
+                }
                 // A picture inside text is its alt text, a link to the picture.
                 MdStyleKind.LINK, MdStyleKind.IMAGE -> listOf(MdLink(style.url.orEmpty(), colors.accent, openLink))
             }

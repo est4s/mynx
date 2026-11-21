@@ -55,4 +55,19 @@ class ViewersTest {
         assertNull(fileKindOfFile("/root/blob", "/root/blob", binary))
         assertNull(fileKindOfFile("/root/gone", null, File(dir, "gone")))
     }
+
+    @Test
+    fun `code in chat that names a file is its path`() {
+        fun path(text: String) = chatFilePath(text, "/root/work", "/root")
+        assertEquals("/root/scripts/README.md", path("~/scripts/README.md"))
+        assertEquals("/etc/hosts", path("/etc/hosts"))
+        assertEquals("/root/work/phone-status.sh", path("phone-status.sh"), "a name with a kind")
+        assertEquals("/root/work/scripts/run", path("scripts/run"), "a slash makes it a path")
+        assertEquals("/root/a.txt", path("../a.txt"))
+        assertEquals("/root/work/ChatView.kt", path("ChatView.kt:820"), "a line number goes")
+        assertEquals("/root/work/src/a.py", path("src/a.py:12:4"))
+        for (text in listOf("", "--md", "mynx open", "mynx", "https://x.y/a.md", "~/apps/*", "\$HOME/x", "a b.md", "~", "/", "folder/", "..", "1/2")) {
+            assertNull(path(text), text)
+        }
+    }
 }

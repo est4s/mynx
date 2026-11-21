@@ -71,6 +71,7 @@ import io.github.est4s.terminal.core.chatArtifactLine
 import io.github.est4s.terminal.core.chatArtifactNote
 import io.github.est4s.terminal.core.chatArtifactRunCommand
 import io.github.est4s.terminal.core.chatArtifactShortcutCommand
+import io.github.est4s.terminal.core.chatFilePath
 import io.github.est4s.terminal.core.chatImageFile
 import io.github.est4s.terminal.core.chatFit
 import io.github.est4s.terminal.core.chatOutcomeText
@@ -84,6 +85,7 @@ import io.github.est4s.terminal.core.mdRows
 import io.github.est4s.terminal.core.runThenShell
 import io.github.est4s.terminal.core.splitAttachments
 import io.github.est4s.terminal.core.usageRing
+import java.io.File
 import kotlin.math.abs
 
 private const val CHAT_TITLE = "claude code"
@@ -174,7 +176,9 @@ private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(con
  * or the card's View. [openFile] opens any other file (a Debian path) in
  * mynx's viewer or another app, as [OpenWith] says (null: the kind's
  * setting): another file's chip, a Markdown card's View, an audio or
- * video card's Play, a changed files card's rows. [clock] is the time
+ * video card's Play, a changed files card's rows, and file paths in
+ * replies (underlined when [hostFile], a Debian path's file on the phone,
+ * says they're there). [clock] is the time
  * Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -192,6 +196,7 @@ class ChatView(
     private val thumbnails: ChatThumbnails? = null,
     private val viewImage: ((String) -> Unit)? = null,
     private val openFile: ((path: String, with: OpenWith?) -> Unit)? = null,
+    private val hostFile: ((String) -> File?)? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
@@ -817,7 +822,10 @@ class ChatView(
     private fun agentCell(colors: StripColors): Cell {
         val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val parser = IncrementalMarkdown()
-        val markdown = MarkdownViews(context, colors, { color, sp, links -> selectableText(color, sp, links) }, ::openLink)
+        val markdown = MarkdownViews(
+            context, colors, { color, sp, links -> selectableText(color, sp, links) }, ::openLink,
+            fileAt = ::codeFile, openFile = { path -> openFile?.invoke(path, null) },
+        )
         val drawnCells = ArrayList<MarkdownViews.Cell>()
         var drawnRows: List<MdRow> = emptyList()
         // The reply as Claude wrote it (its Markdown), under the rows.
@@ -861,6 +869,13 @@ class ChatView(
             }
             drawnRows = next
         }
+    }
+
+    // A file that code in a reply names, if it's there: a stat on the main thread, only for code that looks like a path.
+    private fun codeFile(text: String): String? {
+        val chat = controller() ?: return null
+        val host = hostFile ?: return null
+        return chatFilePath(text, chat.cwd, chat.home)?.takeIf { host(it)?.isFile == true }
     }
 
     private fun openLink(url: String) {

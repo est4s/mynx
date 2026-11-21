@@ -169,7 +169,7 @@ private fun inAppFolder(path: String, home: String) =
     path.startsWith("$home/$APPS/") || path.startsWith("$home/$TERMINAL_APPS/")
 
 // [raw] as an absolute Debian path with `.` and `..` worked out (links left alone).
-private fun debianPath(raw: String, cwd: String, home: String): String? {
+internal fun debianPath(raw: String, cwd: String, home: String): String? {
     if (raw.contains('\u0000') || raw.contains('\n')) return null
     val full = when {
         raw == "~" -> home
