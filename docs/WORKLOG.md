@@ -18,7 +18,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - **Done, confirmed on the phone and merged since:** web apps parts 1
   and 2 (PR #59, #64), the services count in the menu (#58), touch
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
-  mode's chat home with its drawer and the pixel style (#83), 
+  mode's chat home with its drawer and the pixel style (#83),
   Chat's pictures (thumbnails #91, full screen and image cards #92),
   and touch mode's Files (#93). Every
   roadmap step before them (Debian through proot to development boards
