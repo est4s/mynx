@@ -37,10 +37,10 @@ class ChatArtifactsTest {
     fun `written files are hints, relative to the chat's folder or home`() {
         assertEquals(
             listOf(
-                ArtifactHint("/root/apps/demo/index.html", false),
-                ArtifactHint("/root/work/b.apk", false),
-                ArtifactHint("/root/apps/x/main.js", false),
-                ArtifactHint("/root/notes.ipynb", false),
+                ArtifactHint("/root/apps/demo/index.html", false, toolIds = listOf("t-~/apps/demo/index.html")),
+                ArtifactHint("/root/work/b.apk", false, toolIds = listOf("t-b.apk")),
+                ArtifactHint("/root/apps/x/main.js", false, toolIds = listOf("t-../apps/./x//main.js")),
+                ArtifactHint("/root/notes.ipynb", false, toolIds = listOf("t-/root/notes.ipynb")),
             ),
             hints(
                 call("Write", "~/apps/demo/index.html"),
@@ -419,8 +419,49 @@ class ChatArtifactsTest {
             null,
         )
         assertEquals(listOf(ArtifactKind.MARKDOWN, ArtifactKind.IMAGE, ArtifactKind.CHANGED_FILES), found.map { it.kind })
-        assertEquals(changed("/root/work/main.py", "/root/work/util.py"), found.last())
+        assertEquals(
+            changed("/root/work/main.py", "/root/work/util.py").copy(
+                fileTools = mapOf("/root/work/main.py" to listOf("t-main.py", "again"), "/root/work/util.py" to listOf("t-/root/work/util.py")),
+            ),
+            found.last(),
+        )
         assertTrue(ArtifactHint("/root/work/main.py", false).direct("/root"), "written files are looked for at once")
+    }
+
+    @Test
+    fun `a file written again in the turn is one hint with each call's ID`() {
+        assertEquals(
+            listOf(ArtifactHint("/root/work/a.py", false, toolIds = listOf("w1", "e1", "e2"))),
+            hints(call("Write", "a.py", id = "w1"), call("Edit", "/root/work/a.py", id = "e1"), call("Edit", "./a.py", id = "e2")),
+        )
+        assertEquals(
+            listOf(ArtifactHint("/root/work/out.txt", true, written = true)),
+            hints(call("Bash", "echo hi > out.txt")),
+            "a command's file has no edits to diff",
+        )
+    }
+
+    @Test
+    fun `a changed file a command wrote too has no tool calls to diff`() {
+        write("/root/work/a.py", "x")
+        write("/root/work/b.py", "y")
+        val found = finder.find(
+            hints(call("Edit", "a.py", id = "e1"), call("Bash", "echo more >> a.py"), call("Bash", "echo y > b.py")),
+            2_000L,
+        )
+        assertEquals(changed("/root/work/a.py", "/root/work/b.py"), found.single())
+    }
+
+    @Test
+    fun `a changed file's row carries the tool calls that wrote it`() {
+        val card = changed("/root/work/a.py", "/root/b.txt").copy(fileTools = mapOf("/root/work/a.py" to listOf("w1", "e1")))
+        assertEquals(
+            listOf(
+                ChangedFileRow("/root/work/a.py", "a.py", "~/work", toolIds = listOf("w1", "e1")),
+                ChangedFileRow("/root/b.txt", "b.txt", "~"),
+            ),
+            changedFileRows(card, "/root"),
+        )
     }
 
     @Test
