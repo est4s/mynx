@@ -74,6 +74,16 @@ fun speedLabel(speed: Float): String {
     return "$text×"
 }
 
+/** A [videoW]×[videoH] picture's size fit inside [boxW]×[boxH], its shape kept; the box while the size is unknown (0). */
+fun videoFit(boxW: Int, boxH: Int, videoW: Int, videoH: Int): Pair<Int, Int> {
+    if (videoW <= 0 || videoH <= 0) return boxW to boxH
+    return if (boxW.toLong() * videoH > boxH.toLong() * videoW) {
+        (boxH.toLong() * videoW / videoH).toInt() to boxH
+    } else {
+        boxW to (boxW.toLong() * videoH / videoW).toInt()
+    }
+}
+
 /** The folder shown under the name: [debianPath]'s, home as `~`. */
 fun mediaFolder(debianPath: String): String {
     val folder = debianPath.substringBeforeLast('/', "").ifEmpty { "/" }

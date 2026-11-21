@@ -104,4 +104,12 @@ class MediaTest {
         assertEquals("/sdcard/Music", mediaFolder("/sdcard/Music/a.mp3"))
         assertEquals("/", mediaFolder("/a.mp3"))
     }
+
+    @Test
+    fun `a video fits the screen, its shape kept`() {
+        assertEquals(1080 to 607, videoFit(1080, 2400, 1920, 1080))
+        assertEquals(1350 to 1080, videoFit(2400, 1080, 1280, 1024))
+        assertEquals(1080 to 1920, videoFit(1080, 2400, 720, 1280))
+        assertEquals(1080 to 2400, videoFit(1080, 2400, 0, 0))
+    }
 }
