@@ -349,3 +349,9 @@ setup() {
         ! grep -qF -- "$text" "$GUIDE" || { echo "still in the guide: $text"; false; }
     done
 }
+
+@test "the guide says touch view's Files is a file manager to tap, nnn still in Terminal apps" {
+    grep -q "Touch view's Files is a file manager" "$CORE"
+    grep -q "Chat here and Terminal here" "$CORE"
+    grep -q "nnn is in Terminal" "$CORE"
+}

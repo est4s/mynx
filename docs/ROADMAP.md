@@ -16,10 +16,11 @@ Chat for Claude Code (with artifact cards and the hand-off to a tab).
 ## Planned
 
 ### File manager
-- Open other files in an Android app, share, "open terminal here" in a
-  new tab.
-- Tap support, off by default behind a setting (the app is
-  keyboard-first).
+- Touch view has its own (Files: copy, move, rename, delete, open,
+  share, chat or terminal here). Still to do: thumbnails; a chat
+  history that lists other folders' chats; asking for Android's
+  storage permission, so the phone's storage shows in full.
+- nnn in the terminal: open other files in an Android app, share.
 
 ### Agent widget
 A home screen widget that starts a chat with an AI agent, even when

@@ -233,6 +233,10 @@ One `key = value` per line; `mynx settings` describes each.
   in a tab), Copy (a Markdown file's text), View (a picture, shown in
   the card too), Share. Tapping a picture, a card's or one attached to
   a message, shows it full screen (pinch or double-tap to zoom).
+  Touch view's Files is a file manager to tap (nnn is in Terminal
+  apps): long-press to select, then Copy, Cut, Rename, Delete
+  (permanent) or Share; Paste here; Chat here and Terminal here start
+  Claude Code's chat or a shell in the folder shown.
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
   the permission mode new chats of touch view's Chat start in. `auto`
   lets Claude Code decide what's safe to run, asking less; `default`
