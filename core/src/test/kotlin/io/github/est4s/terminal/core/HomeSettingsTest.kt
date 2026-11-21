@@ -140,8 +140,8 @@ class HomeSettingsTest {
     fun `default apps say where each kind of file opens, mynx or another app`() {
         settings("open-code = android\n")
         val apps = items("settings:apps")
-        assertEquals(listOf("Pictures", "Markdown", "Code", "Text", "Audio", "Video"), apps.map { it.label })
-        assertEquals(listOf("mynx", "mynx", "Another app", "mynx", "mynx", "mynx"), apps.map { it.detail })
+        assertEquals(listOf("Pictures", "Markdown", "Code", "Text", "Audio", "Video", "PDF", "HTML pages"), apps.map { it.label })
+        assertEquals(listOf("mynx", "mynx", "Another app", "mynx", "mynx", "mynx", "mynx", "mynx"), apps.map { it.detail })
         assertEquals(HomeAction.Menu("setting:open-code"), apps[2].action)
         val choices = items("setting:open-code").drop(1)
         assertEquals(

@@ -197,7 +197,11 @@ Commands for the phone itself, and the sound device:
 mynx has its own viewers: text (a notepad), source code (highlighted,
 with line numbers), Markdown (drawn as in chat), pictures, and a
 player for audio and video (audio keeps playing with the screen off,
-with controls in the notification). Files open in them from touch
+with controls in the notification), a PDF viewer (pages, pinch to
+zoom, Go to page) and a page viewer for HTML files: a page is shown
+rendered, with the files beside it (CSS, scripts, pictures) and the
+web reachable, but no phone access (that's for web apps in
+`~/apps`, which stay apps); its ⋮ has View source. Files open in them from touch
 view's Files, from chat and from the terminal; text, code and
 Markdown open to read, with an Edit button (Save, Undo, Find: Ctrl+S,
 Ctrl+F). Files over 1 MB open read-only. Any other file opens with
@@ -216,7 +220,8 @@ another Android app.
   setting decides, so nothing waits. `--edit` opens text, code and
   Markdown ready to edit. The app must be on screen. `--json` gives
   `{"ok": true, "with": "mynx", "kind": "code"}` (kinds: `picture`,
-  `markdown`, `code`, `text`, `audio`, `video`, or `null`).
+  `markdown`, `code`, `text`, `audio`, `video`, `pdf`, `html`, or
+  `null`).
   `xdg-open FILE` does the same.
 - Each kind's setting: `mynx` (default) or `android`, e.g. `mynx set
   open-video android`; touch view's Settings → Default apps too.
@@ -225,7 +230,7 @@ another Android app.
 - `open-markdown`: `mynx` (default) or `android`: `.md`, `.markdown`.
 - `open-code`: `mynx` (default) or `android`: source code (`.py`,
   `.kt`, `.sh`, `.c`, `.rs`, `.go`, `.js`, `.ts`, `.json`, `.yaml`,
-  `.toml`, `.conf`, `.html`, `.css`, `.sql`, `.diff`, …, and
+  `.toml`, `.conf`, `.css`, `.sql`, `.diff`, …, and
   `Makefile`, `Dockerfile`, `.bashrc`).
 - `open-text`: `mynx` (default) or `android`: `.txt`, `.log`, `.csv`,
   `.tsv`, `README`, and any other file that is UTF-8 text.
@@ -233,3 +238,8 @@ another Android app.
   opus, flac, wav, mid.
 - `open-video`: `mynx` (default) or `android`: mp4, webm, mkv, 3gp,
   mov.
+- `open-pdf`: `mynx` (default) or `android`: `.pdf`. mynx's viewer
+  shows the pages; it can't search or select text, nor open a PDF
+  with a password (Open with another app can).
+- `open-html`: `mynx` (default) or `android`: `.html`, `.htm`,
+  shown rendered (View source shows the code).

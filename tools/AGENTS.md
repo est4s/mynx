@@ -270,9 +270,9 @@ One `key = value` per line; `mynx settings` describes each.
   it needs (`null`, `tty`, `pts`, …); `off` shows Android's `/dev` as
   before. New tabs and services follow it.
 - `open-pictures`, `open-markdown`, `open-code`, `open-text`,
-  `open-audio`, `open-video`: `mynx` (default) or `android`: where
-  each kind of file opens (Files, chat, `mynx open`): mynx's viewer or
-  another app. See "Files and viewers" in `/opt/mynx/docs/phone.md`.
+  `open-audio`, `open-video`, `open-pdf`, `open-html`: `mynx`
+  (default) or `android`: where each kind of file opens (Files, chat,
+  `mynx open`): mynx's viewer or another app. See "Files and viewers" in `/opt/mynx/docs/phone.md`.
 
 ### Undo
 

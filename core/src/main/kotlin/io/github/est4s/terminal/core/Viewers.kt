@@ -8,14 +8,16 @@ import java.io.File
  * `mynx open`, and asks here.
  */
 
-/** mynx's viewers: pictures; text, code and Markdown; audio and video. */
-enum class Viewer { IMAGE, TEXT, MEDIA }
+/** mynx's viewers: pictures; text, code and Markdown; audio and video; PDF; HTML pages, rendered. */
+enum class Viewer { IMAGE, TEXT, MEDIA, PDF, WEB }
 
 /** The viewer of mynx's that opens a file of [kind] with [with]; null: another app opens it. */
 fun viewerFor(kind: FileKind?, with: OpenWith): Viewer? = when {
     kind == null || with == OpenWith.ANDROID -> null
     kind == FileKind.PICTURE -> Viewer.IMAGE
     kind == FileKind.AUDIO || kind == FileKind.VIDEO -> Viewer.MEDIA
+    kind == FileKind.PDF -> Viewer.PDF
+    kind == FileKind.HTML -> Viewer.WEB
     else -> Viewer.TEXT
 }
 
@@ -27,6 +29,8 @@ fun viewerName(kind: FileKind): String = when (kind) {
     FileKind.TEXT -> "mynx's text viewer"
     FileKind.AUDIO -> "mynx's audio player"
     FileKind.VIDEO -> "mynx's video player"
+    FileKind.PDF -> "mynx's PDF viewer"
+    FileKind.HTML -> "mynx's page viewer"
 }
 
 /**
