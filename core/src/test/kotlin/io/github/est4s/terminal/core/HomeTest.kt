@@ -46,7 +46,7 @@ class HomeTest {
                 HomeItem("Shell", HomeAction.Shell),
                 HomeItem("Top", act("cmd:htop -d 5")),
                 HomeItem("Tools", HomeAction.Menu("apps")),
-                HomeItem("Way too long a label", act("files")),
+                HomeItem("Way too long a label", HomeAction.Files("/root")),
             ),
             menus().items("main"),
         )
@@ -150,6 +150,7 @@ class HomeTest {
         write(File(home, "terminal-apps/module.py"), "not executable\n")
         assertEquals(
             listOf(
+                HomeItem("Files (nnn)", act("files")),
                 HomeItem("Guitar tuner", act("app:/opt/mynx/terminal-apps/tuner")),
                 HomeItem("My Tool", act("app:/root/terminal-apps/my-tool.py")),
             ),
@@ -160,7 +161,7 @@ class HomeTest {
     @Test
     fun `a label is only looked for near the top of the file`() {
         write(File(home, "terminal-apps/late"), "1\n2\n3\n4\n5\n# label: Too late\n", executable = true)
-        assertEquals(listOf("Late"), labels("terminal-apps"))
+        assertEquals(listOf("Files (nnn)", "Late"), labels("terminal-apps"))
     }
 
     @Test
@@ -181,7 +182,10 @@ class HomeTest {
     @Test
     fun `empty lists say so`() {
         assertEquals(listOf(HomeItem("(no games yet)", HomeAction.None)), menus().items("games"))
-        assertEquals(listOf(HomeItem("(no terminal apps yet)", HomeAction.None)), menus().items("terminal-apps"))
+        assertEquals(
+            listOf(HomeItem("Files (nnn)", act("files")), HomeItem("(no terminal apps yet)", HomeAction.None)),
+            menus().items("terminal-apps"),
+        )
     }
 
     @Test

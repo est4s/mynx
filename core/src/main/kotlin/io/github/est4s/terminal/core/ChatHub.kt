@@ -107,8 +107,8 @@ class ChatHub(
     /** A chat's turn runs with no card waiting: the wakelock's auto follows it. */
     val working: Boolean get() = chats.any { it.working }
 
-    /** Makes a fresh chat and shows it. */
-    fun newChat(): ChatController = show(make(null))
+    /** Makes a fresh chat whose agent runs in [cwd] (Files' "Chat here"), and shows it. */
+    fun newChat(cwd: String = this.cwd): ChatController = show(make(null, cwd))
 
     /** Shows the chat on [sessionId]: the one held, else a new one resuming it. */
     fun open(sessionId: String): ChatController = show(chats.firstOrNull { it.sessionId == sessionId } ?: make(sessionId))
@@ -168,7 +168,7 @@ class ChatHub(
         noticeSlots.clear()
     }
 
-    private fun make(resume: String?): ChatController {
+    private fun make(resume: String?, cwd: String = this.cwd): ChatController {
         val slot = SlotHost()
         val chat = ChatController(slot, post, home, cwd, artifacts, now, resume, shared)
         slot.chat = chat
