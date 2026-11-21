@@ -145,8 +145,8 @@ class MediaPlaybackService : Service() {
             return MediaState(
                 path = path,
                 playing = p != null && prepared && runCatching { p.isPlaying }.getOrDefault(false),
-                position = if (p != null && prepared) runCatching { p.currentPosition.toLong() }.getOrDefault(0) else 0,
-                duration = if (p != null && prepared) runCatching { p.duration.toLong() }.getOrDefault(0).coerceAtLeast(0) else 0,
+                position = if (p != null && prepared) runCatching { p.currentPosition.toLong() }.getOrDefault(0L) else 0L,
+                duration = if (p != null && prepared) runCatching { p.duration.toLong() }.getOrDefault(0L).coerceAtLeast(0L) else 0L,
                 speed = speed,
                 hasPrevious = mediaStep(queue, path, -1) != null,
                 hasNext = mediaStep(queue, path, 1) != null,
