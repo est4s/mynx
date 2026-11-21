@@ -74,6 +74,12 @@ import io.github.est4s.terminal.core.SOUND_PID
 import io.github.est4s.terminal.core.SOUND_SERVER
 import io.github.est4s.terminal.core.SOUND_SOCKET
 import io.github.est4s.terminal.core.loadSettings
+import io.github.est4s.terminal.core.FileKind
+import io.github.est4s.terminal.core.OpenWith
+import io.github.est4s.terminal.core.Viewer
+import io.github.est4s.terminal.core.fileKindOfFile
+import io.github.est4s.terminal.core.openWith
+import io.github.est4s.terminal.core.viewerFor
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.ToolsInstaller
@@ -369,6 +375,8 @@ class TerminalService : Service() {
             vibrate = vibrations::oneShot, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share, torch = camera::torch, startSound = sound::start,
             rotation = rotation, rotationChanged = ::setRotation,
+            files = webAppFiles,
+            openFile = { path, kind, with, edit -> openRequestedFile(path, kind, with, edit) },
             phone = { Phone(Build.VERSION.RELEASE, Build.VERSION.SDK_INT, Build.MANUFACTURER, Build.MODEL) },
             crashes = TerminalApp.crashes(application),
             later = locationRequests(File(rootfs, "root"), locator::locate) +
@@ -1423,6 +1431,50 @@ class TerminalService : Service() {
             null
         } catch (e: ActivityNotFoundException) {
             share(Share(listOf(file), null))
+        }
+    }
+
+    /**
+     * The one place that opens a Debian file (Files, chat, `mynx open`):
+     * in mynx's viewer for its kind, or in another app (as
+     * [openDebianFile]), as [with] says (null: the kind's setting).
+     * [edit] opens text, code and Markdown ready to edit. Null when it
+     * opened, else why not.
+     */
+    fun openDebianFileWith(guest: String, with: OpenWith? = null, edit: Boolean = false): String? {
+        val resolved = webAppFiles.resolve(guest)
+        val file = webAppFiles.host(resolved ?: guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
+        return openDebianFileAs(guest, file, fileKindOfFile(guest, resolved, file), with, edit)
+    }
+
+    /** The kind of the Debian file [guest] (null: none mynx views, or not a file), for Open with…. */
+    fun debianFileKind(guest: String): FileKind? {
+        val resolved = webAppFiles.resolve(guest)
+        val file = webAppFiles.host(resolved ?: guest)?.takeIf { it.isFile } ?: return null
+        return fileKindOfFile(guest, resolved, file)
+    }
+
+    // Answers `mynx open FILE`: the request has checked the file and worked out its kind and where it opens.
+    private fun openRequestedFile(guest: String, kind: FileKind?, with: OpenWith, edit: Boolean): String? {
+        val file = debianFile(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
+        return openDebianFileAs(guest, file, kind, with, edit)
+    }
+
+    // Opens [file] (the host file of [guest]) of [kind] in its viewer, or another app's.
+    private fun openDebianFileAs(guest: String, file: File, kind: FileKind?, with: OpenWith?, edit: Boolean): String? {
+        val choice = with ?: kind?.let { currentSettings()?.openWith(it) } ?: OpenWith.MYNX
+        val viewer = viewerFor(kind, choice) ?: return openDebianFile(guest)
+        val shown = front()?.activity ?: return "the app must be on screen to open files"
+        val intent = when (viewer) {
+            Viewer.IMAGE -> ImageViewActivity.intent(shown, file, guest.substringAfterLast('/'))
+            Viewer.TEXT -> TextViewActivity.intent(shown, file, guest, edit)
+            Viewer.MEDIA -> MediaViewActivity.intent(shown, file, guest)
+        }
+        return try {
+            shown.startActivity(intent)
+            null
+        } catch (e: ActivityNotFoundException) {
+            "couldn't open ${guest.substringAfterLast('/')}: ${e.message}"
         }
     }
 

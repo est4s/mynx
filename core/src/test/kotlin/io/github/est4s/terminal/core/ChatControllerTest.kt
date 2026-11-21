@@ -902,16 +902,35 @@ class ChatControllerTest {
         tool("t3", "Write", """{"file_path":"/root/notes.txt","content":"x"}""")
         done()
         work()
-        assertEquals(listOf("Demo 2"), cards().map { it.artifact.label })
-        val first = cards().single().id
+        assertEquals(listOf("Demo 2", "Changed files"), cards().map { it.artifact.label }, "notes.txt is a changed file")
+        assertEquals(listOf("/root/notes.txt"), cards().last().artifact.files)
+        val first = cards().first().id
         chat.send("again")
         drain()
         tool("t4", "Write", """{"file_path":"/root/apps/demo/index.html","content":"x"}""")
         done()
         work()
-        assertEquals(2, cards().size, "a new turn, a new card")
+        assertEquals(3, cards().size, "a new turn, a new card")
         assertEquals(first, cards().first().id)
         assertTrue(cards().last().id != first)
+    }
+
+    @Test
+    fun `a file a command writes gets a card, below the turn's last words once it ends`() {
+        ready()
+        chat.send("write a guide")
+        drain()
+        init()
+        file("/root/scripts/README.md", "# Guide").setLastModified(clock + 5_000)
+        tool("t1", "Bash", """{"command":"cd ~/scripts && cat > README.md <<'EOF'\n# Guide\nEOF"}""")
+        work()
+        assertEquals(listOf(ArtifactKind.MARKDOWN), cards().map { it.artifact.kind })
+        say("Wrote it.")
+        assertEquals("Agent", shown().last(), "during the turn, words come after the card")
+        done()
+        work()
+        assertEquals("Artifact", shown().last(), "at its end, the card is last")
+        assertEquals(1, cards().size)
     }
 
     @Test

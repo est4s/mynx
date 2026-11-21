@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 class MarkdownTest {
     private fun dump(styled: MdStyled): String {
-        val tag = mapOf(MdStyleKind.BOLD to "b", MdStyleKind.ITALIC to "i", MdStyleKind.STRIKE to "s", MdStyleKind.CODE to "c", MdStyleKind.LINK to "a")
+        val tag = mapOf(MdStyleKind.BOLD to "b", MdStyleKind.ITALIC to "i", MdStyleKind.STRIKE to "s", MdStyleKind.CODE to "c", MdStyleKind.LINK to "a", MdStyleKind.IMAGE to "img")
         val out = StringBuilder()
         val ordered = styled.styles.sortedWith(compareBy({ it.start }, { -it.end }, { it.kind.ordinal }))
         for (i in 0..styled.text.length) {
@@ -32,6 +32,7 @@ class MarkdownTest {
         is MdBlock.Table ->
             "table[" + block.aligns.joinToString(",") { it.name.take(1) } + "]" +
                 (listOf(block.header) + block.rows).joinToString("") { row -> "(" + row.joinToString("|") { dump(it) } + ")" }
+        is MdBlock.Images -> "images" + block.images.joinToString("") { "(${it.alt}|${it.url}${it.link?.let { l -> "|$l" } ?: ""})" }
     }
 
     private fun check(vararg cases: Pair<String, String>) {
@@ -61,6 +62,7 @@ class MarkdownTest {
                 }
                 MdBlock.Rule -> Unit
                 is MdBlock.Table -> (listOf(block.header) + block.rows).forEach { row -> row.forEach(::styled) }
+                is MdBlock.Images -> block.images.forEach { out.append(it.alt) }
             }
         }
         return out
@@ -422,5 +424,69 @@ class MarkdownTest {
     fun `tables and rules are rows`() {
         val table = parseMarkdown("|a|\n|-|")[0] as MdBlock.Table
         assertEquals(listOf(MdRow.Table(table), MdRow.Rule()), mdRows(parseMarkdown("|a|\n|-|\n\n---")))
+    }
+
+    // A Markdown file in the viewer: links to other files, and pictures.
+
+    private fun checkFile(vararg cases: Pair<String, String>) {
+        for ((input, expected) in cases) assertEquals(expected, dump(parseMarkdownFile(input)), "input: <$input>")
+    }
+
+    @Test
+    fun `a file's links may point at other files`() = checkFile(
+        "see [notes](notes.md)" to "p:see <a notes.md>notes</a>",
+        "[up](../README.md#install)" to "p:<a ../README.md#install>up</a>",
+        "[abs](/root/a.txt) [web](https://a.example)" to "p:<a /root/a.txt>abs</a> <a https://a.example>web</a>",
+        "[mail](mailto:a@b.example)" to "p:<a mailto:a@b.example>mail</a>",
+        "[here](#section)" to "p:<a #section>here</a>",
+    )
+
+    @Test
+    fun `a file's links never run script or other apps' schemes`() = checkFile(
+        "[x](javascript:alert(1))" to "p:[x](javascript:alert(1))",
+        "[x](intent://a)" to "p:[x](intent://a)",
+        "[x](content://a/b)" to "p:[x](content://a/b)",
+    )
+
+    @Test
+    fun `a reply's links stay web links only`() = check(
+        "see [notes](notes.md)" to "p:see [notes](notes.md)",
+        "![logo](logo.png)" to "p:![logo](logo.png)",
+    )
+
+    @Test
+    fun `pictures alone in a paragraph are a row of pictures`() = checkFile(
+        "![logo](img/logo.png)" to "images(logo|img/logo.png)",
+        "![a](a.png) ![b](https://x.example/b.svg)" to "images(a|a.png)(b|https://x.example/b.svg)",
+        "[![build](badge.svg)](https://ci.example)" to "images(build|badge.svg|https://ci.example)",
+        "text\n\n![](shot.png)\n\nmore" to "p:text / images(|shot.png) / p:more",
+    )
+
+    @Test
+    fun `a picture inside text is its alt text, marked`() = checkFile(
+        "the ![logo](logo.png) here" to "p:the <img logo.png>logo</img> here",
+        "![unclosed](x.png" to "p:![unclosed](x.png",
+        "![nope](javascript:x)" to "p:![nope](javascript:x)",
+    )
+
+    @Test
+    fun `pictures are rows of their own`() {
+        val images = MdBlock.Images(listOf(MdImage("a", "a.png")))
+        assertEquals(listOf(MdRow.Images(images.images, quote = 1)), mdRows(parseMarkdownFile("> ![a](a.png)")))
+    }
+
+    @Test
+    fun `a link's file is found against the Markdown file's folder`() {
+        val doc = "/root/proj/docs/guide.md"
+        assertEquals("/root/proj/docs/notes.md", mdLinkPath(doc, "notes.md"))
+        assertEquals("/root/proj/README.md", mdLinkPath(doc, "../README.md#install"))
+        assertEquals("/root/proj/docs/img/a b.png", mdLinkPath(doc, "./img/a%20b.png?raw=1"))
+        assertEquals("/etc/hosts", mdLinkPath(doc, "/etc/hosts"))
+        assertEquals("/etc/hosts", mdLinkPath(doc, "file:///etc/hosts"))
+        assertEquals("/a.md", mdLinkPath(doc, "../../../../../a.md"))
+        assertEquals(null, mdLinkPath(doc, "https://a.example/x.md"))
+        assertEquals(null, mdLinkPath(doc, "mailto:a@b.example"))
+        assertEquals(null, mdLinkPath(doc, "#section"))
+        assertEquals(null, mdLinkPath(doc, ""))
     }
 }

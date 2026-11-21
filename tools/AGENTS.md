@@ -17,7 +17,7 @@ comes up:
 
 | File | About |
 |---|---|
-| `/opt/mynx/docs/phone.md` | the phone: vibration, clipboard, sharing, location, sensors, battery, camera, flashlight, rotation, sound files, the sound device, sharing to Debian |
+| `/opt/mynx/docs/phone.md` | the phone: vibration, clipboard, sharing, location, sensors, battery, camera, flashlight, rotation, sound files, the sound device, sharing to Debian, files and viewers (`mynx open FILE`) |
 | `/opt/mynx/docs/apps.md` | apps in HTML and JavaScript, the phone from JavaScript (`mynx.js`), building an Android app (APK) |
 | `/opt/mynx/docs/services.md` | background services: servers and daemons kept running by the app |
 | `/opt/mynx/docs/usb.md` | USB serial devices (Arduino, ESP32, adapters, board tools' recipes), raw USB devices (libusb, picotool, UF2, JTAG) |
@@ -133,6 +133,7 @@ their own.
 | `mynx notify TITLE [TEXT]` | a phone notification; tapping it opens this tab. `--if-away` skips it while this tab is on screen |
 | `mynx undo` | take back the last config change (`mynx undo --list` shows what it can take back) |
 | `mynx open URL` | open a web link in the phone's browser (also `xdg-open URL`) |
+| `mynx open FILE` | open a file in mynx's viewer (text, code, Markdown, pictures, audio, video) or another app; asks which in a terminal, `--with mynx\|android` says, `--edit` opens text to edit (`/opt/mynx/docs/phone.md`) |
 | `mynx vibrate`, `clipboard`, `share`, `location`, `sensor`, `battery`, `camera`, `torch`, `rotation`, `audio`, `sound` | the phone: vibration, clipboard, share sheet, GPS, sensors, battery, camera, flashlight, screen rotation, sound files and the sound device (`/opt/mynx/docs/phone.md`) |
 | `mynx app` | apps in HTML and JavaScript: list, open, reload, log, home screen shortcut, permissions (`/opt/mynx/docs/apps.md`) |
 | `mynx service` | background services: list, add, start, stop, log, open as a tab, autostart, adopt a tab (`/opt/mynx/docs/services.md`) |
@@ -268,6 +269,10 @@ One `key = value` per line; `mynx settings` describes each.
   that Debian gets a `/dev` of its own, with the phone's device files
   it needs (`null`, `tty`, `pts`, …); `off` shows Android's `/dev` as
   before. New tabs and services follow it.
+- `open-pictures`, `open-markdown`, `open-code`, `open-text`,
+  `open-audio`, `open-video`: `mynx` (default) or `android`: where
+  each kind of file opens (Files, chat, `mynx open`): mynx's viewer or
+  another app. See "Files and viewers" in `/opt/mynx/docs/phone.md`.
 
 ### Undo
 

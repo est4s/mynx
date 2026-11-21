@@ -69,7 +69,7 @@ class ChatArtifactsTest {
         assertEquals(
             listOf(
                 ArtifactHint("/root/apps/demo", true),
-                ArtifactHint("/root/apps/demo/index.html", true),
+                ArtifactHint("/root/apps/demo/index.html", true, written = true),
                 ArtifactHint("/root/terminal-apps/tool.py", true),
                 ArtifactHint("/root/work/build/out.apk", true),
             ),
@@ -81,6 +81,42 @@ class ChatArtifactsTest {
                         "apksigner sign --out=build/out.apk build/aligned.apk.idsig /tmp/x",
                 ),
             ),
+        )
+    }
+
+    @Test
+    fun `files a command writes are written hints, wherever they are`() {
+        assertEquals(
+            listOf(
+                ArtifactHint("/root/scripts/phone-status.sh", true, written = true),
+                ArtifactHint("/root/scripts/README.md", true, written = true),
+                ArtifactHint("/root/log.txt", true, written = true),
+                ArtifactHint("/root/work/out.csv", true, written = true),
+            ),
+            hints(
+                call("Bash", "mkdir -p ~/scripts\ncat > ~/scripts/phone-status.sh <<'EOF'\necho hi > body.txt\nEOF"),
+                call("Bash", "cd ~/scripts && cat >README.md <<-EOF\n# a > b\n\tEOF\necho done"),
+                call("Bash", "date | tee -a ~/log.txt; make 2>&1 >/dev/null; ls > /tmp/list 2>/tmp/err"),
+                call("Bash", "python3 conv.py >> 'out.csv'; echo \$x > \$HOME/y"),
+            ),
+        )
+    }
+
+    @Test
+    fun `a file a command wrote in this turn is a Markdown card or a changed file`() {
+        val md = write("/root/scripts/README.md", "# Hi")
+        val sh = write("/root/scripts/run.sh", "echo hi")
+        val old = write("/root/scripts/old.sh", "echo old")
+        listOf(md, sh).forEach { it.setLastModified(5_000_000L) }
+        old.setLastModified(1_000_000L)
+        val hints = listOf("/root/scripts/README.md", "/root/scripts/run.sh", "/root/scripts/old.sh")
+            .map { ArtifactHint(it, true, written = true) }
+        assertEquals(
+            listOf(
+                ChatArtifact(ArtifactKind.MARKDOWN, "/root/scripts/README.md", "README.md", "/root/scripts/README.md"),
+                changed("/root/scripts/run.sh"),
+            ),
+            finder.find(hints, 2_000_000L),
         )
     }
 
@@ -103,11 +139,11 @@ class ChatArtifactsTest {
     }
 
     @Test
-    fun `a folder that isn't an app yet, or a bad name, gives no card`() {
+    fun `a folder that isn't an app yet, or a bad name, gives no app card, only changed files`() {
         write("/root/apps/half/notes.txt", "x")
         write("/root/apps/Bad_Name/index.html", "<title>x</title>")
         assertEquals(
-            emptyList(),
+            listOf(changed("/root/apps/half/notes.txt", "/root/apps/Bad_Name/index.html")),
             finder.find(listOf(ArtifactHint("/root/apps/half/notes.txt", false), ArtifactHint("/root/apps/Bad_Name/index.html", false)), null),
         )
     }
@@ -133,6 +169,7 @@ class ChatArtifactsTest {
                 ChatArtifact(ArtifactKind.TERMINAL_APP, "/root/terminal-apps/tool.py", "My tool", "/root/terminal-apps/tool.py"),
                 ChatArtifact(ArtifactKind.TERMINAL_APP, "/root/terminal-apps/plain-one", "Plain One", "/root/terminal-apps/plain-one"),
                 ChatArtifact(ArtifactKind.TERMINAL_APP, "/root/apps/old-tool", "Old Tool", "/root/apps/old-tool"),
+                changed("/root/terminal-apps/lib.py"),
             ),
             finder.find(
                 listOf("tool.py", "plain-one", "lib.py").map { ArtifactHint("/root/terminal-apps/$it", false) } +
@@ -143,12 +180,15 @@ class ChatArtifactsTest {
     }
 
     @Test
-    fun `an APK the agent wrote counts anywhere, and nothing else outside the app folders`() {
+    fun `an APK the agent wrote counts anywhere, and other files outside the app folders are only changed files`() {
         write("/root/work/app.apk", "PK")
         write("/root/work/notes.txt", "x")
         write("/opt/mynx/apps/x/index.html", "<title>x</title>")
         assertEquals(
-            listOf(ChatArtifact(ArtifactKind.APK, "/root/work/app.apk", "app.apk", "/root/work/app.apk")),
+            listOf(
+                ChatArtifact(ArtifactKind.APK, "/root/work/app.apk", "app.apk", "/root/work/app.apk"),
+                changed("/root/work/notes.txt"),
+            ),
             finder.find(
                 listOf("/root/work/app.apk", "/root/work/notes.txt", "/opt/mynx/apps/x/index.html", "/root/work/gone.apk")
                     .map { ArtifactHint(it, false) },
@@ -170,24 +210,40 @@ class ChatArtifactsTest {
         assertEquals(emptyList(), finder.find(hints, null), "no turn start known: commands don't count")
     }
 
+    private fun changed(vararg files: String) =
+        ChatArtifact(ArtifactKind.CHANGED_FILES, CHANGED_FILES_CARD, "Changed files", files[0], files = files.toList())
+
     private val web = ChatArtifact(ArtifactKind.WEB_APP, "/root/apps/demo", "Demo", "/root/apps/demo/index.html", appName = "demo")
     private val apk = ChatArtifact(ArtifactKind.APK, "/root/a.apk", "a.apk", "/root/a.apk")
+
+    @Test
+    fun `at the turn's end its cards move below its last words`() {
+        val before = listOf<ChatItem>(
+            ChatItem.User("u1", "make it"), ChatItem.Artifact("card-1", web), ChatItem.Agent("a1", "done"),
+        )
+        assertEquals(
+            listOf(ChatItem.User("u1", "make it"), ChatItem.Agent("a1", "done"), ChatItem.Artifact("card-1", web), ChatItem.Artifact("card-2", apk)),
+            withArtifactCards(before, listOf(web, apk), toEnd = true) { "card-2" },
+        )
+        val earlier = listOf<ChatItem>(ChatItem.Artifact("old", apk), ChatItem.User("u2", "again"), ChatItem.Agent("a2", "ok"))
+        assertSame(earlier, withArtifactCards(earlier, emptyList(), toEnd = true) { "x" }, "no cards in the turn: the same list")
+    }
 
     @Test
     fun `cards join the turn's end, and change in place within the turn`() {
         var n = 0
         val newId = { "card-${++n}" }
         val before = listOf<ChatItem>(ChatItem.User("u1", "make it"), ChatItem.Agent("a1", "ok"))
-        val once = withArtifactCards(before, listOf(web), newId)
+        val once = withArtifactCards(before, listOf(web), newId = newId)
         assertEquals(before + ChatItem.Artifact("card-1", web), once)
-        assertSame(once, withArtifactCards(once, listOf(web), newId), "nothing new: the same list")
+        assertSame(once, withArtifactCards(once, listOf(web), newId = newId), "nothing new: the same list")
         val renamed = web.copy(label = "Demo 2")
-        val twice = withArtifactCards(once + ChatItem.Agent("a2", "more"), listOf(renamed, apk), newId)
+        val twice = withArtifactCards(once + ChatItem.Agent("a2", "more"), listOf(renamed, apk), newId = newId)
         assertEquals(
             before + ChatItem.Artifact("card-1", renamed) + ChatItem.Agent("a2", "more") + ChatItem.Artifact("card-2", apk),
             twice,
         )
-        val next = withArtifactCards(twice + ChatItem.User("u2", "again"), listOf(web), newId)
+        val next = withArtifactCards(twice + ChatItem.User("u2", "again"), listOf(web), newId = newId)
         assertEquals(ChatItem.Artifact("card-3", web), next.last(), "a new turn, a new card")
     }
 
@@ -249,7 +305,7 @@ class ChatArtifactsTest {
     fun `a Markdown card's line and buttons`() {
         val md = ChatArtifact(ArtifactKind.MARKDOWN, "/root/notes/plan.md", "plan.md", "/root/notes/plan.md")
         assertEquals("Markdown · ~/notes/plan.md", chatArtifactLine(md, "/root"))
-        assertEquals(listOf(ArtifactAction.COPY, ArtifactAction.SHARE), chatArtifactActions(md, canInstall = true))
+        assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.COPY, ArtifactAction.SHARE), chatArtifactActions(md, canInstall = true))
         assertEquals("Copy", ArtifactAction.COPY.label)
     }
 
@@ -297,5 +353,96 @@ class ChatArtifactsTest {
         assertEquals("Image · ~/work/plot.png", chatArtifactLine(image, "/root"))
         assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.SHARE), chatArtifactActions(image, canInstall = true))
         assertEquals("View", ArtifactAction.VIEW.label)
+    }
+
+    @Test
+    fun `audio and video the agent made count anywhere, written or named in a command that changed them`() {
+        val song = write("/root/work/song.MP3", "id3")
+        val clip = write("/root/work/clip.webm", "webm")
+        val old = write("/root/work/old.wav", "riff")
+        write("/root/apps/demo/index.html", "<title>Demo</title>")
+        write("/root/apps/demo/beep.ogg", "ogg")
+        song.setLastModified(5_000_000L)
+        clip.setLastModified(5_000_000L)
+        old.setLastModified(1_000_000L)
+        assertEquals(
+            listOf("/root/work/song.MP3", "/root/work/clip.webm", "/root/work/old.wav").map { ArtifactHint(it, true) },
+            hints(call("Bash", "ffmpeg -i in.mid song.MP3 clip.webm; ls old.wav notes.txt")).filter { it.path != "/root/work/in.mid" },
+        )
+        assertTrue(ArtifactHint("/root/work/in.mid", true) in hints(call("Bash", "timidity in.mid")))
+        assertTrue(ArtifactHint("/root/work/song.mp3", false).direct("/root"))
+        val audio = ChatArtifact(ArtifactKind.AUDIO, "/root/work/song.MP3", "song.MP3", "/root/work/song.MP3", version = 5_000_000L)
+        val video = ChatArtifact(ArtifactKind.VIDEO, "/root/work/clip.webm", "clip.webm", "/root/work/clip.webm", version = 5_000_000L)
+        assertEquals(
+            listOf(audio, video),
+            finder.find(listOf("/root/work/song.MP3", "/root/work/clip.webm", "/root/work/old.wav").map { ArtifactHint(it, true) }, 2_000_000L),
+        )
+        assertEquals(listOf(video), finder.find(listOf(ArtifactHint("/root/work/clip.webm", false)), null), "written: no turn start needed")
+        assertEquals(
+            listOf(ArtifactKind.WEB_APP),
+            finder.find(listOf(ArtifactHint("/root/apps/demo/beep.ogg", false)), null).map { it.kind },
+            "an app's sound is the app's card",
+        )
+        for (name in listOf("a.mp3", "a.m4a", "a.aac", "a.ogg", "a.opus", "a.flac", "a.wav", "a.mid", "a.midi", "a.oga")) assertTrue(chatAudioFile(name), name)
+        for (name in listOf("a.mp4", "a.webm", "a.mkv", "a.3gp", "a.mov", "a.m4v")) assertTrue(chatVideoFile(name), name)
+        assertEquals(false, chatAudioFile("mp3"))
+        assertEquals(false, chatVideoFile("a.mp3"))
+    }
+
+    @Test
+    fun `audio and video cards' lines and buttons`() {
+        val audio = ChatArtifact(ArtifactKind.AUDIO, "/root/work/song.mp3", "song.mp3", "/root/work/song.mp3", version = 1L)
+        val video = ChatArtifact(ArtifactKind.VIDEO, "/tmp/clip.mp4", "clip.mp4", "/tmp/clip.mp4", version = 1L)
+        assertEquals("Audio · ~/work/song.mp3", chatArtifactLine(audio, "/root"))
+        assertEquals("Video · /tmp/clip.mp4", chatArtifactLine(video, "/root"))
+        assertEquals(listOf(ArtifactAction.PLAY, ArtifactAction.SHARE), chatArtifactActions(audio, canInstall = true))
+        assertEquals(listOf(ArtifactAction.PLAY, ArtifactAction.SHARE), chatArtifactActions(video, canInstall = false))
+        assertEquals("Play", ArtifactAction.PLAY.label)
+    }
+
+    @Test
+    fun `files written in a turn without a card of their own share one changed files card, in order, each once`() {
+        write("/root/work/main.py", "print(1)")
+        write("/root/work/util.py", "x = 1")
+        write("/root/work/plan.md", "# Plan")
+        write("/root/work/plot.png", "png")
+        val found = finder.find(
+            hints(
+                call("Write", "main.py"),
+                call("Edit", "/root/work/util.py"),
+                call("Edit", "main.py", id = "again"),
+                call("Write", "plan.md"),
+                call("Write", "plot.png"),
+                call("Write", "gone.txt"),
+                call("Bash", "touch other.py"),
+            ),
+            null,
+        )
+        assertEquals(listOf(ArtifactKind.MARKDOWN, ArtifactKind.IMAGE, ArtifactKind.CHANGED_FILES), found.map { it.kind })
+        assertEquals(changed("/root/work/main.py", "/root/work/util.py"), found.last())
+        assertTrue(ArtifactHint("/root/work/main.py", false).direct("/root"), "written files are looked for at once")
+    }
+
+    @Test
+    fun `the changed files card changes in place within its turn`() {
+        val one = changed("/root/a.py")
+        val items = withArtifactCards(listOf(ChatItem.User("u1", "go")), listOf(one)) { "card-1" }
+        val two = changed("/root/a.py", "/root/b.py")
+        assertEquals(listOf(ChatItem.User("u1", "go"), ChatItem.Artifact("card-1", two)), withArtifactCards(items, listOf(two)) { "new" })
+    }
+
+    @Test
+    fun `a changed files card's line, buttons and rows`() {
+        val card = changed("/root/work/a.py", "/etc/hosts")
+        assertEquals("Changed files · 2 files", chatArtifactLine(card, "/root"))
+        assertEquals("Changed files · 1 file", chatArtifactLine(changed("/root/a.py"), "/root"))
+        assertEquals(emptyList(), chatArtifactActions(card, canInstall = true), "its rows open the files")
+        assertEquals(null, chatArtifactNote(card, canInstall = false))
+        assertEquals(
+            listOf(ChangedFileRow("/root/work/a.py", "a.py", "~/work"), ChangedFileRow("/etc/hosts", "hosts", "/etc")),
+            changedFileRows(card, "/root"),
+        )
+        assertEquals(listOf(ChangedFileRow("/root/x", "x", "~")), changedFileRows(changed("/root/x"), "/root"))
+        assertEquals(listOf(ChangedFileRow("/x", "x", "/")), changedFileRows(changed("/x"), "/root"))
     }
 }

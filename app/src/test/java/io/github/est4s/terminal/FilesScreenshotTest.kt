@@ -9,6 +9,8 @@ import io.github.est4s.terminal.core.ClipOp
 import io.github.est4s.terminal.core.FileClip
 import io.github.est4s.terminal.core.FileEntry
 import io.github.est4s.terminal.core.FileJob
+import io.github.est4s.terminal.core.FileKind
+import io.github.est4s.terminal.core.OpenWith
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -24,8 +26,8 @@ private const val FOLDER = "/root/projects/tip-calc"
 private val noFileActions = object : FilesActions {
     override fun chatHere(folder: String) = Unit
     override fun terminalHere(folder: String) = Unit
-    override fun viewPicture(path: String) = Unit
-    override fun openFile(path: String) = Unit
+    override fun openFile(path: String, with: OpenWith?) = Unit
+    override fun fileKind(path: String): FileKind? = null
     override fun share(paths: List<String>) = Unit
     override fun run(job: FileJob.Run, done: (Int, String) -> Unit) = Unit
     override fun close() = Unit

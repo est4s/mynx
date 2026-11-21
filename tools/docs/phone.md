@@ -24,6 +24,7 @@ Part of the guide to this Debian, `/opt/mynx/AGENTS.md`.
 | `mynx audio play FILE` | play a sound file through the phone's speaker, until it ends |
 | `mynx audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
 | `mynx sound` | whether the sound device is on; `mynx sound start` starts it again, `mynx sound install` installs it |
+| `mynx open FILE` | open a file in mynx's viewer or another app (see "Files and viewers") |
 
 Commands for the phone itself, and the sound device:
 
@@ -189,4 +190,46 @@ Commands for the phone itself, and the sound device:
   as a `.txt` file there, named after its subject (a page's title) or
   the time. A name that's taken gets ` (2)`, so nothing is overwritten.
   A notification says what was saved where.
-- `mynx notify` and `mynx open`: see "AI agents" in `/opt/mynx/AGENTS.md`.
+- `mynx notify` and `mynx open URL`: see "AI agents" in `/opt/mynx/AGENTS.md`.
+
+## Files and viewers
+
+mynx has its own viewers: text (a notepad), source code (highlighted,
+with line numbers), Markdown (drawn as in chat), pictures, and a
+player for audio and video (audio keeps playing with the screen off,
+with controls in the notification). Files open in them from touch
+view's Files, from chat and from the terminal; text, code and
+Markdown open to read, with an Edit button (Save, Undo, Find: Ctrl+S,
+Ctrl+F). Files over 1 MB open read-only. Any other file opens with
+another Android app.
+
+- `mynx open FILE`: opens FILE (a relative one is against the current
+  folder). In a terminal it asks:
+  ```
+  Open notes.md with:
+    1) mynx's Markdown viewer (default)
+    2) another Android app
+  Choose [1]:
+  ```
+  Enter takes the kind's setting. `--with mynx` or `--with android`
+  doesn't ask; nor does a script or an agent (no terminal): the
+  setting decides, so nothing waits. `--edit` opens text, code and
+  Markdown ready to edit. The app must be on screen. `--json` gives
+  `{"ok": true, "with": "mynx", "kind": "code"}` (kinds: `picture`,
+  `markdown`, `code`, `text`, `audio`, `video`, or `null`).
+  `xdg-open FILE` does the same.
+- Each kind's setting: `mynx` (default) or `android`, e.g. `mynx set
+  open-video android`; touch view's Settings → Default apps too.
+- `open-pictures`: `mynx` (default) or `android`: jpg, png, gif,
+  webp, heic, bmp.
+- `open-markdown`: `mynx` (default) or `android`: `.md`, `.markdown`.
+- `open-code`: `mynx` (default) or `android`: source code (`.py`,
+  `.kt`, `.sh`, `.c`, `.rs`, `.go`, `.js`, `.ts`, `.json`, `.yaml`,
+  `.toml`, `.conf`, `.html`, `.css`, `.sql`, `.diff`, …, and
+  `Makefile`, `Dockerfile`, `.bashrc`).
+- `open-text`: `mynx` (default) or `android`: `.txt`, `.log`, `.csv`,
+  `.tsv`, `README`, and any other file that is UTF-8 text.
+- `open-audio`: `mynx` (default) or `android`: mp3, m4a, aac, ogg,
+  opus, flac, wav, mid.
+- `open-video`: `mynx` (default) or `android`: mp4, webm, mkv, 3gp,
+  mov.

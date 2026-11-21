@@ -25,18 +25,25 @@ import java.nio.file.LinkOption
  *   is the file's time, so a picture drawn again changes its card. A command's path counts only if it changed
  *   since the turn started (a command that just reads an app gives no
  *   card), so history, with no turn times, only goes by written files.
+ * - Audio and video ([chatAudioFile], [chatVideoFile]) count as pictures do.
+ * - Files written (Write, Edit, NotebookEdit) that got no card of their own
+ *   share one [ArtifactKind.CHANGED_FILES] card per turn, listing them in
+ *   [ChatArtifact.files] in the order first written.
  * - One card per app per turn (the items after the last prompt), changed
  *   in place when the app changes again ([withArtifactCards]).
  */
 
-enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN, IMAGE }
+enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN, IMAGE, AUDIO, VIDEO, CHANGED_FILES }
 
 /**
  * What a card is about. [path] is the Debian path as found (the app's
  * folder in `~/apps`, the terminal app's file, the APK); [shareFile] the
  * link-free Debian path of what Share sends (a web app's `index.html`,
  * else its `app.conf`); [appName] a web app's name, for its screen;
- * [version] a picture's file time (else 0), so its card shows it anew.
+ * [version] a picture's, audio or video file's time (else 0), so its card
+ * shows it anew. A [ArtifactKind.CHANGED_FILES] card's [path] is
+ * [CHANGED_FILES_CARD] (one per turn), [files] the Debian paths written and
+ * [shareFile] the first of them.
  */
 data class ChatArtifact(
     val kind: ArtifactKind,
@@ -45,10 +52,27 @@ data class ChatArtifact(
     val shareFile: String,
     val appName: String? = null,
     val version: Long = 0L,
+    val files: List<String> = emptyList(),
 )
 
-/** A path a tool call touched; [fromCommand]: named in a Bash command, so only a hint. */
-data class ArtifactHint(val path: String, val fromCommand: Boolean)
+/** The [ChatArtifact.path] of a turn's changed files card. */
+const val CHANGED_FILES_CARD = "changed-files"
+
+/** Whether [name] is an audio file, by its extension ([fileKindOf]). */
+fun chatAudioFile(name: String): Boolean = fileKindOf(name) == FileKind.AUDIO
+
+/** Whether [name] is a video file, by its extension ([fileKindOf]). */
+fun chatVideoFile(name: String): Boolean = fileKindOf(name) == FileKind.VIDEO
+
+private fun media(path: String) = chatImageFile(path) || chatAudioFile(path) || chatVideoFile(path)
+
+/**
+ * A path a tool call touched; [fromCommand]: named in a Bash command, so only
+ * a hint (it counts if it changed in the turn); [written]: the call wrote it
+ * (a Write or Edit, or a command's `>`, `>>` or `tee`), so it can be a
+ * Markdown card or a changed file.
+ */
+data class ArtifactHint(val path: String, val fromCommand: Boolean, val written: Boolean = !fromCommand)
 
 private val WRITE_TOOLS = setOf("Write", "Edit", "NotebookEdit")
 private val COMMAND_SPLIT = Regex("""[\s;&|<>()'"`]+""")
@@ -68,25 +92,76 @@ fun artifactHints(calls: List<ToolCallInfo>, cwd: String, home: String): List<Ar
             call.name in WRITE_TOOLS -> if (call.title != call.name && call.title.isNotBlank()) {
                 debianPath(call.title.trim(), cwd, home)?.let { hints += ArtifactHint(it, false) }
             }
-            call.name == "Bash" -> for (word in call.title.split(COMMAND_SPLIT)) {
-                val token = word.substringAfterLast('=')
-                if (token.isEmpty() || token.indexOfAny(GLOB_CHARS) >= 0) continue
-                val path = debianPath(token, cwd, home) ?: continue
-                if (inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || chatImageFile(path)) {
-                    hints += ArtifactHint(path, true)
+            call.name == "Bash" -> {
+                val written = commandWrites(call.title, cwd, home)
+                for (word in call.title.split(COMMAND_SPLIT)) {
+                    val token = word.substringAfterLast('=')
+                    if (token.isEmpty() || token.indexOfAny(GLOB_CHARS) >= 0) continue
+                    val path = debianPath(token, cwd, home) ?: continue
+                    if (inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || media(path)) {
+                        hints += ArtifactHint(path, true, written = path in written)
+                    }
                 }
+                written.forEach { hints += ArtifactHint(it, true, written = true) }
             }
         }
     }
     return hints.toList()
 }
 
+private val HEREDOC = Regex("""<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1""")
+private val SEGMENT_SPLIT = Regex("""&&|\|\||;|\n""")
+private val CD = Regex("""^\s*cd\s+(['"]?)([^\s;&|<>()'"`]+)\1\s*$""")
+private const val TARGET = """(['"]?)([^\s;&|<>()'"`]+)\1"""
+private val REDIRECT = Regex("""(?:^|[^<>])>{1,2}\|?[ \t]*$TARGET""")
+private val TEE = Regex("""\btee\s+(?:-\S+\s+)*$TARGET""")
+private val SCRATCH = listOf("/tmp/", "/var/tmp/", "/dev/", "/proc/", "/sys/")
+
+/**
+ * The files [command] writes with `>`, `>>` or `tee`, as Debian paths, in
+ * order: here-documents' bodies are skipped, and a `cd` moves the folder
+ * later relative paths start from. Scratch places (`/tmp`, `/dev`) and
+ * paths with a variable or a glob don't count.
+ */
+internal fun commandWrites(command: String, cwd: String, home: String): Set<String> {
+    val lines = ArrayList<String>()
+    var heredocEnd: String? = null
+    for (line in command.lines()) {
+        if (heredocEnd != null) {
+            if (line.trim() == heredocEnd) heredocEnd = null
+            continue
+        }
+        lines += line
+        heredocEnd = HEREDOC.findAll(line).lastOrNull()?.groupValues?.get(2)
+    }
+    val found = LinkedHashSet<String>()
+    var folder = cwd
+    for (segment in lines.joinToString("\n").split(SEGMENT_SPLIT)) {
+        CD.find(segment)?.let { cd ->
+            cd.groupValues[2].takeIf { it.indexOfAny(GLOB_CHARS) < 0 }?.let { debianPath(it, folder, home) }?.let { folder = it }
+            return@let
+        } ?: run {
+            for (match in REDIRECT.findAll(segment) + TEE.findAll(segment)) {
+                val raw = match.groupValues[2]
+                if (raw.indexOfAny(GLOB_CHARS) >= 0) continue
+                val path = debianPath(raw, folder, home) ?: continue
+                if (SCRATCH.none { path.startsWith(it) } && path != "/dev/null") found += path
+            }
+        }
+    }
+    return found
+}
+
 /** Clocks and file times may differ a little: a turn counts as starting this much earlier. */
 const val ARTIFACT_CLOCK_SLACK_MS = 2_000L
 
-/** Worth a look as soon as its call completes: in an app folder, an APK, Markdown or a picture. */
-internal fun ArtifactHint.direct(home: String) =
-    fromCommand || inAppFolder(path, home) || path.endsWith(".apk", ignoreCase = true) || markdown(path) || chatImageFile(path)
+/**
+ * Worth a look as soon as its call completes: every hint is now (a
+ * command's only names app folders, APKs and media, and any written file
+ * can be a changed file). Kept as the one place that decides.
+ */
+@Suppress("UNUSED_PARAMETER")
+internal fun ArtifactHint.direct(home: String) = true
 
 private fun markdown(path: String) = path.endsWith(".md", ignoreCase = true) || path.endsWith(".markdown", ignoreCase = true)
 
@@ -94,7 +169,7 @@ private fun inAppFolder(path: String, home: String) =
     path.startsWith("$home/$APPS/") || path.startsWith("$home/$TERMINAL_APPS/")
 
 // [raw] as an absolute Debian path with `.` and `..` worked out (links left alone).
-private fun debianPath(raw: String, cwd: String, home: String): String? {
+internal fun debianPath(raw: String, cwd: String, home: String): String? {
     if (raw.contains('\u0000') || raw.contains('\n')) return null
     val full = when {
         raw == "~" -> home
@@ -126,14 +201,26 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         // Only the ~/apps apps: the tools' own are never the agent's work.
         val webApps by lazy { apps.list().filter { it.path == "$home/$APPS/${it.name}" } }
         val found = LinkedHashMap<String, ChatArtifact>()
+        val written = LinkedHashSet<String>()
         for (hint in hints) {
             if (hint.fromCommand && (since == null || !changedSince(hint.path, since))) continue
+            val outsideApps = !inAppFolder(hint.path, home)
             val artifact = when {
-                !hint.fromCommand && markdown(hint.path) -> markdownAt(hint.path)
-                chatImageFile(hint.path) && !inAppFolder(hint.path, home) -> imageAt(hint.path)
+                hint.written && markdown(hint.path) -> markdownAt(hint.path)
+                chatImageFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.IMAGE)
+                chatAudioFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.AUDIO)
+                chatVideoFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.VIDEO)
                 else -> artifactAt(hint.path, home) { webApps }
-            } ?: continue
+            }
+            if (artifact == null) {
+                if (hint.written && apps.resolve(hint.path)?.let(apps::host)?.isFile == true) written += hint.path
+                continue
+            }
             if (artifact.path !in found) found[artifact.path] = artifact
+        }
+        if (written.isNotEmpty()) {
+            val files = written.toList()
+            found[CHANGED_FILES_CARD] = ChatArtifact(ArtifactKind.CHANGED_FILES, CHANGED_FILES_CARD, "Changed files", files[0], files = files)
         }
         return found.values.toList()
     }
@@ -168,10 +255,10 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         return ChatArtifact(ArtifactKind.MARKDOWN, path, path.substringAfterLast('/'), resolved)
     }
 
-    private fun imageAt(path: String): ChatArtifact? {
+    private fun mediaAt(path: String, kind: ArtifactKind): ChatArtifact? {
         val resolved = apps.resolve(path) ?: return null
         val file = apps.host(resolved)?.takeIf { it.isFile } ?: return null
-        return ChatArtifact(ArtifactKind.IMAGE, path, path.substringAfterLast('/'), resolved, version = file.lastModified())
+        return ChatArtifact(kind, path, path.substringAfterLast('/'), resolved, version = file.lastModified())
     }
 
     private fun web(app: WebApp): ChatArtifact {
@@ -194,7 +281,7 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
  * prompt): a card already there for the same path is replaced in place,
  * others are added at the end with [newId]. Nothing new: [items] itself.
  */
-fun withArtifactCards(items: List<ChatItem>, found: List<ChatArtifact>, newId: () -> String): List<ChatItem> {
+fun withArtifactCards(items: List<ChatItem>, found: List<ChatArtifact>, toEnd: Boolean = false, newId: () -> String): List<ChatItem> {
     if (found.isEmpty()) return items
     val turnStart = items.indexOfLast { it is ChatItem.User } + 1
     var result: MutableList<ChatItem>? = null
@@ -205,7 +292,16 @@ fun withArtifactCards(items: List<ChatItem>, found: List<ChatArtifact>, newId: (
         val list = result ?: items.toMutableList().also { result = it }
         if (at != null) list[at] = ChatItem.Artifact(list[at].id, artifact) else list += ChatItem.Artifact(newId(), artifact)
     }
-    return result ?: items
+    val done = result ?: items
+    return if (toEnd) cardsLast(done, turnStart) else done
+}
+
+// The turn's cards (from [turnStart]) after its other items, in their order; nothing to move: [items] itself.
+private fun cardsLast(items: List<ChatItem>, turnStart: Int): List<ChatItem> {
+    val turn = items.subList(turnStart, items.size)
+    val (cards, others) = turn.partition { it is ChatItem.Artifact }
+    if (cards.isEmpty() || turn == others + cards) return items
+    return items.subList(0, turnStart) + others + cards
 }
 
 /** A transcript's rows ([readClaudeHistory]) with each turn's cards at its end, as the disk is now. Off the main thread. */
@@ -231,7 +327,8 @@ fun withHistoryArtifacts(items: List<ChatItem>, lookup: ArtifactLookup, cwd: Str
 
 /** What a card's buttons do. */
 enum class ArtifactAction(val label: String) {
-    OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), COPY("Copy"), VIEW("View"), SHARE("Share"),
+    OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), COPY("Copy"), VIEW("View"), PLAY("Play"),
+    SHARE("Share"),
 }
 
 /** [canInstall]: this build may open Android's installer for a file (debug builds only). */
@@ -239,10 +336,14 @@ fun chatArtifactActions(artifact: ChatArtifact, canInstall: Boolean): List<Artif
     ArtifactKind.WEB_APP -> listOf(ArtifactAction.OPEN, ArtifactAction.ADD_TO_HOME, ArtifactAction.SHARE)
     ArtifactKind.TERMINAL_APP -> listOf(ArtifactAction.RUN, ArtifactAction.SHARE)
     ArtifactKind.APK -> if (canInstall) listOf(ArtifactAction.INSTALL, ArtifactAction.SHARE) else listOf(ArtifactAction.SHARE)
-    // Copy puts the file's text on the clipboard ([shareFile]).
-    ArtifactKind.MARKDOWN -> listOf(ArtifactAction.COPY, ArtifactAction.SHARE)
+    // View opens the Markdown viewer; Copy puts the file's text on the clipboard ([shareFile]).
+    ArtifactKind.MARKDOWN -> listOf(ArtifactAction.VIEW, ArtifactAction.COPY, ArtifactAction.SHARE)
     // View shows it full screen; the card shows it too.
     ArtifactKind.IMAGE -> listOf(ArtifactAction.VIEW, ArtifactAction.SHARE)
+    // Play opens the media player.
+    ArtifactKind.AUDIO, ArtifactKind.VIDEO -> listOf(ArtifactAction.PLAY, ArtifactAction.SHARE)
+    // Its rows ([changedFileRows]) open the files in their viewer.
+    ArtifactKind.CHANGED_FILES -> emptyList()
 }
 
 const val CHAT_APK_NO_INSTALL = "mynx can't install apps itself: Share it to a file manager, or open it from the Files app, to install it."
@@ -259,9 +360,26 @@ fun chatArtifactLine(artifact: ChatArtifact, home: String): String {
         ArtifactKind.APK -> "APK"
         ArtifactKind.MARKDOWN -> "Markdown"
         ArtifactKind.IMAGE -> "Image"
+        ArtifactKind.AUDIO -> "Audio"
+        ArtifactKind.VIDEO -> "Video"
+        ArtifactKind.CHANGED_FILES -> {
+            val n = artifact.files.size
+            return "Changed files · $n ${if (n == 1) "file" else "files"}"
+        }
     }
-    val path = if (artifact.path.startsWith("$home/")) "~" + artifact.path.removePrefix(home) else artifact.path
-    return "$kind · $path"
+    return "$kind · ${homePath(artifact.path, home)}"
+}
+
+private fun homePath(path: String, home: String) =
+    if (path == home) "~" else if (path.startsWith("$home/")) "~" + path.removePrefix(home) else path
+
+/** A row of a changed files card: the file's Debian [path], its [name], its [folder] (`~/work`). */
+data class ChangedFileRow(val path: String, val name: String, val folder: String)
+
+/** A changed files card's rows, one per file, in order. */
+fun changedFileRows(artifact: ChatArtifact, home: String): List<ChangedFileRow> = artifact.files.map { path ->
+    val folder = path.substringBeforeLast('/', "").ifEmpty { "/" }
+    ChangedFileRow(path, path.substringAfterLast('/'), homePath(folder, home))
 }
 
 /** Run: a tab running the terminal app as the menu's Terminal apps item does, with its key bar. */

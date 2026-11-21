@@ -175,3 +175,206 @@ Limits: a chat started in another folder is listed while it's live;
 its past sessions are in that folder's history, which the history
 screen (root's home) doesn't show yet. The phone's storage shows only
 what Android lets the app read without a storage permission.
+
+## Viewers: text, code, Markdown, audio and video
+
+The maintainer's decisions (2026-11-21): mynx gets its own viewers
+for text (a notepad), source code, Markdown, audio and video, and
+opens supported files in them **by default**, from Files, from chat
+and from the terminal. A setting per kind picks mynx's viewer or
+another Android app. Text, code and Markdown open **to view, with an
+Edit button**. In the terminal, `mynx open FILE` **asks** which to
+open with, unless the command says (`--with`); without a terminal (an
+agent, a script) it uses the setting, so nothing waits on a prompt.
+
+### Kinds and settings
+
+| Kind | Files | Setting | mynx's viewer |
+|---|---|---|---|
+| picture | `chatImageFile()`'s | `open-pictures` | `ImageViewActivity` (exists) |
+| markdown | `.md`, `.markdown` | `open-markdown` | `TextViewActivity`, drawn as in chat |
+| code | a language `codeLanguageOf()` knows | `open-code` | `TextViewActivity`, highlighted |
+| text | `.txt`, `.log`, `.csv`, …, or any file that looks like text | `open-text` | `TextViewActivity`, plain |
+| audio | mp3, m4a, aac, ogg, opus, flac, wav, mid | `open-audio` | `MediaViewActivity` |
+| video | mp4, webm, mkv, 3gp, mov | `open-video` | `MediaViewActivity` |
+
+Each setting is `mynx` (the default) or `android` (Android's "open
+with"). They're in `settings.conf`, `mynx set open-code android`, and
+a new **Default apps** group in Settings (`HomeSettings`). Anything
+else (no kind, a binary file) opens with Android, else Share, as today.
+
+### Opening
+
+- **Files:** a tap opens the file as its setting says. Selecting one
+  file adds **Open with…** (mynx's viewer, or another app).
+- **Chat:** an attachment chip of any kind opens in its viewer, as
+  pictures' do. Cards: a Markdown card's first action is **View**
+  (then Copy, Share); audio and video written or named in a turn get
+  cards like pictures' (**Play**, Share); code and text files written
+  or edited in a turn (and not already some card) get one
+  **Changed files** card per turn: each file a row (name, folder)
+  that opens it in the code viewer. A file counts as written by Write
+  or Edit, or by a command's `>`, `>>` or `tee` (Claude often writes
+  with `cat > FILE <<'EOF'`) when it changed in the turn. When the turn
+  ends, its cards move below its last words (maintainer's test,
+  2026-11-21: they sat above them, out of sight).
+- **Paths in replies:** code in Claude's text that names a file that's
+  there (`~/scripts/run.sh`, `README.md`, `a.py:12`) is underlined, a
+  link that opens the file as its setting says (maintainer's decision,
+  2026-11-21: underlined, so it's clear it's a link).
+- **Terminal:** `mynx open URL | FILE [--with mynx|android] [--edit]`.
+  A relative FILE is against the current folder. In a terminal, with
+  no `--with`, it asks:
+  ```
+  Open notes.md with:
+    1) mynx's Markdown viewer (default)
+    2) another Android app
+  Choose [1]:
+  ```
+  Enter takes the setting's choice. `--edit` opens text, code and
+  Markdown ready to edit. The app must be on screen (as for links).
+  `xdg-open` takes files too (`mynx open`, so it asks as well).
+  `--json`: `{"ok": true, "with": "mynx", "kind": "code"}`.
+
+### The text viewer (`TextViewActivity`: text, code, Markdown)
+
+- Top bar: ←, the file name (the folder under it, dim), **Edit**, ⋮
+  (Wrap lines, Find, Share, Open with…, Copy path). Markdown adds a
+  **View / Edit** switch in place of Edit.
+- **View:** read-only, selectable. Code and text in the terminal's
+  font with line numbers, horizontally scrolled unless Wrap is on
+  (on by default for text and Markdown, off for code). Code is
+  highlighted in the terminal theme's colours. Markdown is drawn as
+  chat draws it, plus pictures (relative to the file) and links to
+  other local files (they open in their viewer).
+- **Edit:** an `EditText` with the same font and highlighting
+  (re-run off the main thread after typing stops, ~300 ms); the top
+  bar gets **Save** and Undo/Redo. Back with unsaved changes asks:
+  Save, Discard, Cancel.
+- **Saving runs in Debian** (as Files' jobs): the text is written to
+  a temporary file in `/tmp/.mynx/saves/`, then `sh -c 'cat "$1" >
+  "$2" && rm -f "$1"'`, so the file is changed in place (its links,
+  owner and mode kept). If the file changed on disk since it was
+  read, Save asks: Overwrite, Reload, Cancel.
+- Limits: files over 1 MB open read-only and show their first 1 MB
+  (a line says so). Text that isn't UTF-8 (or has NUL bytes) isn't
+  text: "Open with another app". Line endings (LF, CRLF) and a final
+  newline are kept as they were.
+- **Find** (⋮ or Ctrl+F): a bar with the matches' count, ↑ ↓, case
+  ignored.
+- Keyboard: Ctrl+S saves, Ctrl+F finds, Esc leaves Edit (asks if
+  changed), as the keyboard-first rule wants.
+
+### The media player (`MediaViewActivity`: audio and video)
+
+- **Video:** black, full screen, Android's `MediaPlayer` (no new
+  dependency); the picture fits and turns with the phone. A tap shows
+  the controls (←, name, play/pause, a seek bar with times, ⟲10 /
+  10⟳); they hide after 3 s of play. Double-tap left/right seeks 10 s.
+- **Audio:** the name, the folder, a big play/pause, the seek bar,
+  previous/next through the folder's other audio files (by name),
+  and speed (1×, 1.25×, 1.5×, 2×, 0.75×).
+- **Audio keeps playing** when the screen goes off or the app leaves
+  (a foreground service, `MediaPlaybackService`, with a media
+  notification: play/pause, next, close, and the lock screen's
+  controls through a `MediaSession`); video pauses.
+- A file Android can't play says so on screen, with Open with
+  another app.
+
+### Code: where it goes
+
+**core** (tested; one file per bullet):
+- `FileKinds.kt`:
+  ```kotlin
+  enum class FileKind { PICTURE, MARKDOWN, CODE, TEXT, AUDIO, VIDEO }
+  fun fileKindOf(name: String): FileKind?        // by name only
+  fun looksLikeText(head: ByteArray): Boolean    // UTF-8, no NUL (first 8 KB)
+  fun codeLanguageOf(name: String): String?      // "python", "kotlin", "shell", …
+  enum class OpenWith { MYNX, ANDROID }
+  fun Settings.openWith(kind: FileKind): OpenWith
+  ```
+  `Settings` gets `openPictures`, `openMarkdown`, `openCode`,
+  `openText`, `openAudio`, `openVideo` (`SETTINGS`, `HomeSettings`'
+  "Default apps" group).
+- `MynxRequests.kt`: `open-file PATH WITH EDIT` (WITH: `mynx`,
+  `android` or `default`; EDIT `0`/`1`): checks the file, works out
+  the kind, answers `{"with": …, "kind": …}`, and calls a new
+  constructor callback `openFile(path: String, kind: FileKind?, with:
+  OpenWith, edit: Boolean): String?` (null when it opened, else why
+  not). `mynx open`'s question is asked by `cli.py` (it sends
+  `open-file-kind PATH` first for the kind and the setting's choice).
+- `TextDoc.kt`: the editor's model. `loadText(bytes, size):
+  TextLoad` (the text, line ending, final newline, truncated,
+  read-only and why); `TextDoc` (text, saved text, dirty, the file's
+  time when read); `saveText(doc, text): ByteArray` (line endings
+  back as found); `saveJob(temp, path): FileJob`;
+  `findMatches(text, query): List<IntRange>`; `lineStarts(text)` for
+  the numbers.
+- `Syntax.kt`: `highlight(text: String, language: String):
+  List<SyntaxSpan>` (`start`, `end`, `kind`: KEYWORD, TYPE, STRING,
+  COMMENT, NUMBER, CONSTANT, FUNCTION, TAG, ATTRIBUTE, OPERATOR,
+  HEADING, ADDED, REMOVED), from a table of languages (keywords,
+  comments, strings, number forms) plus lexers for HTML/XML, Markdown
+  and diff. Languages at first: Python, shell, Kotlin, Java,
+  JavaScript/TypeScript, C/C++, Rust, Go, Lua, Ruby, PHP, SQL, JSON,
+  YAML, TOML/INI/conf, HTML/XML, CSS, Dockerfile, Makefile, diff.
+  `syntaxColor(kind, scheme: ColorScheme): Int` from the theme's
+  palette (keywords magenta, strings green, comments dim, …), each
+  readable on the background (`contrast()` ≥ 3). Fast enough for 1 MB
+  in well under a second on the phone; a span never crosses the text's
+  end; unknown text is never dropped.
+- `Media.kt`: `mediaTime(ms): String` ("0:07", "1:02:03"),
+  `mediaQueue(names: List<String>, current: String): List<String>`
+  (the folder's audio files by name, ignoring case), `nextSpeed()`,
+  `seekBy(position, delta, duration)`.
+- `ChatArtifacts.kt`: `ArtifactKind.AUDIO`, `VIDEO`, `CHANGED_FILES`
+  (`ChatArtifact.files: List<String>`); the actions View (Markdown),
+  Play (audio, video); the rules as above, tested like pictures'.
+
+**app** (thin):
+- `TextViewActivity` (+ `MarkdownViews`, the Markdown drawing moved
+  out of `ChatView` so both use it; chat's code blocks get highlighted
+  too), `MediaViewActivity`, `MediaPlaybackService` (manifest:
+  `FOREGROUND_SERVICE_MEDIA_PLAYBACK`).
+- `TerminalService.openFile(…)` for the request, and an
+  `openDebianFile(path, with)` that Files and chat use too;
+  `saveDebianText(path, bytes, done)` through `runInDebian`.
+- `FilesView`'s Open with…, `ChatView`'s chips and cards,
+  `MainActivity` wiring, the Settings group.
+- Screenshots: the text viewer (code, Markdown, Edit with the
+  keyboard), the audio player, the cards.
+
+**tools/**: `cli.py` (`mynx open FILE`, the question, `--with`,
+`--edit`), `xdg-open`, the guide (`tools/AGENTS.md`'s `mynx open`
+line and a "Files and viewers" part of `tools/docs/phone.md`),
+tests in `tests/mynx/` and `tests/shell/`.
+
+### Building it: agents in waves
+
+Each agent works in a git worktree of its own on a branch off
+`viewers`, test-first, and only in the files its row names; it
+commits there and reports. Between waves the lead merges the
+branches into `viewers` and runs every local suite; after wave 2
+and wave 3, CI builds the app (it only compiles there), and the
+lead fixes what the compiler finds. One PR, `viewers` into `main`;
+the maintainer tests the build in mynx dev before the merge.
+
+| Wave | Agent | Owns |
+|---|---|---|
+| 1 | **core-open** | `FileKinds.kt`, `Settings.kt`, `HomeSettings.kt`, `MynxRequests.kt` (open-file), `Media.kt`; `cli.py`, `xdg-open`, the guide, their tests |
+| 1 | **core-text** | `TextDoc.kt`, `Syntax.kt`, `ChatArtifacts.kt` (new kinds), their tests |
+| 2 | **app-text** | `TextViewActivity`, `MarkdownViews` (moved out of `ChatView`: only that part of it), the manifest entry, text screenshots |
+| 2 | **app-media** | `MediaViewActivity`, `MediaPlaybackService`, manifest entries, media screenshots |
+| 3 | **app-wiring** | `TerminalService`, `MainActivity`, `FilesView`, `ChatView`'s chips and cards, the Settings group, cards screenshots |
+
+Docs before the merge: `docs/ARCHITECTURE.md` (a "viewers" entry),
+the README, the roadmap, the work log.
+
+### Later (suggested, not decided)
+
+- A **diff view** in chat: a changed file's rows open what changed
+  in the turn, drawn with `Syntax.kt`'s `diff`.
+- A **PDF viewer** (Android's `PdfRenderer`, no dependency) and
+  **HTML files** in the web apps' WebView.
+- Opening files **from other apps** (Android's Files → mynx's
+  viewer), saving back through the content URI.

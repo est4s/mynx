@@ -20,7 +20,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
   mode's chat home with its drawer and the pixel style (#83),
   Chat's pictures (thumbnails #91, full screen and image cards #92),
-  and touch mode's Files (#93). Every
+  touch mode's Files (#93), and viewers for text, code, Markdown,
+  audio and video (#94). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -28,6 +29,12 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
+
+### 0. Viewers: suggested next (the maintainer picks)
+
+Not decided (roadmap "Viewers"): a diff view of a turn's changes in
+chat, a PDF viewer, HTML files in the web apps' WebView, opening files
+from other apps in mynx's viewers.
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -78,6 +85,48 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-21 (199): Viewers for text, code, Markdown, audio and video (PR #94; passed)
+
+The maintainer asked for a Markdown viewer and editor, a notepad, a
+code viewer and a media player, opening supported files, working in
+chat as the image viewer does, with settings for default apps.
+Decisions: mynx's viewers are the default; text, code and Markdown
+open to view with an Edit button; `mynx open FILE` asks in a
+terminal unless `--with` says (my addition, agreed: never without a
+tty or with `--json`, so agents don't wait). Design:
+`docs/TOUCH-DESIGN.md`, "Viewers"; architecture entry "Viewers".
+- Built by agents in three waves in worktrees against that contract:
+  core-open (`FileKinds`, the `open-*` settings, `open-file`
+  requests, `Media`, `mynx open`, `xdg-open`, the guide), core-text
+  (`TextDoc`, `Syntax`, chat's AUDIO/VIDEO/CHANGED_FILES cards),
+  app-text (`TextViewActivity`, `TextViewerView`, `MarkdownViews`
+  moved out of `ChatView`, `TextHistory`, Markdown files' pictures and
+  links), app-media (`MediaViewActivity`, `MediaPlaybackService`,
+  pixel icons), app-wiring (`Viewers.kt`, `openDebianFileWith()`,
+  Files' Open with…, chat's chips and cards). The lead merged, unified
+  the audio/video extensions, and checked builds in CI between waves
+  (`workflow_dispatch` on the branch: both passed).
+- Changed: every file Claude writes now gets checked when its call
+  completes, and files with no other card go into one Changed files
+  card per turn; Markdown cards are View, Copy, Share. Card buttons
+  (View, Play) always use mynx's viewer; chips, Files and the changed
+  files' rows follow the setting.
+- The maintainer's first test (build 44891241402): everything passed
+  but chat's cards, which a script and a Markdown file Claude wrote with
+  `cat > FILE <<'EOF'` never got (only Write and Edit counted). Fixed:
+  a command's `>`, `>>` and `tee` targets count when they changed in
+  the turn (`commandWrites()`); cards move below the turn's last words
+  when it ends (`withArtifactCards(toEnd)`); and code in replies that
+  names a file that's there is an underlined link (`chatFilePath()`,
+  `MarkdownViews`' `fileAt`), the maintainer's choices.
+- Passed in mynx dev (build 44895957994): the maintainer tried it
+  all ("all works").
+- Limits: highlighting stops past 256 KB, editing past 1 MB; web
+  pictures in Markdown aren't fetched; the Open with… dialog has no
+  screenshot (dialogs aren't captured); TextHistory's undo has no
+  app-side test beyond screenshots. One wave-1 test file (`SyntaxTest`)
+  first ran against finished code, so it never failed for a reason.
 
 ### 2026-11-21 (198): Touch mode's Files (PR #93; passed)
 

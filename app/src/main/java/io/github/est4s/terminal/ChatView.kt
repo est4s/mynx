@@ -8,7 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Rect
-import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
@@ -20,17 +19,9 @@ import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
 import android.text.SpannableString
-import android.text.SpannableStringBuilder
 import android.text.Spanned
-import android.text.TextPaint
 import android.text.TextUtils
-import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
-import android.text.style.LeadingMarginSpan
-import android.text.style.QuoteSpan
-import android.text.style.RelativeSizeSpan
-import android.text.style.StrikethroughSpan
-import android.text.style.StyleSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.ActionMode
@@ -46,12 +37,9 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.TableLayout
-import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import io.github.est4s.terminal.core.ArtifactAction
@@ -66,11 +54,12 @@ import io.github.est4s.terminal.core.ChatItem
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.ChatStatusLine
 import io.github.est4s.terminal.core.ChatTabHold
+import io.github.est4s.terminal.core.FileKind
+import io.github.est4s.terminal.core.OpenWith
+import io.github.est4s.terminal.core.changedFileRows
+import io.github.est4s.terminal.core.fileKindOf
 import io.github.est4s.terminal.core.IncrementalMarkdown
-import io.github.est4s.terminal.core.MdAlign
 import io.github.est4s.terminal.core.MdRow
-import io.github.est4s.terminal.core.MdStyleKind
-import io.github.est4s.terminal.core.MdStyled
 import io.github.est4s.terminal.core.NoticeKind
 import io.github.est4s.terminal.core.PermissionOptionKind
 import io.github.est4s.terminal.core.QuestionPicks
@@ -82,6 +71,7 @@ import io.github.est4s.terminal.core.chatArtifactLine
 import io.github.est4s.terminal.core.chatArtifactNote
 import io.github.est4s.terminal.core.chatArtifactRunCommand
 import io.github.est4s.terminal.core.chatArtifactShortcutCommand
+import io.github.est4s.terminal.core.chatFilePath
 import io.github.est4s.terminal.core.chatImageFile
 import io.github.est4s.terminal.core.chatFit
 import io.github.est4s.terminal.core.chatOutcomeText
@@ -95,8 +85,8 @@ import io.github.est4s.terminal.core.mdRows
 import io.github.est4s.terminal.core.runThenShell
 import io.github.est4s.terminal.core.splitAttachments
 import io.github.est4s.terminal.core.usageRing
+import java.io.File
 import kotlin.math.abs
-import kotlin.math.ceil
 
 private const val CHAT_TITLE = "claude code"
 private const val NEW_CHAT_TITLE = "New chat"
@@ -105,11 +95,6 @@ private const val IMAGE_PREVIEW_DP = 240
 private val RIPPLE_ON_FILL: Int get() = Pixel.RIPPLE_ON_CYAN
 // What the rows keep of the height when it's short (see chatFit).
 private const val CONVERSATION_MIN_DP = 48
-// One level of a list or quote.
-private const val MD_INDENT_DP = 18
-// Wider cells wrap: a table of prose stays readable, and the table scrolls sideways.
-private const val MD_CELL_MAX_DP = 220
-private val MD_HEADING_SCALE = floatArrayOf(1.5f, 1.3f, 1.15f, 1.05f, 1f, 1f)
 
 // The box is outside it, so nothing here needs scrolling to when it takes the focus:
 // a tall selectable row that did would make the rows jump.
@@ -117,12 +102,6 @@ private class ChatScroll(context: Context) : ScrollView(context) {
     override fun computeScrollDeltaToGetChildRectOnScreen(rect: Rect): Int = 0
 }
 
-// Likewise for the code and tables that scroll sideways.
-private class ChatSideScroll(context: Context) : HorizontalScrollView(context) {
-    override fun computeScrollDeltaToGetChildRectOnScreen(rect: Rect): Int = 0
-}
-
-// Selectable text ignores a ClickableSpan's taps: selectableText finds them itself.
 // A card's buttons side by side, wrapping onto the next line; one too wide for a
 // line takes a line of its own, at full width (its text wraps, then ellipsizes).
 private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(context) {
@@ -180,15 +159,6 @@ private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(con
     }
 }
 
-private class ChatLink(private val url: String, private val color: Int, private val open: (String) -> Unit) : ClickableSpan() {
-    override fun onClick(widget: View) = open(url)
-
-    override fun updateDrawState(ds: TextPaint) {
-        ds.color = color
-        ds.isUnderlineText = true
-    }
-}
-
 /**
  * Touch mode's Chat, in the pixel style ([Pixel]): the hub's shown
  * [ChatController] as rows over the terminal, drawn from the [ChatState]s the activity passes to [show].
@@ -203,7 +173,13 @@ private class ChatLink(private val url: String, private val color: Int, private 
  * null hides the tiles. [thumbnails] draws images' chips with the picture
  * (null: the photo icon), and image cards' previews. [viewImage] shows a
  * picture full screen (a Debian path): tapping an image's chip or card,
- * or the card's View. [clock] is the time Usage's resets are told from.
+ * or the card's View. [openFile] opens any other file (a Debian path) in
+ * mynx's viewer or another app, as [OpenWith] says (null: the kind's
+ * setting): another file's chip, a Markdown card's View, an audio or
+ * video card's Play, a changed files card's rows, and file paths in
+ * replies (underlined when [hostFile], a Debian path's file on the phone,
+ * says they're there). [clock] is the time
+ * Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ChatView(
@@ -219,10 +195,11 @@ class ChatView(
     private val dictation: ChatDictation? = null,
     private val thumbnails: ChatThumbnails? = null,
     private val viewImage: ((String) -> Unit)? = null,
+    private val openFile: ((path: String, with: OpenWith?) -> Unit)? = null,
+    private val hostFile: ((String) -> File?)? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
-    private class MdCell(val type: Class<*>, val view: View, val bind: (MdRow) -> Unit)
 
     private val rows = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -720,9 +697,20 @@ class ChatView(
             if (image && viewImage != null) {
                 setOnClickListener { viewImage?.invoke(path) }
                 contentDescription = "View $name"
+            } else if (!image && openFile != null) {
+                setOnClickListener { openFile?.invoke(path, null) }
+                contentDescription = "Open $name"
+            }
+            val kindIcon = when {
+                image -> PixelIcon.IMAGE
+                else -> when (fileKindOf(name)) {
+                    FileKind.AUDIO -> PixelIcon.NOTE
+                    FileKind.VIDEO -> PixelIcon.PLAY
+                    else -> PixelIcon.FILE
+                }
             }
             val icon = ImageView(context).apply {
-                setImageDrawable(Pixel.icon(context, if (image) PixelIcon.IMAGE else PixelIcon.FILE, Pixel.DIM, 16))
+                setImageDrawable(Pixel.icon(context, kindIcon, Pixel.DIM, 16))
             }
             addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
             if (image) thumbnails?.load(path) { bitmap ->
@@ -834,7 +822,11 @@ class ChatView(
     private fun agentCell(colors: StripColors): Cell {
         val column = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
         val parser = IncrementalMarkdown()
-        val drawnCells = ArrayList<MdCell>()
+        val markdown = MarkdownViews(
+            context, colors, { color, sp, links -> selectableText(color, sp, links) }, ::openLink,
+            fileAt = ::codeFile, openFile = { path -> openFile?.invoke(path, null) },
+        )
+        val drawnCells = ArrayList<MarkdownViews.Cell>()
         var drawnRows: List<MdRow> = emptyList()
         // The reply as Claude wrote it (its Markdown), under the rows.
         var source = ""
@@ -853,21 +845,21 @@ class ChatView(
                 val cell = drawnCells.getOrNull(i)
                 when {
                     cell == null -> {
-                        val made = mdCell(row, colors)
+                        val made = markdown.cell(row)
                         made.bind(row)
                         drawnCells.add(made)
-                        column.addView(made.view, mdParams(row, before))
+                        column.addView(made.view, markdown.params(row, before))
                     }
                     cell.type != row.javaClass -> {
-                        val made = mdCell(row, colors)
+                        val made = markdown.cell(row)
                         made.bind(row)
                         drawnCells[i] = made
                         column.removeViewAt(i)
-                        column.addView(made.view, i, mdParams(row, before))
+                        column.addView(made.view, i, markdown.params(row, before))
                     }
                     row != drawnRows[i] -> {
                         cell.bind(row)
-                        cell.view.layoutParams = mdParams(row, before)
+                        cell.view.layoutParams = markdown.params(row, before)
                     }
                 }
             }
@@ -879,73 +871,11 @@ class ChatView(
         }
     }
 
-    private fun mdParams(row: MdRow, before: MdRow?): LinearLayout.LayoutParams {
-        val height = if (row is MdRow.Rule) dp(2) else WRAP_CONTENT
-        return LinearLayout.LayoutParams(MATCH_PARENT, height).apply {
-            topMargin = when {
-                before == null -> 0
-                row is MdRow.Text && row.heading > 0 -> dp(12)
-                row is MdRow.Text && row.marker != null && before is MdRow.Text && before.marker != null -> dp(3)
-                else -> dp(8)
-            }
-            // Text rows indent with spans, for the hanging indent.
-            if (row !is MdRow.Text) leftMargin = (row.indent + row.quote) * dp(MD_INDENT_DP)
-        }
-    }
-
-    private fun mdCell(row: MdRow, colors: StripColors): MdCell = when (row) {
-        is MdRow.Text -> mdTextCell(row, colors)
-        is MdRow.Code -> mdCodeCell(row, colors)
-        is MdRow.Table -> mdTableCell(row, colors)
-        is MdRow.Rule -> MdCell(row.javaClass, View(context).apply { setBackgroundColor(Pixel.LINE) }) { }
-    }
-
-    private fun mdTextCell(first: MdRow.Text, colors: StripColors): MdCell {
-        val text = selectableText(colors.text, 15f, links = true).apply { setLineSpacing(0f, 1.15f) }
-        return MdCell(first.javaClass, text) { row -> text.text = mdText(row as MdRow.Text, text, colors) }
-    }
-
-    private fun mdText(row: MdRow.Text, view: TextView, colors: StripColors): CharSequence {
-        val out = SpannableStringBuilder()
-        val marker = row.marker
-        if (marker != null) out.append(marker).append(' ')
-        out.append(mdSpanned(row.text, colors))
-        val end = out.length
-        if (end == 0) return out
-        if (row.heading > 0) {
-            out.setSpan(PixelFontSpan(Pixel.label(context, 700)), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            out.setSpan(RelativeSizeSpan(MD_HEADING_SCALE[row.heading - 1]), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        repeat(row.quote) {
-            out.setSpan(QuoteSpan(colors.accent), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            out.setSpan(LeadingMarginSpan.Standard(dp(8)), 0, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        val first = row.indent * dp(MD_INDENT_DP)
-        val rest = if (marker != null) first + ceil(view.paint.measureText("$marker ")).toInt() else first
-        if (rest > 0) {
-            // A line break in an item starts a paragraph, which would get the first line's margin.
-            val breakAt = out.indexOf('\n')
-            val firstEnd = if (breakAt < 0) end else breakAt + 1
-            out.setSpan(LeadingMarginSpan.Standard(first, rest), 0, firstEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            if (firstEnd < end) out.setSpan(LeadingMarginSpan.Standard(rest), firstEnd, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        return out
-    }
-
-    private fun mdSpanned(styled: MdStyled, colors: StripColors): SpannableString {
-        val out = SpannableString(styled.text)
-        for (style in styled.styles) {
-            val spans: List<Any> = when (style.kind) {
-                MdStyleKind.BOLD -> listOf(StyleSpan(Typeface.BOLD))
-                MdStyleKind.ITALIC -> listOf(StyleSpan(Typeface.ITALIC))
-                MdStyleKind.STRIKE -> listOf(StrikethroughSpan())
-                // All of it is in the mono font already: code stands out in cyan, as in the mock-up.
-                MdStyleKind.CODE -> listOf(ForegroundColorSpan(colors.accent))
-                MdStyleKind.LINK -> listOf(ChatLink(style.url.orEmpty(), colors.accent) { url -> openLink(url) })
-            }
-            spans.forEach { out.setSpan(it, style.start, style.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE) }
-        }
-        return out
+    // A file that code in a reply names, if it's there: a stat on the main thread, only for code that looks like a path.
+    private fun codeFile(text: String): String? {
+        val chat = controller() ?: return null
+        val host = hostFile ?: return null
+        return chatFilePath(text, chat.cwd, chat.home)?.takeIf { host(it)?.isFile == true }
     }
 
     private fun openLink(url: String) {
@@ -956,83 +886,6 @@ class ChatView(
         } catch (e: ActivityNotFoundException) {
             Toast.makeText(context, "No app can open that link.", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private fun mdCodeCell(first: MdRow.Code, colors: StripColors): MdCell {
-        var code = ""
-        val language = plainText(Pixel.DIM, 12f).apply { typeface = Pixel.label(context, 500) }
-        val copy = linkButton("Copy", colors) { }
-        copy.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-        copy.setPadding(dp(6), dp(8), dp(6), dp(8))
-        copy.minHeight = dp(36)
-        copy.setOnClickListener {
-            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("code", code))
-            copy.text = "Copied"
-            copy.postDelayed({ copy.text = "Copy" }, 1500L)
-        }
-        val head = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(2), dp(4), 0)
-            addView(language, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            addView(copy)
-        }
-        val body = selectableText(colors.text, 13f).apply {
-            setPadding(dp(12), 0, dp(12), dp(12))
-        }
-        val card = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE)
-            addView(head)
-            addView(ChatSideScroll(context).apply { addView(body) })
-        }
-        return MdCell(first.javaClass, card) { row ->
-            val block = row as MdRow.Code
-            code = block.text
-            language.text = block.language.orEmpty()
-            body.text = block.text
-        }
-    }
-
-    private fun mdTableCell(first: MdRow.Table, colors: StripColors): MdCell {
-        val grid = TableLayout(context).apply {
-            setDividerDrawable(GradientDrawable().apply {
-                setColor(Pixel.LINE)
-                setSize(1, dp(2))
-            })
-            setShowDividers(LinearLayout.SHOW_DIVIDER_MIDDLE)
-        }
-        var drawnLines: List<List<MdStyled>> = emptyList()
-        return MdCell(first.javaClass, ChatSideScroll(context).apply { addView(grid) }) { row ->
-            val table = (row as MdRow.Table).table
-            val lines = listOf(table.header) + table.rows
-            lines.forEachIndexed { r, line ->
-                if (line == drawnLines.getOrNull(r)) return@forEachIndexed
-                val rowView = grid.getChildAt(r) as? TableRow ?: TableRow(context).also { made ->
-                    if (r == 0) made.setBackgroundColor(colors.selectedBackground)
-                    grid.addView(made)
-                }
-                while (rowView.childCount > line.size) rowView.removeViewAt(rowView.childCount - 1)
-                line.forEachIndexed { c, styled ->
-                    val cell = rowView.getChildAt(c) as? TextView ?: mdTableText(colors, r == 0).also { rowView.addView(it) }
-                    cell.gravity = when (table.aligns.getOrNull(c)) {
-                        MdAlign.CENTER -> Gravity.CENTER_HORIZONTAL
-                        MdAlign.RIGHT -> Gravity.END
-                        else -> Gravity.START
-                    }
-                    cell.text = mdSpanned(styled, colors)
-                }
-            }
-            while (grid.childCount > lines.size) grid.removeViewAt(grid.childCount - 1)
-            drawnLines = lines
-        }
-    }
-
-    private fun mdTableText(colors: StripColors, header: Boolean) = selectableText(colors.text, 14f, links = true).apply {
-        maxWidth = dp(MD_CELL_MAX_DP)
-        setPadding(dp(8), dp(6), dp(8), dp(6))
-        if (header) setTypeface(typeface, Typeface.BOLD)
     }
 
     private fun toolCell(colors: StripColors): Cell {
@@ -1222,14 +1075,7 @@ class ChatView(
             card.addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(TextView(context).apply {
-                    text = artifact.label.filter { it.isLetterOrDigit() }.take(2).uppercase()
-                    typeface = Pixel.label(context, 700)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-                    setTextColor(Pixel.BACKGROUND)
-                    gravity = Gravity.CENTER
-                    setBackgroundColor(Pixel.PINK)
-                }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
+                addView(artifactBadge(artifact), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(plainText(colors.text, 17f).apply {
@@ -1254,16 +1100,69 @@ class ChatView(
                         ArtifactAction.RUN -> openTab(chatArtifactRunCommand(artifact))
                         ArtifactAction.INSTALL -> install?.invoke(artifact.shareFile)
                         ArtifactAction.COPY -> copyFile(artifact.shareFile)
-                        ArtifactAction.VIEW -> viewImage?.invoke(artifact.shareFile)
+                        ArtifactAction.VIEW -> if (artifact.kind == ArtifactKind.IMAGE) {
+                            viewImage?.invoke(artifact.shareFile)
+                        } else {
+                            openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
+                        }
+                        ArtifactAction.PLAY -> openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
             }
-            card.addView(flow, buttonFlowParams())
+            if (flow.childCount > 0) card.addView(flow, buttonFlowParams())
+            if (artifact.kind == ArtifactKind.CHANGED_FILES) changedFileRows(artifact, controller()?.home ?: "/root").forEach { row ->
+                card.addView(changedFileRow(row.name, row.folder, colors) { openFile?.invoke(row.path, null) },
+                    LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+            }
             chatArtifactNote(artifact, canInstall = install != null)?.let { note ->
                 card.addView(answeredText(note, colors))
             }
         }
+    }
+
+    // A card's square: audio, video and changed files their icon; the rest the label's first two letters.
+    private fun artifactBadge(artifact: ChatArtifact): View {
+        val icon = when (artifact.kind) {
+            ArtifactKind.AUDIO -> PixelIcon.NOTE
+            ArtifactKind.VIDEO -> PixelIcon.PLAY
+            ArtifactKind.CHANGED_FILES -> PixelIcon.FILE
+            else -> null
+        }
+        if (icon != null) return ImageView(context).apply {
+            setImageDrawable(Pixel.icon(context, icon, Pixel.BACKGROUND, 24))
+            scaleType = ImageView.ScaleType.CENTER
+            setBackgroundColor(Pixel.PINK)
+        }
+        return TextView(context).apply {
+            text = artifact.label.filter { it.isLetterOrDigit() }.take(2).uppercase()
+            typeface = Pixel.label(context, 700)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            setTextColor(Pixel.BACKGROUND)
+            gravity = Gravity.CENTER
+            setBackgroundColor(Pixel.PINK)
+        }
+    }
+
+    // A changed file: its name, its folder dim under it; a tap opens it.
+    private fun changedFileRow(name: String, folder: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        minimumHeight = dp(48)
+        isFocusable = true
+        contentDescription = "Open $name"
+        setOnClickListener { onTap() }
+        addView(plainText(colors.text, 15f).apply {
+            text = name
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+        })
+        addView(plainText(Pixel.DIM, 12f).apply {
+            text = folder
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+        })
     }
 
     // The picture, as large as the card is wide (up to IMAGE_PREVIEW_DP high), once decoded; a tap views it.
@@ -1335,14 +1234,14 @@ class ChatView(
         })
     }
 
-    private fun linkAt(row: TextView, event: MotionEvent): ChatLink? {
+    private fun linkAt(row: TextView, event: MotionEvent): MdLink? {
         val layout = row.layout ?: return null
         val x = event.x - row.totalPaddingLeft + row.scrollX
         val line = layout.getLineForVertical((event.y - row.totalPaddingTop + row.scrollY).toInt())
         if (x < layout.getLineLeft(line) || x > layout.getLineRight(line)) return null
         val offset = layout.getOffsetForHorizontal(line, x)
         val text = row.text as? Spanned ?: return null
-        return text.getSpans(offset, offset, ChatLink::class.java).firstOrNull()
+        return text.getSpans(offset, offset, MdLink::class.java).firstOrNull()
     }
 
     // Posted: the touch hasn't given the row the focus yet, nor ended the selection.

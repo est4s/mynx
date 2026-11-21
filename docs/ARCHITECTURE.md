@@ -632,6 +632,32 @@ See `docs/ROADMAP.md` "How it works". The details:
   after a confirmation. Chat here is `ChatHub.newChat(cwd)`; Terminal
   here a tab started in the folder. Pictures' thumbnails come from a
   `ChatThumbnails` of its own (40 dp), only for rows near sight.
+- **Viewers** (`core/.../FileKinds.kt`, `Viewers.kt`, `TextDoc.kt`,
+  `TextHistory.kt`, `Syntax.kt`, `Media.kt`; `app/.../TextViewActivity.kt`,
+  `TextViewerView.kt`, `MarkdownViews.kt`, `MediaViewActivity.kt`,
+  `MediaPlaybackService.kt`; the spec is `docs/TOUCH-DESIGN.md`,
+  "Viewers"; maintainer's decisions, 2026-11-21): mynx's own viewers
+  open supported files by default. `fileKindOf()` names the kind
+  (picture, Markdown, code, text, audio, video; `fileKindOfFile()`
+  adds a link's target and text sniffed from the first 8 KB), the
+  `open-*` settings pick `mynx` or `android`, and `viewerFor()` the
+  activity. **One opener**, `TerminalService.openDebianFileWith()`,
+  serves Files, chat's chips and cards, `mynx open` (`open-file`) and
+  the text viewer's links; Android's choice stays `openDebianFile()`.
+  `mynx open FILE` asks in a terminal (`cli.py`, after
+  `open-file-kind`), never with `--json` or without a tty, so agents
+  don't wait. The viewers bind `TerminalService` (flags 0) and
+  register as `FrontActivity`, or opening another app from them fails.
+  **Saving runs in Debian**: the text goes to `/tmp/.mynx/saves/`, then
+  `cat > file` in place (`saveJob()`), keeping links, owner and mode;
+  `TextDoc` keeps line endings, a BOM and the final newline as found.
+  Files over 1 MB (`TEXT_LIMIT`) open read-only; highlighting stops
+  past 256 KB (many spans make a TextView slow). Syntax colours come
+  from the terminal theme's palette with contrast ≥ 3 (`syntaxColor()`),
+  in chat's code blocks too. Media plays from a `FileInputStream`'s fd
+  (the media server can't open the app's files by path); audio lives
+  in a foreground service (`mediaPlayback`, a framework `MediaSession`,
+  notification ID 9000), video in the activity on a `SurfaceView`.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with

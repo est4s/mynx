@@ -84,6 +84,10 @@ sensors, microphone, speaker and flashlight.
   that changes with what's running: the file manager, games, AI agents
   and your own programs can each have their own. A bar can make the
   volume keys send keys too.
+- **Viewers for your files:** text and source code (highlighted, with
+  an editor), Markdown, audio and video open in mynx's own viewers,
+  from the terminal (`mynx open FILE`) or a file manager; audio keeps
+  playing in the background. Or pick another app per kind.
 - **A ready setup:** a launcher menu, a file manager
   ([nnn](https://github.com/jarun/nnn)), ten themes, a Nerd Font, the
   starship prompt and a few terminal games. Every setting is a text
