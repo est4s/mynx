@@ -481,20 +481,7 @@ class MynxRequests(
             file == null || !file.exists() -> throw Refused("no such file: $path")
             file.isDirectory -> throw Refused("$path is a folder: open folders in Files")
         }
-        val kind = fileKindOf(path) ?: fileKindOf(resolved!!)
-            ?: FileKind.TEXT.takeIf { runCatching { looksLikeText(head(file!!)) }.getOrDefault(false) }
-        return path to kind
-    }
-
-    private fun head(file: File): ByteArray = file.inputStream().use { input ->
-        val bytes = ByteArray(TEXT_HEAD)
-        var n = 0
-        while (n < bytes.size) {
-            val read = input.read(bytes, n, bytes.size - n)
-            if (read < 0) break
-            n += read
-        }
-        bytes.copyOf(n)
+        return path to fileKindOfFile(path, resolved, file!!)
     }
 
     private fun openWithFor(kind: FileKind?): OpenWith =
@@ -593,8 +580,6 @@ class MynxRequests(
 }
 
 internal const val HAND_EDITS = "edits by hand"
-// How much of a file `open-file` reads to tell whether it's text.
-private const val TEXT_HEAD = 8192
 private val EDITABLE_KINDS = setOf(FileKind.TEXT, FileKind.CODE, FileKind.MARKDOWN)
 // The ids of requests run by [MynxRequests.call]: no process number, so [MynxRequests.sweep] leaves them be.
 private const val BRIDGE_ID = "bridge-"
