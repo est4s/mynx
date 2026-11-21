@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.view.KeyEvent
 import io.github.est4s.terminal.core.FileKind
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.TextDoc
@@ -140,6 +141,20 @@ class TextViewScreenshotTest {
 
     @Test
     fun editMarkdown() = shoot(1080, 2400, "text-edit-markdown", "/root/apps/tip-calc/README.md", FileKind.MARKDOWN, MARKDOWN, edit = true)
+
+    @Test
+    fun replace() {
+        val view = Screenshots.open(1080, 2400) { activity ->
+            TextViewerView(activity, "/root/apps/tip-calc/tip.py", FileKind.CODE, NEON, noViewerActions, Executor { it.run() })
+        }
+        view.showDoc(docOf(PYTHON), false)
+        Screenshots.settle()
+        // Ctrl+H: Find with Replace, in Edit.
+        view.onKey(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_H, 0, KeyEvent.META_CTRL_ON or KeyEvent.META_CTRL_LEFT_ON))
+        view.typeFind("total", "amount")
+        Screenshots.settle()
+        Screenshots.save(view, "text-replace")
+    }
 
     @Test
     fun plainText() = shoot(1080, 2400, "text-plain", "/root/notes/todo.txt", FileKind.TEXT, "Buy milk\nCall the bank about the card, and ask why the last statement shows a fee twice\n\n- fix the bike")

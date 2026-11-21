@@ -11,6 +11,7 @@ import android.widget.EditText
 import io.github.est4s.terminal.core.AgentQuestion
 import io.github.est4s.terminal.core.ArtifactKind
 import io.github.est4s.terminal.core.CHANGED_FILES_CARD
+import io.github.est4s.terminal.core.ChangedFileRow
 import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatAttachment
 import io.github.est4s.terminal.core.ChatArtifact
@@ -196,9 +197,19 @@ private val MEDIA_CARDS = listOf(
         ChatArtifact(
             ArtifactKind.CHANGED_FILES, CHANGED_FILES_CARD, "Changed files", "/root/tip/tip.py",
             files = listOf("/root/tip/tip.py", "/root/tip/tests/test_tip.py", "/etc/tip.conf"),
+            // tip.conf was written by a command: no diff, so no counts.
+            fileTools = mapOf("/root/tip/tip.py" to listOf("toolu_edit"), "/root/tip/tests/test_tip.py" to listOf("toolu_write")),
         ),
     ),
 )
+
+/** The changed files' counts, as worked out from a transcript. */
+private class FakeDiffs : ChatDiffs {
+    override fun summary(row: ChangedFileRow, done: (String) -> Unit): String? =
+        if (row.path.endsWith("test_tip.py")) "new · 40 lines" else "+12 −3"
+
+    override fun open(row: ChangedFileRow) = true
+}
 
 /** Usage as the maintainer's screenshots had it: context 15%, the session 13% (resets today), the week 40%. */
 private val NOW_MS = 1_794_312_000_000L // 2026-11-10 12:00 UTC
@@ -295,6 +306,7 @@ class ChatScreenshotTest {
                 dictation = FakeDictation(),
                 // Decoded at once, so the screenshot has them.
                 thumbnails = ChatThumbnails(activity, { path -> File(PHOTOS, path.substringAfterLast('/')) }, Executor { it.run() }),
+                diffs = FakeDiffs(),
                 clock = { NOW_MS },
             ).apply { colors = Pixel.COLORS }
         }

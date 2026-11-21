@@ -1421,6 +1421,18 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertIn("  1) mynx's audio player\n  2) another Android app (default)\nChoose [2]:", shown)
         self.assertEqual(self.app.requests[-1], ["open-file", "/root/song.mp3", "mynx", "1"])
 
+    def assert_viewer_named(self, kind, path, viewer):
+        self.start_app({"open-file-kind": {"ok": True, "kind": kind, "with": "mynx"},
+                        "open-file": {"ok": True, "with": "mynx", "kind": kind}})
+        code, shown = self.open_in_terminal(path, answer="")
+        self.assertIn(f"  1) {viewer} (default)\n", shown)
+
+    def test_open_in_a_terminal_names_the_pdf_viewer(self):
+        self.assert_viewer_named("pdf", "/root/a.pdf", "mynx's PDF viewer")
+
+    def test_open_in_a_terminal_names_the_page_viewer(self):
+        self.assert_viewer_named("html", "/root/site/index.html", "mynx's page viewer")
+
     def test_open_in_a_terminal_doesnt_ask_for_a_file_mynx_cant_view(self):
         self.start_app({"open-file-kind": {"ok": True, "kind": None, "with": "android"},
                         "open-file": {"ok": True, "with": "android", "kind": None}})

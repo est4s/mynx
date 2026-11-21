@@ -39,8 +39,16 @@ class FileKindsTest {
     }
 
     @Test
+    fun `PDF and HTML files by their extensions, HTML no longer code`() {
+        for (name in listOf("a.pdf", "/root/Report.PDF")) assertEquals(FileKind.PDF, fileKindOf(name), name)
+        for (name in listOf("index.html", "/root/site/page.htm", "A.HTML")) assertEquals(FileKind.HTML, fileKindOf(name), name)
+        assertEquals("html", codeLanguageOf("index.html"), "View source still highlights it")
+        assertEquals(FileKind.CODE, fileKindOf("page.xhtml"))
+    }
+
+    @Test
     fun `other files have no kind by name`() {
-        for (name in listOf("app.apk", "data.bin", "archive.tar.gz", "noext", "", "folder/", "a.pdf")) assertNull(fileKindOf(name), name)
+        for (name in listOf("app.apk", "data.bin", "archive.tar.gz", "noext", "", "folder/")) assertNull(fileKindOf(name), name)
     }
 
     @Test
@@ -97,17 +105,18 @@ class FileKindsTest {
         val settings = Settings(
             openPictures = OpenWith.ANDROID, openMarkdown = OpenWith.MYNX, openCode = OpenWith.ANDROID,
             openText = OpenWith.MYNX, openAudio = OpenWith.ANDROID, openVideo = OpenWith.MYNX,
+            openPdf = OpenWith.ANDROID, openHtml = OpenWith.MYNX,
         )
         assertEquals(
-            listOf(OpenWith.ANDROID, OpenWith.MYNX, OpenWith.ANDROID, OpenWith.MYNX, OpenWith.ANDROID, OpenWith.MYNX),
-            listOf(FileKind.PICTURE, FileKind.MARKDOWN, FileKind.CODE, FileKind.TEXT, FileKind.AUDIO, FileKind.VIDEO)
+            listOf(OpenWith.ANDROID, OpenWith.MYNX, OpenWith.ANDROID, OpenWith.MYNX, OpenWith.ANDROID, OpenWith.MYNX, OpenWith.ANDROID, OpenWith.MYNX),
+            listOf(FileKind.PICTURE, FileKind.MARKDOWN, FileKind.CODE, FileKind.TEXT, FileKind.AUDIO, FileKind.VIDEO, FileKind.PDF, FileKind.HTML)
                 .map { settings.openWith(it) },
         )
     }
 
     @Test
     fun `the kinds and choices have the words mynx uses`() {
-        assertEquals(listOf("picture", "markdown", "code", "text", "audio", "video"), FileKind.entries.map { it.word })
+        assertEquals(listOf("picture", "markdown", "code", "text", "audio", "video", "pdf", "html"), FileKind.entries.map { it.word })
         assertEquals(listOf("mynx", "android"), OpenWith.entries.map { it.word })
     }
 }

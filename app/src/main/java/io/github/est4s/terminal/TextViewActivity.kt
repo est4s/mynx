@@ -84,7 +84,12 @@ class TextViewActivity : Activity(), FrontActivity, TextViewerActions {
         // Started on its own (the app's process was gone), Pixel has the default colours yet.
         val colors = runCatching { File(rootfs, COLORS_FILE).takeIf { it.isFile }?.readText() }.getOrNull()
         Pixel.use(pixelPalette(colors))
-        val kind = fileKindOf(path)?.takeIf { it == FileKind.MARKDOWN || it == FileKind.CODE } ?: FileKind.TEXT
+        // A page's source is code.
+        val kind = when (fileKindOf(path)) {
+            FileKind.MARKDOWN -> FileKind.MARKDOWN
+            FileKind.CODE, FileKind.HTML -> FileKind.CODE
+            else -> FileKind.TEXT
+        }
         viewer = TextViewerView(this, path, kind, terminalColorScheme(this), this)
         val root = FrameLayout(this).apply {
             addView(viewer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))

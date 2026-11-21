@@ -85,13 +85,21 @@ class OpenFileRequestTest {
     }
 
     @Test
-    fun `only text, code and Markdown open to edit`() {
+    fun `only text, code, Markdown and HTML open to edit`() {
         File(rootfs, "root/song.mp3").writeBytes(byteArrayOf(1, 2))
         assertEquals(
-            """{"ok":false,"error":"only text, code and Markdown files open to edit: song.mp3 is audio"}""",
+            """{"ok":false,"error":"only text, code, Markdown and HTML files open to edit: song.mp3 is audio"}""",
             ask("open-file", "/root/song.mp3", "default", "1"),
         )
         assertEquals(emptyList(), opened)
+    }
+
+    @Test
+    fun `an HTML file opens rendered, or its source to edit`() {
+        write("root/site/index.html", "<p>hi</p>\n")
+        assertEquals("""{"ok":true,"with":"mynx","kind":"html"}""", ask("open-file", "/root/site/index.html", "default", "0"))
+        assertEquals("""{"ok":true,"with":"mynx","kind":"html"}""", ask("open-file", "/root/site/index.html", "default", "1"))
+        assertEquals(Opened("/root/site/index.html", FileKind.HTML, OpenWith.MYNX, true), opened.last())
     }
 
     @Test

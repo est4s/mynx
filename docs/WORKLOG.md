@@ -20,8 +20,10 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
   mode's chat home with its drawer and the pixel style (#83),
   Chat's pictures (thumbnails #91, full screen and image cards #92),
-  touch mode's Files (#93), and viewers for text, code, Markdown,
-  audio and video (#94). Every
+  touch mode's Files (#93), viewers for text, code, Markdown, audio
+  and video (#94), and a turn's changes in chat, PDF (with text
+  selection) and HTML files (#95), with Find in PDFs and Replace in the text
+  viewers (#96, into #95's branch). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -32,9 +34,9 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 0. Viewers: suggested next (the maintainer picks)
 
-Not decided (roadmap "Viewers"): a diff view of a turn's changes in
-chat, a PDF viewer, HTML files in the web apps' WebView, opening files
-from other apps in mynx's viewers.
+Not decided: opening files from other apps in mynx's viewers, and
+whether the diff view should start unwrapped like the code viewer
+(it wraps; nobody has asked).
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -85,6 +87,78 @@ from other apps in mynx's viewers.
 ---
 
 ## Log
+
+### 2026-11-21 (202): Find in PDFs, Replace in the text viewers (PR #96 into `more-viewers`; passed)
+
+The maintainer asked for search in PDFs and Replace in the text
+viewers' Find.
+- Core: `PdfSearch.kt` (pages searched one at a time in order, the
+  current match the first at or after the page in view, else the
+  first; "2/7…" while searching; `pdfRevealBy()` to scroll a match
+  into sight); `TextDoc.kt`'s `replaceMatch()`, `replaceAll()`,
+  `matchAtOrAfter()`. Tested.
+- App: `PdfView`'s Find bar (⋮ Find, Ctrl+F; Android 15+ only, via
+  `searchText()` one page per worker task so renders go between;
+  matches tinted, the current one pink); `TextViewerView`'s Replace row
+  (⋮ Replace, Ctrl+H, ⇄ in Find; switches to Edit; each Replace/All is
+  one Undo step). Screenshots `pdf-find` (stand-in matches) and
+  `text-replace`.
+- Docs: TOUCH-DESIGN.md, ARCHITECTURE.md, the guide (`phone.md`, its
+  check in `home-docs.bats`).
+- Passed in mynx dev (build 44925532382): the maintainer tried it all
+  ("all works"). Phone checks were: PDF Find (type, count growing, ↑ ↓ across
+  pages and zoomed in, Enter, Back/Esc closing it, typing letters like
+  `g` in the field not opening Go to page); Replace in code, text and
+  Markdown (from View: it switches to Edit), Replace then the next,
+  All, Undo of each, Save; read-only (>1 MB) files have no Replace.
+
+### 2026-11-21 (201): Selecting text in the PDF viewer (PR #95; passed)
+
+The maintainer found they couldn't select text in a PDF. Android 15
+(API 35) added text to `PdfRenderer.Page`, so on 15+ a long press
+selects a word, two handles drag it within the page, and a bar has
+Copy, Select all and ✕ (docs/TOUCH-DESIGN.md "PDF").
+- Core: `PdfSelection.kt` (screen ↔ page points under the zoom, the
+  handles and which one a touch grabs, the bar's place, joining the
+  text, one request in flight), tested.
+- App: `PdfPagesView` draws the selection and handles and handles the
+  touches; `PdfViewActivity`'s `PdfText` (`@TargetApi(35)`, behind
+  `SDK_INT >= 35`) calls `selectContent()` / `getTextContents()` on
+  the renderer's worker, with `SelectionBoundary(Point)` (whole
+  points). The activity now passes each page's width in points.
+- Decisions: dragging a handle past the other selects the other way
+  (the two points are sent in reading order); a drag on from the long
+  press extends the word either way; the bar goes below the selection
+  when there's no room above, at the top without either.
+- Not compiled here (app/ builds only in CI); the `pdf-selection`
+  screenshot draws a stand-in selection (Robolectric has no pdfium).
+- To test on the phone: long press a word, drag both handles (also
+  zoomed in), Copy and paste it, Select all, Ctrl+C, Back and a tap
+  clearing it, pinching not selecting; on Android < 15 nothing
+  changes.
+- Passed in mynx dev (build 44920567754), with all of entry 200:
+  the maintainer tried it all ("all works").
+
+### 2026-11-21 (200): A turn's changes in chat, PDF and HTML files (PR #95; passed)
+
+The maintainer asked for three of the viewers' "later" ideas: the diff
+view in chat, a PDF viewer and HTML files. Choices were the lead's
+(`docs/TOUCH-DESIGN.md`, "More viewers"), for the phone test to settle.
+- Built by agents in waves against that design: core-diff (`Diff.kt`,
+  `readFileEdits()`, tool call IDs on changed files), core-kinds (the
+  PDF and HTML kinds, `open-pdf`/`open-html`, their cards and View
+  source, `respondFolder()`, `mynx open`, the guide), app-diff
+  (`DiffViewActivity`, `DiffView`, the card's `+N −M`), app-pdf
+  (`PdfViewActivity`), app-html (`HtmlViewActivity`); the lead wired
+  the opener (`pageApp()`, an HTML file to edit opens its source), the
+  cards, and the docs.
+- Found on the way: Claude's transcripts hold `originalFile` and
+  `structuredPatch` for every Write and Edit, so diffs are exact; a
+  served page's folder must hide dot files (`~/.ssh`).
+- Limits: no text search in PDFs; selecting text needs Android 15
+  (`PdfRenderer`'s text APIs, entry 201);
+  all HTML files share one origin and its storage; a file a command
+  also wrote in the turn gets no diff.
 
 ### 2026-11-21 (199): Viewers for text, code, Markdown, audio and video (PR #94; passed)
 

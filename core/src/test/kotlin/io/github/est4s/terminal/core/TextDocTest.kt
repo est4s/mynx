@@ -155,6 +155,48 @@ class TextDocTest {
     }
 
     @Test
+    fun `replacing a match changes just it and goes on to the next`() {
+        val text = "ab Ab ab"
+        val done = replaceMatch(text, findMatches(text, "ab"), 1, "xyz")
+        assertEquals("ab xyz ab", done.text)
+        assertEquals(TextEdit(3, "Ab", "xyz"), done.edit)
+        assertEquals(1, done.count)
+        assertEquals(6, done.cursor)
+        assertEquals(1, done.next, "the match after it is now the second")
+        // The last one: back round to the first.
+        assertEquals(0, replaceMatch(text, findMatches(text, "ab"), 2, "q").next)
+    }
+
+    @Test
+    fun `a replacement holding the query isn't found again at once`() {
+        val text = "a a"
+        val done = replaceMatch(text, findMatches(text, "a"), 0, "aa")
+        assertEquals("aa a", done.text)
+        assertEquals(2, done.next, "past the replacement: the old second match")
+    }
+
+    @Test
+    fun `the match at or after an offset, else the first`() {
+        val matches = listOf(0..1, 5..6, 9..9)
+        assertEquals(1, matchAtOrAfter(matches, 2))
+        assertEquals(1, matchAtOrAfter(matches, 5))
+        assertEquals(0, matchAtOrAfter(matches, 10))
+        assertEquals(-1, matchAtOrAfter(emptyList(), 0))
+    }
+
+    @Test
+    fun `replace all changes every match, case ignored, as one edit`() {
+        val done = replaceAll("x Foo foo y FOO", "foo", "bar")
+        assertEquals("x bar bar y bar", done?.text)
+        assertEquals(3, done?.count)
+        assertEquals(TextEdit(2, "Foo foo y FOO", "bar bar y bar"), done?.edit)
+        assertEquals(15, done?.cursor)
+        assertNull(replaceAll("abc", "z", "y"), "nothing to replace")
+        assertNull(replaceAll("abc", "", "y"))
+        assertEquals("", replaceAll("aaaa", "aa", "")?.text, "a replacement may be empty")
+    }
+
+    @Test
     fun `line starts number the lines`() {
         assertContentEquals(intArrayOf(0), lineStarts(""))
         assertContentEquals(intArrayOf(0, 2, 3), lineStarts("a\n\nb"))

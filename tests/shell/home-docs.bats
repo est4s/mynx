@@ -333,6 +333,12 @@ setup() {
     grep -qF -- "shows it full screen" "$GUIDE"
 }
 
+@test "the guide says PDFs and HTML pages get cards and open in mynx's viewers" {
+    grep -qF -- "View source (a page)" "$GUIDE"
+    grep -qF -- "a PDF viewer" "$GUIDE"
+    grep -qF -- "and an HTML file's source" "$GUIDE"
+}
+
 @test "the guide says touch view's Settings are lists to tap" {
     grep -qF -- "Settings are lists to tap too" "$GUIDE"
 }
@@ -355,4 +361,15 @@ setup() {
     grep -q "Touch view's Files is a file manager" "$CORE"
     grep -q "Chat here and Terminal here" "$CORE"
     grep -q "nnn is in Terminal" "$CORE"
+}
+
+@test "the guide says the PDF viewer selects and finds text on Android 15 and later" {
+    grep -q "on Android 15 and later a long press selects text" "$DOCS/phone.md"
+    grep -q "⋮ Find (Ctrl+F) searches" "$DOCS/phone.md"
+    ! grep -q "It can't search" "$DOCS/phone.md"
+}
+
+@test "the guide says the text viewers' Find can replace" {
+    grep -q "Find, Replace:" "$DOCS/phone.md"
+    grep -q "Ctrl+H" "$DOCS/phone.md"
 }

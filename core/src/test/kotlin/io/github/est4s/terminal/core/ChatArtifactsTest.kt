@@ -37,10 +37,10 @@ class ChatArtifactsTest {
     fun `written files are hints, relative to the chat's folder or home`() {
         assertEquals(
             listOf(
-                ArtifactHint("/root/apps/demo/index.html", false),
-                ArtifactHint("/root/work/b.apk", false),
-                ArtifactHint("/root/apps/x/main.js", false),
-                ArtifactHint("/root/notes.ipynb", false),
+                ArtifactHint("/root/apps/demo/index.html", false, toolIds = listOf("t-~/apps/demo/index.html")),
+                ArtifactHint("/root/work/b.apk", false, toolIds = listOf("t-b.apk")),
+                ArtifactHint("/root/apps/x/main.js", false, toolIds = listOf("t-../apps/./x//main.js")),
+                ArtifactHint("/root/notes.ipynb", false, toolIds = listOf("t-/root/notes.ipynb")),
             ),
             hints(
                 call("Write", "~/apps/demo/index.html"),
@@ -401,6 +401,78 @@ class ChatArtifactsTest {
     }
 
     @Test
+    fun `a PDF the agent made counts anywhere, written or named in a command that changed it`() {
+        val report = write("/root/work/report.PDF", "%PDF")
+        val old = write("/root/work/old.pdf", "%PDF")
+        write("/root/apps/demo/index.html", "<title>Demo</title>")
+        write("/root/apps/demo/manual.pdf", "%PDF")
+        report.setLastModified(5_000_000L)
+        old.setLastModified(1_000_000L)
+        assertEquals(
+            listOf("/root/work/report.PDF", "/root/work/old.pdf").map { ArtifactHint(it, true) },
+            hints(call("Bash", "pandoc notes.txt -o report.PDF; ls old.pdf")),
+        )
+        assertTrue(chatPdfFile("a.pdf"))
+        assertEquals(false, chatPdfFile("a.html"))
+        val pdf = ChatArtifact(ArtifactKind.PDF, "/root/work/report.PDF", "report.PDF", "/root/work/report.PDF", version = 5_000_000L)
+        assertEquals(
+            listOf(pdf),
+            finder.find(listOf("/root/work/report.PDF", "/root/work/old.pdf").map { ArtifactHint(it, true) }, 2_000_000L),
+        )
+        assertEquals(listOf(pdf), finder.find(listOf(ArtifactHint("/root/work/report.PDF", false)), null), "written: no turn start needed")
+        assertEquals(
+            listOf(ArtifactKind.WEB_APP),
+            finder.find(listOf(ArtifactHint("/root/apps/demo/manual.pdf", false)), null).map { it.kind },
+            "an app's PDF is the app's card",
+        )
+    }
+
+    @Test
+    fun `an HTML file the agent wrote outside the app folders is a page card, not a changed file`() {
+        write("/root/site/index.html", "<title>Hi</title>")
+        val made = write("/root/site/report.htm", "<p>hi</p>")
+        val read = write("/root/site/old.html", "<p>old</p>")
+        write("/root/apps/demo/index.html", "<title>Demo</title>")
+        write("/root/terminal-apps/tool/page.html", "<p>x</p>")
+        made.setLastModified(5_000_000L)
+        read.setLastModified(5_000_000L)
+        fun page(path: String) = ChatArtifact(ArtifactKind.HTML, path, path.substringAfterLast('/'), path)
+        assertEquals(
+            listOf(page("/root/site/index.html"), page("/root/site/report.htm")),
+            finder.find(
+                hints(
+                    call("Write", "/root/site/index.html"),
+                    call("Bash", "cd /root/site && python3 gen.py > report.htm; cat old.html"),
+                ),
+                2_000_000L,
+            ),
+            "named in a command without writing it: no card",
+        )
+        assertEquals(
+            listOf(ArtifactKind.WEB_APP),
+            finder.find(listOf(ArtifactHint("/root/apps/demo/index.html", false)), null).map { it.kind },
+            "a web app's page is the app's card",
+        )
+        assertEquals(
+            listOf(ArtifactKind.CHANGED_FILES),
+            finder.find(listOf(ArtifactHint("/root/terminal-apps/tool/page.html", false)), null).map { it.kind },
+        )
+        assertEquals(emptyList(), finder.find(listOf(ArtifactHint("/root/site/gone.html", false)), null))
+    }
+
+    @Test
+    fun `PDF and page cards' lines and buttons`() {
+        val pdf = ChatArtifact(ArtifactKind.PDF, "/root/work/report.pdf", "report.pdf", "/root/work/report.pdf", version = 1L)
+        val page = ChatArtifact(ArtifactKind.HTML, "/root/site/index.html", "index.html", "/root/site/index.html")
+        assertEquals("PDF · ~/work/report.pdf", chatArtifactLine(pdf, "/root"))
+        assertEquals("HTML page · ~/site/index.html", chatArtifactLine(page, "/root"))
+        assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.SHARE), chatArtifactActions(pdf, canInstall = true))
+        assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.SOURCE, ArtifactAction.SHARE), chatArtifactActions(page, canInstall = true))
+        assertEquals("View source", ArtifactAction.SOURCE.label)
+        assertEquals(null, chatArtifactNote(page, canInstall = false))
+    }
+
+    @Test
     fun `files written in a turn without a card of their own share one changed files card, in order, each once`() {
         write("/root/work/main.py", "print(1)")
         write("/root/work/util.py", "x = 1")
@@ -419,8 +491,49 @@ class ChatArtifactsTest {
             null,
         )
         assertEquals(listOf(ArtifactKind.MARKDOWN, ArtifactKind.IMAGE, ArtifactKind.CHANGED_FILES), found.map { it.kind })
-        assertEquals(changed("/root/work/main.py", "/root/work/util.py"), found.last())
+        assertEquals(
+            changed("/root/work/main.py", "/root/work/util.py").copy(
+                fileTools = mapOf("/root/work/main.py" to listOf("t-main.py", "again"), "/root/work/util.py" to listOf("t-/root/work/util.py")),
+            ),
+            found.last(),
+        )
         assertTrue(ArtifactHint("/root/work/main.py", false).direct("/root"), "written files are looked for at once")
+    }
+
+    @Test
+    fun `a file written again in the turn is one hint with each call's ID`() {
+        assertEquals(
+            listOf(ArtifactHint("/root/work/a.py", false, toolIds = listOf("w1", "e1", "e2"))),
+            hints(call("Write", "a.py", id = "w1"), call("Edit", "/root/work/a.py", id = "e1"), call("Edit", "./a.py", id = "e2")),
+        )
+        assertEquals(
+            listOf(ArtifactHint("/root/work/out.txt", true, written = true)),
+            hints(call("Bash", "echo hi > out.txt")),
+            "a command's file has no edits to diff",
+        )
+    }
+
+    @Test
+    fun `a changed file a command wrote too has no tool calls to diff`() {
+        write("/root/work/a.py", "x")
+        write("/root/work/b.py", "y")
+        val found = finder.find(
+            hints(call("Edit", "a.py", id = "e1"), call("Bash", "echo more >> a.py"), call("Bash", "echo y > b.py")),
+            2_000L,
+        )
+        assertEquals(changed("/root/work/a.py", "/root/work/b.py"), found.single())
+    }
+
+    @Test
+    fun `a changed file's row carries the tool calls that wrote it`() {
+        val card = changed("/root/work/a.py", "/root/b.txt").copy(fileTools = mapOf("/root/work/a.py" to listOf("w1", "e1")))
+        assertEquals(
+            listOf(
+                ChangedFileRow("/root/work/a.py", "a.py", "~/work", toolIds = listOf("w1", "e1")),
+                ChangedFileRow("/root/b.txt", "b.txt", "~"),
+            ),
+            changedFileRows(card, "/root"),
+        )
     }
 
     @Test
@@ -434,8 +547,8 @@ class ChatArtifactsTest {
     @Test
     fun `a changed files card's line, buttons and rows`() {
         val card = changed("/root/work/a.py", "/etc/hosts")
-        assertEquals("Changed files · 2 files", chatArtifactLine(card, "/root"))
-        assertEquals("Changed files · 1 file", chatArtifactLine(changed("/root/a.py"), "/root"))
+        assertEquals("2 files", chatArtifactLine(card, "/root"))
+        assertEquals("1 file", chatArtifactLine(changed("/root/a.py"), "/root"))
         assertEquals(emptyList(), chatArtifactActions(card, canInstall = true), "its rows open the files")
         assertEquals(null, chatArtifactNote(card, canInstall = false))
         assertEquals(
