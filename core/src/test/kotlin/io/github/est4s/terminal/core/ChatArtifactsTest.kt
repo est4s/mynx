@@ -334,8 +334,8 @@ class ChatArtifactsTest {
             finder.find(listOf(ArtifactHint("/root/apps/demo/beep.ogg", false)), null).map { it.kind },
             "an app's sound is the app's card",
         )
-        for (name in listOf("a.mp3", "a.m4a", "a.aac", "a.ogg", "a.opus", "a.flac", "a.wav", "a.mid")) assertTrue(chatAudioFile(name), name)
-        for (name in listOf("a.mp4", "a.webm", "a.mkv", "a.3gp", "a.mov")) assertTrue(chatVideoFile(name), name)
+        for (name in listOf("a.mp3", "a.m4a", "a.aac", "a.ogg", "a.opus", "a.flac", "a.wav", "a.mid", "a.midi", "a.oga")) assertTrue(chatAudioFile(name), name)
+        for (name in listOf("a.mp4", "a.webm", "a.mkv", "a.3gp", "a.mov", "a.m4v")) assertTrue(chatVideoFile(name), name)
         assertEquals(false, chatAudioFile("mp3"))
         assertEquals(false, chatVideoFile("a.mp3"))
     }

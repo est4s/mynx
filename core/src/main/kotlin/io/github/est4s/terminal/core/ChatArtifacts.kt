@@ -58,20 +58,11 @@ data class ChatArtifact(
 /** The [ChatArtifact.path] of a turn's changed files card. */
 const val CHANGED_FILES_CARD = "changed-files"
 
-// TODO(merge): use fileKindOf (FileKinds.kt) for these.
-private val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "aac", "ogg", "opus", "flac", "wav", "mid")
-private val VIDEO_EXTENSIONS = setOf("mp4", "webm", "mkv", "3gp", "mov")
+/** Whether [name] is an audio file, by its extension ([fileKindOf]). */
+fun chatAudioFile(name: String): Boolean = fileKindOf(name) == FileKind.AUDIO
 
-private fun extension(name: String): String? {
-    val file = name.substringAfterLast('/')
-    return if (file.contains('.')) file.substringAfterLast('.').lowercase() else null
-}
-
-/** Whether [name] is an audio file, by its extension. */
-fun chatAudioFile(name: String): Boolean = extension(name) in AUDIO_EXTENSIONS
-
-/** Whether [name] is a video file, by its extension. */
-fun chatVideoFile(name: String): Boolean = extension(name) in VIDEO_EXTENSIONS
+/** Whether [name] is a video file, by its extension ([fileKindOf]). */
+fun chatVideoFile(name: String): Boolean = fileKindOf(name) == FileKind.VIDEO
 
 private fun media(path: String) = chatImageFile(path) || chatAudioFile(path) || chatVideoFile(path)
 
