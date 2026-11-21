@@ -547,8 +547,8 @@ class ChatArtifactsTest {
     @Test
     fun `a changed files card's line, buttons and rows`() {
         val card = changed("/root/work/a.py", "/etc/hosts")
-        assertEquals("Changed files · 2 files", chatArtifactLine(card, "/root"))
-        assertEquals("Changed files · 1 file", chatArtifactLine(changed("/root/a.py"), "/root"))
+        assertEquals("2 files", chatArtifactLine(card, "/root"))
+        assertEquals("1 file", chatArtifactLine(changed("/root/a.py"), "/root"))
         assertEquals(emptyList(), chatArtifactActions(card, canInstall = true), "its rows open the files")
         assertEquals(null, chatArtifactNote(card, canInstall = false))
         assertEquals(

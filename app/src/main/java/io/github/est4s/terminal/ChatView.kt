@@ -182,7 +182,8 @@ private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(con
  * video card's Play, a changed files card's rows, and file paths in
  * replies (underlined when [hostFile], a Debian path's file on the phone,
  * says they're there). [diffs] gives a changed file's `+N −M` and opens
- * its diff view (rows with no diff, or no [diffs]: [openFile]). [clock] is the time
+ * its diff view (rows with no diff, or no [diffs]: [openFile]).
+ * [openSource] shows an HTML card's page as code. [clock] is the time
  * Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
@@ -202,6 +203,7 @@ class ChatView(
     private val openFile: ((path: String, with: OpenWith?) -> Unit)? = null,
     private val hostFile: ((String) -> File?)? = null,
     private val diffs: ChatDiffs? = null,
+    private val openSource: ((String) -> Unit)? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
@@ -1111,6 +1113,7 @@ class ChatView(
                             openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
                         }
                         ArtifactAction.PLAY -> openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
+                        ArtifactAction.SOURCE -> openSource?.invoke(artifact.shareFile)
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
@@ -1130,7 +1133,7 @@ class ChatView(
         val icon = when (artifact.kind) {
             ArtifactKind.AUDIO -> PixelIcon.NOTE
             ArtifactKind.VIDEO -> PixelIcon.PLAY
-            ArtifactKind.CHANGED_FILES -> PixelIcon.FILE
+            ArtifactKind.CHANGED_FILES, ArtifactKind.PDF -> PixelIcon.FILE
             else -> null
         }
         if (icon != null) return ImageView(context).apply {

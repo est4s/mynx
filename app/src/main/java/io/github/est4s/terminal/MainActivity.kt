@@ -815,6 +815,9 @@ class MainActivity : Activity(), FrontActivity {
             },
             hostFile = { path -> hostPath(path, installer.rootfs.path)?.let(::File) },
             diffs = TranscriptDiffs(this, { service?.chats?.shown }, installer.rootfs.path),
+            openSource = { path ->
+                startActivity(TextViewActivity.intent(this, File(hostPath(path, installer.rootfs.path) ?: path), path, edit = false))
+            },
         ).also {
             it.colors = Pixel.COLORS
             it.visibility = View.GONE

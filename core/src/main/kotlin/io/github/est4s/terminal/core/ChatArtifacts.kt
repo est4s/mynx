@@ -407,7 +407,8 @@ fun chatArtifactLine(artifact: ChatArtifact, home: String): String {
         ArtifactKind.HTML -> "HTML page"
         ArtifactKind.CHANGED_FILES -> {
             val n = artifact.files.size
-            return "Changed files · $n ${if (n == 1) "file" else "files"}"
+            // The card's title says "Changed files" already.
+            return "$n ${if (n == 1) "file" else "files"}"
         }
     }
     return "$kind · ${homePath(artifact.path, home)}"
