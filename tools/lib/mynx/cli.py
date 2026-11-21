@@ -33,7 +33,7 @@ Commands:
   edit       edit [settings|theme|keybars|menu]: the settings editors
   notify     notify [--if-away] TITLE [TEXT]: a phone notification
   agent      agent [list] | install [NAME] | notify NAME on|off: AI agents
-  open       open URL: open a link in the phone's browser
+  open       open URL | FILE [--with mynx|android] [--edit]: a link in the browser, a file in its viewer
   vibrate    vibrate [MS] [--strength PCT] | effect NAME | wave STEP... [--repeat] | chain PRIM... | list | stop
   clipboard  clipboard get | set [TEXT]: the phone's clipboard
   share      share FILE... | --text [TEXT]: send to another app
@@ -246,12 +246,67 @@ def cmd_menu(args, as_json):
     raise Usage("usage: mynx menu [show] | edit | reset")
 
 
+OPEN_USAGE = "usage: mynx open URL | FILE [--with mynx|android] [--edit]"
+VIEWERS = {"picture": "mynx's picture viewer", "markdown": "mynx's Markdown viewer", "code": "mynx's code viewer",
+           "text": "mynx's text viewer", "audio": "mynx's audio player", "video": "mynx's video player"}
+
+
 def cmd_open(args, as_json):
-    if len(args) != 1:
-        raise Usage("usage: mynx open URL")
-    answer = request("open-url", args[0])
+    """A link opens in the browser; a file in mynx's viewer or another
+    app, asking which in a terminal unless --with says."""
+    words, target, with_, edit = list(args), [], None, False
+    while words:
+        word = words.pop(0)
+        if word == "--with" and words and words[0] in ("mynx", "android") and with_ is None:
+            with_ = words.pop(0)
+        elif word == "--edit":
+            edit = True
+        elif word.startswith("-") and word != "-" or target:
+            raise Usage(OPEN_USAGE)
+        else:
+            target.append(word)
+    if not target:
+        raise Usage(OPEN_USAGE)
+    arg = target[0]
+    if arg.startswith("file://"):
+        path = urllib.parse.unquote(urllib.parse.urlparse(arg).path)
+    elif re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", arg) and not os.path.exists(arg):
+        if with_ or edit:
+            raise Usage("--with and --edit are for files, not links")
+        out(as_json, request("open-url", arg), None)
+        return 0
+    else:
+        path = os.path.abspath(arg)
+    if with_ is None and not as_json and sys.stdin.isatty() and sys.stdout.isatty():
+        with_ = ask_open_with(path)
+    answer = request("open-file", path, with_ or "default", "1" if edit else "0")
     out(as_json, answer, None)
     return 0
+
+
+def ask_open_with(path):
+    """In a terminal: mynx's viewer or another app, Enter taking the
+    setting's choice. None (the setting decides) for a file mynx can't view."""
+    kind = request("open-file-kind", path)
+    name = os.path.basename(path)
+    if kind["kind"] is None:
+        print(f"{name} opens with another Android app")
+        return None
+    choices = ["mynx", "android"]
+    default = choices.index(kind["with"]) + 1
+    labels = [VIEWERS.get(kind["kind"], "mynx's viewer"), "another Android app"]
+    print(f"Open {name} with:")
+    for i, label in enumerate(labels, 1):
+        print(f"  {i}) {label}" + (" (default)" if i == default else ""))
+    while True:
+        print(f"Choose [{default}]:", end=" ", flush=True)
+        line = sys.stdin.readline()
+        if not line:
+            print()
+            raise Failure("nothing chosen")
+        answer = line.strip() or str(default)
+        if answer in ("1", "2"):
+            return choices[int(answer) - 1]
 
 
 VIBRATE_USAGE = ("usage: mynx vibrate [MS] [--strength PCT] | effect NAME\n"

@@ -63,7 +63,8 @@ class SettingsTest {
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
-                "update-check", "serial-preload", "serial-names", "view", "chat-mode", "chat-model"),
+                "update-check", "serial-preload", "serial-names", "view", "chat-mode", "chat-model",
+                "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -83,11 +84,15 @@ class SettingsTest {
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off", "view" to "touch",
                 "chat-mode" to "plan", "chat-model" to "opus",
+                "open-pictures" to "android", "open-markdown" to "mynx", "open-code" to "android",
+                "open-text" to "mynx", "open-audio" to "android", "open-video" to "android",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
-                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH, chatMode = "plan", chatModel = "opus").values(),
+                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH, chatMode = "plan", chatModel = "opus",
+                openPictures = OpenWith.ANDROID, openCode = OpenWith.ANDROID, openAudio = OpenWith.ANDROID,
+                openVideo = OpenWith.ANDROID).values(),
         )
     }
 
@@ -329,5 +334,20 @@ class SettingsTest {
         assertEquals("~/a b", parsed.settings.shareFolder)
         val error = "share-folder must be a full path or start with ~/"
         assertEquals(listOf("line 3: $error", "line 4: $error"), parsed.problems)
+    }
+
+    @Test
+    fun `files open in mynx's viewers by default, or in another app`() {
+        val keys = listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video")
+        for (key in keys) {
+            assertEquals("mynx", SETTINGS.single { it.key == key }.default, key)
+            assertEquals(listOf("mynx", "android"), SETTINGS.single { it.key == key }.choices, key)
+            assertEquals("mynx", Settings().values().getValue(key), key)
+        }
+        val parsed = parseSettings("open-code = android\nopen-audio = android\nopen-video = vlc\n")
+        assertEquals(OpenWith.ANDROID, parsed.settings.openCode)
+        assertEquals(OpenWith.ANDROID, parsed.settings.openAudio)
+        assertEquals(OpenWith.MYNX, parsed.settings.openVideo)
+        assertEquals(listOf("line 3: open-video must be one of: mynx, android"), parsed.problems)
     }
 }

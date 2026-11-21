@@ -20,5 +20,10 @@ setup() {
 @test "xdg-open without a link says how to use it" {
     run xdg-open
     [ "$status" -ne 0 ]
-    [[ $output == *"usage: xdg-open URL"* ]]
+    [[ $output == *"usage: xdg-open URL|FILE"* ]]
+}
+
+@test "xdg-open opens files too, through mynx open" {
+    run xdg-open notes.md
+    [ "$output" = "mynx open notes.md" ]
 }

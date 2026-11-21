@@ -1329,13 +1329,112 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(self.app.requests, [["open-url", "https://claude.ai/login"]])
 
     def test_open_says_why_it_failed(self):
-        self.start_app({"open-url": {"ok": False, "error": "only http and https links open: x"}})
-        run = self.mynx("open", "x")
+        self.start_app({"open-url": {"ok": False, "error": "only http and https links open: ftp://x"}})
+        run = self.mynx("open", "ftp://x")
         self.assertEqual(run.returncode, 2)
         self.assertIn("only http and https", run.stderr)
+        self.assertEqual(self.app.requests, [["open-url", "ftp://x"]])
 
-    def test_open_needs_one_link(self):
-        self.assertIn("usage: mynx open URL", self.mynx("open").stderr)
+    def test_open_needs_one_link_or_file(self):
+        for args in ([], ["a", "b"], ["a.txt", "--with"], ["a.txt", "--with", "vlc"], ["a.txt", "--bogus"]):
+            run = self.mynx("open", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx open URL | FILE [--with mynx|android] [--edit]", run.stderr, args)
+
+    def test_open_a_link_takes_no_file_options(self):
+        run = self.mynx("open", "https://example.com", "--edit")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("--with and --edit are for files", run.stderr)
+
+    OPENED = {"ok": True, "with": "mynx", "kind": "code"}
+
+    def test_open_a_file_without_a_terminal_follows_the_setting(self):
+        self.start_app({"open-file": self.OPENED})
+        run = self.mynx("open", "src/main.py", cwd=self.tmp.name)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "")
+        path = os.path.join(os.path.realpath(self.tmp.name), "src", "main.py")
+        self.assertEqual(self.app.requests, [["open-file", path, "default", "0"]])
+
+    def test_open_a_file_with_an_app_and_to_edit(self):
+        self.start_app({"open-file": self.OPENED})
+        run = self.mynx("open", "/root/notes.md", "--with", "android", "--edit")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(self.app.requests, [["open-file", "/root/notes.md", "android", "1"]])
+
+    def test_open_a_file_link(self):
+        self.start_app({"open-file": self.OPENED})
+        self.mynx("open", "file:///root/my%20notes.md")
+        self.assertEqual(self.app.requests, [["open-file", "/root/my notes.md", "default", "0"]])
+
+    def test_open_a_file_as_json(self):
+        self.start_app({"open-file": self.OPENED})
+        run = self.mynx("open", "/root/main.py", "--json")
+        self.assertEqual(json.loads(run.stdout), self.OPENED)
+
+    def test_open_a_missing_file_says_so(self):
+        self.start_app({"open-file": {"ok": False, "error": "no such file: /root/gone.txt"}})
+        run = self.mynx("open", "/root/gone.txt")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no such file: /root/gone.txt", run.stderr)
+
+    def open_in_terminal(self, *args, answer=None):
+        """Runs mynx open with a terminal on stdin and stdout, answering its question; gives what it showed."""
+        import pty
+        main, side = pty.openpty()
+        environ = {"PATH": os.environ["PATH"], "MYNX_REQUESTS": self.requests, "HOME": self.home,
+                   "MYNX_TOOLS": self.tools, "MYNX_TIMEOUT": "1"}
+        proc = subprocess.Popen(["python3", MYNX, "open", *args], stdin=side, stdout=side, stderr=side, env=environ)
+        os.close(side)
+        shown = b""
+        deadline = time.monotonic() + 20
+        while proc.poll() is None or not shown.endswith(b"\n") and time.monotonic() < deadline:
+            try:
+                chunk = os.read(main, 1024)
+            except OSError:
+                break
+            if not chunk:
+                break
+            shown += chunk
+            if answer is not None and b"Choose [" in shown:
+                os.write(main, answer.encode() + b"\n")
+                answer = None
+            self.assertLess(time.monotonic(), deadline, shown)
+        proc.wait(timeout=20)
+        os.close(main)
+        return proc.returncode, shown.decode().replace("\r\n", "\n")
+
+    def test_open_in_a_terminal_asks_enter_taking_the_setting(self):
+        self.start_app({"open-file-kind": {"ok": True, "kind": "markdown", "with": "mynx"},
+                        "open-file": {"ok": True, "with": "mynx", "kind": "markdown"}})
+        code, shown = self.open_in_terminal("/root/notes.md", answer="")
+        self.assertEqual(code, 0, shown)
+        self.assertIn("Open notes.md with:\n  1) mynx's Markdown viewer (default)\n  2) another Android app\nChoose [1]:",
+                      shown)
+        self.assertEqual(self.app.requests, [["open-file-kind", "/root/notes.md"],
+                                             ["open-file", "/root/notes.md", "mynx", "0"]])
+
+    def test_open_in_a_terminal_can_pick_the_other(self):
+        self.start_app({"open-file-kind": {"ok": True, "kind": "audio", "with": "android"},
+                        "open-file": {"ok": True, "with": "mynx", "kind": "audio"}})
+        code, shown = self.open_in_terminal("/root/song.mp3", "--edit", answer="1")
+        self.assertIn("  1) mynx's audio player\n  2) another Android app (default)\nChoose [2]:", shown)
+        self.assertEqual(self.app.requests[-1], ["open-file", "/root/song.mp3", "mynx", "1"])
+
+    def test_open_in_a_terminal_doesnt_ask_for_a_file_mynx_cant_view(self):
+        self.start_app({"open-file-kind": {"ok": True, "kind": None, "with": "android"},
+                        "open-file": {"ok": True, "with": "android", "kind": None}})
+        code, shown = self.open_in_terminal("/root/app.apk")
+        self.assertEqual(code, 0, shown)
+        self.assertIn("app.apk opens with another Android app", shown)
+        self.assertNotIn("Choose", shown)
+        self.assertEqual(self.app.requests[-1], ["open-file", "/root/app.apk", "default", "0"])
+
+    def test_open_in_a_terminal_with_a_choice_doesnt_ask(self):
+        self.start_app({"open-file": self.OPENED})
+        code, shown = self.open_in_terminal("/root/main.py", "--with", "mynx")
+        self.assertEqual(code, 0, shown)
+        self.assertEqual(self.app.requests, [["open-file", "/root/main.py", "mynx", "0"]])
 
     # --- update ---------------------------------------------------------------
 
