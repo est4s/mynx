@@ -239,7 +239,8 @@ another Android app.
 - `open-video`: `mynx` (default) or `android`: mp4, webm, mkv, 3gp,
   mov.
 - `open-pdf`: `mynx` (default) or `android`: `.pdf`. mynx's viewer
-  shows the pages; it can't search or select text, nor open a PDF
+  shows the pages; on Android 15 and later a long press selects text
+  (drag the handles, then Copy). It can't search, nor open a PDF
   with a password (Open with another app can).
 - `open-html`: `mynx` (default) or `android`: `.html`, `.htm`,
   shown rendered (View source shows the code).

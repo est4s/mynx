@@ -38,7 +38,8 @@ Install the branch's build and check: chat's Changed files card shows
 `+N −M` per file and a tap opens the diff (two edits to one file read
 as one; a new file all added; Share the diff; Open file); a PDF opens
 from Files (scroll, pinch and double-tap zoom, the page counter, Go to
-page, a protected PDF says so); an HTML file opens rendered with its
+page, a protected PDF says so; a long press selects text, the handles
+drag it, Copy works: entry 201); an HTML file opens rendered with its
 CSS and pictures, View source, web links in the browser, Back through
 its history; `~/apps/NAME/index.html` opens as the app; `mynx open
 page.html --edit` opens the source; the PDF and HTML cards in chat;
@@ -95,6 +96,31 @@ in the code viewer: ask whether that's right. Then merge.
 
 ## Log
 
+### 2026-11-21 (201): Selecting text in the PDF viewer (branch `more-viewers-pdf-select`; to test)
+
+The maintainer found they couldn't select text in a PDF. Android 15
+(API 35) added text to `PdfRenderer.Page`, so on 15+ a long press
+selects a word, two handles drag it within the page, and a bar has
+Copy, Select all and ✕ (docs/TOUCH-DESIGN.md "PDF").
+- Core: `PdfSelection.kt` (screen ↔ page points under the zoom, the
+  handles and which one a touch grabs, the bar's place, joining the
+  text, one request in flight), tested.
+- App: `PdfPagesView` draws the selection and handles and handles the
+  touches; `PdfViewActivity`'s `PdfText` (`@TargetApi(35)`, behind
+  `SDK_INT >= 35`) calls `selectContent()` / `getTextContents()` on
+  the renderer's worker, with `SelectionBoundary(Point)` (whole
+  points). The activity now passes each page's width in points.
+- Decisions: dragging a handle past the other selects the other way
+  (the two points are sent in reading order); a drag on from the long
+  press extends the word either way; the bar goes below the selection
+  when there's no room above, at the top without either.
+- Not compiled here (app/ builds only in CI); the `pdf-selection`
+  screenshot draws a stand-in selection (Robolectric has no pdfium).
+- To test on the phone: long press a word, drag both handles (also
+  zoomed in), Copy and paste it, Select all, Ctrl+C, Back and a tap
+  clearing it, pinching not selecting; on Android < 15 nothing
+  changes.
+
 ### 2026-11-21 (200): A turn's changes in chat, PDF and HTML files (branch `more-viewers`; to test)
 
 The maintainer asked for three of the viewers' "later" ideas: the diff
@@ -111,7 +137,8 @@ view in chat, a PDF viewer and HTML files. Choices were the lead's
 - Found on the way: Claude's transcripts hold `originalFile` and
   `structuredPatch` for every Write and Edit, so diffs are exact; a
   served page's folder must hide dot files (`~/.ssh`).
-- Limits: no text search or selection in PDFs (`PdfRenderer` can't);
+- Limits: no text search in PDFs; selecting text needs Android 15
+  (`PdfRenderer`'s text APIs, entry 201);
   all HTML files share one origin and its storage; a file a command
   also wrote in the turn gets no diff.
 

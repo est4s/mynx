@@ -362,3 +362,8 @@ setup() {
     grep -q "Chat here and Terminal here" "$CORE"
     grep -q "nnn is in Terminal" "$CORE"
 }
+
+@test "the guide says the PDF viewer selects text on Android 15 and later, and cannot search" {
+    grep -q "on Android 15 and later a long press selects text" "$DOCS/phone.md"
+    grep -q "It can't search" "$DOCS/phone.md"
+}

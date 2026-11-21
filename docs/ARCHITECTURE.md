@@ -671,7 +671,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   diffed again in core (Myers, linear space), so several edits read as
   one. A file a command also wrote has no IDs: its row opens the file.
   **PDF:** Android's `PdfRenderer`, one page open at a time, so every
-  render goes through one worker; pages near sight only. **HTML files**
+  render goes through one worker; pages near sight only. Selecting
+  text needs Android 15 (`selectContent()`, `getTextContents()` on
+  the same worker, `PdfText`); core's `PdfSelection.kt` maps touches
+  to a page's PDF points and places the handles and the bar; one
+  selection request in flight (`PdfLatest`). No search yet. **HTML files**
   are served from their folder on `page.files.mynx.invalid`
   (`HTML_FILE_HOST`; can't clash with an app), confined as static apps
   are, and dot files are never served (a page in `~` with web access
