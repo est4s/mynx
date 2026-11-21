@@ -47,6 +47,13 @@ data class Settings(
     val chatMode: String = "auto",
     /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
     val chatModel: String = "default",
+    /** Where pictures open: mynx's viewer or another app (`open-pictures`; the five after it likewise). */
+    val openPictures: OpenWith = OpenWith.MYNX,
+    val openMarkdown: OpenWith = OpenWith.MYNX,
+    val openCode: OpenWith = OpenWith.MYNX,
+    val openText: OpenWith = OpenWith.MYNX,
+    val openAudio: OpenWith = OpenWith.MYNX,
+    val openVideo: OpenWith = OpenWith.MYNX,
 ) {
     fun values(): Map<String, String> = mapOf(
         "font-size" to fontSize.toString(),
@@ -73,6 +80,12 @@ data class Settings(
         "view" to view.word,
         "chat-mode" to chatMode,
         "chat-model" to chatModel,
+        "open-pictures" to openPictures.word,
+        "open-markdown" to openMarkdown.word,
+        "open-code" to openCode.word,
+        "open-text" to openText.word,
+        "open-audio" to openAudio.word,
+        "open-video" to openVideo.word,
     )
 }
 
@@ -258,6 +271,19 @@ val SETTINGS: List<SettingDef> = listOf(
         { if (CHAT_MODEL_NAME.matches(it)) null else "chat-model must be a model's name, like opus or claude-sonnet-5-5, or default" },
         { copy(chatModel = it) },
     ),
+    openSetting("open-pictures", "pictures") { copy(openPictures = it) },
+    openSetting("open-markdown", "Markdown files (.md)") { copy(openMarkdown = it) },
+    openSetting("open-code", "source code (.py, .kt, .sh, .json, …)") { copy(openCode = it) },
+    openSetting("open-text", "text files (.txt, .log, .csv, and others that are text)") { copy(openText = it) },
+    openSetting("open-audio", "audio (.mp3, .m4a, .ogg, .flac, .wav, …)") { copy(openAudio = it) },
+    openSetting("open-video", "video (.mp4, .webm, .mkv, .3gp, .mov)") { copy(openVideo = it) },
+)
+
+private fun openSetting(key: String, what: String, apply: Settings.(OpenWith) -> Settings) = SettingDef(
+    key, "Where $what open from Files, chat and mynx open: mynx (its own viewer) or android (another app, as Android offers).",
+    OpenWith.MYNX.word, OpenWith.entries.map { it.word },
+    oneOf(key, OpenWith.entries.map { it.word }),
+    { v -> apply(OpenWith.entries.first { it.word == v }) },
 )
 
 // What `--model` takes: an alias or an id, with `[1m]` for the long context.

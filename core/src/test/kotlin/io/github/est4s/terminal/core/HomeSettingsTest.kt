@@ -41,6 +41,7 @@ class HomeSettingsTest {
             listOf(
                 HomeItem("Appearance", HomeAction.Menu("settings:appearance")),
                 HomeItem("AI agents", HomeAction.Menu("settings:agents")),
+                HomeItem("Default apps", HomeAction.Menu("settings:apps")),
                 HomeItem("Terminal", HomeAction.Menu("settings:terminal")),
                 HomeItem("Phone access", HomeAction.Menu("settings:phone")),
                 HomeItem("Background", HomeAction.Menu("settings:background")),
@@ -133,6 +134,23 @@ class HomeSettingsTest {
         settings("chat-model = claude-sonnet-5-5\n")
         assertEquals("claude-sonnet-5-5", item("settings:agents", "Model for new chats").detail)
         assertEquals("claude-sonnet-5-5", (items("setting:chat-model").last().action as HomeAction.Input).value)
+    }
+
+    @Test
+    fun `default apps say where each kind of file opens, mynx or another app`() {
+        settings("open-code = android\n")
+        val apps = items("settings:apps")
+        assertEquals(listOf("Pictures", "Markdown", "Code", "Text", "Audio", "Video"), apps.map { it.label })
+        assertEquals(listOf("mynx", "mynx", "Another app", "mynx", "mynx", "mynx"), apps.map { it.detail })
+        assertEquals(HomeAction.Menu("setting:open-code"), apps[2].action)
+        val choices = items("setting:open-code").drop(1)
+        assertEquals(
+            listOf(
+                HomeItem("mynx", HomeAction.Config("set", listOf("open-code", "mynx"), back = true)),
+                HomeItem("Another app", HomeAction.Config("set", listOf("open-code", "android"), back = true), checked = true),
+            ),
+            choices,
+        )
     }
 
     @Test

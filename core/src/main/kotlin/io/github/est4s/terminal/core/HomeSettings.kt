@@ -15,6 +15,10 @@ val HOME_SETTING_GROUPS = listOf(
     // What both views share comes first; Terminal holds only what the terminal alone uses (maintainer, 2026-11-20).
     HomeSettingGroup("settings:appearance", "Appearance", listOf("view")),
     HomeSettingGroup("settings:agents", "AI agents", listOf("chat-mode", "chat-model", "agent-notify", "agent-notify-after")),
+    HomeSettingGroup(
+        "settings:apps", "Default apps",
+        listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video"),
+    ),
     HomeSettingGroup("settings:terminal", "Terminal", listOf("font-size", "font", "cursor-style", "cursor-blink", "tab-swipe")),
     HomeSettingGroup(
         "settings:phone", "Phone access",
@@ -54,6 +58,12 @@ private val SETTING_LABELS = mapOf(
     "serial-preload" to "Serial library",
     "serial-names" to "Serial port names",
     "undo-keep" to "Changes kept",
+    "open-pictures" to "Pictures",
+    "open-markdown" to "Markdown",
+    "open-code" to "Code",
+    "open-text" to "Text",
+    "open-audio" to "Audio",
+    "open-video" to "Video",
 )
 
 const val REPORT_NOTE = "What went wrong? Next, a tab shows the whole report (with the app's version, " +
@@ -175,7 +185,7 @@ internal class HomeSettings(
         "chat-mode" -> chatModeName(value)
         "chat-model" -> chatDefaultModelChoices(emptyList()).firstOrNull { it.value == value }?.name ?: value
         "view" -> value.replaceFirstChar { it.uppercase() }
-        else -> value
+        else -> if (key.startsWith("open-") && value == OpenWith.ANDROID.word) "Another app" else value
     }
 
     private fun choices(key: String): List<HomeItem>? {
