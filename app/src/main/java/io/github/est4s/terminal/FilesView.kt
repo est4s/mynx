@@ -26,6 +26,8 @@ import io.github.est4s.terminal.core.FILE_PLACES
 import io.github.est4s.terminal.core.FileClip
 import io.github.est4s.terminal.core.FileEntry
 import io.github.est4s.terminal.core.FileJob
+import io.github.est4s.terminal.core.FileKind
+import io.github.est4s.terminal.core.OpenWith
 import io.github.est4s.terminal.core.chatRelativeTime
 import io.github.est4s.terminal.core.deleteJob
 import io.github.est4s.terminal.core.fileNameProblem
@@ -36,6 +38,7 @@ import io.github.est4s.terminal.core.isPictureName
 import io.github.est4s.terminal.core.newFolderJob
 import io.github.est4s.terminal.core.pasteJob
 import io.github.est4s.terminal.core.renameJob
+import io.github.est4s.terminal.core.viewerName
 
 /** What Files' taps do; MainActivity implements it. */
 interface FilesActions {
@@ -43,10 +46,13 @@ interface FilesActions {
     fun chatHere(folder: String)
     /** Terminal here: a new tab with a shell in [folder], shown. */
     fun terminalHere(folder: String)
-    /** A picture's row: full screen. */
-    fun viewPicture(path: String)
-    /** Another file's row: another app opens it ("open with"), else Share. */
-    fun openFile(path: String)
+    /**
+     * A file's row, or Open with…: mynx's viewer for its kind or another
+     * app ("open with", else Share), as [with] says (null: its setting).
+     */
+    fun openFile(path: String, with: OpenWith?)
+    /** The kind of the file [path] (null: none mynx views), for Open with…. */
+    fun fileKind(path: String): FileKind?
     /** The selection's Share. */
     fun share(paths: List<String>)
     /** Runs [job]'s argv in Debian; [done] gets its exit code and output, on the main thread. */
@@ -284,7 +290,6 @@ class FilesView(
         val selecting = selected.isNotEmpty()
         backButton.visibility = if (selecting) View.GONE else View.VISIBLE
         crumbsScroll.visibility = if (selecting) View.GONE else View.VISIBLE
-        moreButton.visibility = if (selecting) View.GONE else View.VISIBLE
         clearButton.visibility = if (selecting) View.VISIBLE else View.GONE
         countText.visibility = if (selecting) View.VISIBLE else View.GONE
         countText.text = "${selected.size} selected"
@@ -472,8 +477,7 @@ class FilesView(
     private fun openEntry(entry: FileEntry) {
         when {
             entry.folder -> open(entry.path)
-            isPictureName(entry.name) -> actions.viewPicture(entry.path)
-            else -> actions.openFile(entry.path)
+            else -> actions.openFile(entry.path, null)
         }
     }
 
@@ -483,6 +487,10 @@ class FilesView(
     }
 
     private fun showMore() {
+        if (selected.isNotEmpty()) {
+            pixelMenu(moreButton, listOf(PixelMenuEntry("Open with…", greyed = selectedFile() == null) { openWith() }))
+            return
+        }
         pixelMenu(moreButton, listOf(
             PixelMenuEntry(if (showHidden) "Hide hidden files" else "Show hidden files") {
                 showHidden = !showHidden
@@ -490,6 +498,28 @@ class FilesView(
             },
             PixelMenuEntry("New folder", greyed = entries == null) { newFolder() },
         ))
+    }
+
+    // The one file selected, else null (none, a folder, or more than one).
+    private fun selectedFile(): FileEntry? {
+        val path = selected.singleOrNull() ?: return null
+        return entries?.firstOrNull { it.path == path }?.takeIf { !it.folder }
+    }
+
+    // Open with…: mynx's viewer for the file's kind, or another app.
+    private fun openWith() {
+        val entry = selectedFile() ?: return toast("Select one file to open")
+        val kind = actions.fileKind(entry.path)
+        val choices = listOfNotNull(kind?.let { viewerName(it) to OpenWith.MYNX }, "Another app" to OpenWith.ANDROID)
+        AlertDialog.Builder(context)
+            .setTitle("Open ${entry.name} with")
+            .setItems(choices.map { it.first }.toTypedArray()) { _, which ->
+                selected.clear()
+                render()
+                actions.openFile(entry.path, choices[which].second)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     // The names in this folder, hidden ones too, for a job's checks; null (and why, shown) until it's read.

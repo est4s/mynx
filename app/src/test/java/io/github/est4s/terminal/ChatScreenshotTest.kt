@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import io.github.est4s.terminal.core.AgentQuestion
 import io.github.est4s.terminal.core.ArtifactKind
+import io.github.est4s.terminal.core.CHANGED_FILES_CARD
 import io.github.est4s.terminal.core.ChatAccess
 import io.github.est4s.terminal.core.ChatAttachment
 import io.github.est4s.terminal.core.ChatArtifact
@@ -179,6 +180,26 @@ private val CARDS = listOf(
     ),
 )
 
+/** Audio, video and a turn's changed files: the viewers' cards. */
+private val MEDIA_CARDS = listOf(
+    ChatItem.Agent("agent-media", "I recorded the tip jingle, made a demo video and updated the code."),
+    ChatItem.Artifact(
+        "artifact-audio",
+        ChatArtifact(ArtifactKind.AUDIO, "/root/tip/jingle.ogg", "jingle.ogg", "/root/tip/jingle.ogg", version = 1L),
+    ),
+    ChatItem.Artifact(
+        "artifact-video",
+        ChatArtifact(ArtifactKind.VIDEO, "/root/tip/demo.mp4", "demo.mp4", "/root/tip/demo.mp4", version = 1L),
+    ),
+    ChatItem.Artifact(
+        "artifact-changed",
+        ChatArtifact(
+            ArtifactKind.CHANGED_FILES, CHANGED_FILES_CARD, "Changed files", "/root/tip/tip.py",
+            files = listOf("/root/tip/tip.py", "/root/tip/tests/test_tip.py", "/etc/tip.conf"),
+        ),
+    ),
+)
+
 /** Usage as the maintainer's screenshots had it: context 15%, the session 13% (resets today), the week 40%. */
 private val NOW_MS = 1_794_312_000_000L // 2026-11-10 12:00 UTC
 private val USAGE = ChatUsage(
@@ -315,6 +336,10 @@ class ChatScreenshotTest {
     /** The other cards, answered ones, and the sign-in gate over the box. */
     @Test
     fun cards() = shoot(1080, 4900, "chat-cards", CARDS, running = false, access = ChatAccess.NOT_SIGNED_IN)
+
+    /** Audio, video and changed files cards. */
+    @Test
+    fun mediaCards() = shoot(1080, 2400, "chat-cards-media", MEDIA_CARDS, running = false)
 
     /** Landscape with the keyboard up: what chatFit keeps of a short height. */
     @Test

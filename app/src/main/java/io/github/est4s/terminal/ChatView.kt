@@ -54,6 +54,10 @@ import io.github.est4s.terminal.core.ChatItem
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.ChatStatusLine
 import io.github.est4s.terminal.core.ChatTabHold
+import io.github.est4s.terminal.core.FileKind
+import io.github.est4s.terminal.core.OpenWith
+import io.github.est4s.terminal.core.changedFileRows
+import io.github.est4s.terminal.core.fileKindOf
 import io.github.est4s.terminal.core.IncrementalMarkdown
 import io.github.est4s.terminal.core.MdRow
 import io.github.est4s.terminal.core.NoticeKind
@@ -167,7 +171,11 @@ private class ButtonFlow(context: Context, private val gap: Int) : ViewGroup(con
  * null hides the tiles. [thumbnails] draws images' chips with the picture
  * (null: the photo icon), and image cards' previews. [viewImage] shows a
  * picture full screen (a Debian path): tapping an image's chip or card,
- * or the card's View. [clock] is the time Usage's resets are told from.
+ * or the card's View. [openFile] opens any other file (a Debian path) in
+ * mynx's viewer or another app, as [OpenWith] says (null: the kind's
+ * setting): another file's chip, a Markdown card's View, an audio or
+ * video card's Play, a changed files card's rows. [clock] is the time
+ * Usage's resets are told from.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ChatView(
@@ -183,6 +191,7 @@ class ChatView(
     private val dictation: ChatDictation? = null,
     private val thumbnails: ChatThumbnails? = null,
     private val viewImage: ((String) -> Unit)? = null,
+    private val openFile: ((path: String, with: OpenWith?) -> Unit)? = null,
     clock: () -> Long = System::currentTimeMillis,
 ) : FrameLayout(context) {
     private class Cell(val view: View, val bind: (ChatItem) -> Unit)
@@ -683,9 +692,20 @@ class ChatView(
             if (image && viewImage != null) {
                 setOnClickListener { viewImage?.invoke(path) }
                 contentDescription = "View $name"
+            } else if (!image && openFile != null) {
+                setOnClickListener { openFile?.invoke(path, null) }
+                contentDescription = "Open $name"
+            }
+            val kindIcon = when {
+                image -> PixelIcon.IMAGE
+                else -> when (fileKindOf(name)) {
+                    FileKind.AUDIO -> PixelIcon.NOTE
+                    FileKind.VIDEO -> PixelIcon.PLAY
+                    else -> PixelIcon.FILE
+                }
             }
             val icon = ImageView(context).apply {
-                setImageDrawable(Pixel.icon(context, if (image) PixelIcon.IMAGE else PixelIcon.FILE, Pixel.DIM, 16))
+                setImageDrawable(Pixel.icon(context, kindIcon, Pixel.DIM, 16))
             }
             addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
             if (image) thumbnails?.load(path) { bitmap ->
@@ -1040,14 +1060,7 @@ class ChatView(
             card.addView(LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(TextView(context).apply {
-                    text = artifact.label.filter { it.isLetterOrDigit() }.take(2).uppercase()
-                    typeface = Pixel.label(context, 700)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-                    setTextColor(Pixel.BACKGROUND)
-                    gravity = Gravity.CENTER
-                    setBackgroundColor(Pixel.PINK)
-                }, LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
+                addView(artifactBadge(artifact), LinearLayout.LayoutParams(dp(44), dp(44)).apply { marginEnd = dp(12) })
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(plainText(colors.text, 17f).apply {
@@ -1072,18 +1085,69 @@ class ChatView(
                         ArtifactAction.RUN -> openTab(chatArtifactRunCommand(artifact))
                         ArtifactAction.INSTALL -> install?.invoke(artifact.shareFile)
                         ArtifactAction.COPY -> copyFile(artifact.shareFile)
-                        ArtifactAction.VIEW -> viewImage?.invoke(artifact.shareFile)
-                        // Wired in wave 3 (MediaViewActivity).
-                        ArtifactAction.PLAY -> Unit
+                        ArtifactAction.VIEW -> if (artifact.kind == ArtifactKind.IMAGE) {
+                            viewImage?.invoke(artifact.shareFile)
+                        } else {
+                            openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
+                        }
+                        ArtifactAction.PLAY -> openFile?.invoke(artifact.shareFile, OpenWith.MYNX)
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
             }
-            card.addView(flow, buttonFlowParams())
+            if (flow.childCount > 0) card.addView(flow, buttonFlowParams())
+            if (artifact.kind == ArtifactKind.CHANGED_FILES) changedFileRows(artifact, controller()?.home ?: "/root").forEach { row ->
+                card.addView(changedFileRow(row.name, row.folder, colors) { openFile?.invoke(row.path, null) },
+                    LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) })
+            }
             chatArtifactNote(artifact, canInstall = install != null)?.let { note ->
                 card.addView(answeredText(note, colors))
             }
         }
+    }
+
+    // A card's square: audio, video and changed files their icon; the rest the label's first two letters.
+    private fun artifactBadge(artifact: ChatArtifact): View {
+        val icon = when (artifact.kind) {
+            ArtifactKind.AUDIO -> PixelIcon.NOTE
+            ArtifactKind.VIDEO -> PixelIcon.PLAY
+            ArtifactKind.CHANGED_FILES -> PixelIcon.FILE
+            else -> null
+        }
+        if (icon != null) return ImageView(context).apply {
+            setImageDrawable(Pixel.icon(context, icon, Pixel.BACKGROUND, 24))
+            scaleType = ImageView.ScaleType.CENTER
+            setBackgroundColor(Pixel.PINK)
+        }
+        return TextView(context).apply {
+            text = artifact.label.filter { it.isLetterOrDigit() }.take(2).uppercase()
+            typeface = Pixel.label(context, 700)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            setTextColor(Pixel.BACKGROUND)
+            gravity = Gravity.CENTER
+            setBackgroundColor(Pixel.PINK)
+        }
+    }
+
+    // A changed file: its name, its folder dim under it; a tap opens it.
+    private fun changedFileRow(name: String, folder: String, colors: StripColors, onTap: () -> Unit) = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Pixel.box(context, fill = colors.selectedBackground, border = Pixel.LINE, ripple = Pixel.LINE)
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        minimumHeight = dp(48)
+        isFocusable = true
+        contentDescription = "Open $name"
+        setOnClickListener { onTap() }
+        addView(plainText(colors.text, 15f).apply {
+            text = name
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+        })
+        addView(plainText(Pixel.DIM, 12f).apply {
+            text = folder
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.MIDDLE
+        })
     }
 
     // The picture, as large as the card is wide (up to IMAGE_PREVIEW_DP high), once decoded; a tap views it.
