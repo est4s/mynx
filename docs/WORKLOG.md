@@ -20,31 +20,23 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
   mode's chat home with its drawer and the pixel style (#83),
   Chat's pictures (thumbnails #91, full screen and image cards #92),
-  touch mode's Files (#93), and viewers for text, code, Markdown,
-  audio and video (#94). Every
+  touch mode's Files (#93), viewers for text, code, Markdown, audio
+  and video (#94), and a turn's changes in chat, PDF (with text
+  selection) and HTML files (#95). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
-- **Waiting for the phone test:** a turn's changes in chat, PDF and
-  HTML files (branch `more-viewers`).
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
   PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
 
-### 0. More viewers: the maintainer's test in mynx dev
+### 0. Viewers: suggested next (the maintainer picks)
 
-Install the branch's build and check: chat's Changed files card shows
-`+N −M` per file and a tap opens the diff (two edits to one file read
-as one; a new file all added; Share the diff; Open file); a PDF opens
-from Files (scroll, pinch and double-tap zoom, the page counter, Go to
-page, a protected PDF says so; a long press selects text, the handles
-drag it, Copy works: entry 201); an HTML file opens rendered with its
-CSS and pictures, View source, web links in the browser, Back through
-its history; `~/apps/NAME/index.html` opens as the app; `mynx open
-page.html --edit` opens the source; the PDF and HTML cards in chat;
-the Default apps settings for both. Wrap is on in the diff view, off
-in the code viewer: ask whether that's right. Then merge.
+Not decided: search in PDFs (Android 15's `searchText`, beside the
+selection), opening files from other apps in mynx's viewers, and
+whether the diff view should start unwrapped like the code viewer
+(it wraps; nobody has asked).
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -96,7 +88,7 @@ in the code viewer: ask whether that's right. Then merge.
 
 ## Log
 
-### 2026-11-21 (201): Selecting text in the PDF viewer (branch `more-viewers-pdf-select`; to test)
+### 2026-11-21 (201): Selecting text in the PDF viewer (PR #95; passed)
 
 The maintainer found they couldn't select text in a PDF. Android 15
 (API 35) added text to `PdfRenderer.Page`, so on 15+ a long press
@@ -120,8 +112,10 @@ Copy, Select all and ✕ (docs/TOUCH-DESIGN.md "PDF").
   zoomed in), Copy and paste it, Select all, Ctrl+C, Back and a tap
   clearing it, pinching not selecting; on Android < 15 nothing
   changes.
+- Passed in mynx dev (build 44920567754), with all of entry 200:
+  the maintainer tried it all ("all works").
 
-### 2026-11-21 (200): A turn's changes in chat, PDF and HTML files (branch `more-viewers`; to test)
+### 2026-11-21 (200): A turn's changes in chat, PDF and HTML files (PR #95; passed)
 
 The maintainer asked for three of the viewers' "later" ideas: the diff
 view in chat, a PDF viewer and HTML files. Choices were the lead's
