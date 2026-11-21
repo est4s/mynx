@@ -55,6 +55,8 @@ sealed interface HomeAction {
     data class Input(val title: String, val value: String, val note: String?, val target: String) : HomeAction
     /** Opens [url] in the browser. */
     data class Link(val url: String) : HomeAction
+    /** Touch mode's file manager, at [folder] (a Debian path; see FileBrowser.kt). nnn is "Files (nnn)" in Terminal apps. */
+    data class Files(val folder: String) : HomeAction
 }
 
 /** How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, or a label with its value. */
@@ -176,7 +178,7 @@ class HomeMenus(
         "apps", "terminal-apps", "games", "settings", "agents", "system", "help" -> HomeItem(label, HomeAction.Menu(action))
         "app-settings" -> HomeItem(label, HomeAction.Menu("settings"))
         "welcome" -> HomeItem(label, HomeAction.Menu("welcome"))
-        "files" -> HomeItem(label, act(action))
+        "files" -> HomeItem(label, HomeAction.Files(guestHome))
         else -> HomeItem(label, act("cmd:" + action.removePrefix("run ")))
     }
 
@@ -205,7 +207,9 @@ class HomeMenus(
             .flatMap(::programs)
             .map { (guest, file) -> HomeItem(terminalAppLabel(guest, file), act("app:$guest")) }
             .sortedWith(compareBy({ it.label.uppercase() }, { it.label }))
-        return found.ifEmpty { listOf(HomeItem("(no terminal apps yet)", HomeAction.None)) }
+        // nnn, the terminal's file manager, now that Home's Files is touch mode's own.
+        return listOf(HomeItem("Files (nnn)", act("files"))) +
+            found.ifEmpty { listOf(HomeItem("(no terminal apps yet)", HomeAction.None)) }
     }
 
     private fun games(): List<HomeItem> {

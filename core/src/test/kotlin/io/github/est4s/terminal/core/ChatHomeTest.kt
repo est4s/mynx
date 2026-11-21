@@ -11,7 +11,7 @@ class ChatHomeTest {
     private val main = listOf(
         HomeItem("AI agents", HomeAction.Menu("agents")),
         HomeItem("Shell", HomeAction.Shell),
-        HomeItem("Files", menuActTab("files")),
+        HomeItem("Files", HomeAction.Files("/root")),
         HomeItem("Apps", HomeAction.Menu("apps")),
     )
 
