@@ -156,10 +156,14 @@ fun agentProotCommand(launch: AgentLaunch): List<String> = launch.env.map { (key
  * the binary); names over 200 characters also get a hash we don't
  * reproduce.
  */
-fun claudeTranscriptDir(home: String, cwd: String): String {
-    val name = cwd.trimEnd('/').map { if (it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9') it else '-' }.joinToString("")
-    return "$home/.claude/projects/$name"
-}
+fun claudeTranscriptDir(home: String, cwd: String): String = "${claudeProjectsDir(home)}/${claudeProjectName(cwd)}"
+
+/** Where Claude keeps every folder's transcripts, a folder each ([claudeProjectName]). */
+fun claudeProjectsDir(home: String): String = "$home/.claude/projects"
+
+/** The name of [cwd]'s folder in [claudeProjectsDir]. */
+fun claudeProjectName(cwd: String): String =
+    cwd.trimEnd('/').map { if (it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9') it else '-' }.joinToString("")
 
 fun claudeTranscriptPath(home: String, cwd: String, sessionId: String): String =
     "${claudeTranscriptDir(home, cwd)}/$sessionId.jsonl"

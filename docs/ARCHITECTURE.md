@@ -773,8 +773,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`core/.../ClaudeHistory.kt`): `--resume` replays nothing, so a
   resumed chat reads its transcript (`readClaudeHistory`, off the main
   thread, line by line, last 300 rows) into the same `ChatItem`s.
-  The history lists `claudeTranscriptDir`'s sessions (the 50 newest,
-  first 16 KB each for the title). Claude names that folder by turning
+  The history lists every folder's sessions (`listClaudeSessions` over
+  `claudeProjectsDir`: the 50 newest, first 16 KB each for the title
+  and the folder, the first `cwd` a line names); a row outside the
+  hub's folder names it (`ChatHistoryRow.cwd`) and `open(id, cwd)`
+  resumes it there. A session is left out if its `cwd` doesn't map to
+  the folder it's kept in (`--resume` there wouldn't find it) or is
+  gone (scripts' temp folders). Claude names that folder by turning
   every character but ASCII letters and digits into `-` (read in its
   binary). **Model and mode** (`core/.../ChatSettings.kt`): Model
   and Permission in + go to a running process (`set_model`,

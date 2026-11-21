@@ -144,10 +144,11 @@ class ChatHubTest {
         drain()
     }
 
-    private fun transcript(id: String, prompt: String, modified: Long) {
-        File(top, claudeTranscriptPath("/root", "/root", id).removePrefix("/")).apply {
+    private fun transcript(id: String, prompt: String, modified: Long, cwd: String = "/root") {
+        File(top, cwd).mkdirs()
+        File(top, claudeTranscriptPath("/root", cwd, id).removePrefix("/")).apply {
             parentFile.mkdirs()
-            writeText("""{"type":"user","message":{"role":"user","content":"$prompt"},"uuid":"$id-0"}""" + "\n")
+            writeText("""{"type":"user","message":{"role":"user","content":"$prompt"},"uuid":"$id-0","cwd":"$cwd"}""" + "\n")
             setLastModified(modified)
         }
     }
@@ -375,12 +376,12 @@ class ChatHubTest {
     @Test
     fun `a live chat's row takes its transcript's place`() {
         val past = listOf(
-            ClaudeSessionSummary("a", "Claude's title", 100),
-            ClaudeSessionSummary("b", "other", 200),
+            ClaudeSessionSummary("a", "Claude's title", 100, "/root"),
+            ClaudeSessionSummary("b", "other", 200, "/root"),
         )
         val live = listOf(
-            LiveChat("a", "my prompt", 300, ChatRowState.WAITING),
-            LiveChat("n", null, 50, ChatRowState.IDLE),
+            LiveChat("a", "my prompt", 300, ChatRowState.WAITING, "/root"),
+            LiveChat("n", null, 50, ChatRowState.IDLE, "/root"),
         )
         assertEquals(
             listOf(
@@ -388,8 +389,46 @@ class ChatHubTest {
                 ChatHistoryRow("a", "Claude's title", 300, ChatRowState.WAITING),
                 ChatHistoryRow("b", "other", 200),
             ),
-            chatHistory(live, past),
+            chatHistory(live, past, "/root"),
         )
+    }
+
+    @Test
+    fun `rows name their folder when it isn't the hub's own`() {
+        val past = listOf(ClaudeSessionSummary("a", "there", 100, "/root/site"), ClaudeSessionSummary("b", "here", 200, "/root"))
+        val live = listOf(LiveChat("n", "new", 50, ChatRowState.IDLE, "/tmp"))
+        assertEquals(
+            listOf(
+                ChatHistoryRow("n", "new", 50, ChatRowState.IDLE, cwd = "/tmp"),
+                ChatHistoryRow("b", "here", 200),
+                ChatHistoryRow("a", "there", 100, cwd = "/root/site"),
+            ),
+            chatHistory(live, past, "/root"),
+        )
+    }
+
+    @Test
+    fun `the history lists other folders' chats, and opening one resumes it in its folder`() {
+        val there = "aaaaaaaa-0000-0000-0000-000000000001"
+        transcript(there, "in the site", 2_000_000L, cwd = "/root/site")
+        transcript("aaaaaaaa-0000-0000-0000-000000000002", "at home", 1_000_000L)
+        var rows: List<ChatHistoryRow>? = null
+        hub.history { rows = it }
+        work()
+        assertEquals(listOf("in the site" to "/root/site", "at home" to null), rows!!.map { it.title to it.cwd })
+        val chat = hub.open(there)
+        assertEquals("/root/site", chat.cwd)
+        start(chat)
+        assertEquals("/root/site", host.launches.last().cwd)
+        assertEquals(there, flag("--resume"))
+    }
+
+    @Test
+    fun `a chat started in another folder keeps it in its row once it's left`() {
+        val chat = hub.newChat("/root/site")
+        val one = start(chat)
+        one.done()
+        assertEquals("/root/site", hub.rows().single().cwd)
     }
 
     private fun flag(name: String, launch: AgentLaunch = host.launches.last()): String? =

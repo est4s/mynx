@@ -373,3 +373,7 @@ setup() {
     grep -q "Find, Replace:" "$DOCS/phone.md"
     grep -q "Ctrl+H" "$DOCS/phone.md"
 }
+
+@test "the guide says the chat history lists every folder's chats" {
+    grep -q "its chats from every folder" "$GUIDE"
+}

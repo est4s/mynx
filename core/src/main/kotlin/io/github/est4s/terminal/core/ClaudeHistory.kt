@@ -13,8 +13,8 @@ const val CLAUDE_TITLE_MAX = 120
 /** How many past chats the list reads. */
 const val CLAUDE_SESSIONS_MAX = 50
 
-/** A past chat for the chat history: [title] is its first prompt, on one line. */
-data class ClaudeSessionSummary(val sessionId: String, val title: String, val modifiedMs: Long)
+/** A past chat for the chat history: [title] is its first prompt, on one line; [cwd] the folder it ran in. */
+data class ClaudeSessionSummary(val sessionId: String, val title: String, val modifiedMs: Long, val cwd: String)
 
 // User lines Claude writes itself: slash commands and their output, `!`
 // commands, background tasks' news, interruptions.
@@ -214,7 +214,12 @@ internal fun oneLine(text: String): String =
  * The first prompt in [file], on one line, read from its first [head]
  * bytes only; null when there's none there.
  */
-fun claudeSessionTitle(file: File, head: Int = CLAUDE_TITLE_HEAD_BYTES): String? {
+fun claudeSessionTitle(file: File, head: Int = CLAUDE_TITLE_HEAD_BYTES): String? = claudeSessionHead(file, head).title
+
+private class SessionHead(val title: String?, val cwd: String?)
+
+// The first prompt and the first folder named (each line has Claude's `cwd`) in [file]'s first [head] bytes.
+private fun claudeSessionHead(file: File, head: Int = CLAUDE_TITLE_HEAD_BYTES): SessionHead {
     val buffer = ByteArray(head)
     var size = 0
     file.inputStream().use { input ->
@@ -226,11 +231,13 @@ fun claudeSessionTitle(file: File, head: Int = CLAUDE_TITLE_HEAD_BYTES): String?
     }
     val lines = String(buffer, 0, size, Charsets.UTF_8).split('\n')
     val full = size == head
+    var cwd: String? = null
     for (line in if (full) lines.dropLast(1) else lines) {
         val parsed = parseLine(line) ?: continue
-        promptText(parsed)?.let { return oneLine(promptTitleText(it)) }
+        if (cwd == null) cwd = parsed["cwd"] as? String
+        promptText(parsed)?.let { return SessionHead(oneLine(promptTitleText(it)), cwd) }
     }
-    return if (full) cutPrompt(lines.last()) else null
+    return SessionHead(if (full) cutPrompt(lines.last()) else null, cwd)
 }
 
 // A first prompt longer than the head: its line is cut, so take the start of its text as it stands.
@@ -251,15 +258,37 @@ private fun cutPrompt(line: String): String? {
 private val ASIDE_KEYS = listOf("\"isSidechain\":true", "\"isMeta\":true", "\"isCompactSummary\":true", "\"sourceToolUseID\"")
 
 /**
- * The past chats in [dir] (a host path to [claudeTranscriptDir]), newest
- * first, with a title each: only the most recent [max] files are read,
- * and only their heads. Sessions with no prompt are left out.
+ * The past chats of every folder in [projects] (a host path to
+ * [claudeProjectsDir]), newest first, with a title and a folder each: only
+ * the most recent [max] are kept, and only their heads read. A chat's folder
+ * is the first `cwd` its head names, if that's the folder it's kept in
+ * ([claudeProjectName]: else `--resume` there wouldn't find it); one naming
+ * none is [here]'s if it's in [here]'s folder. Left out: chats with no
+ * prompt or no folder, and those whose folder [exists] says is gone (Claude
+ * can't start there; a script's temp folders).
  */
-fun listClaudeSessions(dir: File, max: Int = CLAUDE_SESSIONS_MAX): List<ClaudeSessionSummary> =
-    listClaudeTranscripts(dir).take(max).mapNotNull { transcript ->
-        val title = runCatching { claudeSessionTitle(File(dir, "${transcript.sessionId}.jsonl")) }.getOrNull()
-        title?.let { ClaudeSessionSummary(transcript.sessionId, it, transcript.modifiedMs) }
-    }
+fun listClaudeSessions(
+    projects: File,
+    here: String,
+    exists: (String) -> Boolean = { true },
+    max: Int = CLAUDE_SESSIONS_MAX,
+): List<ClaudeSessionSummary> {
+    val hereName = claudeProjectName(here)
+    val there = HashMap<String, Boolean>()
+    return projects.listFiles().orEmpty().filter { it.isDirectory }
+        .flatMap { dir -> listClaudeTranscripts(dir).map { dir to it } }
+        .sortedByDescending { (_, transcript) -> transcript.modifiedMs }
+        .asSequence()
+        .mapNotNull { (dir, transcript) ->
+            val head = runCatching { claudeSessionHead(File(dir, "${transcript.sessionId}.jsonl")) }.getOrNull()
+            val title = head?.title ?: return@mapNotNull null
+            val cwd = head.cwd ?: here.takeIf { dir.name == hereName } ?: return@mapNotNull null
+            if (claudeProjectName(cwd) != dir.name || !there.getOrPut(cwd) { exists(cwd) }) return@mapNotNull null
+            ClaudeSessionSummary(transcript.sessionId, title, transcript.modifiedMs, cwd)
+        }
+        .take(max)
+        .toList()
+}
 
 /** How long ago [then] was, for the chat history. */
 fun chatRelativeTime(now: Long, then: Long): String {

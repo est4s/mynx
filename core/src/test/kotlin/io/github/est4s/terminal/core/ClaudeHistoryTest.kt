@@ -179,31 +179,71 @@ class ClaudeHistoryTest {
         assertNull(claudeSessionTitle(tag))
     }
 
+    private val projects get() = File(top, "projects")
+
+    // A transcript of [cwd]'s folder, its head naming [cwd] (null: none named).
+    private fun session(cwd: String, id: String, prompt: String?, modified: Long, named: String? = cwd) =
+        File(projects, claudeProjectName(cwd)).let { dir ->
+            dir.mkdirs()
+            val folder = named?.let { ""","cwd":${jsonText(it)}""" } ?: ""
+            val head = """{"type":"mode","mode":"normal","sessionId":"$id"}"""
+            val line = prompt?.let { user(1, it).dropLast(1) + folder + "}" } ?: """{"type":"mode"$folder}"""
+            File(dir, "$id.jsonl").apply { writeText(head + "\n" + line + "\n"); setLastModified(modified) }
+        }
+
+    private fun id(n: Int) = "0000000$n-1111-1111-1111-111111111111"
+
     @Test
     fun `past chats are newest first, only those with a prompt`() {
-        val a = "aaaaaaaa-1111-1111-1111-111111111111"
-        val b = "bbbbbbbb-1111-1111-1111-111111111111"
-        val c = "cccccccc-1111-1111-1111-111111111111"
-        File(top, "$a.jsonl").apply { writeText(user(1, "older") + "\n"); setLastModified(1000_000) }
-        File(top, "$b.jsonl").apply { writeText(user(1, "newer") + "\n"); setLastModified(3000_000) }
-        File(top, "$c.jsonl").apply { writeText("""{"type":"mode"}""" + "\n"); setLastModified(2000_000) }
+        session("/root", id(1), "older", 1000_000)
+        session("/root", id(2), "newer", 3000_000)
+        session("/root", id(3), null, 2000_000)
         assertEquals(
-            listOf(ClaudeSessionSummary(b, "newer", 3000_000), ClaudeSessionSummary(a, "older", 1000_000)),
-            listClaudeSessions(top),
+            listOf(ClaudeSessionSummary(id(2), "newer", 3000_000, "/root"), ClaudeSessionSummary(id(1), "older", 1000_000, "/root")),
+            listClaudeSessions(projects, "/root"),
         )
     }
 
     @Test
-    fun `the list is capped to the most recent`() {
-        for (n in 1..5) {
-            File(top, "0000000$n-1111-1111-1111-111111111111.jsonl").apply { writeText(user(n, "p$n") + "\n"); setLastModified(n * 1000_000L) }
-        }
-        assertEquals(listOf("p5", "p4"), listClaudeSessions(top, max = 2).map { it.title })
+    fun `every folder's chats are listed together, each with its folder`() {
+        session("/root", id(1), "at home", 1000_000)
+        session("/root/src/app", id(2), "in the app", 3000_000)
+        session("/tmp", id(3), "in tmp", 2000_000)
+        assertEquals(
+            listOf(id(2) to "/root/src/app", id(3) to "/tmp", id(1) to "/root"),
+            listClaudeSessions(projects, "/root").map { it.sessionId to it.cwd },
+        )
+    }
+
+    @Test
+    fun `chats whose folder is gone are left out, as resuming them can't start`() {
+        session("/root", id(1), "here", 1000_000)
+        session("/tmp/gone", id(2), "gone", 2000_000)
+        assertEquals(listOf(id(1)), listClaudeSessions(projects, "/root", exists = { it != "/tmp/gone" }).map { it.sessionId })
+    }
+
+    @Test
+    fun `a chat naming no folder is the given folder's if it's in its folder, else left out`() {
+        session("/root", id(1), "home", 1000_000, named = null)
+        session("/root/x", id(2), "elsewhere", 2000_000, named = null)
+        assertEquals(listOf(id(1) to "/root"), listClaudeSessions(projects, "/root").map { it.sessionId to it.cwd })
+    }
+
+    @Test
+    fun `a chat naming a folder that isn't its own is left out, as --resume there wouldn't find it`() {
+        session("/root/a", id(1), "moved", 1000_000, named = "/root/b")
+        assertEquals(emptyList(), listClaudeSessions(projects, "/root"))
+    }
+
+    @Test
+    fun `the list is capped to the most recent, across folders`() {
+        for (n in 1..5) session(if (n % 2 == 0) "/root" else "/tmp", id(n), "p$n", n * 1000_000L)
+        assertEquals(listOf("p5", "p4"), listClaudeSessions(projects, "/root", max = 2).map { it.title })
     }
 
     @Test
     fun `an unreadable or missing folder lists nothing`() {
-        assertEquals(emptyList(), listClaudeSessions(File(top, "absent")))
+        assertEquals(emptyList(), listClaudeSessions(File(top, "absent"), "/root"))
     }
 
     @Test

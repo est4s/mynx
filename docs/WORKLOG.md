@@ -46,6 +46,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 2. Touch mode: what's left
 
+- **Test entry 204** (the history's other folders) on the phone.
 - Other agents in Chat (Codex's `app-server`, Gemini's ACP), which
   need accounts to test; the
   Model page lists fallback models until a session reports its own.
@@ -81,6 +82,32 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-21 (204): The chat history lists every folder's chats (PR pending; to test)
+
+The maintainer asked for the roadmap's "chat history that lists other
+folders' chats". A chat started from Files' "Chat here" left the
+history once it was dropped, and resuming it in `/root` couldn't work.
+- Core: `listClaudeSessions(projects, here, exists)` reads every
+  folder under `~/.claude/projects` (the 50 newest overall); each
+  session's folder is the first `cwd` its head names. Left out: a
+  `cwd` whose Claude folder name isn't the one it's kept in, and
+  folders that are gone (the phone had scratchpad temp folders from
+  `claude -p` runs). `ChatHistoryRow.cwd` (null for the hub's own,
+  `/root`), `LiveChat.cwd`, `ChatHub.open(id, cwd)` (else the cwd the
+  last read found, else `/root`: a notification's tap),
+  `chatFolderLabel()`. Tested.
+- App: rows (history, drawer, chat home) open with their folder;
+  the history's meta line ends with the folder (`~/site/`, cut in the
+  middle when long); "No chats yet." `chat-history` screenshots have
+  other-folder rows.
+- Docs: ARCHITECTURE.md, TOUCH-DESIGN.md (Files' limits), the roadmap,
+  the guide.
+- To test on the phone: Files → a folder → Chat here, send a prompt,
+  leave it until it's dropped (Back, then the history): the row shows
+  the folder; opening it shows its transcript and the next prompt goes
+  on in that folder (ask `pwd`); a notification tap on it; old chats in
+  `/root/mynx` listed beside `/root` ones; deleted temp folders not.
 
 ### 2026-11-21 (203): Viewers closed; roadmap cleaned up
 

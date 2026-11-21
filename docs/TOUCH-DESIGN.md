@@ -174,10 +174,9 @@ list's `files`). `ChatHub.newChat(cwd: String = this.cwd)`.
 showing it (`filesShown`, `goBack()`), `TerminalService.runInDebian(argv,
 done)` and `newSession(command, cwd)`; a `files` screenshot.
 
-Limits: a chat started in another folder is listed while it's live;
-its past sessions are in that folder's history, which the history
-screen (root's home) doesn't show yet. The phone's storage shows only
-what Android lets the app read without a storage permission.
+Limits: the phone's storage shows only what Android lets the app
+read without a storage permission. (A chat started here is listed in
+the history with its folder, live or past, and resumes there.)
 
 ## Viewers: text, code, Markdown, audio and video
 

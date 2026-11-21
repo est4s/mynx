@@ -122,7 +122,7 @@ class DrawerView(
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        setOnClickListener { leave { actions.openChat(row.sessionId) } }
+        setOnClickListener { leave { actions.openChat(row) } }
     }
 
     private fun linuxRow(item: DrawerItem) = LinearLayout(context).apply {

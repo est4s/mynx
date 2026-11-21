@@ -1,32 +1,44 @@
 package io.github.est4s.terminal.core
 
-/** A chat a [ChatHub] holds, as its history row sees it: [title] its first prompt, null before one. */
-data class LiveChat(val sessionId: String, val title: String?, val touchedMs: Long, val state: ChatRowState)
+/** A chat a [ChatHub] holds, as its history row sees it: [title] its first prompt, null before one; [cwd] where it runs. */
+data class LiveChat(val sessionId: String, val title: String?, val touchedMs: Long, val state: ChatRowState, val cwd: String)
 
-/** One row of the chat history: [state] is null for a past chat no controller holds. */
-data class ChatHistoryRow(val sessionId: String, val title: String, val modifiedMs: Long, val state: ChatRowState? = null)
+/**
+ * One row of the chat history: [state] is null for a past chat no controller
+ * holds; [cwd] the folder it runs in, null for the hub's own.
+ */
+data class ChatHistoryRow(
+    val sessionId: String,
+    val title: String,
+    val modifiedMs: Long,
+    val state: ChatRowState? = null,
+    val cwd: String? = null,
+)
 
 const val CHAT_UNTITLED = "New chat"
 
 /**
  * The history screen's rows: the [live] chats merged with the [past]
- * sessions read from their folder ([listClaudeSessions]). A live chat's row
+ * sessions of every folder ([listClaudeSessions]), each row naming its
+ * folder unless it's [here], the hub's own. A live chat's row
  * replaces its transcript's, keeping the transcript's title (Claude's own
  * pick of the first prompt), and is as new as the later of the two. Live
  * chats not in a transcript yet come first, titled by their first prompt;
  * then the rest, newest first.
  */
-fun chatHistory(live: List<LiveChat>, past: List<ClaudeSessionSummary>): List<ChatHistoryRow> {
+fun chatHistory(live: List<LiveChat>, past: List<ClaudeSessionSummary>, here: String): List<ChatHistoryRow> {
     val byId = past.associateBy { it.sessionId }
     val liveIds = live.map { it.sessionId }.toSet()
     val (known, fresh) = live.partition { it.sessionId in byId }
+    fun folder(cwd: String) = cwd.takeUnless { it.trimEnd('/') == here.trimEnd('/') }
     val freshRows = fresh.sortedByDescending { it.touchedMs }
-        .map { ChatHistoryRow(it.sessionId, promptTitle(it.title), it.touchedMs, it.state) }
+        .map { ChatHistoryRow(it.sessionId, promptTitle(it.title), it.touchedMs, it.state, folder(it.cwd)) }
     val knownRows = known.map {
         val transcript = byId.getValue(it.sessionId)
-        ChatHistoryRow(it.sessionId, transcript.title, maxOf(transcript.modifiedMs, it.touchedMs), it.state)
+        ChatHistoryRow(it.sessionId, transcript.title, maxOf(transcript.modifiedMs, it.touchedMs), it.state, folder(it.cwd))
     }
-    val pastRows = past.filter { it.sessionId !in liveIds }.map { ChatHistoryRow(it.sessionId, it.title, it.modifiedMs) }
+    val pastRows = past.filter { it.sessionId !in liveIds }
+        .map { ChatHistoryRow(it.sessionId, it.title, it.modifiedMs, cwd = folder(it.cwd)) }
     return freshRows + (knownRows + pastRows).sortedByDescending { it.modifiedMs }
 }
 
@@ -110,8 +122,15 @@ class ChatHub(
     /** Makes a fresh chat whose agent runs in [cwd] (Files' "Chat here"), and shows it. */
     fun newChat(cwd: String = this.cwd): ChatController = show(make(null, cwd))
 
-    /** Shows the chat on [sessionId]: the one held, else a new one resuming it. */
-    fun open(sessionId: String): ChatController = show(chats.firstOrNull { it.sessionId == sessionId } ?: make(sessionId))
+    /**
+     * Shows the chat on [sessionId]: the one held, else a new one resuming it
+     * in its folder: [cwd], else the one the history last read for it, else
+     * the hub's own.
+     */
+    fun open(sessionId: String, cwd: String? = null): ChatController = show(
+        chats.firstOrNull { it.sessionId == sessionId }
+            ?: make(sessionId, cwd ?: past.firstOrNull { it.sessionId == sessionId }?.cwd ?: this.cwd),
+    )
 
     /** Back to the history: no chat shown. */
     fun leave() {
@@ -134,13 +153,14 @@ class ChatHub(
     }
 
     /** The history's rows, with the past sessions as last read ([history]). */
-    fun rows(): List<ChatHistoryRow> = chatHistory(liveChats(), past)
+    fun rows(): List<ChatHistoryRow> = chatHistory(liveChats(), past, cwd)
 
-    /** Reads the folder's past chats off the main thread, then gives [rows] on it. */
+    /** Reads every folder's past chats off the main thread, then gives [rows] on it. */
     fun history(done: (List<ChatHistoryRow>) -> Unit) {
-        val dir = host.hostFile(claudeTranscriptDir(home, cwd))
+        val dir = host.hostFile(claudeProjectsDir(home))
         host.background {
-            val list = runCatching { listClaudeSessions(dir) }.getOrDefault(emptyList())
+            val exists = { path: String -> host.hostFile(path).isDirectory }
+            val list = runCatching { listClaudeSessions(dir, cwd, exists) }.getOrDefault(emptyList())
             post {
                 past = list
                 done(rows())
@@ -206,7 +226,7 @@ class ChatHub(
     }
 
     private fun liveChats(): List<LiveChat> = chats.mapNotNull { chat ->
-        chat.sessionId?.let { LiveChat(it, chat.title, chat.touchedMs, chat.rowState) }
+        chat.sessionId?.let { LiveChat(it, chat.title, chat.touchedMs, chat.rowState, chat.cwd) }
     }
 
     private fun rowsChanged() {

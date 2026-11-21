@@ -218,7 +218,8 @@ One `key = value` per line; `mynx settings` describes each.
   menu editors still run in a tab). Terminal
   (top right) shows the tabs, and ⌂ on the tab strip or Back comes
   back to Home. In `touch`, Home's AI agents opens an installed Claude
-  Code's chat history: New chat, then its chats in `/root`, newest
+  Code's chat history: New chat, then its chats from every folder
+  (another folder's named on its row; it goes on there), newest
   first, marked while one works or waits for you. A chat shows
   messages, tool cards and Allow/Deny; Back goes to the history, and
   Back again to Home. Several chats can work at once, each its own
