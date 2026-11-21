@@ -2,6 +2,8 @@ package io.github.est4s.terminal
 
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -13,10 +15,12 @@ import android.text.TextUtils
 import android.util.TypedValue
 import android.view.GestureDetector
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.EditorInfo
@@ -26,18 +30,36 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.OverScroller
 import android.widget.TextView
+import android.widget.Toast
 import io.github.est4s.terminal.core.PdfColumn
+import io.github.est4s.terminal.core.PdfHandle
+import io.github.est4s.terminal.core.PdfLatest
+import io.github.est4s.terminal.core.PdfPageSpace
+import io.github.est4s.terminal.core.PdfPoint
+import io.github.est4s.terminal.core.PdfRect
 import io.github.est4s.terminal.core.PdfRenderSize
+import io.github.est4s.terminal.core.PdfSelection
 import io.github.est4s.terminal.core.PdfZoom
+import io.github.est4s.terminal.core.pdfBarPlace
+import io.github.est4s.terminal.core.pdfBefore
+import io.github.est4s.terminal.core.pdfBox
 import io.github.est4s.terminal.core.pdfGoToPage
+import io.github.est4s.terminal.core.pdfGrab
+import io.github.est4s.terminal.core.pdfHandles
 import io.github.est4s.terminal.core.pdfIndicator
 import io.github.est4s.terminal.core.pdfPlan
+import io.github.est4s.terminal.core.pdfSelectionEnds
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.hypot
 
 // Behind the pages.
 private const val PDF_BACKGROUND = 0xFF4A4D52.toInt()
 // A zoom is settled (and rendered sharper) once it hasn't changed for this long.
 private const val SETTLE_MS = 250L
+// Selected text's tint: the accent at about 35%.
+private const val SELECTION_ALPHA = 0x59
+// Two points this close in height (PDF points) are on one line.
+private const val LINE_POINTS = 4f
 
 /** What the PDF view asks of its activity. */
 interface PdfViewActions {
@@ -56,6 +78,19 @@ interface PdfViewActions {
      * or null and why not (null and null: it wasn't wanted any more).
      */
     fun render(page: Int, size: PdfRenderSize, stillWanted: () -> Boolean, done: (Bitmap?, String?) -> Unit)
+
+    /** Whether pages' text can be selected (Android 15's PdfRenderer can). */
+    val canSelect: Boolean get() = false
+
+    /**
+     * Select [page]'s text from [start] to [stop] (in its PDF points),
+     * off the main thread; then [done] on the main thread with what's
+     * selected, or null for nothing.
+     */
+    fun select(page: Int, start: PdfPoint, stop: PdfPoint, done: (PdfSelection?) -> Unit) = done(null)
+
+    /** All of [page]'s text, as [select] gives it. */
+    fun selectAll(page: Int, done: (PdfSelection?) -> Unit) = done(null)
 }
 
 /**
@@ -77,6 +112,24 @@ class PdfView(
     var indicatorHold = 1500L
 
     val pages = PdfPagesView(context, actions) { page, count -> showIndicator(page, count) }
+
+    // Over a selection: Copy, Select all, ✕.
+    private val selectionBar = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE)
+        setPadding(dp(2), dp(2), dp(2), dp(2))
+        addView(barButton("Copy") { copySelection() }, LayoutParams(WRAP_CONTENT, dp(44)))
+        addView(barButton("Select all") { pages.selectAll() }, LayoutParams(WRAP_CONTENT, dp(44)))
+        addView(ImageView(context).apply {
+            setImageDrawable(Pixel.icon(context, PixelIcon.CLOSE, Pixel.DIM, 16))
+            scaleType = ImageView.ScaleType.CENTER
+            background = pixelRipple()
+            contentDescription = "Clear the selection"
+            setOnClickListener { pages.clearSelection() }
+        }, LayoutParams(dp(44), dp(44)))
+        visibility = View.GONE
+    }
 
     private val header = LinearLayout(context).apply {
         orientation = HORIZONTAL
@@ -156,19 +209,69 @@ class PdfView(
             addView(indicator, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
                 bottomMargin = dp(20)
             })
+            addView(selectionBar, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START))
         }, LayoutParams(MATCH_PARENT, 0, 1f))
+        pages.selectionMoved = { selected, box -> placeBar(selected, box) }
         showMessage("Loading…", open = false)
     }
 
-    /** The document is open: its pages' height / width, in order. */
-    fun showPages(aspects: List<Float>) {
+    /** Clears the selection, if there's one (Back's first job); true when there was. */
+    fun clearSelection(): Boolean = pages.clearSelection()
+
+    /** Copy (and Ctrl+C): the selected text on the clipboard; false with none. */
+    fun copySelection(): Boolean {
+        val text = pages.selection?.text ?: return false
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(name, text))
+        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+        pages.clearSelection()
+        return true
+    }
+
+    // The bar over the selection, whose box on screen is [box] (null: it has none), or gone without one.
+    private fun placeBar(selected: Boolean, box: PdfRect?) {
+        if (!selected) {
+            selectionBar.visibility = View.GONE
+            return
+        }
+        if (selectionBar.measuredWidth == 0) selectionBar.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED)
+        val w = pages.width.toFloat()
+        val h = pages.height.toFloat()
+        val place = pdfBarPlace(
+            box ?: PdfRect(0f, 0f, w, h),
+            selectionBar.measuredWidth.toFloat(),
+            selectionBar.measuredHeight.toFloat(),
+            w,
+            h,
+            dp(8).toFloat(),
+            pages.handleSize,
+        )
+        selectionBar.translationX = place.x
+        selectionBar.translationY = place.y
+        selectionBar.visibility = View.VISIBLE
+    }
+
+    private fun barButton(label: String, onTap: () -> Unit) = TextView(context).apply {
+        text = label
+        typeface = Pixel.label(context, 600)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        setTextColor(Pixel.CYAN)
+        gravity = Gravity.CENTER
+        setPadding(dp(14), 0, dp(14), 0)
+        background = pixelRipple()
+        isFocusable = true
+        setOnClickListener { onTap() }
+    }
+
+    /** The document is open: its pages' height / width, in order, and their widths in PDF points (for selecting text). */
+    fun showPages(aspects: List<Float>, pointWidths: List<Float> = emptyList()) {
         message.visibility = View.GONE
         pages.visibility = View.VISIBLE
         if (aspects.isEmpty()) {
             showMessage("$name has no pages.", open = true)
             return
         }
-        pages.show(aspects)
+        pages.show(aspects, pointWidths)
     }
 
     /** It can't be shown: [text] says why, over Open with another app. */
@@ -210,6 +313,10 @@ class PdfView(
     /** Esc, G, and the keys that scroll and zoom; true when it was one. */
     fun onKey(event: KeyEvent): Boolean {
         val key = event.keyCode
+        if (key == KeyEvent.KEYCODE_C && event.isCtrlPressed && pages.selection != null) {
+            if (event.action == KeyEvent.ACTION_DOWN) copySelection()
+            return true
+        }
         when (key) {
             KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_G,
             KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
@@ -222,7 +329,7 @@ class PdfView(
         if (event.action != KeyEvent.ACTION_DOWN) return true
         val page = pages.height * 9f / 10
         when (key) {
-            KeyEvent.KEYCODE_ESCAPE -> actions.close()
+            KeyEvent.KEYCODE_ESCAPE -> if (!pages.clearSelection()) actions.close()
             KeyEvent.KEYCODE_G -> askPage()
             KeyEvent.KEYCODE_DPAD_DOWN -> pages.scrollBy(0f, dp(60).toFloat())
             KeyEvent.KEYCODE_DPAD_UP -> pages.scrollBy(0f, -dp(60).toFloat())
@@ -282,6 +389,13 @@ class PdfView(
  * at the width; it lets the far ones go. A page not rendered yet is
  * white. [moved] gets the current page and the count whenever the pages
  * move.
+ *
+ * Where [PdfViewActions.canSelect] (Android 15+), a long press selects
+ * the word under it (and a drag on from there extends it); the
+ * selection is tinted, with handles at its ends that drag it further,
+ * on its page (core's [PdfPageSpace] maps the touches to the page's
+ * points). One selection request is in flight at a time, the latest
+ * waiting ([PdfLatest]). [selectionMoved] hears where it is on screen.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class PdfPagesView(
@@ -305,6 +419,43 @@ class PdfPagesView(
     private val scroller = OverScroller(context)
     private var flingX = 0
     private var flingY = 0
+
+    // Selecting text.
+    private var pointWidths: List<Float> = emptyList()
+    private val selectPaint = Paint()
+    private val handlePaint = Paint()
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop.toFloat()
+    private val grabSlop = Pixel.dp(context, 28).toFloat()
+    private val stem = Pixel.dp(context, 2).toFloat()
+    private val requests = PdfLatest<SelectRequest>()
+    // Bumped when the selection is cleared or replaced: answers to older requests are dropped.
+    private var generation = 0
+    private var multiTouch = false
+    private var dragging = false
+    private var longPressed = false
+    private var longPressX = 0f
+    private var longPressY = 0f
+    // The long press's word hasn't come yet; the finger has moved off it, extending it.
+    private var awaitingWord = false
+    private var extending = false
+    // A drag selects from [dragFrom] to the finger, or from the finger to [dragUntil] when it's before [dragFrom].
+    private var dragFrom = PdfPoint(0f, 0f)
+    private var dragUntil = PdfPoint(0f, 0f)
+    // From the finger to the end it moves, on screen.
+    private var dragDx = 0f
+    private var dragDy = 0f
+
+    private class SelectRequest(val generation: Int, val page: Int, val start: PdfPoint, val stop: PdfPoint, val fresh: Boolean)
+
+    /** A selection handle's side, hanging below the line's end. */
+    val handleSize = Pixel.dp(context, 14).toFloat()
+
+    /** The selected text, if any. */
+    var selection: PdfSelection? = null
+        private set
+
+    /** Hears whether there's a selection, and its box on screen (null: its text has no place on the page), whenever it or the pages move. */
+    var selectionMoved: (selected: Boolean, box: PdfRect?) -> Unit = { _, _ -> }
 
     val count: Int get() = aspects.size
 
@@ -351,8 +502,25 @@ class PdfPagesView(
         }
 
         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            if (clearSelection()) return true
             moved(zoom.let { column?.current(it.top, it.bottom) ?: 0 }, count)
             return true
+        }
+
+        override fun onLongPress(e: MotionEvent) {
+            if (!actions.canSelect || multiTouch || scaler.isInProgress) return
+            val space = space() ?: return
+            val page = space.pageAt(e.x, e.y) ?: return
+            val point = space.toPage(page, e.x, e.y)
+            longPressed = true
+            longPressX = e.x
+            longPressY = e.y
+            awaitingWord = true
+            extending = false
+            dragging = false
+            generation++
+            requests.clear()
+            request(SelectRequest(generation, page, point, point, fresh = true))
         }
     })
 
@@ -361,9 +529,11 @@ class PdfPagesView(
         isFocusable = true
     }
 
-    /** The document's pages, height / width each. */
-    fun show(pageAspects: List<Float>) {
+    /** The document's pages, height / width each, and their widths in PDF points. */
+    fun show(pageAspects: List<Float>, pagePointWidths: List<Float> = emptyList()) {
         aspects = pageAspects
+        pointWidths = pagePointWidths
+        clearSelection()
         bitmaps.clear()
         pending.clear()
         failed.clear()
@@ -401,6 +571,121 @@ class PdfPagesView(
         changed(zoomed = true)
     }
 
+    /** Shows [chosen] as the selection (null: none): what the renderer selected, or a stand-in's. */
+    fun showSelection(chosen: PdfSelection?) {
+        selection = chosen
+        invalidate()
+        reportSelection()
+    }
+
+    /** Clears the selection; true when there was one. */
+    fun clearSelection(): Boolean {
+        generation++
+        requests.clear()
+        dragging = false
+        longPressed = false
+        extending = false
+        awaitingWord = false
+        if (selection == null) return false
+        showSelection(null)
+        return true
+    }
+
+    /** Select all: the whole text of the selection's page, or of the current one. */
+    fun selectAll() {
+        val shown = column ?: return
+        if (!actions.canSelect || shown.count == 0) return
+        val page = selection?.page ?: shown.current(zoom.top, zoom.bottom)
+        generation++
+        requests.clear()
+        dragging = false
+        val asked = generation
+        actions.selectAll(page) { found -> if (asked == generation && found != null) showSelection(found) }
+    }
+
+    private fun space(): PdfPageSpace? = column?.let { PdfPageSpace(it, zoom, pointWidths) }
+
+    private fun reportSelection() {
+        val chosen = selection
+        if (chosen == null) {
+            selectionMoved(false, null)
+            return
+        }
+        val space = space()
+        selectionMoved(true, space?.let { s -> pdfBox(chosen.rects.map { s.toScreen(chosen.page, it) }) })
+    }
+
+    private fun request(asked: SelectRequest) {
+        requests.offer(asked)?.let { send(it) }
+    }
+
+    private fun send(asked: SelectRequest) {
+        actions.select(asked.page, asked.start, asked.stop) { found ->
+            // Cleared or replaced since: its queue went with it.
+            if (asked.generation != generation) return@select
+            if (asked.fresh) {
+                awaitingWord = false
+                if (found == null) longPressed = false
+            }
+            if (found != null) {
+                if (asked.fresh) performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                showSelection(found)
+            }
+            requests.done()?.let { send(it) }
+        }
+    }
+
+    // The handles' centres on screen: below the first line's start and the last line's end.
+    private fun handleCentres(): Pair<PdfPoint, PdfPoint>? {
+        val chosen = selection ?: return null
+        val space = space() ?: return null
+        val (start, stop) = pdfHandles(chosen.rects) ?: return null
+        val a = space.toScreen(chosen.page, start)
+        val b = space.toScreen(chosen.page, stop)
+        val half = handleSize / 2
+        return PdfPoint(a.x - half, a.y + half) to PdfPoint(b.x + half, b.y + half)
+    }
+
+    // A touch on a handle starts dragging that end; false when it's on neither.
+    private fun grab(x: Float, y: Float): Boolean {
+        val chosen = selection ?: return false
+        val space = space() ?: return false
+        val (startCentre, stopCentre) = handleCentres() ?: return false
+        val handle = pdfGrab(x, y, startCentre, stopCentre, grabSlop) ?: return false
+        val (start, stop) = pdfSelectionEnds(chosen.rects) ?: return false
+        val moving = if (handle == PdfHandle.START) start else stop
+        val fixed = if (handle == PdfHandle.START) stop else start
+        val at = space.toScreen(chosen.page, moving)
+        dragDx = at.x - x
+        dragDy = at.y - y
+        dragFrom = fixed
+        dragUntil = fixed
+        return true
+    }
+
+    // A drag on from a long press: once past the touch slop, from the word's start or to its end.
+    private fun extend(x: Float, y: Float) {
+        val chosen = selection ?: return
+        if (awaitingWord) return
+        if (!extending) {
+            if (hypot(x - longPressX, y - longPressY) < touchSlop) return
+            val (start, stop) = pdfSelectionEnds(chosen.rects) ?: return
+            dragFrom = start
+            dragUntil = stop
+            extending = true
+        }
+        dragTo(x, y)
+    }
+
+    // The moving end to the screen point ([x], [y]), kept on the selection's page.
+    private fun dragTo(x: Float, y: Float) {
+        val chosen = selection ?: return
+        val space = space() ?: return
+        val finger = space.toPageInside(chosen.page, x, y)
+        val (start, stop) = if (pdfBefore(finger, dragFrom, LINE_POINTS)) finger to dragUntil else dragFrom to finger
+        request(SelectRequest(generation, chosen.page, start, stop, fresh = false))
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) = relayout(keep = true)
 
     // A new width or document: the column again, the same place at the top if [keep].
@@ -423,6 +708,7 @@ class PdfPagesView(
         }
         plan()
         column?.let { moved(it.current(zoom.top, zoom.bottom), it.count) }
+        if (selection != null) reportSelection()
     }
 
     // Asks for what core's plan says, and lets go of what it drops.
@@ -461,6 +747,38 @@ class PdfPagesView(
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                multiTouch = false
+                longPressed = false
+                extending = false
+                dragging = grab(event.x, event.y)
+                if (dragging) {
+                    scroller.forceFinished(true)
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> multiTouch = true
+        }
+        if (dragging) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_MOVE -> dragTo(event.x + dragDx, event.y + dragDy)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragging = false
+            }
+            return true
+        }
+        if (longPressed) {
+            // A drag on from a long press extends the word it selected, either way.
+            if (event.actionMasked == MotionEvent.ACTION_MOVE && !multiTouch) extend(event.x, event.y)
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                longPressed = false
+                extending = false
+            }
+            // It still needs to see the gesture end.
+            gestures.onTouchEvent(event)
+            return true
+        }
         scaler.onTouchEvent(event)
         gestures.onTouchEvent(event)
         return true
@@ -493,5 +811,26 @@ class PdfPagesView(
             val bitmap = bitmaps[page] ?: continue
             canvas.drawBitmap(bitmap, null, rect, paint)
         }
+        drawSelection(canvas, shown)
+    }
+
+    // The selected lines tinted, and a handle hanging from each end: a stem along the line's edge, a block below it.
+    private fun drawSelection(canvas: Canvas, shown: PdfColumn) {
+        val chosen = selection ?: return
+        if (chosen.page >= shown.count) return
+        val space = PdfPageSpace(shown, zoom, pointWidths)
+        selectPaint.color = (Pixel.CYAN and 0x00FFFFFF) or (SELECTION_ALPHA shl 24)
+        handlePaint.color = Pixel.CYAN
+        for (line in chosen.rects) {
+            val r = space.toScreen(chosen.page, line)
+            canvas.drawRect(r.left, r.top, r.right, r.bottom, selectPaint)
+        }
+        val first = chosen.rects.firstOrNull() ?: return
+        val start = space.toScreen(chosen.page, first)
+        val stop = space.toScreen(chosen.page, chosen.rects.last())
+        canvas.drawRect(start.left - stem, start.top, start.left, start.bottom, handlePaint)
+        canvas.drawRect(start.left - handleSize, start.bottom, start.left, start.bottom + handleSize, handlePaint)
+        canvas.drawRect(stop.right, stop.top, stop.right + stem, stop.bottom, handlePaint)
+        canvas.drawRect(stop.right, stop.bottom, stop.right + handleSize, stop.bottom + handleSize, handlePaint)
     }
 }

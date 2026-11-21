@@ -8,7 +8,9 @@ import android.graphics.Paint
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import io.github.est4s.terminal.core.PdfRect
 import io.github.est4s.terminal.core.PdfRenderSize
+import io.github.est4s.terminal.core.PdfSelection
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -101,6 +103,17 @@ class PdfViewScreenshotTest {
 
     @Test
     fun atPage() = shoot(1080, 2400, "pdf-page-3", List(12) { LETTER }) { it.pages.goTo(2) }
+
+    @Test
+    fun selection() = shoot(1080, 2400, "pdf-selection", List(12) { LETTER }) { view ->
+        // Robolectric can't select (no pdfium): the stand-in lines' rects, in a 612-point page's units (FakePages' 1/100 of its width).
+        val unit = 612f / 100
+        fun line(index: Int, from: Float, to: Float): PdfRect {
+            val y = 24f + 3.2f * index
+            return PdfRect(from * unit, (y - 0.7f) * unit, to * unit, (y + 2.1f) * unit)
+        }
+        view.pages.showSelection(PdfSelection(0, "selected text", listOf(line(2, 40f, 90f), line(3, 10f, 90f), line(4, 10f, 62f))))
+    }
 
     @Test
     fun password() {
