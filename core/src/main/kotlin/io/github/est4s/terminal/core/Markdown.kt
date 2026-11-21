@@ -3,9 +3,13 @@ package io.github.est4s.terminal.core
 /** Text and what's styled in it; ranges are offsets into [text] and may nest or overlap. */
 data class MdStyled(val text: String, val styles: List<MdStyle> = emptyList())
 
-enum class MdStyleKind { BOLD, ITALIC, STRIKE, CODE, LINK }
+enum class MdStyleKind { BOLD, ITALIC, STRIKE, CODE, LINK, IMAGE }
 
-/** [url] is set for a [MdStyleKind.LINK], and always passes [mdLinkAllowed]. */
+/**
+ * [url] is set for a [MdStyleKind.LINK] and an [MdStyleKind.IMAGE] (its
+ * text is the alt text). In a reply it always passes [mdLinkAllowed]; in a
+ * file ([parseMarkdownFile]), [mdFileLinkAllowed].
+ */
 data class MdStyle(val start: Int, val end: Int, val kind: MdStyleKind, val url: String? = null)
 
 enum class MdAlign { LEFT, CENTER, RIGHT }
@@ -20,7 +24,13 @@ sealed interface MdBlock {
 
     /** Rows may have more or fewer cells than [header]: none are dropped. */
     data class Table(val aligns: List<MdAlign>, val header: List<MdStyled>, val rows: List<List<MdStyled>>) : MdBlock
+
+    /** A paragraph of nothing but pictures (a file's only: [parseMarkdownFile]). */
+    data class Images(val images: List<MdImage>) : MdBlock
 }
+
+/** `![alt](url)`, inside `[…](link)` when [link] is set. */
+data class MdImage(val alt: String, val url: String, val link: String? = null)
 
 /**
  * One thing a screen draws, in order: lists and quotes flattened, nesting
@@ -35,12 +45,50 @@ sealed interface MdRow {
     data class Code(val language: String?, val text: String, override val indent: Int = 0, override val quote: Int = 0) : MdRow
     data class Table(val table: MdBlock.Table, override val indent: Int = 0, override val quote: Int = 0) : MdRow
     data class Rule(override val indent: Int = 0, override val quote: Int = 0) : MdRow
+    data class Images(val images: List<MdImage>, override val indent: Int = 0, override val quote: Int = 0) : MdRow
 }
 
 /** A whole `http(s)://…` address, the only links a reply may hold. */
 fun mdLinkAllowed(url: String): Boolean {
     val prefix = listOf("http://", "https://").firstOrNull { url.startsWith(it, ignoreCase = true) } ?: return false
     return url.length > prefix.length && url.none { it.isWhitespace() || it.isISOControl() }
+}
+
+private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*:")
+
+/**
+ * A link in a Markdown file: web links, `mailto:`, `file:` and paths
+ * (no scheme: relative to the file, see [mdLinkPath], or `#section`).
+ * Other schemes (`javascript:`, `intent:`, …) aren't links.
+ */
+fun mdFileLinkAllowed(url: String): Boolean {
+    if (url.isEmpty() || url.length > MAX_URL || url.any { it.isWhitespace() || it.isISOControl() }) return false
+    if (mdLinkAllowed(url)) return true
+    val scheme = SCHEME.find(url)?.value?.lowercase() ?: return true
+    return scheme == "mailto:" || scheme == "file:"
+}
+
+/**
+ * The Debian path a link in the Markdown file [doc] points at: relative to
+ * its folder, `#…` and `?…` dropped, `%20` decoded. Null for web links,
+ * other schemes and links within the file.
+ */
+fun mdLinkPath(doc: String, url: String): String? {
+    var target = url.substringBefore('#').substringBefore('?')
+    if (target.startsWith("file://", ignoreCase = true)) target = target.substring(7)
+    else if (target.startsWith("file:", ignoreCase = true)) target = target.substring(5)
+    if (target.isEmpty() || SCHEME.containsMatchIn(target)) return null
+    target = runCatching { java.net.URLDecoder.decode(target.replace("+", "%2B"), "UTF-8") }.getOrDefault(target)
+    val joined = if (target.startsWith("/")) target else doc.substringBeforeLast('/', "") + "/" + target
+    val parts = ArrayList<String>()
+    for (part in joined.split('/')) {
+        when (part) {
+            "", "." -> Unit
+            ".." -> parts.removeLastOrNull()
+            else -> parts.add(part)
+        }
+    }
+    return "/" + parts.joinToString("/")
 }
 
 /**
@@ -55,7 +103,15 @@ fun mdLinkAllowed(url: String): Boolean {
  * inside code is interpreted. Work is linear in the text, and nesting
  * stops at [MAX_DEPTH] (what's deeper is text).
  */
-fun parseMarkdown(text: String): List<MdBlock> = parseBlocks(splitLines(text), 0).map { it.block }
+fun parseMarkdown(text: String): List<MdBlock> = parseBlocks(splitLines(text), 0, false).map { it.block }
+
+/**
+ * A Markdown file, for the text viewer: as [parseMarkdown], and its links
+ * may point at files ([mdFileLinkAllowed]), and `![alt](url)` is a picture:
+ * a paragraph of only pictures is [MdBlock.Images], one in text an
+ * [MdStyleKind.IMAGE] style on its alt text.
+ */
+fun parseMarkdownFile(text: String): List<MdBlock> = parseBlocks(splitLines(text), 0, true).map { it.block }
 
 /**
  * [parseMarkdown] for text that grows: only the end is parsed again, and
@@ -79,7 +135,7 @@ class IncrementalMarkdown {
         val from = if (keep == 0) 0 else starts[keep]
         val part = new.substring(from)
         val offsets = lineOffsets(part)
-        val parsed = parseBlocks(splitLines(part), 0)
+        val parsed = parseBlocks(splitLines(part), 0, false)
         blocks = blocks.take(keep) + parsed.map { it.block }
         starts = starts.take(keep) + parsed.map { from + offsets[it.line] }
         text = new
@@ -88,7 +144,7 @@ class IncrementalMarkdown {
     }
 }
 
-/** What [ChatView] draws, top to bottom. */
+/** What ChatView and the text viewer draw (MarkdownViews), top to bottom. */
 fun mdRows(blocks: List<MdBlock>): List<MdRow> = ArrayList<MdRow>().also { addRows(blocks, 0, 0, 0, it) }
 
 private val BULLETS = listOf("•", "◦", "▪")
@@ -101,6 +157,7 @@ private fun addRows(blocks: List<MdBlock>, indent: Int, quote: Int, depth: Int, 
             is MdBlock.Code -> out.add(MdRow.Code(block.language, block.text, indent, quote))
             is MdBlock.Table -> out.add(MdRow.Table(block, indent, quote))
             MdBlock.Rule -> out.add(MdRow.Rule(indent, quote))
+            is MdBlock.Images -> out.add(MdRow.Images(block.images, indent, quote))
             is MdBlock.Quote -> addRows(block.blocks, indent, quote + 1, depth, out)
             is MdBlock.ItemList -> block.items.forEachIndexed { number, item ->
                 val marker = if (block.ordered) "${block.start + number}." else BULLETS[minOf(depth, BULLETS.lastIndex)]
@@ -132,7 +189,8 @@ private fun lineOffsets(text: String): List<Int> {
     return offsets
 }
 
-private fun parseBlocks(lines: List<String>, depth: Int): List<Parsed> {
+// [files]: a Markdown file's (links to files, pictures), not a reply's.
+private fun parseBlocks(lines: List<String>, depth: Int, files: Boolean): List<Parsed> {
     val out = ArrayList<Parsed>()
     var i = 0
     while (i < lines.size) {
@@ -144,12 +202,12 @@ private fun parseBlocks(lines: List<String>, depth: Int): List<Parsed> {
         val step = when {
             fenceAt(line) != null -> parseFence(lines, i)
             indentOf(line) >= 4 -> parseIndentedCode(lines, i)
-            headingAt(line) != null -> Step(headingAt(line)!!, i + 1)
+            headingAt(line) != null -> Step(headingAt(line)!!.let { MdBlock.Heading(it.first, parseInline(it.second, files)) }, i + 1)
             isRule(line) -> Step(MdBlock.Rule, i + 1)
-            depth < MAX_DEPTH && isQuote(line) -> parseQuote(lines, i, depth)
-            depth < MAX_DEPTH && markerAt(line) != null -> parseList(lines, i, depth)
-            isTableStart(lines, i) -> parseTable(lines, i)
-            else -> parseParagraph(lines, i, depth)
+            depth < MAX_DEPTH && isQuote(line) -> parseQuote(lines, i, depth, files)
+            depth < MAX_DEPTH && markerAt(line) != null -> parseList(lines, i, depth, files)
+            isTableStart(lines, i) -> parseTable(lines, i, files)
+            else -> parseParagraph(lines, i, depth, files)
         }
         out.add(Parsed(step.block, i))
         i = step.next
@@ -230,7 +288,8 @@ private fun parseIndentedCode(lines: List<String>, from: Int): Step {
     return Step(MdBlock.Code(null, code.joinToString("\n")), i)
 }
 
-private fun headingAt(line: String): MdBlock.Heading? {
+// The level and the text.
+private fun headingAt(line: String): Pair<Int, String>? {
     if (indentOf(line) > 3) return null
     val body = line.trim()
     val level = body.indexOfFirst { it != '#' }.let { if (it < 0) body.length else it }
@@ -238,7 +297,7 @@ private fun headingAt(line: String): MdBlock.Heading? {
     var content = body.substring(level).trim()
     val open = content.trimEnd('#')
     if (open.isEmpty() || open.last().isWhitespace()) content = open.trimEnd()
-    return MdBlock.Heading(level, parseInline(content))
+    return level to content
 }
 
 private fun isRule(line: String): Boolean {
@@ -249,14 +308,14 @@ private fun isRule(line: String): Boolean {
 
 private fun isQuote(line: String): Boolean = indentOf(line) <= 3 && line.trimStart().startsWith('>')
 
-private fun parseQuote(lines: List<String>, from: Int, depth: Int): Step {
+private fun parseQuote(lines: List<String>, from: Int, depth: Int, files: Boolean): Step {
     val body = ArrayList<String>()
     var i = from
     while (i < lines.size && isQuote(lines[i])) {
         body.add(lines[i].trimStart().substring(1).removePrefix(" "))
         i++
     }
-    return Step(MdBlock.Quote(parseBlocks(body, depth + 1).map { it.block }), i)
+    return Step(MdBlock.Quote(parseBlocks(body, depth + 1, files).map { it.block }), i)
 }
 
 private class Marker(val ordered: Boolean, val kind: Char, val start: Int, val indent: Int, val content: Int, val rest: String)
@@ -289,7 +348,7 @@ private fun markerAt(line: String): Marker? {
 
 private fun Char.isAsciiDigit() = this in '0'..'9'
 
-private fun parseList(lines: List<String>, from: Int, depth: Int): Step {
+private fun parseList(lines: List<String>, from: Int, depth: Int, files: Boolean): Step {
     val first = markerAt(lines[from])!!
     val items = ArrayList<List<MdBlock>>()
     var i = from
@@ -310,16 +369,28 @@ private fun parseList(lines: List<String>, from: Int, depth: Int): Step {
             }
             i++
         }
-        items.add(parseBlocks(body, depth + 1).map { it.block })
+        items.add(parseBlocks(body, depth + 1, files).map { it.block })
     }
     return Step(MdBlock.ItemList(first.ordered, first.start, items), i)
 }
 
-private fun parseParagraph(lines: List<String>, from: Int, depth: Int): Step {
+private fun parseParagraph(lines: List<String>, from: Int, depth: Int, files: Boolean): Step {
     var i = from + 1
     while (i < lines.size && !lines[i].isBlank() && !interruptsParagraph(lines, i, depth)) i++
     val text = (from until i).joinToString("\n") { lines[it].trim() }
-    return Step(MdBlock.Paragraph(parseInline(text)), i)
+    val styled = parseInline(text, files)
+    return Step(onlyImages(styled) ?: MdBlock.Paragraph(styled), i)
+}
+
+// Pictures with nothing but space between them (a link around one is kept).
+private fun onlyImages(styled: MdStyled): MdBlock.Images? {
+    val images = styled.styles.filter { it.kind == MdStyleKind.IMAGE }
+    if (images.isEmpty()) return null
+    val covered = BooleanArray(styled.text.length)
+    for (image in images) for (i in image.start until image.end) covered[i] = true
+    if (styled.text.indices.any { !covered[it] && !styled.text[it].isWhitespace() }) return null
+    fun around(image: MdStyle) = styled.styles.firstOrNull { it.kind == MdStyleKind.LINK && it.start <= image.start && image.end <= it.end }
+    return MdBlock.Images(images.map { MdImage(styled.text.substring(it.start, it.end), it.url.orEmpty(), around(it)?.url) })
 }
 
 private fun interruptsParagraph(lines: List<String>, i: Int, depth: Int): Boolean {
@@ -393,14 +464,14 @@ private fun splitCells(line: String): List<String> {
     return cells
 }
 
-private fun parseTable(lines: List<String>, from: Int): Step {
+private fun parseTable(lines: List<String>, from: Int, files: Boolean): Step {
     val rows = ArrayList<List<MdStyled>>()
     var i = from + 2
     while (i < lines.size && '|' in lines[i] && !endsTable(lines[i])) {
-        rows.add(splitCells(lines[i]).map(::parseInline))
+        rows.add(splitCells(lines[i]).map { parseInline(it, files) })
         i++
     }
-    return Step(MdBlock.Table(alignsOf(lines[from + 1])!!, splitCells(lines[from]).map(::parseInline), rows), i)
+    return Step(MdBlock.Table(alignsOf(lines[from + 1])!!, splitCells(lines[from]).map { parseInline(it, files) }, rows), i)
 }
 
 private fun endsTable(line: String): Boolean = fenceAt(line) != null || headingAt(line) != null || isQuote(line)
@@ -440,13 +511,15 @@ private const val MAX_URL = 2048
 private const val NO_URL_END = " \t\n<>\"`]"
 private const val URL_TAIL = ".,;:!?'*_~"
 
-private class InlineParser(private val src: String) {
+private class Bracket(val tok: Tok, val index: Int, val image: Boolean)
+
+private class InlineParser(private val src: String, private val files: Boolean) {
     private val toks = ArrayList<Tok>()
     private val plain = StringBuilder()
     private val marks = ArrayList<Mark>()
     private val openers = ArrayList<Tok>()
     private val openCounts = HashMap<Char, Int>()
-    private val brackets = ArrayList<Pair<Tok, Int>>()
+    private val brackets = ArrayList<Bracket>()
     // Bare links, with where they are, so a link around one can take it back.
     private val autolinks = ArrayList<Pair<Mark, Int>>()
 
@@ -469,7 +542,11 @@ private class InlineParser(private val src: String) {
                 '\\' -> backslash(i)
                 '`' -> codeSpan(i)
                 '*', '_', '~' -> delimiterRun(i)
-                '[' -> openBracket(i)
+                '[' -> openBracket(i, false)
+                '!' -> if (files && src.getOrNull(i + 1) == '[') openBracket(i, true) else {
+                    plain.append('!')
+                    i + 1
+                }
                 ']' -> closeBracket(i)
                 '<' -> angleLink(i)
                 'h', 'H' -> bareLink(i)
@@ -565,11 +642,12 @@ private class InlineParser(private val src: String) {
         }
     }
 
-    private fun openBracket(i: Int): Int {
+    private fun openBracket(i: Int, image: Boolean): Int {
         flush()
-        brackets.add(Tok("[") to toks.size)
-        toks.add(brackets.last().first)
-        return i + 1
+        val tok = Tok(if (image) "![" else "[")
+        brackets.add(Bracket(tok, toks.size, image))
+        toks.add(tok)
+        return i + tok.text.length
     }
 
     private fun closeBracket(i: Int): Int {
@@ -580,11 +658,11 @@ private class InlineParser(private val src: String) {
             return i + 1
         }
         flush()
-        while (autolinks.isNotEmpty() && autolinks.last().second > open.second) autolinks.removeAt(autolinks.lastIndex).first.dropped = true
+        while (autolinks.isNotEmpty() && autolinks.last().second > open.index) autolinks.removeAt(autolinks.lastIndex).first.dropped = true
         val label = Tok("")
-        toks[open.second] = label
+        toks[open.index] = label
         val close = add(Tok(""))
-        marks.add(Mark(label, close, MdStyleKind.LINK, target.first))
+        marks.add(Mark(label, close, if (open.image) MdStyleKind.IMAGE else MdStyleKind.LINK, target.first))
         return target.second
     }
 
@@ -619,7 +697,7 @@ private class InlineParser(private val src: String) {
             p = close + 1
             skipSpaces()
         }
-        if (src.getOrNull(p) != ')' || !mdLinkAllowed(url)) return null
+        if (src.getOrNull(p) != ')' || !(if (files) mdFileLinkAllowed(url) else mdLinkAllowed(url))) return null
         return url to p + 1
     }
 
@@ -680,10 +758,11 @@ private class InlineParser(private val src: String) {
         val styles = marks.filterNot { it.dropped }.mapNotNull { mark ->
             val start = if (mark.to == null) mark.from.outStart else mark.from.outEnd
             val end = (mark.to ?: mark.from).let { if (mark.to == null) it.outEnd else it.outStart }
-            if (start < end) MdStyle(start, end, mark.kind, mark.url) else null
+            // A picture with no alt text is still a picture.
+            if (start < end || mark.kind == MdStyleKind.IMAGE) MdStyle(start, end, mark.kind, mark.url) else null
         }
         return MdStyled(out.toString(), styles.sortedWith(compareBy({ it.start }, { it.kind.ordinal })))
     }
 }
 
-private fun parseInline(text: String): MdStyled = InlineParser(text).parse()
+private fun parseInline(text: String, files: Boolean): MdStyled = InlineParser(text, files).parse()
