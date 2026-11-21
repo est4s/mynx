@@ -377,3 +377,8 @@ setup() {
 @test "the guide says the chat history lists every folder's chats" {
     grep -q "its chats from every folder" "$GUIDE"
 }
+
+@test "the guide says how to let Debian see all of the phone's storage" {
+    grep -q "mynx storage allow" "$CORE"
+    grep -q "Allow access to manage all files" "$DOCS/phone.md"
+}

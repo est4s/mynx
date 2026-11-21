@@ -1928,6 +1928,41 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx torch on [PERCENT] | off", run.stderr, args)
 
+    # --- storage ------------------------------------------------------------
+
+    def test_storage_says_whether_debian_sees_all_of_the_phones_storage(self):
+        self.start_app({"storage": {"ok": True, "access": "some"}})
+        run = self.mynx("storage")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Phone storage: only some files (mynx storage allow asks for all)\n")
+        run = self.mynx("--json", "storage", "status")
+        self.assertEqual(json.loads(run.stdout), {"ok": True, "access": "some"})
+        self.assertEqual(self.app.requests, [["storage"], ["storage", "status"]])
+
+    def test_storage_with_all_files(self):
+        self.start_app({"storage": {"ok": True, "access": "all"}})
+        self.assertEqual(self.mynx("storage").stdout, "Phone storage: all files\n")
+        self.assertEqual(self.mynx("storage", "allow").stdout, "Phone storage: all files\n")
+
+    def test_storage_allow_says_what_to_turn_on_in_androids_settings(self):
+        self.start_app({"storage": {"ok": True, "access": "some", "asked": "settings"}})
+        run = self.mynx("storage", "allow")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Android's settings are open: turn on \"Allow access to manage all files\", "
+                                     "then come back. mynx storage checks.\n")
+        self.assertEqual(self.app.requests, [["storage", "allow"]])
+
+    def test_storage_allow_on_older_androids_is_a_dialog(self):
+        self.start_app({"storage": {"ok": True, "access": "some", "asked": "dialog"}})
+        self.assertEqual(self.mynx("storage", "allow").stdout,
+                         "Android asks on the phone's screen: allow it. mynx storage checks.\n")
+
+    def test_storage_usage(self):
+        for args in [("grant",), ("allow", "now"), ("status", "x")]:
+            run = self.mynx("storage", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx storage [status] | allow", run.stderr, args)
+
     # --- rotation -----------------------------------------------------------
 
     def test_rotation_lock_is_held_by_the_program_that_runs_mynx(self):

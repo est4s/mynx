@@ -72,7 +72,9 @@ sensors, microphone, speaker and flashlight.
   a device's characteristics, and a Nordic UART or HM-10 device
   becomes a serial port too (`mynx ble bind`, `/dev/serial/nus0`).
 - **Debian 13 (arm64).** `apt install` whatever you need; your files
-  and packages survive app updates.
+  and packages survive app updates. The phone's storage is at
+  `/storage/emulated/0`, all of it once you allow it (`mynx storage
+  allow`).
 - **Tabs** that keep running in the background and come back when you
   reopen the app. Swipe sideways to switch.
 - **Background services** for servers and daemons (a web server,

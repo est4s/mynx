@@ -38,6 +38,7 @@ import io.github.est4s.terminal.core.isPictureName
 import io.github.est4s.terminal.core.newFolderJob
 import io.github.est4s.terminal.core.pasteJob
 import io.github.est4s.terminal.core.renameJob
+import io.github.est4s.terminal.core.storageBarShown
 import io.github.est4s.terminal.core.viewerName
 
 /** What Files' taps do; MainActivity implements it. */
@@ -59,6 +60,10 @@ interface FilesActions {
     fun run(job: FileJob.Run, done: (Int, String) -> Unit)
     /** The top row's ← at the top of the tree: the chat home. */
     fun close()
+    /** Whether Android lets the app see all of the phone's storage (the bar's Allow hides once it does). */
+    fun storageGranted(): Boolean
+    /** The storage bar's Allow: Android's settings page or dialog. */
+    fun allowStorage()
 }
 
 /**
@@ -200,6 +205,24 @@ class FilesView(
         visibility = View.GONE
     }
 
+    // In the phone's storage until Android lets the app see all of it (core's storageBarShown).
+    private val storageBar = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.PINK)
+        setPadding(dp(14), dp(8), dp(8), dp(8))
+        addView(TextView(context).apply {
+            text = "Android shows mynx only some of the phone's files."
+            typeface = Pixel.text(context)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Pixel.TEXT)
+        }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        addView(actionButton("Allow", main = true) { actions.allowStorage() }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+            marginStart = dp(8)
+        })
+        visibility = View.GONE
+    }
+
     private val bottomRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
         setPadding(dp(16), dp(8), dp(16), dp(12))
@@ -220,6 +243,9 @@ class FilesView(
         addView(View(context).apply { setBackgroundColor(Pixel.LINE) }, LayoutParams(LayoutParams.MATCH_PARENT, dp(2)))
         addView(placesScroll, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(selectionRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(storageBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+            setMargins(dp(16), dp(8), dp(16), 0)
+        })
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         addView(jobRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(pasteBar, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
@@ -236,6 +262,12 @@ class FilesView(
         entries = null
         problem = null
         scroll.scrollTo(0, 0)
+        render()
+        refresh()
+    }
+
+    /** Back from Android's settings or dialog: the bar, and what the folder shows now. */
+    fun storageChanged() {
         render()
         refresh()
     }
@@ -294,6 +326,7 @@ class FilesView(
         countText.visibility = if (selecting) View.VISIBLE else View.GONE
         countText.text = "${selected.size} selected"
         placesScroll.visibility = if (selecting) View.GONE else View.VISIBLE
+        storageBar.visibility = if (!selecting && storageBarShown(folder, actions.storageGranted())) View.VISIBLE else View.GONE
         selectionRow.visibility = if (selecting) View.VISIBLE else View.GONE
         setEnabledLook(renameButton, selected.size == 1)
         renderCrumbs()

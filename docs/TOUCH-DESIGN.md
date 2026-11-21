@@ -174,9 +174,12 @@ list's `files`). `ChatHub.newChat(cwd: String = this.cwd)`.
 showing it (`filesShown`, `goBack()`), `TerminalService.runInDebian(argv,
 done)` and `newSession(command, cwd)`; a `files` screenshot.
 
-Limits: the phone's storage shows only what Android lets the app
-read without a storage permission. (A chat started here is listed in
-the history with its folder, live or past, and resumes there.)
+The phone's storage: until Android allows all of it, Files in
+`/storage` shows a bar ("Android shows mynx only some of the phone's
+files." **Allow**), which opens Android's All files access page (a
+dialog before Android 11); back from it, Files lists the folder again
+and the bar goes. A chat started here is listed in the history with
+its folder, live or past, and resumes there.
 
 ## Viewers: text, code, Markdown, audio and video
 
