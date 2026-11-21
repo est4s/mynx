@@ -29,11 +29,11 @@ import io.github.est4s.terminal.core.FileJob
 import io.github.est4s.terminal.core.chatRelativeTime
 import io.github.est4s.terminal.core.deleteJob
 import io.github.est4s.terminal.core.fileNameProblem
+import io.github.est4s.terminal.core.filesBack
 import io.github.est4s.terminal.core.fileSizeText
 import io.github.est4s.terminal.core.folderCrumbs
 import io.github.est4s.terminal.core.isPictureName
 import io.github.est4s.terminal.core.newFolderJob
-import io.github.est4s.terminal.core.parentFolder
 import io.github.est4s.terminal.core.pasteJob
 import io.github.est4s.terminal.core.renameJob
 
@@ -257,13 +257,13 @@ class FilesView(
         render()
     }
 
-    /** Back: leaves the selection, else goes up a folder; false at `/`. */
+    /** Back: leaves the selection, else goes up a folder; false at a place (core's [filesBack]). */
     fun back(): Boolean {
         if (selected.isNotEmpty()) {
             clearSelection()
             return true
         }
-        val parent = parentFolder(folder) ?: return false
+        val parent = filesBack(folder) ?: return false
         open(parent)
         return true
     }

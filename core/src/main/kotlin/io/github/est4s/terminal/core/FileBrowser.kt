@@ -98,6 +98,17 @@ fun parentFolder(path: String): String? {
     return clean.substringBeforeLast('/').ifEmpty { "/" }
 }
 
+/**
+ * Where Files' Back goes from [folder]: up a folder, or null (back to the
+ * chat home) at one of [FILE_PLACES], so it never climbs into folders
+ * Android won't list (`/storage/emulated`).
+ */
+fun filesBack(folder: String): String? {
+    val clean = cleanPath(folder)
+    if (FILE_PLACES.any { it.second == clean }) return null
+    return parentFolder(clean)
+}
+
 /** The places row, label to path. `/storage` is bound from Android ([HOST_BINDS]). */
 val FILE_PLACES: List<Pair<String, String>> = listOf(
     "Home" to "/root",

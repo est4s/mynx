@@ -138,6 +138,16 @@ class FileBrowserTest {
     }
 
     @Test
+    fun `Back goes up a folder, and leaves at a place`() {
+        assertEquals("/root/src", filesBack("/root/src/app"))
+        assertEquals("/storage/emulated/0", filesBack("/storage/emulated/0/Music"))
+        assertNull(filesBack("/root"))
+        assertNull(filesBack("/storage/emulated/0/Download"))
+        assertNull(filesBack("/storage/emulated/0"))
+        assertNull(filesBack("/"))
+    }
+
+    @Test
     fun `the places are home, Download, the phone and Debian`() {
         assertEquals(
             listOf("Home" to "/root", "Download" to "/storage/emulated/0/Download", "Phone" to "/storage/emulated/0", "Debian" to "/"),

@@ -128,8 +128,9 @@ places.
 - Bottom actions, always: **Chat here** (a new chat whose agent runs
   in this folder: `ChatHub.newChat(cwd)`), **Terminal here** (a new
   tab with a shell in it: `TerminalService.newSession(cwd = …)`).
-- Back: leaves the selection, else goes up a folder, else to the
-  chat home; up from a place's top goes on up (`/storage/…` to `/`).
+- Back: leaves the selection, else goes up a folder, else (at one
+  of the places, `filesBack()`) to the chat home, so it never climbs
+  into `/storage/emulated`, which Android won't list.
 
 **Every change runs in Debian**, never through `java.io.File`: proot
 fakes hard links (`--link2symlink`, `.l2s.*` files with host paths),
