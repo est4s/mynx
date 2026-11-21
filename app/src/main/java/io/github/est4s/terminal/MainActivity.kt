@@ -51,6 +51,8 @@ import io.github.est4s.terminal.core.chatHome
 import io.github.est4s.terminal.core.ColorScheme
 import io.github.est4s.terminal.core.FileEntry
 import io.github.est4s.terminal.core.FileJob
+import io.github.est4s.terminal.core.FileKind
+import io.github.est4s.terminal.core.OpenWith
 import io.github.est4s.terminal.core.listFolder
 import io.github.est4s.terminal.core.fitAroundTerminal
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
@@ -561,15 +563,12 @@ class MainActivity : Activity(), FrontActivity {
             hideHome()
         }
 
-        override fun viewPicture(path: String) {
-            val file = filesApps.host(filesApps.resolve(path) ?: path)
-            if (file == null) return toastError("$path isn't there any more")
-            startActivity(ImageViewActivity.intent(this@MainActivity, file, path.substringAfterLast('/')))
+        override fun openFile(path: String, with: OpenWith?) {
+            val service = service ?: return toastError("the app isn't ready yet")
+            toastError(service.openDebianFileWith(path, with))
         }
 
-        override fun openFile(path: String) {
-            toastError(service?.openDebianFile(path))
-        }
+        override fun fileKind(path: String): FileKind? = service?.debianFileKind(path)
 
         override fun share(paths: List<String>) {
             toastError(service?.shareDebianFiles(paths))
