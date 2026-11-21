@@ -32,12 +32,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
-### 0. Viewers: suggested next (the maintainer picks)
-
-Not decided: opening files from other apps in mynx's viewers, and
-whether the diff view should start unwrapped like the code viewer
-(it wraps; nobody has asked).
-
 ### 1. Development boards: what's left (the maintainer picks)
 
 - Raw USB hotplug while a program runs (libudev's monitor wants
@@ -87,6 +81,13 @@ whether the diff view should start unwrapped like the code viewer
 ---
 
 ## Log
+
+### 2026-11-21 (203): Viewers closed; roadmap cleaned up
+
+The maintainer closed the viewer suggestions (opening files from
+other apps, the diff view unwrapped): "we are all good there". Done
+items left the roadmap (Viewers, touch mode's built parts); the
+drawer's alternative moved to `docs/TOUCH-DESIGN.md`.
 
 ### 2026-11-21 (202): Find in PDFs, Replace in the text viewers (PR #96 into `more-viewers`; passed)
 

@@ -1,7 +1,10 @@
 # Touch mode: chat first, with a drawer
 
 The design for touch view's next step (maintainer's decision,
-2026-11-11; roadmap "Touch mode", work log "Next" 4). The pictures
+2026-11-11). The alternative was a launcher button next to the prompt
+box, opening a sheet of Home's items from the bottom; if it's chosen
+instead, switch before touch mode's first release, while nobody has
+learned the drawer. The pictures
 are mock-ups from a design study, drawn in a browser at 390 × 844 dp
 (2× pixels): sample data, not the app. Where this text and a picture
 differ, the text wins.
