@@ -3,6 +3,7 @@ package io.github.est4s.terminal.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ChatHomeTest {
@@ -82,6 +83,13 @@ class ChatHomeTest {
         assertEquals("claude code · auto · /tmp/", home(cwd = "/tmp").footer)
         assertEquals("claude code · auto · /rootfs/", home(cwd = "/rootfs").footer)
         assertEquals("claude code · auto · /", home(cwd = "/").footer)
+    }
+
+    @Test
+    fun aChatsFolderIsShownAsTheFooterShowsIt() {
+        assertNull(chatFolderLabel(null, "/root"))
+        assertEquals("~/site/", chatFolderLabel("/root/site", "/root"))
+        assertEquals("/tmp/", chatFolderLabel("/tmp", "/root"))
     }
 
     @Test

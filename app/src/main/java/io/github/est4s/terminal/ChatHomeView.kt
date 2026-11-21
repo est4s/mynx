@@ -35,8 +35,8 @@ interface ChatHomeActions {
     fun addContext(draft: String)
     /** The mic: a new chat with [draft] in its box, dictation started. */
     fun dictate(draft: String)
-    /** A chat's row; null is New chat (empty). */
-    fun openChat(sessionId: String?)
+    /** A chat's row (it resumes in its folder); null is New chat (empty). */
+    fun openChat(row: ChatHistoryRow?)
     /** The history screen. */
     fun allChats()
     /** A Linux item that isn't a list, or the Install button. */
@@ -378,7 +378,7 @@ class ChatHomeView(
                 })
             }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        setOnClickListener { actions.openChat(row.sessionId) }
+        setOnClickListener { actions.openChat(row) }
     }
 
     private fun iconButton(icon: PixelIcon, description: String, onClick: () -> Unit) = ImageView(context).apply {

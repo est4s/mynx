@@ -50,6 +50,9 @@ fun chatHome(
     )
 }
 
+/** A history row's folder ([ChatHistoryRow.cwd]) as the footer shows one: `~/site/`; null for the hub's own. */
+fun chatFolderLabel(cwd: String?, home: String): String? = cwd?.let { footerDir(it, home) }
+
 // "Default (asks)" → "default": the mode's name without its explanation.
 private fun footerMode(mode: String): String =
     CHAT_MODES.firstOrNull { it.value == mode }?.name?.substringBefore(" (")?.lowercase() ?: mode

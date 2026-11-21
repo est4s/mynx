@@ -43,6 +43,7 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.ChatController
+import io.github.est4s.terminal.core.ChatHistoryRow
 import io.github.est4s.terminal.core.ChatHome
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.HOME_MAIN
@@ -463,7 +464,7 @@ class MainActivity : Activity(), FrontActivity {
             chat?.toggleDictation()
         }
 
-        override fun openChat(sessionId: String?) = this@MainActivity.openChat(sessionId)
+        override fun openChat(row: ChatHistoryRow?) = this@MainActivity.openChat(row?.sessionId, row?.cwd)
 
         override fun allChats() = showChatHistory()
 
@@ -598,10 +599,10 @@ class MainActivity : Activity(), FrontActivity {
         view.focusInput()
     }
 
-    // A history row (its session) or New chat (null).
-    private fun openChat(sessionId: String?) {
+    // A history row (its session, resumed in [cwd], null: where the hub last saw it) or New chat (null).
+    private fun openChat(sessionId: String?, cwd: String? = null) {
         val chats = service?.chats ?: return
-        if (sessionId == null) chats.newChat() else chats.open(sessionId)
+        if (sessionId == null) chats.newChat() else chats.open(sessionId, cwd)
         showChat()
     }
 
@@ -824,7 +825,7 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }, ::openChat).also {
+        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }) { openChat(it?.sessionId, it?.cwd) }.also {
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }

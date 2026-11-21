@@ -12,15 +12,16 @@ import android.widget.ScrollView
 import android.widget.TextView
 import io.github.est4s.terminal.core.ChatHistoryRow
 import io.github.est4s.terminal.core.ChatHub
+import io.github.est4s.terminal.core.chatFolderLabel
 import io.github.est4s.terminal.core.chatRelativeTime
 
 private const val HISTORY_TITLE = "Chats"
 
 /**
  * The agent's home in touch mode, in the pixel style: New chat, then its
- * chats ([ChatHub.rows]: the live ones with their marks, and the folder's
- * past ones), newest first. A row goes to [openChat] with its session id,
- * New chat with null. [back] is the header's ←; the terminal is the chat
+ * chats ([ChatHub.rows]: the live ones with their marks, and every folder's
+ * past ones, a row outside the hub's folder naming it), newest first. A row
+ * goes to [openChat], New chat with null. [back] is the header's ←; the terminal is the chat
  * home drawer's.
  */
 @SuppressLint("ViewConstructor")
@@ -28,7 +29,7 @@ class ChatHistoryView(
     context: Context,
     private val hub: () -> ChatHub?,
     private val back: () -> Unit,
-    private val openChat: (String?) -> Unit,
+    private val openChat: (ChatHistoryRow?) -> Unit,
 ) : LinearLayout(context) {
     private val rows = LinearLayout(context).apply {
         orientation = VERTICAL
@@ -123,7 +124,7 @@ class ChatHistoryView(
         val list = shown
         when {
             list == null -> rows.addView(note("Reading…"))
-            list.isEmpty() -> rows.addView(note("No chats here yet."))
+            list.isEmpty() -> rows.addView(note("No chats yet."))
             else -> {
                 val now = System.currentTimeMillis()
                 list.forEach {
@@ -161,9 +162,14 @@ class ChatHistoryView(
                     addView(smallText(" · ", Pixel.DIM))
                     addView(smallText(word, color))
                 }
-            }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
+                // Another folder's chat: its folder last, cut in the middle when long.
+                chatFolderLabel(chat.cwd, hub()?.home ?: "/root")?.let {
+                    addView(smallText(" · ", Pixel.DIM))
+                    addView(smallText(it, Pixel.DIM).apply { ellipsize = TextUtils.TruncateAt.MIDDLE }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+                }
+            }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
         }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-        setOnClickListener { openChat(chat.sessionId) }
+        setOnClickListener { openChat(chat) }
     }
 
     private fun smallText(text: String, color: Int) = TextView(context).apply {
