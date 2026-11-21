@@ -49,6 +49,9 @@ import io.github.est4s.terminal.core.HOME_MAIN
 import io.github.est4s.terminal.core.agentBinary
 import io.github.est4s.terminal.core.chatHome
 import io.github.est4s.terminal.core.ColorScheme
+import io.github.est4s.terminal.core.FileEntry
+import io.github.est4s.terminal.core.FileJob
+import io.github.est4s.terminal.core.listFolder
 import io.github.est4s.terminal.core.fitAroundTerminal
 import io.github.est4s.terminal.core.MAX_FONT_SIZE
 import io.github.est4s.terminal.core.MIN_FONT_SIZE
@@ -143,6 +146,7 @@ class MainActivity : Activity(), FrontActivity {
     private var chat: ChatView? = null
     private var chatHistory: ChatHistoryView? = null
     private var chatHomeView: ChatHomeView? = null
+    private var filesView: FilesView? = null
     // After Chat's Sign in or Install opens a tab: Back returns to the chat, to check again.
     private var chatAfterTab = false
     private val chatListener: (ChatController, ChatState) -> Unit = { controller, state ->
@@ -176,6 +180,7 @@ class MainActivity : Activity(), FrontActivity {
                     }
                     s.chatPlace == ChatPlace.CHAT && s.chats.shown != null -> showChat()
                     s.chatPlace == ChatPlace.HISTORY -> showChatHistory()
+                    s.chatPlace == ChatPlace.FILES -> showFiles(s.filesFolder ?: filesApps.guestHome)
                     else -> showChatHome()
                 }
             }
@@ -271,6 +276,7 @@ class MainActivity : Activity(), FrontActivity {
         hideChatHistory()
         hideChatHome()
         hideHome()
+        hideFiles()
     }
 
     private fun shellOf(intent: Intent?): Int? =
@@ -284,6 +290,7 @@ class MainActivity : Activity(), FrontActivity {
         hideChat()
         hideChatHistory()
         hideChatHome()
+        hideFiles()
         hideHome()
     }
 
@@ -299,6 +306,7 @@ class MainActivity : Activity(), FrontActivity {
             if (chatShown) service?.chats?.opened() // signed in or installed meanwhile?
             if (chatHistoryShown) chatHistory?.refresh()
             if (chatHomeShown) chatHomeView?.refresh()
+            if (filesShown) filesView?.refresh()
         }
         root.post(keyBarPoll)
         service?.cameOnScreen()
@@ -357,10 +365,13 @@ class MainActivity : Activity(), FrontActivity {
     }
 
     // Touch mode: everything backs out to the chat home (a chat after its sheet,
-    // the history, Home's lists after their levels, the terminal unless a chat
-    // sent it there); the chat home closes its drawer, then the app is left.
+    // the history, Home's lists after their levels, Files after its selection and
+    // folders, the terminal unless a chat sent it there); the chat home closes its
+    // drawer, then the app is left.
     private fun goBack() {
         when {
+            filesShown && filesView?.back() == true -> Unit
+            filesShown -> showChatHome()
             chatShown && chat?.sheetBack() == true -> Unit
             chatShown -> showChatHome()
             chatHomeShown && chatHomeView?.back() == true -> Unit
@@ -380,6 +391,7 @@ class MainActivity : Activity(), FrontActivity {
         hideHome()
         hideChat()
         hideChatHistory()
+        hideFiles()
         service.chats.leave()
         chatAfterTab = false
         service.chatPlace = ChatPlace.HOME
@@ -470,6 +482,7 @@ class MainActivity : Activity(), FrontActivity {
     private fun showHome() {
         val view = home ?: return
         hideChatHome()
+        hideFiles()
         chatAfterTab = false
         (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(root.windowToken, 0)
         view.visibility = View.VISIBLE
@@ -489,6 +502,87 @@ class MainActivity : Activity(), FrontActivity {
 
     private val chatHistoryShown get() = chatHistory?.visibility == View.VISIBLE
 
+    private val filesShown get() = filesView?.visibility == View.VISIBLE
+
+    // Root's home and the rootfs, for Files: reads only (every change runs in Debian).
+    private val filesApps by lazy { WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools) }
+
+    /** Touch mode's Files at [folder], over the terminal as Home is. Leaving a chat for it lets an idle chat's process go. */
+    private fun showFiles(folder: String) {
+        val view = filesView ?: return
+        val service = service ?: return
+        hideHome()
+        hideChatHome()
+        hideChat()
+        hideChatHistory()
+        service.chats.leave()
+        chatAfterTab = false
+        service.chatPlace = ChatPlace.FILES
+        hideKeyboard()
+        view.visibility = View.VISIBLE
+        view.open(folder)
+        view.requestFocus()
+    }
+
+    private fun hideFiles() {
+        val service = service
+        if (service?.chatPlace == ChatPlace.FILES) service.chatPlace = ChatPlace.NONE
+        if (!filesShown) return
+        filesView?.visibility = View.GONE
+        terminalView.requestFocus()
+    }
+
+    // Off the main thread; the folder is kept for a recreated activity (a theme's colours).
+    private fun listFiles(folder: String, done: (Result<List<FileEntry>>) -> Unit) {
+        service?.filesFolder = folder
+        val apps = filesApps
+        thread(name = "files-list") {
+            val result: Result<List<FileEntry>> = try {
+                listFolder(apps, folder, true)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            root.post { done(result) }
+        }
+    }
+
+    private val filesActions = object : FilesActions {
+        override fun chatHere(folder: String) {
+            val chats = service?.chats ?: return
+            chats.newChat(folder)
+            showChat()
+        }
+
+        override fun terminalHere(folder: String) {
+            val service = service ?: return
+            service.newSession(cwd = folder)
+            hideFiles()
+            hideChatHome()
+            hideHome()
+        }
+
+        override fun viewPicture(path: String) {
+            val file = filesApps.host(filesApps.resolve(path) ?: path)
+            if (file == null) return toastError("$path isn't there any more")
+            startActivity(ImageViewActivity.intent(this@MainActivity, file, path.substringAfterLast('/')))
+        }
+
+        override fun openFile(path: String) {
+            toastError(service?.openDebianFile(path))
+        }
+
+        override fun share(paths: List<String>) {
+            toastError(service?.shareDebianFiles(paths))
+        }
+
+        override fun run(job: FileJob.Run, done: (Int, String) -> Unit) {
+            val service = service ?: return done(-1, "the app isn't ready yet")
+            service.runInDebian(job.argv, done)
+        }
+
+        override fun close() = showChatHome()
+    }
+
     /** Touch mode's Chat, over the terminal, as Home is: the hub's shown chat (the chats live in the service), else the history. */
     private fun showChat() {
         val view = chat ?: return
@@ -497,6 +591,7 @@ class MainActivity : Activity(), FrontActivity {
         hideHome()
         hideChatHome()
         hideChatHistory()
+        hideFiles()
         chatAfterTab = false
         service.chatPlace = ChatPlace.CHAT
         view.visibility = View.VISIBLE
@@ -524,6 +619,7 @@ class MainActivity : Activity(), FrontActivity {
         hideHome()
         hideChatHome()
         hideChat()
+        hideFiles()
         service.chats.leave()
         chatAfterTab = false
         service.chatPlace = ChatPlace.HISTORY
@@ -593,6 +689,7 @@ class MainActivity : Activity(), FrontActivity {
             is HomeAction.Tab -> service.newSession(action.command)
             HomeAction.Shell -> service.newSession()
             is HomeAction.Chat -> return showChatHistory()
+            is HomeAction.Files -> return showFiles(action.folder)
             is HomeAction.App -> return startActivity(WebAppActivity.shortcutIntent(this, action.name))
             is HomeAction.Service -> {
                 val refusal = service.serviceAct(action.name, action.op)
@@ -606,6 +703,7 @@ class MainActivity : Activity(), FrontActivity {
         }
         hideHome()
         hideChatHome()
+        hideFiles()
     }
 
     // Only for the "terminals running" notification; everything works without it.
@@ -732,6 +830,11 @@ class MainActivity : Activity(), FrontActivity {
                 maxHeight = dp(40)
             }
         }.also {
+            it.visibility = View.GONE
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
+        filesView = FilesView(this, ::listFiles, filesApps.guestHome, filesActions).also {
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
@@ -1168,6 +1271,7 @@ class MainActivity : Activity(), FrontActivity {
             hideChatHistory()
             hideChatHome()
             hideHome()
+            hideFiles()
         }
         renderStrip()
     }
@@ -1200,7 +1304,7 @@ class MainActivity : Activity(), FrontActivity {
         if (chatShown && chat?.hasFocus() != true) chat?.focusInput()
         // Typing on one, the chat home's box (the terminal under it may have the focus).
         if (chatHomeShown && event.isPrintingKey && chatHomeView?.hasFocus() != true) chatHomeView?.focusInput()
-        return (::keyBar.isInitialized && !homeShown && !chatShown && !chatHistoryShown && !chatHomeShown && keyBar.onVolumeKey(event)) ||
+        return (::keyBar.isInitialized && !homeShown && !chatShown && !chatHistoryShown && !chatHomeShown && !filesShown && keyBar.onVolumeKey(event)) ||
             super.dispatchKeyEvent(event)
     }
 
