@@ -170,3 +170,45 @@ fun lineStarts(text: String): IntArray {
     for (i in text.indices) if (text[i] == '\n') starts[n++] = i + 1
     return starts
 }
+
+/**
+ * A replace in Find: the [text] after it, the [edit] that made it (for
+ * the editor and Undo), how many matches it replaced, the [cursor] after
+ * the last replacement, and the match to go to next in the new text's
+ * [findMatches] (-1: none).
+ */
+data class Replaced(val text: String, val edit: TextEdit, val count: Int, val cursor: Int, val next: Int)
+
+/** The index of the first of [matches] starting at or after [offset], else the first (-1 with none). */
+fun matchAtOrAfter(matches: List<IntRange>, offset: Int): Int {
+    if (matches.isEmpty()) return -1
+    val at = matches.indexOfFirst { it.first >= offset }
+    return if (at < 0) 0 else at
+}
+
+/** Replaces [matches]' [current] one in [text] with [replacement]; the next match is the first after it. */
+fun replaceMatch(text: String, matches: List<IntRange>, current: Int, replacement: String): Replaced {
+    val match = matches[current]
+    val edit = TextEdit(match.first, text.substring(match.first, match.last + 1), replacement)
+    val after = edit.applyTo(text)
+    val query = edit.removed
+    return Replaced(after, edit, 1, edit.end, matchAtOrAfter(findMatches(after, query), edit.end))
+}
+
+/** Every match of [query] in [text] (case ignored) replaced with [replacement]; null when there's none. */
+fun replaceAll(text: String, query: String, replacement: String): Replaced? {
+    val matches = findMatches(text, query)
+    if (matches.isEmpty()) return null
+    val out = StringBuilder(text.length)
+    var from = 0
+    for (match in matches) {
+        out.append(text, from, match.first).append(replacement)
+        from = match.last + 1
+    }
+    out.append(text, from, text.length)
+    val after = out.toString()
+    val first = matches.first().first
+    val tail = text.length - (matches.last().last + 1)
+    val edit = TextEdit(first, text.substring(first, text.length - tail), after.substring(first, after.length - tail))
+    return Replaced(after, edit, matches.size, edit.end, -1)
+}
