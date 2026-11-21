@@ -43,6 +43,7 @@ import com.termux.terminal.TerminalSession
 import com.termux.terminal.TextStyle
 import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.ChatController
+import io.github.est4s.terminal.core.ChatHistoryRow
 import io.github.est4s.terminal.core.ChatHome
 import io.github.est4s.terminal.core.ChatState
 import io.github.est4s.terminal.core.HOME_MAIN
