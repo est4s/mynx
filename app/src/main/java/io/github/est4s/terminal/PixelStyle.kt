@@ -175,7 +175,15 @@ object Pixel {
             10, 2, 2, 6, 10, 6, 6, 2,                           // its folded corner
             7, 10, 5, 2, 7, 13, 5, 2,                           // two lines
         )
-        PixelIcon.BOLT -> intArrayOf(11, 1, 3, 3, 9, 4, 3, 3, 7, 7, 3, 2, 7, 9, 8, 2, 11, 11, 3, 3, 9, 14, 3, 3, 7, 17, 3, 2)
+        PixelIcon.FOLDER -> intArrayOf(
+            2, 3, 7, 2, 7, 5, 2, 2,                              // the tab
+            2, 7, 16, 2, 2, 15, 16, 2, 2, 3, 2, 14, 16, 7, 2, 10, // the body
+        )
+        PixelIcon.LINK -> intArrayOf(
+            4, 14, 3, 3, 7, 11, 3, 3, 10, 8, 3, 3, // the shaft, up and right
+            9, 3, 8, 3, 14, 6, 3, 5,               // its head
+        )
+        PixelIcon.BOLT ->intArrayOf(11, 1, 3, 3, 9, 4, 3, 3, 7, 7, 3, 2, 7, 9, 8, 2, 11, 11, 3, 3, 9, 14, 3, 3, 7, 17, 3, 2)
         PixelIcon.CHIP -> intArrayOf(
             5, 5, 10, 10,                                       // the chip
             7, 2, 2, 3, 11, 2, 2, 3, 7, 15, 2, 3, 11, 15, 2, 3, // its pins
@@ -233,7 +241,7 @@ fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
     popup.showAsDropDown(anchor, 0, 0, Gravity.END)
 }
 
-enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, BOLT, CHIP, REFRESH }
+enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH }
 
 /** Text in another typeface (TypefaceSpan(Typeface) is API 28+): Pixelify Sans for headings in Chat's Markdown. */
 class PixelFontSpan(private val face: Typeface) : MetricAffectingSpan() {

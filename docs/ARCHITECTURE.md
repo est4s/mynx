@@ -618,6 +618,20 @@ See `docs/ROADMAP.md` "How it works". The details:
   read `Pixel`'s colours as they're built. Pixelify Sans for labels, buttons and
   headings, JetBrains Mono for text; square boxes, 2 dp borders, the
   pink hard shadow only on a screen's main action; block icons.
+- **Touch mode's Files** (`core/.../FileBrowser.kt`,
+  `app/.../FilesView.kt`; the spec is `docs/TOUCH-DESIGN.md`, "Files";
+  maintainer's decision, 2026-11-21): the drawer's Files
+  (`HomeAction.Files`) opens it in place of nnn, which stays in
+  Terminal apps. Listing reads through `WebApps` (read-only, links
+  resolved the Debian way). **Every change runs in Debian**: core
+  turns copy, move, rename, delete and new folder into a `FileJob`
+  (`/bin/sh -c` with quoted paths), which `TerminalService.runInDebian()`
+  runs in a proot of its own; never `java.io.File`, because proot's
+  `--link2symlink` fakes hard links with `.l2s.*` files holding host
+  paths, and `deleteRecursively()` follows links. Delete is permanent,
+  after a confirmation. Chat here is `ChatHub.newChat(cwd)`; Terminal
+  here a tab started in the folder. Pictures' thumbnails come from a
+  `ChatThumbnails` of its own (40 dp), only for rows near sight.
 - **Chat protocol** (`core/.../AgentSession.kt`, `ClaudeSession.kt`,
   `ClaudeLaunch.kt`, `Conversation.kt`; maintainer's decision,
   2026-11-10: Claude's stream-json first, behind a thin session with

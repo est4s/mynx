@@ -31,14 +31,16 @@ private const val PREVIEW_BYTES = 32 * 1024 * 1024
  * upright by its EXIF orientation, decoded on [worker] and kept in a
  * cache. A file that can't be decoded (gone, or a format the phone
  * can't read) is remembered and keeps its icon. [preview] is an image
- * card's picture: whole, its long side within [PREVIEW_DP].
+ * card's picture: whole, its long side within [PREVIEW_DP]. Files' rows
+ * use one of their own, [sizeDp] squares.
  */
 class ChatThumbnails(
     context: Context,
     private val hostFile: (String) -> File,
     private val worker: Executor = WORKER,
+    sizeDp: Int = CHAT_THUMBNAIL_DP,
 ) {
-    private val size = Pixel.dp(context, CHAT_THUMBNAIL_DP)
+    private val size = Pixel.dp(context, sizeDp)
     private val main = Handler(Looper.getMainLooper())
     private val cache = LruCache<String, Bitmap>(CACHED)
     private val failed = HashSet<String>()
@@ -47,8 +49,13 @@ class ChatThumbnails(
         override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
     }
 
-    /** Calls [done] on the main thread with [path]'s thumbnail: at once if it's cached, never if it can't be made. */
-    fun load(path: String, done: (Bitmap) -> Unit) = load(cache, path, done) { decode(hostFile(path)) }
+    /**
+     * Calls [done] on the main thread with [path]'s thumbnail: at once if
+     * it's cached, never if it can't be made. [version] (the file's time)
+     * tells a file written again from the one cached.
+     */
+    fun load(path: String, version: Long = 0, done: (Bitmap) -> Unit) =
+        load(cache, "$path\u0000$version", done) { decode(hostFile(path)) }
 
     /** As [load], [path]'s whole picture for a card; [version] (its file time) tells a picture drawn again from the last. */
     fun preview(path: String, version: Long, done: (Bitmap) -> Unit) =

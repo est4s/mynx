@@ -18,8 +18,9 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - **Done, confirmed on the phone and merged since:** web apps parts 1
   and 2 (PR #59, #64), the services count in the menu (#58), touch
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
-  mode's chat home with its drawer and the pixel style (#83), and
-  Chat's pictures (thumbnails #91, full screen and image cards #92). Every
+  mode's chat home with its drawer and the pixel style (#83),
+  Chat's pictures (thumbnails #91, full screen and image cards #92),
+  and touch mode's Files (#93). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -77,6 +78,31 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-21 (198): Touch mode's Files (PR #93; passed)
+
+The maintainer asked for a touch file manager: copy, move, delete,
+and chat or a terminal in a folder. Decisions: it replaces nnn in
+touch mode (nnn stays as "Files (nnn)" in Terminal apps), Delete is
+permanent after a confirmation, it starts at `~` with the phone's
+storage among the places. Built by two agents in parallel against a
+contract in `docs/TOUCH-DESIGN.md` ("Files"): core (`FileBrowser.kt`:
+listing, crumbs, places, names, jobs; `HomeAction.Files`;
+`ChatHub.newChat(cwd)`) and app (`FilesView`, `runInDebian`,
+`openDebianFile`, `shareDebianFiles`, `newSession(cwd)`,
+`ChatPlace.FILES`, the `files*` screenshots).
+- Every change is a `/bin/sh -c` job run in Debian, never
+  `java.io.File`: proot's faked hard links (`.l2s.*`, never listed).
+- Back stops at a place (`filesBack()`), not climbing into
+  `/storage/emulated`.
+- Pictures' rows show a thumbnail (`ChatThumbnails` with 40 dp
+  squares, cached by path and file time), asked for only once the row
+  is within a screen of sight: DCIM would decode every photo up front.
+- Limits: a chat started elsewhere isn't in the history once it's
+  done (the history lists `/root`'s); storage shows
+  only what Android allows without a storage permission.
+- Passed in mynx dev (build 44878894871): the maintainer tried it
+  all ("all works great").
 
 ### 2026-11-21 (197): Pictures full screen, and image cards (merged, PR #92; passed)
 

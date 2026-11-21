@@ -162,6 +162,15 @@ class ChatHubTest {
     }
 
     @Test
+    fun `a new chat may run in another folder, and its agent starts there`() {
+        val chat = hub.newChat("/root/src/app")
+        assertEquals("/root/src/app", chat.cwd)
+        start(chat)
+        assertEquals("/root/src/app", host.launches.last().cwd)
+        assertEquals("/root", hub.newChat().cwd)
+    }
+
+    @Test
     fun `a new chat is shown and the screen hears it with its controller`() {
         val chat = hub.newChat()
         assertSame(chat, hub.shown)
