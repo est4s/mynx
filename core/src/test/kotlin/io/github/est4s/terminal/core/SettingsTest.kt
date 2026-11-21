@@ -64,7 +64,7 @@ class SettingsTest {
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
                 "update-check", "serial-preload", "serial-names", "view", "chat-mode", "chat-model",
-                "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video"),
+                "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -86,13 +86,14 @@ class SettingsTest {
                 "chat-mode" to "plan", "chat-model" to "opus",
                 "open-pictures" to "android", "open-markdown" to "mynx", "open-code" to "android",
                 "open-text" to "mynx", "open-audio" to "android", "open-video" to "android",
+                "open-pdf" to "android", "open-html" to "mynx",
             ),
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
                 wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH, chatMode = "plan", chatModel = "opus",
                 openPictures = OpenWith.ANDROID, openCode = OpenWith.ANDROID, openAudio = OpenWith.ANDROID,
-                openVideo = OpenWith.ANDROID).values(),
+                openVideo = OpenWith.ANDROID, openPdf = OpenWith.ANDROID).values(),
         )
     }
 
@@ -338,7 +339,7 @@ class SettingsTest {
 
     @Test
     fun `files open in mynx's viewers by default, or in another app`() {
-        val keys = listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video")
+        val keys = listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html")
         for (key in keys) {
             assertEquals("mynx", SETTINGS.single { it.key == key }.default, key)
             assertEquals(listOf("mynx", "android"), SETTINGS.single { it.key == key }.choices, key)
@@ -349,5 +350,8 @@ class SettingsTest {
         assertEquals(OpenWith.ANDROID, parsed.settings.openAudio)
         assertEquals(OpenWith.MYNX, parsed.settings.openVideo)
         assertEquals(listOf("line 3: open-video must be one of: mynx, android"), parsed.problems)
+        val more = parseSettings("open-pdf = android\nopen-html = android\n").settings
+        assertEquals(OpenWith.ANDROID, more.openPdf)
+        assertEquals(OpenWith.ANDROID, more.openHtml)
     }
 }

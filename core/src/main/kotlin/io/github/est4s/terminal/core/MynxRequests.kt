@@ -325,7 +325,7 @@ class MynxRequests(
                 }
                 if (edit && kind !in EDITABLE_KINDS) {
                     val what = kind?.word ?: "not text"
-                    throw Refused("only text, code and Markdown files open to edit: $name is $what")
+                    throw Refused("only text, code, Markdown and HTML files open to edit: $name is $what")
                 }
                 openFile(path, kind, with, edit)?.let { throw Refused(it) }
                 ok("with" to json(with.word), "kind" to (kind?.let { json(it.word) } ?: "null"))
@@ -580,7 +580,8 @@ class MynxRequests(
 }
 
 internal const val HAND_EDITS = "edits by hand"
-private val EDITABLE_KINDS = setOf(FileKind.TEXT, FileKind.CODE, FileKind.MARKDOWN)
+// An HTML file opens its source (the code viewer) to edit.
+private val EDITABLE_KINDS = setOf(FileKind.TEXT, FileKind.CODE, FileKind.MARKDOWN, FileKind.HTML)
 // The ids of requests run by [MynxRequests.call]: no process number, so [MynxRequests.sweep] leaves them be.
 private const val BRIDGE_ID = "bridge-"
 internal const val UNDO_DIR = ".local/state/mynx/undo"

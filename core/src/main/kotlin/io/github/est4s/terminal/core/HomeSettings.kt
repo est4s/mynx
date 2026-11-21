@@ -17,7 +17,7 @@ val HOME_SETTING_GROUPS = listOf(
     HomeSettingGroup("settings:agents", "AI agents", listOf("chat-mode", "chat-model", "agent-notify", "agent-notify-after")),
     HomeSettingGroup(
         "settings:apps", "Default apps",
-        listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video"),
+        listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
     ),
     HomeSettingGroup("settings:terminal", "Terminal", listOf("font-size", "font", "cursor-style", "cursor-blink", "tab-swipe")),
     HomeSettingGroup(
@@ -64,6 +64,8 @@ private val SETTING_LABELS = mapOf(
     "open-text" to "Text",
     "open-audio" to "Audio",
     "open-video" to "Video",
+    "open-pdf" to "PDF",
+    "open-html" to "HTML pages",
 )
 
 const val REPORT_NOTE = "What went wrong? Next, a tab shows the whole report (with the app's version, " +

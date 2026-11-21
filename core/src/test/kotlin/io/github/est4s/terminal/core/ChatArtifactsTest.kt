@@ -401,6 +401,78 @@ class ChatArtifactsTest {
     }
 
     @Test
+    fun `a PDF the agent made counts anywhere, written or named in a command that changed it`() {
+        val report = write("/root/work/report.PDF", "%PDF")
+        val old = write("/root/work/old.pdf", "%PDF")
+        write("/root/apps/demo/index.html", "<title>Demo</title>")
+        write("/root/apps/demo/manual.pdf", "%PDF")
+        report.setLastModified(5_000_000L)
+        old.setLastModified(1_000_000L)
+        assertEquals(
+            listOf("/root/work/report.PDF", "/root/work/old.pdf").map { ArtifactHint(it, true) },
+            hints(call("Bash", "pandoc notes.txt -o report.PDF; ls old.pdf")),
+        )
+        assertTrue(chatPdfFile("a.pdf"))
+        assertEquals(false, chatPdfFile("a.html"))
+        val pdf = ChatArtifact(ArtifactKind.PDF, "/root/work/report.PDF", "report.PDF", "/root/work/report.PDF", version = 5_000_000L)
+        assertEquals(
+            listOf(pdf),
+            finder.find(listOf("/root/work/report.PDF", "/root/work/old.pdf").map { ArtifactHint(it, true) }, 2_000_000L),
+        )
+        assertEquals(listOf(pdf), finder.find(listOf(ArtifactHint("/root/work/report.PDF", false)), null), "written: no turn start needed")
+        assertEquals(
+            listOf(ArtifactKind.WEB_APP),
+            finder.find(listOf(ArtifactHint("/root/apps/demo/manual.pdf", false)), null).map { it.kind },
+            "an app's PDF is the app's card",
+        )
+    }
+
+    @Test
+    fun `an HTML file the agent wrote outside the app folders is a page card, not a changed file`() {
+        write("/root/site/index.html", "<title>Hi</title>")
+        val made = write("/root/site/report.htm", "<p>hi</p>")
+        val read = write("/root/site/old.html", "<p>old</p>")
+        write("/root/apps/demo/index.html", "<title>Demo</title>")
+        write("/root/terminal-apps/tool/page.html", "<p>x</p>")
+        made.setLastModified(5_000_000L)
+        read.setLastModified(5_000_000L)
+        fun page(path: String) = ChatArtifact(ArtifactKind.HTML, path, path.substringAfterLast('/'), path)
+        assertEquals(
+            listOf(page("/root/site/index.html"), page("/root/site/report.htm")),
+            finder.find(
+                hints(
+                    call("Write", "/root/site/index.html"),
+                    call("Bash", "cd /root/site && python3 gen.py > report.htm; cat old.html"),
+                ),
+                2_000_000L,
+            ),
+            "named in a command without writing it: no card",
+        )
+        assertEquals(
+            listOf(ArtifactKind.WEB_APP),
+            finder.find(listOf(ArtifactHint("/root/apps/demo/index.html", false)), null).map { it.kind },
+            "a web app's page is the app's card",
+        )
+        assertEquals(
+            listOf(ArtifactKind.CHANGED_FILES),
+            finder.find(listOf(ArtifactHint("/root/terminal-apps/tool/page.html", false)), null).map { it.kind },
+        )
+        assertEquals(emptyList(), finder.find(listOf(ArtifactHint("/root/site/gone.html", false)), null))
+    }
+
+    @Test
+    fun `PDF and page cards' lines and buttons`() {
+        val pdf = ChatArtifact(ArtifactKind.PDF, "/root/work/report.pdf", "report.pdf", "/root/work/report.pdf", version = 1L)
+        val page = ChatArtifact(ArtifactKind.HTML, "/root/site/index.html", "index.html", "/root/site/index.html")
+        assertEquals("PDF · ~/work/report.pdf", chatArtifactLine(pdf, "/root"))
+        assertEquals("HTML page · ~/site/index.html", chatArtifactLine(page, "/root"))
+        assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.SHARE), chatArtifactActions(pdf, canInstall = true))
+        assertEquals(listOf(ArtifactAction.VIEW, ArtifactAction.SOURCE, ArtifactAction.SHARE), chatArtifactActions(page, canInstall = true))
+        assertEquals("View source", ArtifactAction.SOURCE.label)
+        assertEquals(null, chatArtifactNote(page, canInstall = false))
+    }
+
+    @Test
     fun `files written in a turn without a card of their own share one changed files card, in order, each once`() {
         write("/root/work/main.py", "print(1)")
         write("/root/work/util.py", "x = 1")

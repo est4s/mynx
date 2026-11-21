@@ -21,6 +21,8 @@ class ViewersTest {
         assertEquals(Viewer.IMAGE, viewerFor(FileKind.PICTURE, OpenWith.MYNX))
         for (kind in listOf(FileKind.MARKDOWN, FileKind.CODE, FileKind.TEXT)) assertEquals(Viewer.TEXT, viewerFor(kind, OpenWith.MYNX))
         for (kind in listOf(FileKind.AUDIO, FileKind.VIDEO)) assertEquals(Viewer.MEDIA, viewerFor(kind, OpenWith.MYNX))
+        assertEquals(Viewer.PDF, viewerFor(FileKind.PDF, OpenWith.MYNX))
+        assertEquals(Viewer.WEB, viewerFor(FileKind.HTML, OpenWith.MYNX))
     }
 
     @Test
@@ -38,6 +40,8 @@ class ViewersTest {
         assertEquals("mynx's text viewer", viewerName(FileKind.TEXT))
         assertEquals("mynx's audio player", viewerName(FileKind.AUDIO))
         assertEquals("mynx's video player", viewerName(FileKind.VIDEO))
+        assertEquals("mynx's PDF viewer", viewerName(FileKind.PDF))
+        assertEquals("mynx's page viewer", viewerName(FileKind.HTML))
     }
 
     @Test

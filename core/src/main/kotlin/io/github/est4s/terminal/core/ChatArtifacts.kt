@@ -25,7 +25,11 @@ import java.nio.file.LinkOption
  *   is the file's time, so a picture drawn again changes its card. A command's path counts only if it changed
  *   since the turn started (a command that just reads an app gives no
  *   card), so history, with no turn times, only goes by written files.
- * - Audio and video ([chatAudioFile], [chatVideoFile]) count as pictures do.
+ * - Audio and video ([chatAudioFile], [chatVideoFile]) and PDFs
+ *   ([chatPdfFile]) count as pictures do.
+ * - An HTML file (`.html`, `.htm`) outside the app folders counts like a
+ *   Markdown one: written, not just named ([ArtifactKind.HTML]). In `~/apps`
+ *   it's the web app's card.
  * - Files written (Write, Edit, NotebookEdit) that got no card of their own
  *   share one [ArtifactKind.CHANGED_FILES] card per turn, listing them in
  *   [ChatArtifact.files] in the order first written.
@@ -33,14 +37,14 @@ import java.nio.file.LinkOption
  *   in place when the app changes again ([withArtifactCards]).
  */
 
-enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN, IMAGE, AUDIO, VIDEO, CHANGED_FILES }
+enum class ArtifactKind { WEB_APP, TERMINAL_APP, APK, MARKDOWN, IMAGE, AUDIO, VIDEO, CHANGED_FILES, PDF, HTML }
 
 /**
  * What a card is about. [path] is the Debian path as found (the app's
  * folder in `~/apps`, the terminal app's file, the APK); [shareFile] the
  * link-free Debian path of what Share sends (a web app's `index.html`,
  * else its `app.conf`); [appName] a web app's name, for its screen;
- * [version] a picture's, audio or video file's time (else 0), so its card
+ * [version] a picture's, audio, video or PDF file's time (else 0), so its card
  * shows it anew. A [ArtifactKind.CHANGED_FILES] card's [path] is
  * [CHANGED_FILES_CARD] (one per turn), [files] the Debian paths written and
  * [shareFile] the first of them, [fileTools] the tool calls (Write, Edit)
@@ -67,7 +71,10 @@ fun chatAudioFile(name: String): Boolean = fileKindOf(name) == FileKind.AUDIO
 /** Whether [name] is a video file, by its extension ([fileKindOf]). */
 fun chatVideoFile(name: String): Boolean = fileKindOf(name) == FileKind.VIDEO
 
-private fun media(path: String) = chatImageFile(path) || chatAudioFile(path) || chatVideoFile(path)
+/** Whether [name] is a PDF, by its extension ([fileKindOf]). */
+fun chatPdfFile(name: String): Boolean = fileKindOf(name) == FileKind.PDF
+
+private fun media(path: String) = chatImageFile(path) || chatAudioFile(path) || chatVideoFile(path) || chatPdfFile(path)
 
 /**
  * A path a tool call touched; [fromCommand]: named in a Bash command, so only
@@ -227,6 +234,10 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
                 chatImageFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.IMAGE)
                 chatAudioFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.AUDIO)
                 chatVideoFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.VIDEO)
+                chatPdfFile(hint.path) && outsideApps -> mediaAt(hint.path, ArtifactKind.PDF)
+                // A page in an app reached through a link stays the app's.
+                hint.written && outsideApps && fileKindOf(hint.path) == FileKind.HTML ->
+                    artifactAt(hint.path, home) { webApps } ?: pageAt(hint.path)
                 else -> artifactAt(hint.path, home) { webApps }
             }
             if (artifact == null) {
@@ -277,6 +288,9 @@ class ArtifactFinder(private val apps: WebApps) : ArtifactLookup {
         if (apps.host(resolved)?.isFile != true) return null
         return ChatArtifact(ArtifactKind.MARKDOWN, path, path.substringAfterLast('/'), resolved)
     }
+
+    private fun pageAt(path: String): ChatArtifact? =
+        markdownAt(path)?.copy(kind = ArtifactKind.HTML)
 
     private fun mediaAt(path: String, kind: ArtifactKind): ChatArtifact? {
         val resolved = apps.resolve(path) ?: return null
@@ -351,7 +365,7 @@ fun withHistoryArtifacts(items: List<ChatItem>, lookup: ArtifactLookup, cwd: Str
 /** What a card's buttons do. */
 enum class ArtifactAction(val label: String) {
     OPEN("Open"), ADD_TO_HOME("Add to home screen"), RUN("Run"), INSTALL("Install"), COPY("Copy"), VIEW("View"), PLAY("Play"),
-    SHARE("Share"),
+    SHARE("Share"), SOURCE("View source"),
 }
 
 /** [canInstall]: this build may open Android's installer for a file (debug builds only). */
@@ -367,6 +381,10 @@ fun chatArtifactActions(artifact: ChatArtifact, canInstall: Boolean): List<Artif
     ArtifactKind.AUDIO, ArtifactKind.VIDEO -> listOf(ArtifactAction.PLAY, ArtifactAction.SHARE)
     // Its rows ([changedFileRows]) open the files in their viewer.
     ArtifactKind.CHANGED_FILES -> emptyList()
+    // View opens the PDF viewer.
+    ArtifactKind.PDF -> listOf(ArtifactAction.VIEW, ArtifactAction.SHARE)
+    // View shows the page rendered, View source its code.
+    ArtifactKind.HTML -> listOf(ArtifactAction.VIEW, ArtifactAction.SOURCE, ArtifactAction.SHARE)
 }
 
 const val CHAT_APK_NO_INSTALL = "mynx can't install apps itself: Share it to a file manager, or open it from the Files app, to install it."
@@ -385,6 +403,8 @@ fun chatArtifactLine(artifact: ChatArtifact, home: String): String {
         ArtifactKind.IMAGE -> "Image"
         ArtifactKind.AUDIO -> "Audio"
         ArtifactKind.VIDEO -> "Video"
+        ArtifactKind.PDF -> "PDF"
+        ArtifactKind.HTML -> "HTML page"
         ArtifactKind.CHANGED_FILES -> {
             val n = artifact.files.size
             return "Changed files · $n ${if (n == 1) "file" else "files"}"

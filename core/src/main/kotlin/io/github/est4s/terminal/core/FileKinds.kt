@@ -12,7 +12,8 @@ import java.nio.charset.CodingErrorAction
 
 /** A kind of file mynx has a viewer for; [word] is how `mynx open --json` and the settings name it. */
 enum class FileKind(val word: String) {
-    PICTURE("picture"), MARKDOWN("markdown"), CODE("code"), TEXT("text"), AUDIO("audio"), VIDEO("video")
+    PICTURE("picture"), MARKDOWN("markdown"), CODE("code"), TEXT("text"), AUDIO("audio"), VIDEO("video"),
+    PDF("pdf"), HTML("html"),
 }
 
 /** Where a file opens: mynx's own viewer, or another Android app (Android's "open with"). */
@@ -26,11 +27,14 @@ fun Settings.openWith(kind: FileKind): OpenWith = when (kind) {
     FileKind.TEXT -> openText
     FileKind.AUDIO -> openAudio
     FileKind.VIDEO -> openVideo
+    FileKind.PDF -> openPdf
+    FileKind.HTML -> openHtml
 }
 
 private val MARKDOWN_EXTENSIONS = setOf("md", "markdown", "mdown", "mkd")
 private val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "aac", "ogg", "oga", "opus", "flac", "wav", "mid", "midi")
 private val VIDEO_EXTENSIONS = setOf("mp4", "m4v", "webm", "mkv", "3gp", "mov")
+private val HTML_EXTENSIONS = setOf("html", "htm")
 private val TEXT_EXTENSIONS = setOf("txt", "text", "log", "csv", "tsv", "out", "err", "rst", "adoc", "org", "srt", "vtt", "nfo")
 private val TEXT_NAMES = setOf(
     "readme", "license", "licence", "copying", "authors", "changelog", "news", "todo", "install", "contributors",
@@ -47,6 +51,9 @@ fun fileKindOf(name: String): FileKind? {
         ext in MARKDOWN_EXTENSIONS -> FileKind.MARKDOWN
         ext in AUDIO_EXTENSIONS -> FileKind.AUDIO
         ext in VIDEO_EXTENSIONS -> FileKind.VIDEO
+        ext == "pdf" -> FileKind.PDF
+        // Rendered, not code: the page viewer's View source still highlights it (codeLanguageOf).
+        ext in HTML_EXTENSIONS -> FileKind.HTML
         codeLanguageOf(file) != null -> FileKind.CODE
         ext in TEXT_EXTENSIONS || file.lowercase() in TEXT_NAMES -> FileKind.TEXT
         else -> null
