@@ -378,3 +378,84 @@ the README, the roadmap, the work log.
   **HTML files** in the web apps' WebView.
 - Opening files **from other apps** (Android's Files → mynx's
   viewer), saving back through the content URI.
+
+## More viewers: a turn's changes, PDF and HTML
+
+The maintainer's request (2026-11-21), after the viewers: the diff
+view in chat, a PDF viewer and HTML files, from the viewers' "later"
+list. The choices below are the lead's, for the maintainer to change
+on the phone test.
+
+### A turn's changes (the diff view)
+
+- **Where from:** Claude Code's transcript has, for every Write and
+  Edit, a `toolUseResult` with `originalFile` (the file before that
+  call; null for a new file), `structuredPatch` (hunks:
+  `oldStart`, `oldLines`, `newStart`, `newLines`, `lines` with ` `,
+  `-`, `+`, `\`) and, for a Write, `content`. The transcript is on disk
+  while the chat runs (`claudeTranscriptPath()`), so the app reads it
+  when it needs a diff, off the main thread; a live chat needs nothing
+  more from the stream.
+- **One diff per file per turn:** before = the first call's
+  `originalFile` in the turn (empty when the file is new); after = the
+  last call's result (a Write's `content`, an Edit's `originalFile`
+  with its patch applied). core diffs the two (lines, Myers, 3 lines
+  of context), so several edits read as one change, and a later turn's
+  edits never show in this one. A file a command wrote (`cat >`) has
+  no patch: its row opens the file, as today.
+- **The Changed files card:** each row shows `+N −M` (or "new") once
+  worked out, and a tap opens the **diff view** (a file with no diff:
+  the viewer, as now).
+- **The diff view** (`DiffViewActivity`): top bar ←, the file name
+  and folder, `+N −M`, ⋮ (Open file: the viewer; Share the diff as a
+  `.diff`; Wrap lines). The body: hunks one after another, each under
+  an `@@ … @@` line; each line with its old and new line numbers, a
+  `+`/`−` mark, added lines on a green tint and removed ones on red
+  (the theme's palette, readable), the text highlighted for the file's
+  language; unchanged lines between hunks fold into "⋯ N lines". A
+  new file shows all its lines as added. Over 1 MB on either side:
+  "too big to diff here", with Open file.
+
+### PDF
+
+- **Kind** `PDF` (`.pdf`), setting `open-pdf` (`mynx` | `android`,
+  default `mynx`), in Default apps.
+- **`PdfViewActivity`:** Android's `PdfRenderer` (no dependency). The
+  pages one under another on a grey background, each as wide as the
+  screen, rendered when near sight (and dropped when far, to bound
+  memory), sharper once a zoom settles; pinch and double-tap zoom
+  (core's `ImageZoom` or the like), a page indicator ("3 / 12") that
+  fades, ⋮: Go to page, Share, Open with another app. A
+  password-protected or broken PDF says so on screen, with Open with
+  another app. No text search or selection (`PdfRenderer` can't).
+- **Chat:** a PDF Claude writes or makes (named in a command and
+  changed in the turn, as pictures) gets a card with View and Share;
+  chips open in the viewer.
+
+### HTML files
+
+- **Kind** `HTML` (`.html`, `.htm`), setting `open-html`, in Default
+  apps. HTML stops being "code": it opens **rendered**, and the
+  viewer's ⋮ has **View source** (the code viewer).
+- **`HtmlViewActivity`:** a WebView showing the file, its folder
+  served read-only through `shouldInterceptRequest` on a host of its
+  own (as web apps are, from core), so relative CSS, scripts and
+  pictures work; JavaScript on; the web reachable (CDN scripts); no
+  `mynx.js` bridge (a file isn't an app: no phone access). Links to
+  other files in the folder open in the WebView, web links in the
+  browser. Top bar: ←, the page's title (else the file name), ⋮
+  (Reload, View source, Share, Open with another app). Pages in
+  `~/apps` stay web apps there; this is for any other HTML file.
+- **Chat:** an HTML file outside the app folders that Claude writes
+  gets a card: **View** (rendered), View source, Share.
+
+### Code: where it goes, and the waves
+
+| Wave | Agent | Owns |
+|---|---|---|
+| 1 | **core-diff** | `Diff.kt` (line diff, hunks with context, counts, applying a `structuredPatch`, the turn's before/after from its edits), reading `toolUseResult`s by tool call ID from a transcript (`ClaudeHistory.kt`), `ChangedFileRow`'s tool call IDs (`ChatArtifacts.kt`: only that) |
+| 1 | **core-kinds** | `FileKind.PDF`/`HTML`, `open-pdf`/`open-html` (`Settings.kt`, `HomeSettings.kt`), `Viewer.PDF`/`WEB` (`Viewers.kt`), the PDF and HTML cards (`ChatArtifacts.kt`: those only), `mynx open`'s names (`cli.py`), the guide; serving a file's folder for the HTML viewer (`WebApps.kt`) |
+| 2 | **app-diff** | `DiffViewActivity`, the Changed files card's rows (`ChatView.kt`: that part), its screenshots |
+| 2 | **app-pdf** | `PdfViewActivity`, its screenshots |
+| 2 | **app-html** | `HtmlViewActivity`, its screenshots |
+| 3 | lead | the opener (`TerminalService.openDebianFileWith()`), Files' icons, chat's PDF and HTML cards, the manifest, the docs |
