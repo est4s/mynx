@@ -32,6 +32,13 @@ private class FakePages : PdfViewActions {
     override fun share() = Unit
     override fun openWithAnotherApp() = Unit
 
+    override val canSearch: Boolean get() = true
+
+    // Robolectric can't search (no pdfium): two "matches" on every other page, on the stand-in lines.
+    override fun search(page: Int, query: String, done: (List<List<PdfRect>>?) -> Unit) {
+        main.post { done(if (page % 2 == 0) listOf(standInLine(2, 30f, 48f), standInLine(9, 62f, 80f)).map { listOf(it) } else emptyList()) }
+    }
+
     override fun render(page: Int, size: PdfRenderSize, stillWanted: () -> Boolean, done: (Bitmap?, String?) -> Unit) {
         main.post { done(if (stillWanted()) drawPage(page, size) else null, null) }
     }
@@ -57,6 +64,13 @@ private class FakePages : PdfViewActions {
         }
         return bitmap
     }
+}
+
+/** FakePages' line [index] from [from] to [to] (in 1/100 of the page's width), in a 612-point page's points. */
+private fun standInLine(index: Int, from: Float, to: Float): PdfRect {
+    val unit = 612f / 100
+    val y = 24f + 3.2f * index
+    return PdfRect(from * unit, (y - 0.7f) * unit, to * unit, (y + 2.1f) * unit)
 }
 
 /** The PDF viewer with stand-in pages (see [FakePages]), zoomed, at a page, and its error (see [Screenshots]). */
@@ -113,6 +127,11 @@ class PdfViewScreenshotTest {
             return PdfRect(from * unit, (y - 0.7f) * unit, to * unit, (y + 2.1f) * unit)
         }
         view.pages.showSelection(PdfSelection(0, "selected text", listOf(line(2, 40f, 90f), line(3, 10f, 90f), line(4, 10f, 62f))))
+    }
+
+    @Test
+    fun find() = shoot(1080, 2400, "pdf-find", List(12) { LETTER }) { view ->
+        view.find("revenue")
     }
 
     @Test

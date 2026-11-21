@@ -43,7 +43,10 @@ import io.github.est4s.terminal.core.SyntaxSpan
 import io.github.est4s.terminal.core.TextDoc
 import io.github.est4s.terminal.core.TextHistory
 import io.github.est4s.terminal.core.codeLanguageOf
+import io.github.est4s.terminal.core.TextEdit
 import io.github.est4s.terminal.core.findMatches
+import io.github.est4s.terminal.core.replaceAll
+import io.github.est4s.terminal.core.replaceMatch
 import io.github.est4s.terminal.core.highlight
 import io.github.est4s.terminal.core.lineStarts
 import io.github.est4s.terminal.core.mdRows
@@ -285,16 +288,45 @@ class TextViewerView(
         setTextColor(Pixel.DIM)
         setPadding(dp(4), 0, dp(4), 0)
     }
-    private val findBar = LinearLayout(context).apply {
+    private val replaceToggle = glyphButton("⇄", "Replace") { toggleReplace() }
+    private val replaceInput = EditText(context).apply {
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        setTextColor(Pixel.TEXT)
+        setHintTextColor(Pixel.DIM)
+        hint = "Replace with"
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_ACTION_DONE or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        background = null
+        setPadding(dp(12), 0, dp(4), 0)
+        setOnEditorActionListener { _, _, _ ->
+            replaceCurrent()
+            true
+        }
+    }
+    private val replaceRow = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
+        addView(replaceInput, LayoutParams(0, dp(48), 1f))
+        addView(smallButton("Replace") { replaceCurrent() }, LayoutParams(WRAP_CONTENT, dp(48)))
+        addView(smallButton("All") { replaceEvery() }, LayoutParams(WRAP_CONTENT, dp(48)))
+        visibility = View.GONE
+    }
+    private val findBar = LinearLayout(context).apply {
+        orientation = VERTICAL
         background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE)
         setPadding(dp(4), dp(2), dp(4), dp(2))
-        addView(findInput, LayoutParams(0, dp(48), 1f))
-        addView(findCount, LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-        addView(glyphButton("↑", "Previous match") { step(-1) }, LayoutParams(dp(44), dp(48)))
-        addView(glyphButton("↓", "Next match") { step(1) }, LayoutParams(dp(44), dp(48)))
-        addView(iconButton(PixelIcon.CLOSE, Pixel.TEXT, "Close find", 16) { closeFind() }, LayoutParams(dp(44), dp(48)))
+        addView(LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(findInput, LayoutParams(0, dp(48), 1f))
+            addView(findCount, LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(glyphButton("↑", "Previous match") { step(-1) }, LayoutParams(dp(40), dp(48)))
+            addView(glyphButton("↓", "Next match") { step(1) }, LayoutParams(dp(40), dp(48)))
+            addView(replaceToggle, LayoutParams(dp(40), dp(48)))
+            addView(iconButton(PixelIcon.CLOSE, Pixel.TEXT, "Close find", 16) { closeFind() }, LayoutParams(dp(40), dp(48)))
+        }, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        addView(replaceRow, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         visibility = View.GONE
     }
     private var matches: List<Pair<TextView, IntRange>> = emptyList()
@@ -377,16 +409,18 @@ class TextViewerView(
         }
     }
 
-    /** Ctrl+S, Ctrl+F and Esc; true when it was one. */
+    /** Ctrl+S, Ctrl+F, Ctrl+H and Esc; true when it was one. */
     fun onKey(event: KeyEvent): Boolean {
         val ctrl = event.isCtrlPressed
         val key = event.keyCode
-        val ours = (ctrl && (key == KeyEvent.KEYCODE_S || key == KeyEvent.KEYCODE_F)) || key == KeyEvent.KEYCODE_ESCAPE
+        val ours = (ctrl && (key == KeyEvent.KEYCODE_S || key == KeyEvent.KEYCODE_F || key == KeyEvent.KEYCODE_H)) ||
+            key == KeyEvent.KEYCODE_ESCAPE
         if (!ours) return false
         if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return true
         when {
             key == KeyEvent.KEYCODE_S -> requestSave()
             key == KeyEvent.KEYCODE_F -> openFind()
+            key == KeyEvent.KEYCODE_H -> openReplace()
             findBar.visibility == View.VISIBLE -> closeFind()
             editing -> leaveEditing()
             else -> back()
@@ -413,6 +447,8 @@ class TextViewerView(
             fillEditor(shown.text)
         } else {
             removeCallbacks(highlightLater)
+            replaceRow.visibility = View.GONE
+            styleReplaceToggle()
         }
         renderBody()
         renderBar()
@@ -630,6 +666,7 @@ class TextViewerView(
         if (shown != null) {
             entries += PixelMenuEntry(if (wrap) "Wrap lines  ✓" else "Wrap lines") { toggleWrap() }
             entries += PixelMenuEntry("Find") { openFind() }
+            if (!shown.readOnly) entries += PixelMenuEntry("Replace") { openReplace() }
         }
         entries += PixelMenuEntry("Share") { actions.share() }
         entries += PixelMenuEntry("Open with…") { actions.openWithAnotherApp() }
@@ -654,8 +691,9 @@ class TextViewerView(
     // Find
 
     private fun openFind() {
-        if (doc == null) return
+        val shown = doc ?: return
         findBar.visibility = View.VISIBLE
+        replaceToggle.visibility = if (shown.readOnly) View.GONE else View.VISIBLE
         findInput.requestFocus()
         findInput.selectAll()
         find(0)
@@ -663,8 +701,71 @@ class TextViewerView(
 
     private fun closeFind() {
         findBar.visibility = View.GONE
+        replaceRow.visibility = View.GONE
         clearFind()
         if (editing) editor.requestFocus()
+    }
+
+    /** Types [query] into Find and [replacement] into Replace: for the screenshots. */
+    fun typeFind(query: String, replacement: String = "") {
+        findInput.setText(query)
+        replaceInput.setText(replacement)
+    }
+
+    // Replace (⋮, Ctrl+H or ⇄): Find with a second row. Replacing changes the text, so it's in Edit.
+    private fun openReplace() {
+        val shown = doc ?: return
+        if (shown.readOnly) {
+            toast(shown.load.readOnlyReason ?: "This file can't be edited here.")
+            return
+        }
+        val searching = findBar.visibility == View.VISIBLE && findInput.text.isNotEmpty()
+        if (!editing) setEditing(true)
+        if (findBar.visibility != View.VISIBLE) openFind()
+        replaceRow.visibility = View.VISIBLE
+        styleReplaceToggle()
+        if (searching) replaceInput.requestFocus() else findInput.requestFocus()
+        find(current.coerceAtLeast(0))
+    }
+
+    private fun toggleReplace() {
+        if (replaceRow.visibility == View.VISIBLE) {
+            replaceRow.visibility = View.GONE
+            styleReplaceToggle()
+            findInput.requestFocus()
+        } else {
+            openReplace()
+        }
+    }
+
+    private fun styleReplaceToggle() {
+        replaceToggle.setTextColor(if (replaceRow.visibility == View.VISIBLE) Pixel.CYAN else Pixel.TEXT)
+    }
+
+    // Replace: the current match, then on to the next.
+    private fun replaceCurrent() {
+        if (!editing) return openReplace()
+        if (matches.getOrNull(current)?.first !== editor) return
+        val done = replaceMatch(editor.text.toString(), matches.map { it.second }, current, replaceInput.text.toString())
+        replaceInEditor(done.edit)
+        find(done.next.coerceAtLeast(0))
+    }
+
+    // All: every match, as one step to undo.
+    private fun replaceEvery() {
+        if (!editing) return openReplace()
+        val query = findInput.text.toString()
+        val done = replaceAll(editor.text.toString(), query, replaceInput.text.toString()) ?: return toast("No matches")
+        replaceInEditor(done.edit)
+        find(0)
+        toast(if (done.count == 1) "Replaced 1" else "Replaced ${done.count}")
+    }
+
+    // Into the editor as typing goes (so Undo has it), as a step of its own.
+    private fun replaceInEditor(edit: TextEdit) {
+        history?.newStep()
+        editor.text.replace(edit.start, edit.start + edit.removed.length, edit.inserted)
+        history?.newStep()
     }
 
     private fun clearFind() {
@@ -792,6 +893,19 @@ class TextViewerView(
         } else {
             Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE, ripple = Pixel.LINE)
         }
+        isFocusable = true
+        setOnClickListener { onTap() }
+    }
+
+    // A word to tap in the Replace row.
+    private fun smallButton(label: String, onTap: () -> Unit) = TextView(context).apply {
+        text = label
+        typeface = Pixel.label(context, 600)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        setTextColor(Pixel.CYAN)
+        gravity = Gravity.CENTER
+        setPadding(dp(12), 0, dp(12), 0)
+        background = pixelRipple()
         isFocusable = true
         setOnClickListener { onTap() }
     }
