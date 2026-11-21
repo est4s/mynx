@@ -18,16 +18,10 @@ with a turn's changes as diffs in chat.
 ## Planned
 
 ### File manager
-- Touch view has its own (Files: copy, move, rename, delete, open,
-  share, chat or terminal here). Still to do: a chat
-  history that lists other folders' chats; asking for Android's
-  storage permission, so the phone's storage shows in full.
+- Touch mode's Files: a chat history that lists other folders'
+  chats; asking for Android's storage permission, so the phone's
+  storage shows in full.
 - nnn in the terminal: open other files in an Android app, share.
-
-### Viewers
-Built (see `docs/TOUCH-DESIGN.md`, "Viewers" and "More viewers"),
-with a turn's changes in chat, PDF and HTML files. Suggested next, not
-decided: opening files from other apps in mynx's viewers.
 
 ### Agent widget
 A home screen widget that starts a chat with an AI agent, even when
@@ -49,16 +43,9 @@ prompt line ("Ask Claude…") with a mic button at its end.
 - To check: whether each agent keeps what's typed while it starts.
 
 ### Touch mode
-What's left of the second way to use mynx (`view = touch`): Home, and
-Chat for Claude Code with its cards and hand-off, are built.
 - **Other agents in Chat:** Codex (its `app-server`) and Gemini (ACP),
   with the same artifact cards and "Open in terminal" hand-off
   (`codex resume` and the others' equivalents).
-- **Chat first, with a drawer** (maintainer's decision, 2026-11-11):
-  the alternative was a launcher button next to the prompt box,
-  opening a sheet of Home's items from the bottom; if it's chosen
-  instead, switch before touch mode's first release, while nobody has
-  learned the drawer. Design: `docs/TOUCH-DESIGN.md`.
 - **Later, not decided** (discussed 2026-11-11): a
   "run, open or ask" box (open an app, run a command in a tab, or
   ask the agent); a launcher mode (mynx as Android's home app, off by
