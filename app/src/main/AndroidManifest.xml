@@ -106,6 +106,13 @@
             android:launchMode="singleTop"
             android:exported="false" />
 
+        <!-- The text viewer: text, code and Markdown files, to view and edit. -->
+        <activity
+            android:name=".TextViewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+
         <!-- Other apps share files and text into Debian's share folder. -->
         <activity
             android:name=".ShareActivity"
