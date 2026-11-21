@@ -1,6 +1,7 @@
 #!/bin/sh
-# xdg-open URL: open a link in the phone's browser. Programs that sign
-# in through a browser (AI agents) call this, or $BROWSER, which the app
-# points here.
-[ $# -ge 1 ] || { echo "usage: xdg-open URL" >&2; exit 1; }
+# xdg-open URL|FILE: open a link in the phone's browser, or a file in
+# its viewer (mynx open, which asks which in a terminal). Programs that
+# sign in through a browser (AI agents) call this, or $BROWSER, which
+# the app points here.
+[ $# -ge 1 ] || { echo "usage: xdg-open URL|FILE" >&2; exit 1; }
 exec mynx open "$1"
