@@ -113,6 +113,13 @@
             android:windowSoftInputMode="adjustResize"
             android:exported="false" />
 
+        <!-- HTML files, rendered: the page viewer. -->
+        <activity
+            android:name=".HtmlViewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+
         <!-- A chat turn's changes to a file. -->
         <activity
             android:name=".DiffViewActivity"
