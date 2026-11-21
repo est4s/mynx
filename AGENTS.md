@@ -221,7 +221,8 @@ Bugs that took a phone round to find; keep them from coming back.
   site's icon in the ClipData as a preview: with text and no
   `EXTRA_STREAM`, the clip isn't a file to save (`filesToSave()`).
 - **The app can't read `/storage/emulated/0/DCIM`** (or other apps'
-  media) without a media permission; test shares with files it made.
+  files) until All files access is on (`mynx storage allow`); test
+  shares with files it made.
 - **Codex's sandbox can't run under proot:** its bundled `bwrap`
   fails ("Can't read /proc/sys/kernel/overflowuid") and the Landlock
   mode needs bubblewrap too, so only `danger-full-access` works.

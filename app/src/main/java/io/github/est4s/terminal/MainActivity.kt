@@ -320,6 +320,8 @@ class MainActivity : Activity(), FrontActivity {
     override fun onResume() {
         super.onResume()
         FrontActivities.resumed(this)
+        // Back from Android's storage settings or dialog: Files may see more now.
+        filesView?.takeIf { it.visibility == View.VISIBLE }?.storageChanged()
     }
 
     override fun onStop() {
@@ -550,6 +552,12 @@ class MainActivity : Activity(), FrontActivity {
     }
 
     private val filesActions = object : FilesActions {
+        override fun storageGranted() = service?.storage?.granted ?: true
+
+        override fun allowStorage() {
+            service?.storage?.ask()?.let { Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show() }
+        }
+
         override fun chatHere(folder: String) {
             val chats = service?.chats ?: return
             chats.newChat(folder)

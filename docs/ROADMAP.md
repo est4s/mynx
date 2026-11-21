@@ -18,8 +18,6 @@ with a turn's changes as diffs in chat.
 ## Planned
 
 ### File manager
-- Touch mode's Files: asking for Android's storage permission, so
-  the phone's storage shows in full.
 - nnn in the terminal: open other files in an Android app, share.
 
 ### Agent widget

@@ -47,6 +47,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 2. Touch mode: what's left
 
+- **Test entry 205** (asking for all of the phone's storage) on the phone.
 - Other agents in Chat (Codex's `app-server`, Gemini's ACP), which
   need accounts to test; the
   Model page lists fallback models until a session reports its own.
@@ -82,6 +83,37 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-21 (205): Asking for all of the phone's storage (PR pending; to test)
+
+The maintainer asked for the roadmap's last Files item: asking for
+Android's storage permission, so the phone's storage shows in full.
+Without it Debian saw folders under `/storage/emulated/0` but not
+other apps' files (DCIM/Camera listed empty).
+- Decisions (the lead's, for the phone test to settle): Android 11+
+  "All files access" (`MANAGE_EXTERNAL_STORAGE`, as Termux does),
+  the storage dialog before 11 (`requestLegacyExternalStorage` for
+  10). Asked from Files' bar and `mynx storage allow`, never at first
+  run. Play restricts the permission, as `REQUEST_INSTALL_PACKAGES`.
+- Core: `Storage.kt` (`StorageAsk`, `storageAsk(sdk)`,
+  `StorageAccess`, `storageBarShown()`), the `storage` request
+  (`status`, `allow`: `access` all/some, `asked` settings/dialog).
+  Tested.
+- App: `TerminalService.storage` (`isExternalStorageManager()`; the
+  app's All files access page, else the list of apps; the dialog
+  before 11); Files' pink bar in `/storage` with **Allow**; Files
+  lists again in `onResume`. Screenshot `files-storage`.
+- `mynx storage [status] | allow`, tested; the guide (`phone.md`,
+  the core guide's Phone storage line, a `home-docs.bats` check),
+  README, ARCHITECTURE.md, TOUCH-DESIGN.md, the roadmap.
+- Local `test_serial_port` timing tests fail here on `main` too
+  (`BusyTest`, `ControlTest`, flaky under load); not this change.
+- To test on the phone: Files → Phone (or Download): the bar shows;
+  Allow opens Android's page for mynx dev; turn it on, Back: the bar
+  goes and DCIM/Camera lists the photos; `mynx storage` says all
+  files; `ls /storage/emulated/0/DCIM/Camera` in a tab (a tab opened
+  before granting too); turning it off again (Android may restart the
+  app) brings the bar back; `mynx storage allow` from a tab.
 
 ### 2026-11-21 (204): The chat history lists every folder's chats (PR #98; passed)
 

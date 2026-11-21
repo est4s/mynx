@@ -70,7 +70,8 @@ comes up:
   then `apt install <name>`. Everything installed stays across app
   updates.
 - **Phone storage** (Download, DCIM, Documents, …) is at
-  `/storage/emulated/0`.
+  `/storage/emulated/0`; to see other apps' files there, Android
+  must allow it: `mynx storage allow`.
 - Editors and pagers: `nano` and `less` are installed; `mc` has a file
   manager and editor; `htop` shows processes.
 

@@ -23,7 +23,7 @@ import java.util.concurrent.Executor
 private const val HOUR = 3_600_000L
 private const val FOLDER = "/root/projects/tip-calc"
 
-private val noFileActions = object : FilesActions {
+private open class NoFileActions(private val granted: Boolean = true) : FilesActions {
     override fun chatHere(folder: String) = Unit
     override fun terminalHere(folder: String) = Unit
     override fun openFile(path: String, with: OpenWith?) = Unit
@@ -31,6 +31,8 @@ private val noFileActions = object : FilesActions {
     override fun share(paths: List<String>) = Unit
     override fun run(job: FileJob.Run, done: (Int, String) -> Unit) = Unit
     override fun close() = Unit
+    override fun storageGranted() = granted
+    override fun allowStorage() = Unit
 }
 
 /** The sample pictures, drawn: logo.png a pink block on dark, the screenshot a sky and a field. */
@@ -81,6 +83,8 @@ class FilesScreenshotTest {
         entries: List<FileEntry> = sampleEntries(System.currentTimeMillis()),
         selection: List<String> = emptyList(),
         clip: FileClip? = null,
+        folder: String = FOLDER,
+        storageGranted: Boolean = true,
     ) {
         val view = Screenshots.open(w, h) { activity ->
             val thumbnails = ChatThumbnails(
@@ -89,9 +93,9 @@ class FilesScreenshotTest {
                 Executor { it.run() },
                 FilesView.FILES_THUMBNAIL_DP,
             )
-            FilesView(activity, list = { _, _ -> }, home = "/root", actions = noFileActions, thumbnails = thumbnails)
+            FilesView(activity, list = { _, _ -> }, home = "/root", actions = NoFileActions(storageGranted), thumbnails = thumbnails)
         }
-        view.show(FOLDER, entries, selection, clip)
+        view.show(folder, entries, selection, clip)
         Screenshots.settle()
         // As the post after layout does on a phone: the rows have their places now.
         view.loadVisibleThumbnails()
@@ -119,6 +123,10 @@ class FilesScreenshotTest {
         selection = listOf("$FOLDER/index.html", "$FOLDER/logo.png"),
         clip = FileClip(ClipOp.COPY, listOf("/root/Download/a.txt", "/root/Download/b.txt", "/root/Download/c.txt")),
     )
+
+    // The phone's storage before Android allows all of it: the bar asking for it.
+    @Test
+    fun storage() = shoot(1080, 2400, "files-storage", folder = "/storage/emulated/0/Download", storageGranted = false)
 
     @Test
     fun pasting() = shoot(

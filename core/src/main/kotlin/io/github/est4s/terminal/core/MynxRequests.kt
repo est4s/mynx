@@ -63,6 +63,7 @@ class MynxRequests(
     private val readClipboard: () -> Result<String> = { Result.failure(Exception("the clipboard isn't available here")) },
     private val share: (Share) -> String? = { "sharing isn't available here" },
     private val torch: (Boolean, Int?) -> String? = { _, _ -> "the flashlight isn't available here" },
+    private val storage: StorageAccess? = null,
     private val startSound: () -> String? = { "the sound device isn't available here" },
     private val rotation: RotationLocks = RotationLocks(),
     private val rotationChanged: (Orientation?) -> Unit = {},
@@ -399,6 +400,19 @@ class MynxRequests(
                 }
                 torch(on, percent)?.let { throw Refused(it) }
                 ok()
+            }
+            "storage" -> {
+                val access = storage ?: throw Refused("the phone's storage isn't available here")
+                val words = args.map { it.trim() }.filter { it.isNotEmpty() }
+                when {
+                    words.isEmpty() || words == listOf("status") -> ok("access" to json(storageWord(access.granted)))
+                    words == listOf("allow") && access.granted -> ok("access" to json("all"))
+                    words == listOf("allow") -> {
+                        access.ask()?.let { throw Refused(it) }
+                        ok("access" to json(storageWord(access.granted)), "asked" to json(access.how.word))
+                    }
+                    else -> throw Refused("storage [status] | allow")
+                }
             }
             "rotation" -> {
                 val usage = "rotation lock PID [portrait|landscape] | unlock | status"

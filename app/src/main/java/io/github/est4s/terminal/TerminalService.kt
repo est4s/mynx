@@ -1,5 +1,6 @@
 package io.github.est4s.terminal
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,11 +10,13 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
+import android.os.Environment
 import android.os.FileObserver
 import android.os.Handler
 import android.os.IBinder
@@ -29,6 +32,8 @@ import io.github.est4s.terminal.core.Orientation
 import io.github.est4s.terminal.core.Phone
 import io.github.est4s.terminal.core.ReplySink
 import io.github.est4s.terminal.core.RotationLocks
+import io.github.est4s.terminal.core.StorageAccess
+import io.github.est4s.terminal.core.storageAsk
 import io.github.est4s.terminal.core.micNotice
 import io.github.est4s.terminal.core.audioRequests
 import io.github.est4s.terminal.core.BatteryQuery
@@ -368,13 +373,47 @@ class TerminalService : Service() {
     /** Why the app's tools couldn't be updated, for the activity to show. */
     var toolsError: String? = null
         private set
+    /** All of the phone's storage for Debian: `mynx storage` and Files' bar. */
+    val storage: StorageAccess = object : StorageAccess {
+        override val granted: Boolean
+            get() = if (Build.VERSION.SDK_INT >= 30) {
+                Environment.isExternalStorageManager()
+            } else {
+                checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+            }
+
+        override val how = storageAsk(Build.VERSION.SDK_INT)
+
+        // Android 11+: All files access is a switch in its settings, no dialog.
+        override fun ask(): String? {
+            val shown = front() ?: return "the app must be on screen to ask for the phone's storage"
+            if (Build.VERSION.SDK_INT < 30) {
+                shown.askPermissions(
+                    arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                ) {}
+                return null
+            }
+            val forApp = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))
+            val forAll = Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            for (intent in listOf(forApp, forAll)) {
+                try {
+                    shown.activity.startActivity(intent)
+                    return null
+                } catch (e: ActivityNotFoundException) {
+                    continue
+                }
+            }
+            return "this phone has no setting for all files access"
+        }
+    }
+
     private val requestDir by lazy { File(rootfs, REQUEST_DIR) }
     private val requests: MynxRequests by lazy {
         MynxRequests(
             requestDir, File(rootfs, "root"),
             notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
             vibrate = vibrations::oneShot, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
-            share = ::share, torch = camera::torch, startSound = sound::start,
+            share = ::share, torch = camera::torch, storage = storage, startSound = sound::start,
             rotation = rotation, rotationChanged = ::setRotation,
             files = webAppFiles,
             openFile = { path, kind, with, edit -> openRequestedFile(path, kind, with, edit) },

@@ -20,6 +20,7 @@ Part of the guide to this Debian, `/opt/mynx/AGENTS.md`.
 | `mynx battery` | the battery: charge, charging, temperature, health, battery saver; `--stream` prints changes |
 | `mynx camera FILE` | take a photo with the phone's camera app, saved to FILE; `--quick front\|back` snaps one with no screen |
 | `mynx torch on [PERCENT]\|off` | the phone's flashlight |
+| `mynx storage` | whether Debian sees all of the phone's storage; `mynx storage allow` asks Android for it |
 | `mynx rotation lock [portrait\|landscape]` | stop the screen turning while the program that ran it runs; `unlock`, `status` |
 | `mynx audio play FILE` | play a sound file through the phone's speaker, until it ends |
 | `mynx audio record FILE` | record from the microphone to FILE (`.m4a`, `.aac`, `.ogg`, `.opus`, `.wav`) until Ctrl+C or `--seconds N` |
@@ -190,6 +191,15 @@ Commands for the phone itself, and the sound device:
   as a `.txt` file there, named after its subject (a page's title) or
   the time. A name that's taken gets ` (2)`, so nothing is overwritten.
   A notification says what was saved where.
+- **All of the phone's storage:** until Android allows it, Debian
+  sees only some of `/storage/emulated/0`: folders, and the files
+  the app made, not other apps' photos, music or documents. `mynx
+  storage allow` asks for it (the app must be on screen): on Android
+  11 and later it opens a settings page; turn on
+  "Allow access to manage all files" there. Before 11 a dialog asks. Touch
+  view's Files shows an Allow bar in the phone's storage until then.
+  `mynx storage` says which (`all` or `some` with `--json`). Programs
+  and agents in Debian can then read and change every file there.
 - `mynx notify` and `mynx open URL`: see "AI agents" in `/opt/mynx/AGENTS.md`.
 
 ## Files and viewers

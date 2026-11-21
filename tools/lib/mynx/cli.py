@@ -43,6 +43,7 @@ Commands:
   camera     camera FILE [--quick front|back]: take a photo
   torch      torch on [PERCENT] | off: the flashlight
   rotation   rotation [status] | lock [portrait|landscape] | unlock
+  storage    storage [status] | allow: let Debian see all of the phone's storage
   audio      audio play FILE | record FILE [--seconds N]: sound
   sound      sound [status] | start | install: the sound device
   usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
@@ -631,6 +632,27 @@ def cmd_torch(args, as_json):
         raise Usage("usage: mynx torch on [PERCENT] | off")
     answer = request("torch", *args)
     out(as_json, answer, None)
+    return 0
+
+
+STORAGE_USAGE = "usage: mynx storage [status] | allow"
+
+
+def cmd_storage(args, as_json):
+    if args not in ([], ["status"], ["allow"]):
+        raise Usage(STORAGE_USAGE)
+    answer = request("storage", *args)
+    asked = answer.get("asked")
+    if asked == "settings":
+        text = ("Android's settings are open: turn on \"Allow access to manage all files\", "
+                "then come back. mynx storage checks.")
+    elif asked == "dialog":
+        text = "Android asks on the phone's screen: allow it. mynx storage checks."
+    elif answer["access"] == "all":
+        text = "Phone storage: all files"
+    else:
+        text = "Phone storage: only some files (mynx storage allow asks for all)"
+    out(as_json, answer, text)
     return 0
 
 
@@ -2419,7 +2441,7 @@ COMMANDS = {
     "notify": cmd_notify, "hook": cmd_hook, "agent": cmd_agent, "undo": cmd_undo, "open": cmd_open,
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
-    "rotation": cmd_rotation,
+    "rotation": cmd_rotation, "storage": cmd_storage,
     "audio": cmd_audio, "sound": cmd_sound, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,

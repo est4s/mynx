@@ -632,6 +632,18 @@ See `docs/ROADMAP.md` "How it works". The details:
   after a confirmation. Chat here is `ChatHub.newChat(cwd)`; Terminal
   here a tab started in the folder. Pictures' thumbnails come from a
   `ChatThumbnails` of its own (40 dp), only for rows near sight.
+  **The phone's storage** (`core/.../Storage.kt`; maintainer's
+  roadmap item, 2026-11-21): without a permission Android shows the
+  app (so proot) only folders and its own files under `/storage`.
+  `TerminalService.storage` (a `StorageAccess`) asks: Android 11+
+  "All files access" (`MANAGE_EXTERNAL_STORAGE`, a settings page:
+  `ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`, else the list of
+  all apps), before it the storage permissions' dialog
+  (`requestLegacyExternalStorage` for Android 10's raw paths). `mynx
+  storage [allow]` and Files' bar (`storageBarShown()`, in
+  `/storage` while not granted) use it; Files lists again in
+  `onResume`, back from the settings. Play restricts the permission:
+  a Play build would need a variant without it.
 - **Viewers** (`core/.../FileKinds.kt`, `Viewers.kt`, `TextDoc.kt`,
   `TextHistory.kt`, `Syntax.kt`, `Media.kt`; `app/.../TextViewActivity.kt`,
   `TextViewerView.kt`, `MarkdownViews.kt`, `MediaViewActivity.kt`,
