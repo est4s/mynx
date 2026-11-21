@@ -15,12 +15,12 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   serial, BLE, BLE UART ports), signed with the release key
   (certificate SHA-256 `24b7fefa…2b40`). The maintainer's daily mynx
   is the release, updated through `mynx update`.
-- **In progress:** touch mode's Files (branch `touch-files`).
 - **Done, confirmed on the phone and merged since:** web apps parts 1
   and 2 (PR #59, #64), the services count in the menu (#58), touch
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
-  mode's chat home with its drawer and the pixel style (#83), and
-  Chat's pictures (thumbnails #91, full screen and image cards #92). Every
+  mode's chat home with its drawer and the pixel style (#83), 
+  Chat's pictures (thumbnails #91, full screen and image cards #92),
+  and touch mode's Files (#93). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -28,19 +28,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
-
-### 0. Touch mode's Files (branch `touch-files`, not pushed yet)
-
-Built, core tested; `app/` not compiled yet (CI). Push, open the PR,
-`scripts/deliver.sh`, then on the phone check: drawer → Files opens
-at `~`; places (Download, Phone: what shows without a storage
-permission?); thumbnails (scroll a folder of photos: smooth?); open a folder, a
-picture, a PDF ("open with"); select,
-Copy/Cut → Paste here (a "(2)" name), Rename, Delete (asks), New
-folder, Share; a failing job (e.g. paste into `/proc`) shows its
-output; Chat here (the chat runs there: ask `pwd`); Terminal here;
-Back through folders to the chat home; a theme change keeps Files
-open; nnn as Terminal apps → Files (nnn).
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -92,7 +79,7 @@ open; nnn as Terminal apps → Files (nnn).
 
 ## Log
 
-### 2026-11-21 (198): Touch mode's Files (branch `touch-files`)
+### 2026-11-21 (198): Touch mode's Files (PR #93; passed)
 
 The maintainer asked for a touch file manager: copy, move, delete,
 and chat or a terminal in a folder. Decisions: it replaces nnn in
@@ -114,6 +101,8 @@ listing, crumbs, places, names, jobs; `HomeAction.Files`;
 - Limits: a chat started elsewhere isn't in the history once it's
   done (the history lists `/root`'s); storage shows
   only what Android allows without a storage permission.
+- Passed in mynx dev (build 44878894871): the maintainer tried it
+  all ("all works great").
 
 ### 2026-11-21 (197): Pictures full screen, and image cards (merged, PR #92; passed)
 
