@@ -41,7 +41,11 @@ private class Refused(message: String) : Exception(message)
  * [startSound] (re)starts the sound server (`mynx sound install`).
  * [rotation] holds the screen's rotation locks; [rotationChanged] gets
  * the orientation to hold (null: none) after each change. [phone] and
- * [crashes] go into bug reports (`report-info`).
+ * [crashes] go into bug reports (`report-info`). [openFile] opens a
+ * Debian file (the path as asked, checked to be a file) of a kind (null:
+ * none mynx views) in mynx's viewer or another app, ready to edit or not,
+ * and returns null or why it didn't; [files] reads Debian's paths, links
+ * followed (`open-file`, `open-file-kind`: docs/TOUCH-DESIGN.md, "Viewers").
  *
  * Requests in [later] are answered later, or stream (see [Later]).
  * [sweep] cancels those whose `mynx` cancelled them or has gone
@@ -66,7 +70,13 @@ class MynxRequests(
     private val crashes: Crashes? = null,
     private val later: Map<String, Later> = emptyMap(),
     private val alive: (Int) -> Boolean = { pid -> File("/proc/$pid").exists() },
+    files: WebApps? = null,
+    private val openFile: (path: String, kind: FileKind?, with: OpenWith, edit: Boolean) -> String? =
+        { _, _, _, _ -> "this build can't open files yet" },
 ) {
+    // Debian's paths as Debian sees them, links followed (`open-file`).
+    private val files = files ?: WebApps(home, home.parentFile.path, File(home.parentFile, TOOLS_MOUNT.removePrefix("/")))
+
     private val config = File(home, CONFIG_DIR)
     private val settingsFile = File(config, "settings.conf")
     private val colorsFile = File(config, "colors.properties")
@@ -295,6 +305,31 @@ class MynxRequests(
                 installApk(apk)?.let { throw Refused(it) }
                 ok()
             }
+            "open-file-kind" -> {
+                need(1)
+                val kind = fileToOpen(args[0].trim()).second
+                ok("kind" to (kind?.let { json(it.word) } ?: "null"), "with" to json(openWithFor(kind).word))
+            }
+            "open-file" -> {
+                need(1)
+                val (path, kind) = fileToOpen(args[0].trim())
+                val name = path.substringAfterLast('/')
+                val with = when (val word = args.getOrNull(1)?.trim().orEmpty().ifEmpty { "default" }) {
+                    "default" -> openWithFor(kind)
+                    else -> OpenWith.entries.firstOrNull { it.word == word }
+                        ?: throw Refused("open with mynx, android or default, not $word")
+                }
+                val edit = args.getOrNull(2)?.trim() == "1"
+                if (with == OpenWith.MYNX && kind == null) {
+                    throw Refused("mynx has no viewer for $name: open it with another app (--with android)")
+                }
+                if (edit && kind !in EDITABLE_KINDS) {
+                    val what = kind?.word ?: "not text"
+                    throw Refused("only text, code and Markdown files open to edit: $name is $what")
+                }
+                openFile(path, kind, with, edit)?.let { throw Refused(it) }
+                ok("with" to json(with.word), "kind" to (kind?.let { json(it.word) } ?: "null"))
+            }
             "vibrate" -> {
                 var ms = DEFAULT_VIBRATE_MS
                 var percent: Int? = null
@@ -437,6 +472,34 @@ class MynxRequests(
         throw Refused("${request.name}: badly encoded text")
     }
 
+    // A Debian file to open and its kind: by its name, its link's target's, else text if its start is.
+    private fun fileToOpen(path: String): Pair<String, FileKind?> {
+        if (!path.startsWith("/")) throw Refused("the path must start with /: $path")
+        val resolved = files.resolve(path)
+        val file = resolved?.let(files::host)
+        when {
+            file == null || !file.exists() -> throw Refused("no such file: $path")
+            file.isDirectory -> throw Refused("$path is a folder: open folders in Files")
+        }
+        val kind = fileKindOf(path) ?: fileKindOf(resolved!!)
+            ?: FileKind.TEXT.takeIf { runCatching { looksLikeText(head(file!!)) }.getOrDefault(false) }
+        return path to kind
+    }
+
+    private fun head(file: File): ByteArray = file.inputStream().use { input ->
+        val bytes = ByteArray(TEXT_HEAD)
+        var n = 0
+        while (n < bytes.size) {
+            val read = input.read(bytes, n, bytes.size - n)
+            if (read < 0) break
+            n += read
+        }
+        bytes.copyOf(n)
+    }
+
+    private fun openWithFor(kind: FileKind?): OpenWith =
+        kind?.let { loadSettings(settingsFile).settings.openWith(it) } ?: OpenWith.ANDROID
+
     private fun shareAllowed() {
         if (!loadSettings(settingsFile).settings.androidShare) {
             throw Refused("sharing is off (mynx set android-share on)")
@@ -530,6 +593,9 @@ class MynxRequests(
 }
 
 internal const val HAND_EDITS = "edits by hand"
+// How much of a file `open-file` reads to tell whether it's text.
+private const val TEXT_HEAD = 8192
+private val EDITABLE_KINDS = setOf(FileKind.TEXT, FileKind.CODE, FileKind.MARKDOWN)
 // The ids of requests run by [MynxRequests.call]: no process number, so [MynxRequests.sweep] leaves them be.
 private const val BRIDGE_ID = "bridge-"
 internal const val UNDO_DIR = ".local/state/mynx/undo"
