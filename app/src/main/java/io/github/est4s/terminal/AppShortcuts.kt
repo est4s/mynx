@@ -16,8 +16,8 @@ import kotlin.math.max
 
 // An adaptive icon's 108 dp, at 4 px a dp.
 private const val ICON_PX = 432
-// The generated letter's size, as a share of the icon: well inside the safe zone.
-private const val LETTER_SIZE = 0.3f
+// The generated letter's size, as a share of the picture's box: well inside it.
+private const val LETTER_SIZE = 0.49f
 private val OPAQUE = 0xFF000000.toInt()
 
 /**
@@ -53,47 +53,51 @@ class AppShortcuts(private val context: Context) {
         return ShortcutInfo.Builder(context, shortcut.id)
             .setShortLabel(label)
             .setLongLabel(label)
-            .setIcon(Icon.createWithAdaptiveBitmap(drawIcon(shortcut)))
+            .setIcon(Icon.createWithAdaptiveBitmap(appIcon(shortcut, ICON_PX, SHORTCUT_SAFE_ZONE.toFloat())))
             .setIntent(WebAppActivity.shortcutIntent(context, shortcut.name))
             .build()
     }
+}
 
-    // app.conf's icon scaled into the safe zone on the theme's background, else the letter.
-    private fun drawIcon(shortcut: AppShortcut): Bitmap {
-        val bitmap = Bitmap.createBitmap(ICON_PX, ICON_PX, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(shortcut.background or OPAQUE)
-        val box = (ICON_PX * SHORTCUT_SAFE_ZONE).toFloat()
-        val picture = shortcut.icon?.let { file -> runCatching { decode(file.path, box.toInt()) }.getOrNull() }
-        if (picture != null) {
-            val scale = box / max(picture.width, picture.height)
-            val width = picture.width * scale
-            val height = picture.height * scale
-            val left = (ICON_PX - width) / 2f
-            val top = (ICON_PX - height) / 2f
-            canvas.drawBitmap(picture, null, RectF(left, top, left + width, top + height),
-                Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
-            picture.recycle()
-        } else {
-            val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = shortcut.foreground or OPAQUE
-                textAlign = Paint.Align.CENTER
-                typeface = Typeface.DEFAULT_BOLD
-                textSize = ICON_PX * LETTER_SIZE
-            }
-            val baseline = ICON_PX / 2f - (paint.descent() + paint.ascent()) / 2f
-            canvas.drawText(shortcut.letter, ICON_PX / 2f, baseline, paint)
+/**
+ * [shortcut]'s icon as a [size]-pixel square: app.conf's icon scaled to fit
+ * [fill] of it, centred on the theme's background, else the letter on its
+ * colour. The home screen shortcut ([AppShortcuts]) and Home's app logos.
+ */
+fun appIcon(shortcut: AppShortcut, size: Int, fill: Float): Bitmap {
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    canvas.drawColor(shortcut.background or OPAQUE)
+    val box = size * fill
+    val picture = shortcut.icon?.let { file -> runCatching { decodeIcon(file.path, box.toInt()) }.getOrNull() }
+    if (picture != null) {
+        val scale = box / max(picture.width, picture.height)
+        val width = picture.width * scale
+        val height = picture.height * scale
+        val left = (size - width) / 2f
+        val top = (size - height) / 2f
+        canvas.drawBitmap(picture, null, RectF(left, top, left + width, top + height),
+            Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG))
+        picture.recycle()
+    } else {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = shortcut.foreground or OPAQUE
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.DEFAULT_BOLD
+            textSize = box * LETTER_SIZE
         }
-        return bitmap
+        val baseline = size / 2f - (paint.descent() + paint.ascent()) / 2f
+        canvas.drawText(shortcut.letter, size / 2f, baseline, paint)
     }
+    return bitmap
+}
 
-    // A big picture is read at a fraction of its size: the icon needs [size] pixels at most.
-    private fun decode(path: String, size: Int): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(path, bounds)
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-        var sample = 1
-        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= size) sample *= 2
-        return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
-    }
+// A big picture is read at a fraction of its size: the icon needs [size] pixels at most.
+private fun decodeIcon(path: String, size: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= size) sample *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
 }

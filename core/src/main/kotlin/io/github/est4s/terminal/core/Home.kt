@@ -27,7 +27,7 @@ fun agentBinary(apps: WebApps, command: String): String? =
 private val LABEL_LINE = Regex("""^#\s*label:\s*(.*\S)""")
 private val BUILT_IN_MENU = listOf(
     "Shell" to "shell", "AI agents" to "agents", "Services" to "services", "Apps" to "apps",
-    "Terminal apps" to "terminal-apps", "Games" to "games", "Files" to "files", "Settings" to "settings",
+    "Games" to "games", "Files" to "files", "Settings" to "settings",
 )
 private val EXECUTE_BITS = setOf(
     PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE, PosixFilePermission.OTHERS_EXECUTE,
@@ -70,9 +70,18 @@ enum class HomeRow { BUTTON, SECTION, TEXT, INFO }
  */
 data class HomeService(val name: String, val state: String, val saved: Boolean, val autostart: Boolean)
 
+/** The picture before a [HomeItem]'s label. */
+sealed interface HomeLogo {
+    /** A web app's: what its home screen shortcut shows ([appShortcut]). */
+    data class App(val shortcut: AppShortcut) : HomeLogo
+    /** The Terminal apps folder's. */
+    data object Terminal : HomeLogo
+}
+
 /**
  * A row of a Home list: [detail] is its value, shown after the label;
- * [checked], the choice in use; [swatch], a theme's colours (ARGB).
+ * [checked], the choice in use; [swatch], a theme's colours (ARGB);
+ * [logo], the picture before the label.
  */
 data class HomeItem(
     val label: String,
@@ -81,6 +90,7 @@ data class HomeItem(
     val checked: Boolean = false,
     val swatch: List<Int> = emptyList(),
     val kind: HomeRow = HomeRow.BUTTON,
+    val logo: HomeLogo? = null,
 )
 
 /**
@@ -185,11 +195,16 @@ class HomeMenus(
     private fun byLabel(list: List<WebApp>) = list.sortedWith(compareBy({ it.label.uppercase() }, { it.label }))
 
     private fun webApps(): List<HomeItem> {
-        val found = byLabel(apps.list()).map { HomeItem(it.label, HomeAction.App(it.name)) }
+        val colors by lazy { loadColorScheme(File(apps.home, "$CONFIG_DIR/colors.properties")).scheme }
+        val found = byLabel(apps.list()).map { app ->
+            val logo = HomeLogo.App(appShortcut(app, app.icon?.let(apps::host), colors))
+            HomeItem(app.label, HomeAction.App(app.name), logo = logo)
+        }
         val items = found.ifEmpty { listOf(HomeItem("(no apps yet)", HomeAction.None)) }
-        val keepTerminalApps = mainEntries().none { it.second == "terminal-apps" }
+        val terminalApps = mainEntries().none { it.second == "terminal-apps" }
+        val folder = HomeItem("Terminal apps", HomeAction.Menu("terminal-apps"), logo = HomeLogo.Terminal)
         return items +
-            (if (keepTerminalApps) listOf(HomeItem("Terminal apps", HomeAction.Menu("terminal-apps"))) else emptyList()) +
+            (if (terminalApps) listOf(folder) else emptyList()) +
             (if (found.isEmpty()) emptyList() else listOf(HomeItem("Add to home screen…", HomeAction.Menu("shortcuts"))))
     }
 

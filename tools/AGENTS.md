@@ -382,8 +382,8 @@ line, in order; labels up to 20 characters. Actions:
 |---|---|
 | `shell` | leave the menu for the shell |
 | `files` | the file manager |
-| `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps" in `/opt/mynx/docs/apps.md`), then **Add to home screen…** |
-| `terminal-apps` | the Terminal apps menu (see "Terminal apps" under "More of the setup") |
+| `apps` | the Apps menu: the apps, in HTML and JavaScript (see "Apps" in `/opt/mynx/docs/apps.md`), then the **Terminal apps** folder, then **Add to home screen…** |
+| `terminal-apps` | the Terminal apps menu (see "Terminal apps" under "More of the setup"); with it in the main menu, Apps leaves its folder out |
 | `games` | the Games menu |
 | `settings` | the Settings menu: App settings, Touch view, System, Help |
 | `app-settings` | the settings editors (`mynx edit`) |
@@ -406,9 +406,10 @@ under Games, named after the file: `ln -s /path/to/game ~/games/my-game`
 shows "My Game". The menu starts games with `play`. Terminal apps work
 the same way from `/opt/mynx/terminal-apps`, `~/terminal-apps` and
 `~/apps`, named by a `# label: Name` line near the top of the file.
-Apps are folders instead (see "Apps" in `/opt/mynx/docs/apps.md`). A menu file from before
-terminal apps (with `apps` but no `terminal-apps`) shows "Terminal
-apps" at the end of the Apps list.
+Apps are folders instead (see "Apps" in `/opt/mynx/docs/apps.md`).
+Terminal apps is a folder at the end of the Apps list, unless the menu
+file has `terminal-apps` itself. Touch view's Apps list shows each
+app's logo: `app.conf`'s `icon`, else its home screen shortcut's letter.
 
 ### Key bars
 
@@ -486,7 +487,7 @@ shows the generic game bar until `my-tool.conf` exists.
   `key:path;key:path`). Text files open in `$EDITOR` (nano).
 - **Terminal apps:** example programs that use the phone, in Python,
   to run, read and copy. Each is a command and an item in the menu's
-  Terminal apps, shown with its own key bar; `--help` lists its keys.
+  Apps → Terminal apps, shown with its own key bar; `--help` lists its keys.
 
   | Command | What it is | Uses |
   |---|---|---|
@@ -585,8 +586,8 @@ shows the generic game bar until `my-tool.conf` exists.
   JavaScript"). It can have a home screen shortcut, but runs only
   inside mynx.
 - **A terminal app** that lives in mynx: a program in
-  `~/terminal-apps` with its own key bar, in the menu's Terminal apps
-  (see "Terminal apps" under "More of the setup"). Quick to write and
+  `~/terminal-apps` with its own key bar, in the menu's Apps →
+  Terminal apps (see "Terminal apps" under "More of the setup"). Quick to write and
   change, in Python, bash or anything Debian runs, and it reaches the
   phone through `mynx`: sensors, location, camera, microphone,
   flashlight, vibration, notifications. It runs only inside mynx.

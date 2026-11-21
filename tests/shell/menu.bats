@@ -36,8 +36,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -55,7 +55,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Terminal apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -145,27 +145,27 @@ keys() {
 }
 
 @test "Release notes shows mynx notes" {
-    run keys 842
+    run keys 742
     [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 844
+    run keys 744
     [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "Help has Getting started" {
-    run keys 841xxxxxxqqq
+    run keys 741xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 843
+    run keys 743
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 833
+    run keys 733
     [[ $output == *"RUN: mynx github"* ]]
 }
 
@@ -173,7 +173,7 @@ keys() {
     rm "$HOME/.config/gh/hosts.yml"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Terminal apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Games Files Settings Exit" ]
     [ "${ACTS[2]}" = github ]
     menu_items system
     [ "${ITEMS[*]}" = "Update all System info" ]
@@ -287,9 +287,9 @@ app() { # app FILE [LABEL]: an executable terminal app, labelled for the menu if
     mkdir -p "$HOME/terminal-apps"
     app "$BATS_TEST_TMPDIR/terminal-apps/tuner" "Guitar tuner"
     app "$HOME/terminal-apps/my-tool.py"
-    run keys 51
+    run keys 421
     [[ $output == *"RUN: keybar tuner,shell $BATS_TEST_TMPDIR/terminal-apps/tuner"* ]]
-    run keys 52
+    run keys 422
     [[ $output == *"RUN: keybar my-tool,shell $HOME/terminal-apps/my-tool.py"* ]]
 }
 
@@ -324,12 +324,12 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     cp -a "$FIXTURES/." "$HOME/"
     source "$MENU"
     menu_items apps
-    [ "${#ITEMS[@]}" -eq 5 ]
+    [ "${#ITEMS[@]}" -eq 6 ]
     [ "${ITEMS[0]}" = "Escape" ]
     [ "${ITEMS[1]}" = "Hello & Welcome" ]
     [ "${ITEMS[2]}" = "My Notes" ]
     [ "${ITEMS[3]}" = "Served" ]
-    [ "${ACTS[*]}" = "webapp:escape webapp:hello webapp:notes webapp:served menu:shortcuts" ]
+    [ "${ACTS[*]}" = "webapp:escape webapp:hello webapp:notes webapp:served menu:terminal-apps menu:shortcuts" ]
 }
 
 @test "apps come from ~/apps and the tools' folder; ~/apps wins only with an app" {
@@ -339,8 +339,8 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     mkdir -p "$HOME/apps/sketch"   # not an app: doesn't hide the tools' one
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Mine Sketch Add to home screen…" ]
-    [ "${ACTS[*]}" = "webapp:hello webapp:sketch menu:shortcuts" ]
+    [ "${ITEMS[*]}" = "Mine Sketch Terminal apps Add to home screen…" ]
+    [ "${ACTS[*]}" = "webapp:hello webapp:sketch menu:terminal-apps menu:shortcuts" ]
 }
 
 @test "an app's name must be a DNS label" {
@@ -351,7 +351,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     web_app "$HOME/apps/a-1" "A 1"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "A 1 Forty Add to home screen…" ]
+    [ "${ITEMS[*]}" = "A 1 Forty Terminal apps Add to home screen…" ]
 }
 
 @test "what isn't an app is skipped" {
@@ -363,8 +363,8 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     ln -s "$HOME/nowhere" "$HOME/apps/dangling"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "(no apps yet)" ]
-    [ "${ACTS[*]}" = none ]
+    [ "${ITEMS[*]}" = "(no apps yet) Terminal apps" ]
+    [ "${ACTS[*]}" = "none menu:terminal-apps" ]
 }
 
 @test "a link to a folder elsewhere is an app" {
@@ -373,8 +373,8 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     ln -s "$HOME/pixel-hero/assets" "$HOME/apps/pixel-hero"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Pixel Hero Add to home screen…" ]
-    [ "${ACTS[*]}" = "webapp:pixel-hero menu:shortcuts" ]
+    [ "${ITEMS[*]}" = "Pixel Hero Terminal apps Add to home screen…" ]
+    [ "${ACTS[*]}" = "webapp:pixel-hero menu:terminal-apps menu:shortcuts" ]
 }
 
 @test "served apps: url on 127.0.0.1 or localhost; an index.html still gives the label, as core" {
@@ -384,7 +384,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     printf '  url=http://127.0.0.1:65535/x?y=1  \n' >"$HOME/apps/two/app.conf"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Titled Two Add to home screen…" ]
+    [ "${ITEMS[*]}" = "Titled Two Terminal apps Add to home screen…" ]
 }
 
 @test "an app's label: app.conf's name, then <title>, then the folder" {
@@ -418,7 +418,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     printf '<titlex>No</titlex><title>Yes</title>' >"$HOME/apps/titled/index.html"
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "Late Title Open Title Yes Add to home screen…" ]
+    [ "${ITEMS[*]}" = "Late Title Open Title Yes Terminal apps Add to home screen…" ]
 }
 
 @test "Apps opens the chosen app with mynx app open" {
@@ -427,12 +427,15 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
     [[ $output == *"RUN: mynx app open hello"* ]]
 }
 
-@test "the main menu has Apps and Terminal apps" {
+@test "the main menu has Apps, which holds Terminal apps" {
+    web_app "$HOME/apps/sketch" "Sketch"
     source "$MENU"
     menu_items main
     [ "${ITEMS[3]}" = Apps ]
-    [ "${ITEMS[4]}" = "Terminal apps" ]
-    [ "${ACTS[4]}" = menu:terminal-apps ]
+    [[ " ${ACTS[*]} " != *" menu:terminal-apps "* ]]
+    menu_items apps
+    [ "${ITEMS[*]}" = "Sketch Terminal apps Add to home screen…" ]
+    [ "${ACTS[1]}" = menu:terminal-apps ]
 }
 
 @test "with an old menu file (apps, no terminal-apps), Apps ends with Terminal apps" {
@@ -480,12 +483,12 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
 @test "with no apps there's nothing to add to the home screen" {
     source "$MENU"
     menu_items apps
-    [ "${ITEMS[*]}" = "(no apps yet)" ]
+    [ "${ITEMS[*]}" = "(no apps yet) Terminal apps" ]
 }
 
 @test "picking an app under Add to home screen… runs mynx app shortcut; picking one under Apps still opens it" {
     web_app "$HOME/apps/gadgets" "Gadgets"
-    run keys '421'
+    run keys '431'
     [[ $output == *"RUN: mynx app shortcut gadgets"* ]]
     [[ $output != *"RUN: mynx app open"* ]]
     run keys '41'
@@ -553,23 +556,23 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 9
+    run keys 8
     [ "$status" -eq 10 ]
 }
 
 @test "Files opens the file manager" {
-    run keys 7
+    run keys 6
     [[ $output == *"RUN: files"* ]]
 }
 
 @test "Games starts the chosen game" {
     game "$BATS_TEST_TMPDIR/games/neon-rogue.py"
-    run keys 61
+    run keys 51
     [[ $output == *"RUN: play $BATS_TEST_TMPDIR/games/neon-rogue.py"* ]]
 }
 
 @test "Settings → App settings opens the settings editors" {
-    run keys 81
+    run keys 71
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -788,7 +791,7 @@ no_services_mynx() {
 }
 
 @test "Update all runs apt" {
-    run keys 831
+    run keys 731
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 
@@ -887,7 +890,7 @@ no_services_mynx() {
 }
 
 @test "Touch view is in Settings" {
-    run keys 82
+    run keys 72
     [[ $output == *"RUN: mynx set view touch"* ]]
 }
 

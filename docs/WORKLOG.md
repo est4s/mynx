@@ -34,6 +34,10 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
+### 0. Test app logos and Terminal apps in Apps (branch `apps-logos`)
+
+Entry 206 says what to check in mynx dev; once it passes, merge.
+
 ### 1. Development boards: what's left (the maintainer picks)
 
 - Raw USB hotplug while a program runs (libudev's monitor wants
@@ -83,6 +87,33 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-22 (206): App logos in touch mode's Apps; Terminal apps moves into Apps (not yet tested on the phone)
+
+The maintainer asked for the apps' logos in touch mode's menu, and for
+the Terminal apps folder to move into Apps in both the terminal's
+launcher and touch mode.
+- Logos: `HomeItem.logo` (`HomeLogo.App`, `HomeLogo.Terminal`). An
+  app's logo is its home screen shortcut's (`appShortcut()`:
+  `app.conf`'s `icon`, else the letter on a theme colour), drawn by
+  `appIcon()`, which is now shared with `AppShortcuts` (the
+  shortcut's drawing is unchanged). Terminal apps gets the pixel
+  terminal icon. 36 dp squares in a 2 dp border (`HomeView.logo()`).
+  Screenshot `home-apps`.
+- Terminal apps moves: it's no longer in `tools/menu.conf` or the
+  built-in lists (`BUILT_IN_MENU`, the menu's fallback), so the
+  existing rule adds it at the end of Apps, before "Add to home
+  screen…". A user's own `menu.conf` with `terminal-apps` keeps it
+  in the main menu (it's their file; the guide says so). The main
+  menu's numbers after Apps move up by one.
+- Tests: `HomeTest`, `menu.bats` (key-number and Apps-list tests
+  follow the new order). Docs: the guide, `usb.md`, `apps.md`,
+  README, ARCHITECTURE.md, TOUCH-DESIGN.md.
+- To check in mynx dev: touch mode's Apps shows logos (Sketch and
+  Gadgets as letters; an app with an `icon` shows it); Terminal apps
+  is last before "Add to home screen…" and opens; the drawer and
+  Home's main list have no Terminal apps; in the terminal's menu,
+  Apps → Terminal apps works and the main menu has no Terminal apps.
 
 ### 2026-11-21 (205): Asking for all of the phone's storage (PR #99; passed)
 

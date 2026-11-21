@@ -21,10 +21,15 @@ import android.widget.Toast
 import io.github.est4s.terminal.core.HOME_MAIN
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeItem
+import io.github.est4s.terminal.core.HomeLogo
 import io.github.est4s.terminal.core.HomeMenus
 import io.github.est4s.terminal.core.HomeRow
 import io.github.est4s.terminal.core.homeInputAction
 import kotlin.concurrent.thread
+
+// An app's logo in a row: its size, and how much of it app.conf's icon fills.
+private const val LOGO_DP = 36
+private const val LOGO_FILL = 0.8f
 
 /**
  * Touch mode's Home: core's [HomeMenus] as lists to tap, in the pixel style,
@@ -212,7 +217,8 @@ class HomeView(
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(56)
-        setPadding(dp(16), dp(8), dp(12), dp(8))
+        setPadding(if (item.logo != null) dp(10) else dp(16), dp(8), dp(12), dp(8))
+        item.logo?.let { addView(logo(it), LayoutParams(dp(LOGO_DP), dp(LOGO_DP)).apply { marginEnd = dp(12) }) }
         addView(TextView(context).apply {
             text = item.label
             typeface = Pixel.label(context, 500)
@@ -248,6 +254,21 @@ class HomeView(
             isFocusable = true
             setOnClickListener { open(item) }
         }
+    }
+
+    // An app's logo, as its home screen shortcut draws it, or the Terminal apps folder's; a square in a 2 dp border.
+    private fun logo(logo: HomeLogo) = ImageView(context).apply {
+        val border = dp(2)
+        when (logo) {
+            is HomeLogo.App -> setImageBitmap(appIcon(logo.shortcut, dp(LOGO_DP) - 2 * border, LOGO_FILL))
+            HomeLogo.Terminal -> {
+                setImageDrawable(Pixel.icon(context, PixelIcon.TERMINAL, Pixel.CYAN))
+                scaleType = ImageView.ScaleType.CENTER
+            }
+        }
+        background = Pixel.box(context, fill = Pixel.BACKGROUND, border = Pixel.LINE)
+        setPadding(border, border, border, border)
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
     // A theme at a glance: its background and text, then colours 1 to 6.
