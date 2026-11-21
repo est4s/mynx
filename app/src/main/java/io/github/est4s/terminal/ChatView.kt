@@ -1255,6 +1255,8 @@ class ChatView(
                         ArtifactAction.INSTALL -> install?.invoke(artifact.shareFile)
                         ArtifactAction.COPY -> copyFile(artifact.shareFile)
                         ArtifactAction.VIEW -> viewImage?.invoke(artifact.shareFile)
+                        // Wired in wave 3 (MediaViewActivity).
+                        ArtifactAction.PLAY -> Unit
                         ArtifactAction.SHARE -> shareFile(artifact.shareFile)
                     }
                 })
