@@ -144,6 +144,7 @@ import io.github.est4s.terminal.core.WebAppLauncher
 import io.github.est4s.terminal.core.WebApps
 import io.github.est4s.terminal.core.forWebApps
 import io.github.est4s.terminal.core.webAppRequests
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import java.net.InetSocketAddress
@@ -171,8 +172,8 @@ const val EXTRA_CHAT_SESSION = "chat-session"
 // Past every range in use (web apps take 5000-5999).
 private const val CHAT_NOTICE_ID = 6000
 
-/** Which of touch mode's chat screens shows: none, the chat home (touch view's start), the history, or a chat. */
-enum class ChatPlace { NONE, HOME, HISTORY, CHAT }
+/** Which of touch mode's screens shows: none, the chat home (touch view's start), the history, a chat, or Files. */
+enum class ChatPlace { NONE, HOME, HISTORY, CHAT, FILES }
 private const val UPDATE_CHANNEL_ID = "updates"
 private const val UPDATE_NOTIFICATION_ID = 2
 // How often to see whether an update check is due (the Updater decides: about daily).
@@ -351,6 +352,9 @@ class TerminalService : Service() {
             if (tabsClosed && tabs.isEmpty && serviceManager.active == 0) exit()
         }
     }
+    /** Touch mode's Files: the folder it last listed, to open again in a recreated activity. */
+    var filesFolder: String? = null
+
     /** Home's lists to open again once the activity is built anew (a theme changed its colours); null: none. */
     var homeLevels: List<Pair<String, String>>? = null
 
@@ -938,8 +942,42 @@ class TerminalService : Service() {
         return tabs.selected!!.session
     }
 
-    /** A new tab after the selected one; [command] runs instead of the plain login shell. */
-    fun newSession(command: List<String>? = null): TerminalSession = startShell(command = command).also { tabs.open(it) }
+    /** A new tab after the selected one, in [cwd] (else /root); [command] runs instead of the plain login shell. */
+    fun newSession(command: List<String>? = null, cwd: String? = null): TerminalSession =
+        startShell(cwd = cwd, command = command).also { tabs.open(it) }
+
+    /**
+     * Runs [argv] in a proot of its own, with no tab (touch mode's Files:
+     * every change runs in Debian). Call it on the main thread, as for a
+     * tab; [done] gets the exit code and the output (stderr in it, the
+     * first [RUN_OUTPUT_MAX] bytes), on the main thread.
+     */
+    fun runInDebian(argv: List<String>, done: (Int, String) -> Unit) {
+        val launch = debianLaunch(workDir = "/root", command = argv)
+        thread(name = "debian-run", isDaemon = true) {
+            val (code, output) = try {
+                val builder = ProcessBuilder(launch.argv).directory(filesDir).redirectErrorStream(true)
+                builder.environment().putAll(launch.env)
+                val process = builder.start()
+                process.outputStream.close()
+                val kept = ByteArrayOutputStream()
+                val buffer = ByteArray(8192)
+                // Read to the end, so the process never blocks on a full pipe; keep the start.
+                process.inputStream.use { input ->
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        val room = RUN_OUTPUT_MAX - kept.size()
+                        if (room > 0) kept.write(buffer, 0, minOf(n, room))
+                    }
+                }
+                process.waitFor() to String(kept.toByteArray(), Charsets.UTF_8)
+            } catch (e: Exception) {
+                -1 to "couldn't start it: ${e.message ?: e.javaClass.simpleName}"
+            }
+            mainHandler.post { done(code, output) }
+        }
+    }
 
     /** Replaces a finished session with a fresh shell in the same tab and folder. A service's tab waits for the service. */
     fun restart(old: TerminalSession) {
@@ -1356,6 +1394,41 @@ class TerminalService : Service() {
         return share(Share(listOf(file), null))
     }
 
+    /** Touch mode's Files: the share sheet for the Debian files [guests]; null when it opened, else why not. */
+    fun shareDebianFiles(guests: List<String>): String? {
+        val files = guests.map { guest ->
+            debianFile(guest)?.takeIf { it.isFile }
+                ?: return "${guest.substringAfterLast('/')} isn't a file: only files can be shared"
+        }
+        if (files.isEmpty()) return "nothing to share"
+        return share(Share(files, null))
+    }
+
+    /**
+     * Touch mode's Files: opens the Debian file [guest] in another app
+     * (Android's "open with"), else the share sheet; null when one opened,
+     * else why not.
+     */
+    fun openDebianFile(guest: String): String? {
+        val shown = front()?.activity
+            ?: return "the app must be on screen to open files"
+        val file = debianFile(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
+        val uri = ShareProvider.uris(listOf(file))[0]
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, ShareProvider.typeOf(file) ?: "application/octet-stream")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // No chooser: Android asks which app itself, and says when none can (then: Share).
+        return try {
+            shown.startActivity(view)
+            null
+        } catch (e: ActivityNotFoundException) {
+            share(Share(listOf(file), null))
+        }
+    }
+
+    // A guest path's host file, its links followed as Debian sees them (proot's faked hard links too).
+    private fun debianFile(guest: String): File? = webAppFiles.host(webAppFiles.resolve(guest) ?: guest)
+
     /** A Markdown card's Copy: the file's text, or why not. Reads the file: off the main thread. */
     fun debianFileText(guest: String): Result<String> {
         val file = webAppFiles.host(guest)?.takeIf { it.isFile }
@@ -1373,6 +1446,8 @@ class TerminalService : Service() {
     private companion object {
         // Android's clipboard goes through a binder transaction: keep well under its 1 MB.
         const val CHAT_COPY_MAX = 256 * 1024L
+        // runInDebian's output kept for the screen: plenty for an error.
+        const val RUN_OUTPUT_MAX = 16 * 1024
     }
 
     // Answers `mynx install-apk`: null when the installer opened, else why not.
