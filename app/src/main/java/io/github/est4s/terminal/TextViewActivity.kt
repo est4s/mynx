@@ -298,7 +298,7 @@ class TextViewActivity : Activity(), FrontActivity, TextViewerActions {
                 FileKind.MARKDOWN, FileKind.CODE, FileKind.TEXT -> startActivity(intent(this, file, target, edit = false))
                 else -> {
                     val running = service ?: return toast("mynx can't open $name.")
-                    running.openDebianFile(target)?.let(::toast)
+                    running.openDebianFileWith(target)?.let(::toast)
                 }
             }
         }
