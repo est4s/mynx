@@ -92,6 +92,22 @@ class HomeScreenshotTest {
         shoot(home(1080, 2400), "home-apps", "apps", "Apps")
     }
 
+    // Games with their logos: letter tiles, and a picture beside the game when it has one.
+    @Test
+    fun games() {
+        listOf("games/neon-rogue.py", "games/neon-drive.py", "games/flap").forEach { name ->
+            write(name, "#!/bin/sh\n")
+            File(home, name).setExecutable(true)
+        }
+        val picture = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        Canvas(picture).apply {
+            drawColor(Color.rgb(0x2E, 0x7D, 0x32))
+            drawRect(16f, 28f, 48f, 44f, Paint().apply { color = Color.rgb(0xFF, 0x40, 0x81) })
+        }
+        File(home, "games/neon-drive.png").outputStream().use { picture.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        shoot(home(1080, 2400), "home-games", "games", "Games")
+    }
+
     @Test
     fun services() = shoot(home(1080, 2400), "home-services", "services", "Services")
 

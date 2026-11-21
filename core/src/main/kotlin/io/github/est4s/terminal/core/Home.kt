@@ -12,6 +12,7 @@ private const val LABEL_MAX = 20
 private const val LABEL_LINES = 5
 private const val LABEL_BYTES = 4096
 private val GAME_DIRS = listOf("/opt/neon-games", "games")
+private val GAME_PICTURES = listOf("png", "webp", "jpg", "jpeg")
 private val AGENTS = listOf("claude" to "Claude Code", "codex" to "Codex", "gemini" to "Gemini CLI")
 // The one agent touch mode opens as a chat; the others run in a tab.
 private const val CHAT_AGENT = "claude"
@@ -72,8 +73,8 @@ data class HomeService(val name: String, val state: String, val saved: Boolean, 
 
 /** The picture before a [HomeItem]'s label. */
 sealed interface HomeLogo {
-    /** A web app's: what its home screen shortcut shows ([appShortcut]). */
-    data class App(val shortcut: AppShortcut) : HomeLogo
+    /** A picture or a letter tile: a web app's home screen shortcut's ([appShortcut]), or a game's ([gameLogo]). */
+    data class Tile(val shortcut: AppShortcut) : HomeLogo
     /** The Terminal apps folder's. */
     data object Terminal : HomeLogo
 }
@@ -192,12 +193,13 @@ class HomeMenus(
         else -> HomeItem(label, act("cmd:" + action.removePrefix("run ")))
     }
 
+    private val colors by lazy { loadColorScheme(File(apps.home, "$CONFIG_DIR/colors.properties")).scheme }
+
     private fun byLabel(list: List<WebApp>) = list.sortedWith(compareBy({ it.label.uppercase() }, { it.label }))
 
     private fun webApps(): List<HomeItem> {
-        val colors by lazy { loadColorScheme(File(apps.home, "$CONFIG_DIR/colors.properties")).scheme }
         val found = byLabel(apps.list()).map { app ->
-            val logo = HomeLogo.App(appShortcut(app, app.icon?.let(apps::host), colors))
+            val logo = HomeLogo.Tile(appShortcut(app, app.icon?.let(apps::host), colors))
             HomeItem(app.label, HomeAction.App(app.name), logo = logo)
         }
         val items = found.ifEmpty { listOf(HomeItem("(no apps yet)", HomeAction.None)) }
@@ -230,8 +232,18 @@ class HomeMenus(
     private fun games(): List<HomeItem> {
         val found = GAME_DIRS.map { if (it.startsWith("/")) it else "$guestHome/$it" }
             .flatMap(::programs)
-            .map { (guest, _) -> HomeItem(gameLabel(guest), act("game:$guest")) }
+            .map { (guest, _) ->
+                val label = gameLabel(guest)
+                val name = guest.substringAfterLast('/').let { if ('.' in it) it.substringBeforeLast('.') else it }
+                val logo = gameLogo(name, label, gamePicture(guest.substringBeforeLast('/'), name), colors)
+                HomeItem(label, act("game:$guest"), logo = HomeLogo.Tile(logo))
+            }
         return found.ifEmpty { listOf(HomeItem("(no games yet)", HomeAction.None)) }
+    }
+
+    // A picture beside the game with its name: neon-flap.png for neon-flap.py.
+    private fun gamePicture(folder: String, name: String): File? = GAME_PICTURES.firstNotNullOfOrNull { ending ->
+        apps.resolve("$folder/$name.$ending")?.let(apps::host)?.takeIf { it.isFile }
     }
 
     private fun installed(command: String) = agentBinary(apps, command) != null

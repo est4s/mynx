@@ -105,10 +105,10 @@ class HomeTest {
         val colors = loadColorScheme(File(home, ".config/mynx/colors.properties")).scheme
         val items = menus().items("apps")
         assertEquals(
-            HomeLogo.App(appShortcut(apps.find("gadgets")!!, File(home, "apps/gadgets/logo.png"), colors)),
+            HomeLogo.Tile(appShortcut(apps.find("gadgets")!!, File(home, "apps/gadgets/logo.png"), colors)),
             items[0].logo,
         )
-        val letter = (items[1].logo as HomeLogo.App).shortcut
+        val letter = (items[1].logo as HomeLogo.Tile).shortcut
         assertEquals(appShortcut(apps.find("sketch")!!, null, colors), letter)
         assertEquals("S", letter.letter)
         assertEquals(null, letter.icon)
@@ -203,13 +203,30 @@ class HomeTest {
         write(File(rootfs, "opt/my/real-game"), "x", executable = true)
         File(home, "games").mkdirs()
         Files.createSymbolicLink(File(home, "games/linked_game.sh").toPath(), File("/opt/my/real-game").toPath())
+        val colors = loadColorScheme(File(home, ".config/mynx/colors.properties")).scheme
         assertEquals(
             listOf(
-                HomeItem("Neon Flap", act("game:/opt/neon-games/neon-flap.py")),
-                HomeItem("Linked Game", act("game:/root/games/linked_game.sh")),
+                HomeItem("Neon Flap", act("game:/opt/neon-games/neon-flap.py"),
+                    logo = HomeLogo.Tile(gameLogo("neon-flap", "Neon Flap", null, colors))),
+                HomeItem("Linked Game", act("game:/root/games/linked_game.sh"),
+                    logo = HomeLogo.Tile(gameLogo("linked_game", "Linked Game", null, colors))),
             ),
             menus().items("games"),
         )
+    }
+
+    @Test
+    fun `a game's logo is a letter tile, or a picture of the same name beside it`() {
+        write(File(home, "games/neon-rogue.py"), "x", executable = true)
+        write(File(home, "games/neon-rogue.webp"), "webp")
+        write(File(home, "games/flap"), "x", executable = true)
+        write(File(home, "games/flap.txt"), "not a picture")
+        val logos = menus().items("games").map { (it.logo as HomeLogo.Tile).shortcut }
+        assertEquals(listOf("F", "N"), logos.map { it.letter })
+        assertEquals(listOf(null, File(home, "games/neon-rogue.webp")), logos.map { it.icon })
+        val tile = gameLogo("neon-rogue", "Neon Rogue", null, loadColorScheme(File("none")).scheme)
+        assertEquals("N", tile.letter)
+        assertEquals("game-neon-rogue", tile.id)
     }
 
     @Test

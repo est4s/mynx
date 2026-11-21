@@ -593,7 +593,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   as usual. Apps' rows carry a `HomeLogo` (maintainer's decision,
   2026-11-22): each app's is its home screen shortcut's `appShortcut()`,
   drawn by the same `appIcon()`, and the Terminal apps folder's is the
-  pixel terminal icon. Exit isn't listed. Services is a list of its own:
+  pixel terminal icon. Games get one too, by the same rules
+  (`gameLogo()`): a picture beside the game with its name, else the
+  letter tile. Exit isn't listed. Services is a list of its own:
   `HomeMenus` takes a snapshot (`ServiceManager.homeServices()`) and
   `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
   thread; `ServiceHost.changed` refreshes it while it shows, and in

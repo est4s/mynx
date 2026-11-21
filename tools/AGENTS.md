@@ -410,6 +410,9 @@ Apps are folders instead (see "Apps" in `/opt/mynx/docs/apps.md`).
 Terminal apps is a folder at the end of the Apps list, unless the menu
 file has `terminal-apps` itself. Touch view's Apps list shows each
 app's logo: `app.conf`'s `icon`, else its home screen shortcut's letter.
+Its Games list does the same for games: a PNG, WebP or JPEG beside the
+game with its name (`~/games/my-game.png` for `my-game.py`), else a
+letter.
 
 ### Key bars
 
