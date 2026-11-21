@@ -11,6 +11,7 @@ import android.graphics.Color
 import android.graphics.Point
 import android.graphics.pdf.PdfRenderer
 import android.graphics.pdf.content.PdfPageTextContent
+import android.graphics.pdf.models.PageMatchBounds
 import android.graphics.pdf.models.selection.PageSelection
 import android.graphics.pdf.models.selection.SelectionBoundary
 import android.os.Build
@@ -48,8 +49,8 @@ private const val COLORS_FILE = "root/.config/mynx/colors.properties"
  * open at a time and isn't thread-safe: everything that touches it
  * (opening, measuring the pages, rendering, closing) runs there, in
  * order. A PDF with a password, or one it can't read, says so on screen.
- * On Android 15+ the renderer also selects a page's text ([PdfText]),
- * on the same thread.
+ * On Android 15+ the renderer also selects and searches a page's text
+ * ([PdfText]), on the same thread, a page per task so renders go between.
  * Share and Open with another app go through the service, so this is a
  * [FrontActivity], bound to the service if it runs.
  */
@@ -105,9 +106,9 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
         back()
     }
 
-    // Back clears a selection first.
+    // Back closes Find, or clears a selection, first.
     private fun back() {
-        if (!view.clearSelection()) finish()
+        if (!view.closeFind() && !view.clearSelection()) finish()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean = view.onKey(event) || super.dispatchKeyEvent(event)
@@ -259,8 +260,13 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
     override fun selectAll(page: Int, done: (PdfSelection?) -> Unit) =
         onWorker(done) { current -> if (Build.VERSION.SDK_INT >= 35) PdfText.all(current, page) else null }
 
+    override val canSearch: Boolean get() = Build.VERSION.SDK_INT >= 35
+
+    override fun search(page: Int, query: String, done: (List<List<PdfRect>>?) -> Unit) =
+        onWorker(done) { current -> if (Build.VERSION.SDK_INT >= 35) PdfText.search(current, page, query) else null }
+
     // [work] on the worker with the renderer, then [done] with what it gave (null when it threw).
-    private fun onWorker(done: (PdfSelection?) -> Unit, work: (PdfRenderer) -> PdfSelection?) {
+    private fun <T> onWorker(done: (T?) -> Unit, work: (PdfRenderer) -> T?) {
         val sent = runCatching {
             worker.execute {
                 val current = renderer
@@ -309,6 +315,16 @@ class PdfViewActivity : Activity(), FrontActivity, PdfViewActions {
             try {
                 val chosen: PageSelection? = opened.selectContent(SelectionBoundary(point(start)), SelectionBoundary(point(stop)))
                 return chosen?.let { selected(page, it.selectedTextContents) }
+            } finally {
+                opened.close()
+            }
+        }
+
+        fun search(renderer: PdfRenderer, page: Int, query: String): List<List<PdfRect>> {
+            val opened = renderer.openPage(page)
+            try {
+                val found: List<PageMatchBounds> = opened.searchText(query)
+                return found.map { match -> match.bounds.map { PdfRect(it.left, it.top, it.right, it.bottom) } }
             } finally {
                 opened.close()
             }

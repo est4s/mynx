@@ -10,7 +10,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.GestureDetector
@@ -24,6 +26,7 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -38,6 +41,8 @@ import io.github.est4s.terminal.core.PdfPageSpace
 import io.github.est4s.terminal.core.PdfPoint
 import io.github.est4s.terminal.core.PdfRect
 import io.github.est4s.terminal.core.PdfRenderSize
+import io.github.est4s.terminal.core.PdfMatch
+import io.github.est4s.terminal.core.PdfSearch
 import io.github.est4s.terminal.core.PdfSelection
 import io.github.est4s.terminal.core.PdfZoom
 import io.github.est4s.terminal.core.pdfBarPlace
@@ -48,6 +53,7 @@ import io.github.est4s.terminal.core.pdfGrab
 import io.github.est4s.terminal.core.pdfHandles
 import io.github.est4s.terminal.core.pdfIndicator
 import io.github.est4s.terminal.core.pdfPlan
+import io.github.est4s.terminal.core.pdfRevealBy
 import io.github.est4s.terminal.core.pdfSelectionEnds
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.hypot
@@ -60,6 +66,11 @@ private const val SETTLE_MS = 250L
 private const val SELECTION_ALPHA = 0x59
 // Two points this close in height (PDF points) are on one line.
 private const val LINE_POINTS = 4f
+// Find searches once typing stops for this long: each search goes through every page.
+private const val SEARCH_DELAY_MS = 300L
+// Find's matches: the accent at about 25%, the current one pink at about 45%.
+private const val MATCH_ALPHA = 0x40
+private const val CURRENT_MATCH_ALPHA = 0x73
 
 /** What the PDF view asks of its activity. */
 interface PdfViewActions {
@@ -91,14 +102,26 @@ interface PdfViewActions {
 
     /** All of [page]'s text, as [select] gives it. */
     fun selectAll(page: Int, done: (PdfSelection?) -> Unit) = done(null)
+
+    /** Whether pages' text can be searched (Android 15's PdfRenderer can). */
+    val canSearch: Boolean get() = false
+
+    /**
+     * Where [query] is on [page] (case ignored), off the main thread; then
+     * [done] on the main thread with each match's line rects in the page's
+     * PDF points, or null when it couldn't search.
+     */
+    fun search(page: Int, query: String, done: (List<List<PdfRect>>?) -> Unit) = done(null)
 }
 
 /**
  * The PDF viewer's screen (`PdfViewActivity`, docs/TOUCH-DESIGN.md
  * "PDF"): the top bar with ←, the Debian file [path]'s name over its
- * folder and ⋮ (Go to page, Share, Open with another app), the pages
+ * folder and ⋮ (Find, Go to page, Share, Open with another app), the pages
  * ([PdfPagesView]) and a page indicator ("3 / 12") that fades when
  * they're still. Rendering is the activity's ([PdfViewActions.render]).
+ * Find (Android 15+) is a bar at the bottom; core's [PdfSearch] keeps
+ * the matches as the pages are searched one by one.
  */
 @SuppressLint("ViewConstructor")
 class PdfView(
@@ -171,6 +194,57 @@ class PdfView(
     }
     private val fade = Runnable { indicator.animate().alpha(0f).setDuration(300).start() }
 
+    private val findInput = EditText(context).apply {
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+        setTextColor(Pixel.TEXT)
+        setHintTextColor(Pixel.DIM)
+        hint = "Find"
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+        background = null
+        setPadding(dp(12), 0, dp(4), 0)
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                this@PdfView.removeCallbacks(searchLater)
+                this@PdfView.postDelayed(searchLater, SEARCH_DELAY_MS)
+            }
+        })
+        setOnEditorActionListener { _, _, _ ->
+            if (search?.query == text.toString()) stepFind(1) else startSearch()
+            true
+        }
+    }
+    private val findCount = TextView(context).apply {
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        setTextColor(Pixel.DIM)
+        setPadding(dp(4), 0, dp(4), 0)
+    }
+    private val findBar = LinearLayout(context).apply {
+        orientation = HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE)
+        setPadding(dp(4), dp(2), dp(4), dp(2))
+        addView(findInput, LayoutParams(0, dp(48), 1f))
+        addView(findCount, LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        addView(glyphButton("↑", "Previous match") { stepFind(-1) }, LayoutParams(dp(44), dp(48)))
+        addView(glyphButton("↓", "Next match") { stepFind(1) }, LayoutParams(dp(44), dp(48)))
+        addView(ImageView(context).apply {
+            setImageDrawable(Pixel.icon(context, PixelIcon.CLOSE, Pixel.TEXT, 16))
+            scaleType = ImageView.ScaleType.CENTER
+            background = pixelRipple()
+            contentDescription = "Close find"
+            setOnClickListener { closeFind() }
+        }, LayoutParams(dp(44), dp(48)))
+        visibility = View.GONE
+    }
+    // The search being run and shown; a new one replaces it, and answers for the old one are dropped.
+    private var search: PdfSearch? = null
+    private val searchLater = Runnable { startSearch() }
+
     private val messageText = TextView(context).apply {
         typeface = Pixel.text(context)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -211,8 +285,71 @@ class PdfView(
             })
             addView(selectionBar, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START))
         }, LayoutParams(MATCH_PARENT, 0, 1f))
+        addView(findBar, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         pages.selectionMoved = { selected, box -> placeBar(selected, box) }
         showMessage("Loading…", open = false)
+    }
+
+    /** Find, from ⋮ or Ctrl+F: the bar at the bottom, its text selected to type over. */
+    fun openFind() {
+        if (!actions.canSearch || pages.count == 0) return
+        findBar.visibility = View.VISIBLE
+        findInput.requestFocus()
+        findInput.selectAll()
+        val keyboard = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        keyboard.showSoftInput(findInput, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    /** Finds [query] now (as typing it and waiting would): for the screenshots. */
+    fun find(query: String) {
+        openFind()
+        findInput.setText(query)
+        startSearch()
+    }
+
+    /** Closes Find and its highlights (Back's first job); true when it was open. */
+    fun closeFind(): Boolean {
+        if (findBar.visibility != View.VISIBLE) return false
+        removeCallbacks(searchLater)
+        findBar.visibility = View.GONE
+        search = null
+        findCount.text = ""
+        pages.showSearch(null)
+        val keyboard = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        keyboard.hideSoftInputFromWindow(findInput.windowToken, 0)
+        pages.requestFocus()
+        return true
+    }
+
+    // A new search for what's typed, from the page in view, a page at a time.
+    private fun startSearch() {
+        removeCallbacks(searchLater)
+        val query = findInput.text.toString()
+        val started = PdfSearch(query, pages.currentPage, pages.count)
+        search = started
+        pages.showSearch(started)
+        findCount.text = started.label
+        searchNext(started)
+    }
+
+    private fun searchNext(running: PdfSearch) {
+        val page = running.nextPage ?: return
+        actions.search(page, running.query) { found ->
+            if (search !== running) return@search
+            val moved = running.found(page, found.orEmpty())
+            findCount.text = running.label
+            pages.showSearch(running)
+            if (moved) running.currentMatch?.let(pages::reveal)
+            searchNext(running)
+        }
+    }
+
+    private fun stepFind(by: Int) {
+        val running = search ?: return startSearch()
+        if (!running.step(by)) return
+        findCount.text = running.label
+        pages.showSearch(running)
+        running.currentMatch?.let(pages::reveal)
     }
 
     /** Clears the selection, if there's one (Back's first job); true when there was. */
@@ -310,9 +447,19 @@ class PdfView(
         field.requestFocus()
     }
 
-    /** Esc, G, and the keys that scroll and zoom; true when it was one. */
+    /** Esc, G, Ctrl+F, and the keys that scroll and zoom; true when it was one. */
     fun onKey(event: KeyEvent): Boolean {
         val key = event.keyCode
+        if (key == KeyEvent.KEYCODE_F && event.isCtrlPressed) {
+            if (event.action == KeyEvent.ACTION_DOWN) openFind()
+            return true
+        }
+        // Typing in Find: its keys are the field's, but Esc closes it.
+        if (findInput.hasFocus()) {
+            if (key != KeyEvent.KEYCODE_ESCAPE) return false
+            if (event.action == KeyEvent.ACTION_DOWN) closeFind()
+            return true
+        }
         if (key == KeyEvent.KEYCODE_C && event.isCtrlPressed && pages.selection != null) {
             if (event.action == KeyEvent.ACTION_DOWN) copySelection()
             return true
@@ -329,7 +476,7 @@ class PdfView(
         if (event.action != KeyEvent.ACTION_DOWN) return true
         val page = pages.height * 9f / 10
         when (key) {
-            KeyEvent.KEYCODE_ESCAPE -> if (!pages.clearSelection()) actions.close()
+            KeyEvent.KEYCODE_ESCAPE -> if (!closeFind() && !pages.clearSelection()) actions.close()
             KeyEvent.KEYCODE_G -> askPage()
             KeyEvent.KEYCODE_DPAD_DOWN -> pages.scrollBy(0f, dp(60).toFloat())
             KeyEvent.KEYCODE_DPAD_UP -> pages.scrollBy(0f, -dp(60).toFloat())
@@ -363,10 +510,22 @@ class PdfView(
 
     private fun showMore(anchor: View) {
         val entries = ArrayList<PixelMenuEntry>()
+        if (actions.canSearch && pages.count > 0) entries += PixelMenuEntry("Find") { openFind() }
         if (pages.count > 1) entries += PixelMenuEntry("Go to page") { askPage() }
         entries += PixelMenuEntry("Share") { actions.share() }
         entries += PixelMenuEntry("Open with another app") { actions.openWithAnotherApp() }
         pixelMenu(anchor, entries)
+    }
+
+    private fun glyphButton(glyph: String, description: String, onTap: () -> Unit) = TextView(context).apply {
+        text = glyph
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+        setTextColor(Pixel.TEXT)
+        gravity = Gravity.CENTER
+        contentDescription = description
+        background = pixelRipple()
+        isFocusable = true
+        setOnClickListener { onTap() }
     }
 
     private fun iconButton(icon: PixelIcon, color: Int, description: String, onTap: (View) -> Unit) = ImageView(context).apply {
@@ -458,6 +617,13 @@ class PdfPagesView(
     var selectionMoved: (selected: Boolean, box: PdfRect?) -> Unit = { _, _ -> }
 
     val count: Int get() = aspects.size
+
+    /** The page mostly in view. */
+    val currentPage: Int get() = column?.current(zoom.top, zoom.bottom) ?: 0
+
+    // Find's matches, drawn over the pages.
+    private var search: PdfSearch? = null
+    private val matchPaint = Paint()
 
     private val settle = Runnable {
         settledZoom = zoom.scale
@@ -569,6 +735,27 @@ class PdfPagesView(
         scroller.forceFinished(true)
         zoom.zoomBy(factor, width / 2f, height / 2f)
         changed(zoomed = true)
+    }
+
+    /** Draws [shown]'s matches (null: none), the current one brighter. */
+    fun showSearch(shown: PdfSearch?) {
+        search = shown
+        invalidate()
+    }
+
+    /** Scrolls so [match] is in sight. */
+    fun reveal(match: PdfMatch) {
+        val space = space() ?: return
+        if (match.page >= count) return
+        val box = pdfBox(match.rects.map { space.toScreen(match.page, it) }) ?: return
+        val by = pdfRevealBy(box, width.toFloat(), height.toFloat(), Pixel.dp(context, 48).toFloat())
+        if (by.x == 0f && by.y == 0f) {
+            invalidate()
+            return
+        }
+        scroller.forceFinished(true)
+        zoom.panBy(by.x, by.y)
+        changed(zoomed = false)
     }
 
     /** Shows [chosen] as the selection (null: none): what the renderer selected, or a stand-in's. */
@@ -811,7 +998,29 @@ class PdfPagesView(
             val bitmap = bitmaps[page] ?: continue
             canvas.drawBitmap(bitmap, null, rect, paint)
         }
+        drawMatches(canvas, shown)
         drawSelection(canvas, shown)
+    }
+
+    // Find's matches on the pages in sight.
+    private fun drawMatches(canvas: Canvas, shown: PdfColumn) {
+        val running = search ?: return
+        if (running.matches.isEmpty()) return
+        val space = PdfPageSpace(shown, zoom, pointWidths)
+        val inSight = shown.pagesIn(zoom.top, zoom.bottom)
+        val current = running.currentMatch
+        running.matches.forEach { match ->
+            if (match.page !in inSight || match.page >= shown.count) return@forEach
+            matchPaint.color = if (match === current) {
+                (Pixel.PINK and 0x00FFFFFF) or (CURRENT_MATCH_ALPHA shl 24)
+            } else {
+                (Pixel.CYAN and 0x00FFFFFF) or (MATCH_ALPHA shl 24)
+            }
+            for (line in match.rects) {
+                val r = space.toScreen(match.page, line)
+                canvas.drawRect(r.left, r.top, r.right, r.bottom, matchPaint)
+            }
+        }
     }
 
     // The selected lines tinted, and a handle hanging from each end: a stem along the line's edge, a block below it.

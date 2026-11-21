@@ -22,7 +22,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   Chat's pictures (thumbnails #91, full screen and image cards #92),
   touch mode's Files (#93), viewers for text, code, Markdown, audio
   and video (#94), and a turn's changes in chat, PDF (with text
-  selection) and HTML files (#95). Every
+  selection) and HTML files (#95), with Find in PDFs and Replace in the text
+  viewers (#96, into #95's branch). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -33,8 +34,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 0. Viewers: suggested next (the maintainer picks)
 
-Not decided: search in PDFs (Android 15's `searchText`, beside the
-selection), opening files from other apps in mynx's viewers, and
+Not decided: opening files from other apps in mynx's viewers, and
 whether the diff view should start unwrapped like the code viewer
 (it wraps; nobody has asked).
 
@@ -87,6 +87,30 @@ whether the diff view should start unwrapped like the code viewer
 ---
 
 ## Log
+
+### 2026-11-21 (202): Find in PDFs, Replace in the text viewers (PR #96 into `more-viewers`; passed)
+
+The maintainer asked for search in PDFs and Replace in the text
+viewers' Find.
+- Core: `PdfSearch.kt` (pages searched one at a time in order, the
+  current match the first at or after the page in view, else the
+  first; "2/7…" while searching; `pdfRevealBy()` to scroll a match
+  into sight); `TextDoc.kt`'s `replaceMatch()`, `replaceAll()`,
+  `matchAtOrAfter()`. Tested.
+- App: `PdfView`'s Find bar (⋮ Find, Ctrl+F; Android 15+ only, via
+  `searchText()` one page per worker task so renders go between;
+  matches tinted, the current one pink); `TextViewerView`'s Replace row
+  (⋮ Replace, Ctrl+H, ⇄ in Find; switches to Edit; each Replace/All is
+  one Undo step). Screenshots `pdf-find` (stand-in matches) and
+  `text-replace`.
+- Docs: TOUCH-DESIGN.md, ARCHITECTURE.md, the guide (`phone.md`, its
+  check in `home-docs.bats`).
+- Passed in mynx dev (build 44925532382): the maintainer tried it all
+  ("all works"). Phone checks were: PDF Find (type, count growing, ↑ ↓ across
+  pages and zoomed in, Enter, Back/Esc closing it, typing letters like
+  `g` in the field not opening Go to page); Replace in code, text and
+  Markdown (from View: it switches to Edit), Replace then the next,
+  All, Undo of each, Save; read-only (>1 MB) files have no Replace.
 
 ### 2026-11-21 (201): Selecting text in the PDF viewer (PR #95; passed)
 
