@@ -809,6 +809,10 @@ class MainActivity : Activity(), FrontActivity {
             viewImage = { path ->
                 startActivity(ImageViewActivity.intent(this, File(hostPath(path, installer.rootfs.path) ?: path), path.substringAfterLast('/')))
             },
+            openFile = { path, with ->
+                val running = service
+                toastError(if (running == null) "the app isn't ready yet" else running.openDebianFileWith(path, with))
+            },
         ).also {
             it.colors = Pixel.COLORS
             it.visibility = View.GONE
