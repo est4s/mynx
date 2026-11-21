@@ -23,7 +23,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   touch mode's Files (#93), viewers for text, code, Markdown, audio
   and video (#94), and a turn's changes in chat, PDF (with text
   selection) and HTML files (#95), with Find in PDFs and Replace in the text
-  viewers (#96, into #95's branch). Every
+  viewers (#96, into #95's branch), and the chat history listing
+  every folder's chats (#98). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -46,7 +47,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ### 2. Touch mode: what's left
 
-- **Test entry 204** (the history's other folders) on the phone.
 - Other agents in Chat (Codex's `app-server`, Gemini's ACP), which
   need accounts to test; the
   Model page lists fallback models until a session reports its own.
@@ -83,7 +83,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-21 (204): The chat history lists every folder's chats (PR pending; to test)
+### 2026-11-21 (204): The chat history lists every folder's chats (PR #98; passed)
 
 The maintainer asked for the roadmap's "chat history that lists other
 folders' chats". A chat started from Files' "Chat here" left the
@@ -103,11 +103,11 @@ history once it was dropped, and resuming it in `/root` couldn't work.
   other-folder rows.
 - Docs: ARCHITECTURE.md, TOUCH-DESIGN.md (Files' limits), the roadmap,
   the guide.
-- To test on the phone: Files → a folder → Chat here, send a prompt,
-  leave it until it's dropped (Back, then the history): the row shows
-  the folder; opening it shows its transcript and the next prompt goes
-  on in that folder (ask `pwd`); a notification tap on it; old chats in
-  `/root/mynx` listed beside `/root` ones; deleted temp folders not.
+- Passed in mynx dev (build 44933764075): the maintainer tried it
+  all ("all works"): Chat here's row naming its folder, resuming
+  there (`pwd`), a notification tap, folders listed together, gone
+  temp folders left out. (The first build failed: `MainActivity`
+  lacked the `ChatHistoryRow` import, which only CI compiles.)
 
 ### 2026-11-21 (203): Viewers closed; roadmap cleaned up
 
