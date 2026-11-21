@@ -119,6 +119,12 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false" />
 
+        <!-- mynx's PDF viewer. -->
+        <activity
+            android:name=".PdfViewActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:exported="false" />
+
         <!-- Other apps share files and text into Debian's share folder. -->
         <activity
             android:name=".ShareActivity"
