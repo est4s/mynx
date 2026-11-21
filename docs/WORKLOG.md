@@ -20,32 +20,21 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   mode's Home and Services, Chat for Claude Code (#67-#81), touch
   mode's chat home with its drawer and the pixel style (#83),
   Chat's pictures (thumbnails #91, full screen and image cards #92),
-  and touch mode's Files (#93). Every
+  touch mode's Files (#93), and viewers for text, code, Markdown,
+  audio and video (#94). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
-- **Waiting for the phone test:** viewers for text, code, Markdown,
-  audio and video (PR #94, branch `viewers`).
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
   PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
 
-### 0. Viewers (PR #94): the maintainer's test in mynx dev
+### 0. Viewers: suggested next (the maintainer picks)
 
-Install the PR's build (`scripts/deliver.sh` on branch `viewers`)
-and check: from Files, a .py, .md, .txt, an mp3 and an mp4 open in
-mynx's viewers; Edit, Save (and a file changed meanwhile asks);
-undo/redo, Find, Wrap; Open with… → Another app; the Default apps
-settings switch a kind to Android; `mynx open FILE` in a tab asks,
-`--with android` and `--edit` work, `--json` doesn't ask; chat: a
-script and a Markdown file Claude writes (also through `cat >`) give
-a Changed files card and a Markdown card (View), below its last words
-once the turn ends; paths in its reply are underlined and open; a sent .txt chip opens; audio keeps
-playing with the screen off, the notification's controls and the
-lock screen work, headphones out pauses; a video turns with the
-phone and double-tap seeks. Fix what fails, then merge (docs are
-done in the PR). Suggested next (not decided): roadmap "Viewers".
+Not decided (roadmap "Viewers"): a diff view of a turn's changes in
+chat, a PDF viewer, HTML files in the web apps' WebView, opening files
+from other apps in mynx's viewers.
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -97,7 +86,7 @@ done in the PR). Suggested next (not decided): roadmap "Viewers".
 
 ## Log
 
-### 2026-11-21 (199): Viewers for text, code, Markdown, audio and video (PR #94; to test)
+### 2026-11-21 (199): Viewers for text, code, Markdown, audio and video (PR #94; passed)
 
 The maintainer asked for a Markdown viewer and editor, a notepad, a
 code viewer and a media player, opening supported files, working in
@@ -131,6 +120,8 @@ tty or with `--json`, so agents don't wait). Design:
   when it ends (`withArtifactCards(toEnd)`); and code in replies that
   names a file that's there is an underlined link (`chatFilePath()`,
   `MarkdownViews`' `fileAt`), the maintainer's choices.
+- Passed in mynx dev (build 44895957994): the maintainer tried it
+  all ("all works").
 - Limits: highlighting stops past 256 KB, editing past 1 MB; web
   pictures in Markdown aren't fetched; the Open with… dialog has no
   screenshot (dialogs aren't captured); TextHistory's undo has no
