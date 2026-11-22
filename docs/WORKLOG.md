@@ -25,7 +25,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   selection) and HTML files (#95), with Find in PDFs and Replace in the text
   viewers (#96, into #95's branch), and the chat history listing
   every folder's chats (#98), and asking for all of the phone's
-  storage (#99). Every
+  storage (#99), and app and game logos in touch mode with Terminal
+  apps moved into Apps (#100). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -33,10 +34,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
-
-### 0. Test app and game logos, and Terminal apps in Apps (branch `apps-logos`)
-
-Entry 206 says what to check in mynx dev; once it passes, merge.
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -88,7 +85,7 @@ Entry 206 says what to check in mynx dev; once it passes, merge.
 
 ## Log
 
-### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (not yet tested on the phone)
+### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (PR #100; passed)
 
 The maintainer asked for the apps' logos in touch mode's menu, and for
 the Terminal apps folder to move into Apps in both the terminal's
@@ -114,7 +111,7 @@ launcher and touch mode.
 - Tests: `HomeTest`, `menu.bats` (key-number and Apps-list tests
   follow the new order). Docs: the guide, `usb.md`, `apps.md`,
   README, ARCHITECTURE.md, TOUCH-DESIGN.md.
-- To check in mynx dev: touch mode's Apps shows logos (Sketch and
+- Passed in mynx dev (build 44959185452): touch mode's Apps shows logos (Sketch and
   Gadgets as letters; an app with an `icon` shows it); Terminal apps
   is last before "Add to home screen…" and opens; the drawer and
   Home's main list have no Terminal apps; Games shows letter tiles
