@@ -26,6 +26,7 @@ val robolectricDir = layout.buildDirectory.dir("robolectric-jars").get().asFile.
 val robolectricJars = tasks.register<Sync>("robolectricJars") {
     from(robolectricAndroid)
     into(robolectricDir)
+    doLast { destinationDir.listFiles()?.forEach { println("robolectricJars: $it (${it.length()} bytes)") } }
 }
 
 android {
@@ -107,6 +108,8 @@ android {
             val screenshots = project.layout.buildDirectory.dir("screenshots").get().asFile.path
             all { test ->
                 test.systemProperty("mynx.screenshots", screenshots)
+                // Failures with their messages, not just the exception's class.
+                test.testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
                 test.dependsOn(robolectricJars)
                 test.systemProperty("robolectric.offline", "true")
                 test.systemProperty("robolectric.dependency.dir", robolectricDir)
