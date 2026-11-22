@@ -8,11 +8,14 @@ plugins {
 // Robolectric's own download from Maven Central failed from CI (2026-11-22). The
 // versions are Robolectric's own (DefaultSdkProvider; -i7 is 4.14.1's
 // PREINSTRUMENTED_VERSION): change them with Robolectric's.
-val robolectricAndroid = configurations.create("robolectricAndroid") { isTransitive = false }
+// One configuration each: in one, Gradle would keep only the newer version.
+val robolectricAndroids = listOf("14-robolectric-10818077-i7", "15-robolectric-12650502-i7").map { version ->
+    configurations.create("robolectricAndroid$version") { isTransitive = false }.also {
+        dependencies.add(it.name, "org.robolectric:android-all-instrumented:$version")
+    }
+}
 
 dependencies {
-    robolectricAndroid("org.robolectric:android-all-instrumented:14-robolectric-10818077-i7")
-    robolectricAndroid("org.robolectric:android-all-instrumented:15-robolectric-12650502-i7")
     implementation(project(":core"))
     implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
     // USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) over Android's USB host API.
@@ -26,7 +29,7 @@ dependencies {
 
 val robolectricDir = layout.buildDirectory.dir("robolectric-jars").get().asFile.path
 val robolectricJars = tasks.register<Sync>("robolectricJars") {
-    from(robolectricAndroid)
+    from(robolectricAndroids)
     into(robolectricDir)
 }
 

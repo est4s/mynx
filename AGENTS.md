@@ -154,7 +154,7 @@ runner's IP limit and ran out. Without the secrets (forks) they pull
 anonymously.
 
 **Robolectric** runs offline: Gradle fetches the Androids it uses
-(`robolectricAndroid` in `app/build.gradle.kts`: 34 for the tests, 35
+(`robolectricAndroids` in `app/build.gradle.kts`: 34 for the tests, 35
 for the app's resources) from Google's mirror
 of Maven Central (`settings.gradle.kts`), since Maven Central answered
 CI with 429 Too Many Requests (2026-11-22). Upgrading Robolectric
