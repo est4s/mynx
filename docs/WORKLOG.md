@@ -26,7 +26,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   viewers (#96, into #95's branch), and the chat history listing
   every folder's chats (#98), and asking for all of the phone's
   storage (#99), and app and game logos in touch mode with Terminal
-  apps moved into Apps (#100). Every
+  apps moved into Apps (#100), and `mynx install-apk` in every build
+  (#101; release builds get it with the next release). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
