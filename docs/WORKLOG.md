@@ -82,7 +82,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; mostly passed)
+### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; passed)
 
 The maintainer chose to let release builds open Android's installer
 for an APK built in Debian, so agents needn't serve it to the
@@ -111,8 +111,8 @@ browser (Android still asks before every install).
   screen to open the installer" (exit 2). `mynx help` showed
   `install-apk` one column off, as it's longer than the name column:
   the column is two wider now, with a test that every line lines up.
-  Still to try: a chat card for an APK shows Install. Release builds
-  get it with the next release.
+  A chat card for an APK (Bash copying it) shows Install, which opens
+  the installer. Release builds get it with the next release.
 
 ### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (PR #100; passed)
 
