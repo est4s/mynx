@@ -810,8 +810,7 @@ class MainActivity : Activity(), FrontActivity {
             openApp = { name -> startActivity(WebAppActivity.shortcutIntent(this, name)) },
             shareFile = { path -> toastError(service?.shareDebianFile(path)) },
             copyFile = ::copyDebianFile,
-            // As `mynx install-apk`: only debug builds install other apps.
-            installApk = { path: String -> toastError(service?.installDebianApk(path)) }.takeIf { BuildConfig.DEBUG },
+            installApk = { path: String -> toastError(service?.installDebianApk(path)) },
             attach = { source, done -> chatFiles.pick(source, done) },
             dictation = dictation,
             thumbnails = ChatThumbnails(this, { path -> File(hostPath(path, installer.rootfs.path) ?: path) }),

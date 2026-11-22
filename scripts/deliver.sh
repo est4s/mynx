@@ -56,8 +56,8 @@ cp "$tmp"/*/*.apk "$apk"
 echo "Copied to $apk"
 
 [[ $open == 1 ]] || exit 0
-# Only debug builds of the app (mynx dev) answer this; run from the
-# release mynx, it's refused and the file has to be opened by hand.
+# Releases up to 0.4.0 answer this only in debug builds (mynx dev);
+# there, it's refused and the file has to be opened by hand.
 if ! mynx install-apk "$apk"; then
     echo "Open Download/$(basename "$apk") in the Files app to install it."
     exit 1

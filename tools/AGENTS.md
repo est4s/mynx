@@ -139,6 +139,7 @@ their own.
 | `mynx app` | apps in HTML and JavaScript: list, open, reload, log, home screen shortcut, permissions (`/opt/mynx/docs/apps.md`) |
 | `mynx service` | background services: list, add, start, stop, log, open as a tab, autostart, adopt a tab (`/opt/mynx/docs/services.md`) |
 | `mynx usb`, `uf2`, `fix-links` | USB serial ports and raw USB devices, a serial monitor, UF2 flashing (`/opt/mynx/docs/usb.md`) |
+| `mynx install-apk FILE` | open Android's installer for an APK built here; the user taps Install (see "Building an Android app" in `/opt/mynx/docs/apps.md`) |
 | `mynx bt`, `ble` | Bluetooth serial ports, Bluetooth LE devices (`/opt/mynx/docs/bluetooth.md`) |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |

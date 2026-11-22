@@ -265,13 +265,15 @@ A build takes about a minute.
   `versionCode` in the manifest for each update.
 - **The package name** (`package=` in the manifest) must be unique on
   the phone, e.g. `com.NAME.app`.
-- **Installing:** serve the folder with `python3 -m http.server 8765
-  --bind 127.0.0.1` (in the background) and `mynx open
-  http://127.0.0.1:8765/NAME.apk`; the browser downloads it, and
-  **Open** starts Android's installer. mynx must be on screen: when
-  `mynx open` says it isn't, ask the user to come back to it, then
-  run it again. The first time, Android asks to allow the browser to
-  install apps.
+- **Installing:** `mynx install-apk NAME.apk` opens Android's
+  installer; the user taps **Install** (or **Update**). mynx must be
+  on screen: when it says it isn't, ask the user to come back to it,
+  then run it again. The first time, Android asks to allow mynx to
+  install apps: the settings page opens, and once the user allows it,
+  run it again. An older mynx says only debug builds can install
+  apps: there, serve the folder (`python3 -m http.server 8765 --bind
+  127.0.0.1`, in the background), `mynx open
+  http://127.0.0.1:8765/NAME.apk`, and the user opens the download.
 - **No adb or logcat here:** you can't read the app's log or see why
   it crashed. Have it write errors where Debian can read them, e.g. a
   `Thread.setDefaultUncaughtExceptionHandler` that writes to

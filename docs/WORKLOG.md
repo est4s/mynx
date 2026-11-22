@@ -26,7 +26,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   viewers (#96, into #95's branch), and the chat history listing
   every folder's chats (#98), and asking for all of the phone's
   storage (#99), and app and game logos in touch mode with Terminal
-  apps moved into Apps (#100). Every
+  apps moved into Apps (#100), and `mynx install-apk` in every build
+  (#101; release builds get it with the next release). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -57,10 +58,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (the guide's "Making an
-  app"): a `mynx` command that opens the installer for an APK in
-  release builds too (`install-apk` answers only in debug), so agents
-  needn't serve it to the browser; and one that fetches `r8.jar` and
-  `android.jar`.
+  app"): a `mynx` command that fetches `r8.jar` and `android.jar`.
 - The wakelock is a setting; a notification action to toggle it (like
   Termux) could come later if people want it.
 - The interrupted-install check (swipe the app away while unpacking,
@@ -84,6 +82,38 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; passed)
+
+The maintainer chose to let release builds open Android's installer
+for an APK built in Debian, so agents needn't serve it to the
+browser (Android still asks before every install).
+- App: `TerminalService` no longer refuses outside debug builds
+  (`MynxRequests`' `installApk` is `openInstaller`), and a chat card's
+  Install shows in every build. Core was already generic.
+- `mynx install-apk FILE` is in `mynx help` and the guide's command
+  table; `apps.md`'s "Installing" uses it, with the browser way kept
+  for a mynx up to 0.4.0 (which says only debug builds can install).
+- Tests: `test_mynx.py` (in help; a realistic refusal),
+  `home-docs.bats` (the guide lists it). Docs: AGENTS.md, ARCHITECTURE.md,
+  `deliver.sh`'s comment, the manifest and `ApkProvider` comments.
+- CI: Robolectric's own download of its Android jar failed on both
+  runs of this PR (an `IOException` from Maven Central, which
+  answered fine from the phone), failing every screenshot test.
+  Gradle then got 429 Too Many Requests for it too. So
+  `app/build.gradle.kts` has Gradle fetch `android-all-instrumented`
+  from Google's mirror of Maven Central (`settings.gradle.kts`, for
+  that module only) and runs Robolectric offline from it. It needs
+  two: SDK 34 for the tests and 35 (its newest) for the app's
+  resources, each in a configuration of its own (in one, Gradle kept
+  only 15). Test failures now print their messages in CI.
+- In mynx dev (build 45003725619, with F-Droid's APK): on screen the
+  installer opened (exit 0); off screen it said "the app must be on
+  screen to open the installer" (exit 2). `mynx help` showed
+  `install-apk` one column off, as it's longer than the name column:
+  the column is two wider now, with a test that every line lines up.
+  A chat card for an APK (Bash copying it) shows Install, which opens
+  the installer. Release builds get it with the next release.
 
 ### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (PR #100; passed)
 

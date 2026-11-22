@@ -411,7 +411,7 @@ class TerminalService : Service() {
     private val requests: MynxRequests by lazy {
         MynxRequests(
             requestDir, File(rootfs, "root"),
-            notify = ::showNotice, openUrl = ::openLink, installApk = ::installApk,
+            notify = ::showNotice, openUrl = ::openLink, installApk = ::openInstaller,
             vibrate = vibrations::oneShot, setClipboard = ::setClipboard, readClipboard = ::readClipboard,
             share = ::share, torch = camera::torch, storage = storage, startSound = sound::start,
             rotation = rotation, rotationChanged = ::setRotation,
@@ -1536,10 +1536,10 @@ class TerminalService : Service() {
         return runCatching { file.readText() }
     }
 
-    /** A chat card's Install (debug builds only, as `mynx install-apk`); null when the installer opened. */
+    /** A chat card's Install (as `mynx install-apk`); null when the installer opened. */
     fun installDebianApk(guest: String): String? {
         val file = webAppFiles.host(guest)?.takeIf { it.isFile } ?: return "$guest isn't there any more"
-        return installApk(file)
+        return openInstaller(file)
     }
 
     private companion object {
@@ -1549,13 +1549,8 @@ class TerminalService : Service() {
         const val RUN_OUTPUT_MAX = 16 * 1024
     }
 
-    // Answers `mynx install-apk`: null when the installer opened, else why not.
-    private fun installApk(apk: File): String? {
-        if (!BuildConfig.DEBUG) return "only debug builds of the app can install apps"
-        return openInstaller(apk)
-    }
-
-    // Opens Android's installer for an APK (an update, or a CI build): null if it did, else why not.
+    // Opens Android's installer for an APK (an update, or one from `mynx install-apk`):
+    // null if it did, else why not.
     private fun openInstaller(apk: File): String? {
         val shown = activity?.takeIf { it.onScreen }
             ?: return "the app must be on screen to open the installer"

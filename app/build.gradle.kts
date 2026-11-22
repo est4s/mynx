@@ -2,6 +2,19 @@ plugins {
     id("com.android.application")
 }
 
+// The Androids Robolectric runs the tests on (SDK 34, as their @Config) and loads
+// the app's resources with (its newest, 35, as compileSdk is past it), fetched by
+// Gradle (from a mirror, see settings.gradle.kts), which retries and caches them:
+// Robolectric's own download from Maven Central failed from CI (2026-11-22). The
+// versions are Robolectric's own (DefaultSdkProvider; -i7 is 4.14.1's
+// PREINSTRUMENTED_VERSION): change them with Robolectric's.
+// One configuration each: in one, Gradle would keep only the newer version.
+val robolectricAndroids = listOf("14-robolectric-10818077-i7", "15-robolectric-12650502-i7").map { version ->
+    configurations.create("robolectricAndroid$version") { isTransitive = false }.also {
+        dependencies.add(it.name, "org.robolectric:android-all-instrumented:$version")
+    }
+}
+
 dependencies {
     implementation(project(":core"))
     implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
@@ -12,6 +25,12 @@ dependencies {
     // Robolectric's native graphics: for looking at, not compared.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
+}
+
+val robolectricDir = layout.buildDirectory.dir("robolectric-jars").get().asFile.path
+val robolectricJars = tasks.register<Sync>("robolectricJars") {
+    from(robolectricAndroids)
+    into(robolectricDir)
 }
 
 android {
@@ -93,6 +112,11 @@ android {
             val screenshots = project.layout.buildDirectory.dir("screenshots").get().asFile.path
             all { test ->
                 test.systemProperty("mynx.screenshots", screenshots)
+                // Failures with their messages, not just the exception's class.
+                test.testLogging.exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                test.dependsOn(robolectricJars)
+                test.systemProperty("robolectric.offline", "true")
+                test.systemProperty("robolectric.dependency.dir", robolectricDir)
                 // Robolectric loads a whole Android into the test JVM.
                 test.maxHeapSize = "2g"
             }
