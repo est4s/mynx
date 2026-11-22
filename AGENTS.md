@@ -153,6 +153,11 @@ and `DOCKERHUB_TOKEN` secrets (a read-only token the maintainer made,
 runner's IP limit and ran out. Without the secrets (forks) they pull
 anonymously.
 
+**Robolectric** runs offline: Gradle fetches the Android it runs on
+(`robolectricAndroid` in `app/build.gradle.kts`, since its own
+download failed from CI, 2026-11-22). Upgrading Robolectric means
+changing that version too.
+
 **Dependencies:** prefer few, well-maintained ones. Plain Android views, no
 Jetpack Compose (smaller APK, faster CI, and the terminal library is
 View-based).

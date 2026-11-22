@@ -2,7 +2,14 @@ plugins {
     id("com.android.application")
 }
 
+// The Android Robolectric runs the tests on (SDK 34, as their @Config), fetched by
+// Gradle, which retries and caches it: Robolectric's own download failed from
+// CI on every run (2026-11-22). Its version is Robolectric's own for SDK 34
+// (-i7 is 4.14.1's PREINSTRUMENTED_VERSION): change it with Robolectric's.
+val robolectricAndroid by configurations.creating { isTransitive = false }
+
 dependencies {
+    robolectricAndroid("org.robolectric:android-all-instrumented:14-robolectric-10818077-i7")
     implementation(project(":core"))
     implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
     // USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) over Android's USB host API.
@@ -12,6 +19,12 @@ dependencies {
     // Robolectric's native graphics: for looking at, not compared.
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")
+}
+
+val robolectricDir = layout.buildDirectory.dir("robolectric-jars").get().asFile.path
+val robolectricJars = tasks.register<Sync>("robolectricJars") {
+    from(robolectricAndroid)
+    into(robolectricDir)
 }
 
 android {
@@ -93,6 +106,9 @@ android {
             val screenshots = project.layout.buildDirectory.dir("screenshots").get().asFile.path
             all { test ->
                 test.systemProperty("mynx.screenshots", screenshots)
+                test.dependsOn(robolectricJars)
+                test.systemProperty("robolectric.offline", "true")
+                test.systemProperty("robolectric.dependency.dir", robolectricDir)
                 // Robolectric loads a whole Android into the test JVM.
                 test.maxHeapSize = "2g"
             }

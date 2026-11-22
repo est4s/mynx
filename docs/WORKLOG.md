@@ -96,6 +96,12 @@ browser (Android still asks before every install).
 - Tests: `test_mynx.py` (in help; a realistic refusal),
   `home-docs.bats` (the guide lists it). Docs: AGENTS.md, ARCHITECTURE.md,
   `deliver.sh`'s comment, the manifest and `ApkProvider` comments.
+- CI: Robolectric's own download of its Android jar failed on both
+  runs of this PR (an `IOException` from Maven Central, which
+  answered fine from the phone), failing every screenshot test.
+  `app/build.gradle.kts` now has Gradle fetch
+  `android-all-instrumented` (retried, cached by `setup-gradle`) and
+  runs Robolectric offline from it.
 - To test in mynx dev: build a small APK in Debian (or take any APK),
   `mynx install-apk FILE` opens the installer; with mynx off screen it
   says so; a chat card for an APK shows Install. Release builds get it
