@@ -50,6 +50,7 @@ Commands:
   bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
   ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
   uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
+  install-apk install-apk FILE: open Android's installer for an APK (an app built here)
   fix-links  fix-links DIR...: repair what moving a folder did to its hard links
   app        app [list] | open|reload|shortcut NAME | log NAME [-n N]
              | permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]: apps (HTML and JavaScript)
@@ -1464,8 +1465,7 @@ def apt_install(packages, yes, question):
     return True
 
 
-# Not in HELP: for installing builds of the app while developing it. Only
-# debug builds of the app answer it.
+# The app answers it in every build after 0.4.0 (up to it, debug builds only).
 def cmd_install_apk(args, as_json):
     if len(args) != 1:
         raise Usage("usage: mynx install-apk FILE")

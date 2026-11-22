@@ -862,8 +862,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   its card), are checked on disk off the main thread with Home's rules
   (`WebApps`, `terminalAppLabel`); one `ChatItem.Artifact` per app per
   turn, changed in place; history gets them too (written files only).
-  Run and Add to home screen are `menu --act` tabs; Install only in
-  debug builds, as `mynx install-apk`.
+  Run and Add to home screen are `menu --act` tabs; Install is
+  `mynx install-apk`'s request.
 - **Launcher shortcut** (long-press the icon → Settings):
   `res/xml/shortcuts.xml` sends `io.github.est4s.terminal.SETTINGS`
   to `MainActivity`, which opens a new tab with core's

@@ -1521,7 +1521,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertEqual(run.returncode, 2)
             self.assertIn("usage: mynx update [--check] [--yes]", run.stderr)
 
-    # --- install-apk (debug builds) ------------------------------------------
+    # --- install-apk ---------------------------------------------------------
 
     def test_install_apk_sends_the_full_path(self):
         self.start_app({"install-apk": {"ok": True}})
@@ -3232,17 +3232,17 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertIn("usage: mynx share FILE... | --text [TEXT]", run.stderr)
 
     def test_install_apk_says_why_it_failed(self):
-        self.start_app({"install-apk": {"ok": False, "error": "only debug builds can install apps"}})
+        self.start_app({"install-apk": {"ok": False, "error": "the app must be on screen to open the installer"}})
         run = self.mynx("install-apk", "/tmp/app.apk")
         self.assertEqual(run.returncode, 2)
-        self.assertIn("only debug builds can install apps", run.stderr)
+        self.assertIn("the app must be on screen to open the installer", run.stderr)
 
     def test_install_apk_needs_one_file(self):
         self.assertIn("usage: mynx install-apk FILE", self.mynx("install-apk").stderr)
 
-    def test_install_apk_is_left_out_of_help(self):
-        # A tool for developing the app, not for users.
-        self.assertNotIn("install-apk", self.mynx("help").stdout)
+    def test_install_apk_is_in_help(self):
+        # For apps built in Debian, in every build of the app.
+        self.assertIn("  install-apk install-apk FILE: open Android's installer for an APK", self.mynx("help").stdout)
 
 
 if __name__ == "__main__":

@@ -87,19 +87,20 @@ Consequences:
    with `mynx install-apk`. The maintainer just taps **Install**. The
    build installs as **mynx dev**, a separate app (see "Naming"): run
    from mynx dev, the app restarts as the new build. Run from the
-   release mynx (where the maintainer develops), the installer can't
-   open: the script says to open the file in the Files app, and mynx
-   dev installs or updates beside it.
+   release mynx (where the maintainer develops), mynx dev installs or
+   updates beside it; a release up to 0.4.0 can't open the installer,
+   so the script says to open the file in the Files app.
 
 Notes on why the script does what it does:
-- `mynx install-apk FILE` (left out of `mynx help` and the user guide)
-  asks the app to open the installer, through `ApkProvider`, which
-  serves just that one file to it. Only **debug builds** answer it
-  (`BuildConfig.DEBUG`); release builds use the same installer path for
-  `mynx update` (see "Updates" in `docs/ARCHITECTURE.md`), so
-  `REQUEST_INSTALL_PACKAGES` and `ApkProvider` are in the main manifest
-  (maintainer's decision, 2026-10-08). Play restricts that permission: a
-  Play build would need a variant without them.
+- `mynx install-apk FILE` asks the app to open the installer, through
+  `ApkProvider`, which serves just that one file to it. It's also how
+  users' agents install apps they build in Debian (the guide's
+  "Building an Android app"), so every build answers it (maintainer's
+  decision, 2026-11-22; up to 0.4.0 only debug builds did): Android
+  still asks the user before each install. `mynx update` uses the same
+  path, and `REQUEST_INSTALL_PACKAGES` and `ApkProvider` are in the
+  main manifest (maintainer's decision, 2026-10-08). Play restricts
+  that permission: a Play build would need a variant without them.
 - A new file name for each run: Android won't let the app overwrite a
   file in Download that another app made (the old debug-signed mynx
   left `mynx-build.apk`). The script deletes its own older builds.

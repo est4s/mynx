@@ -44,7 +44,7 @@
         tools:targetApi="31" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- mynx update opens Android's installer for the APK it downloaded from GitHub
-         (and debug builds' mynx install-apk for a CI build). -->
+         and mynx install-apk for an APK built in Debian (or a CI build). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- The camera, microphone and Bluetooth permissions would otherwise hide the app from phones without one. -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

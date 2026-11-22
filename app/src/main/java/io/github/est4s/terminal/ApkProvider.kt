@@ -12,8 +12,8 @@ import java.io.FileNotFoundException
 
 /**
  * Hands Android's installer the one APK being installed: an update
- * `mynx update` downloaded, or (debug builds) a CI build from
- * `mynx install-apk`.
+ * `mynx update` downloaded, or an APK from `mynx install-apk` (an app
+ * built in Debian, a CI build of mynx dev).
  */
 class ApkProvider : ContentProvider() {
     companion object {

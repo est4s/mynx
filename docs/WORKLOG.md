@@ -57,10 +57,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
 - **Maybe, for Android apps built in Debian** (the guide's "Making an
-  app"): a `mynx` command that opens the installer for an APK in
-  release builds too (`install-apk` answers only in debug), so agents
-  needn't serve it to the browser; and one that fetches `r8.jar` and
-  `android.jar`.
+  app"): a `mynx` command that fetches `r8.jar` and `android.jar`.
 - The wakelock is a setting; a notification action to toggle it (like
   Termux) could come later if people want it.
 - The interrupted-install check (swipe the app away while unpacking,
@@ -84,6 +81,25 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-22 (207): `mynx install-apk` in every build (PR pending; to test)
+
+The maintainer chose to let release builds open Android's installer
+for an APK built in Debian, so agents needn't serve it to the
+browser (Android still asks before every install).
+- App: `TerminalService` no longer refuses outside debug builds
+  (`MynxRequests`' `installApk` is `openInstaller`), and a chat card's
+  Install shows in every build. Core was already generic.
+- `mynx install-apk FILE` is in `mynx help` and the guide's command
+  table; `apps.md`'s "Installing" uses it, with the browser way kept
+  for a mynx up to 0.4.0 (which says only debug builds can install).
+- Tests: `test_mynx.py` (in help; a realistic refusal),
+  `home-docs.bats` (the guide lists it). Docs: AGENTS.md, ARCHITECTURE.md,
+  `deliver.sh`'s comment, the manifest and `ApkProvider` comments.
+- To test in mynx dev: build a small APK in Debian (or take any APK),
+  `mynx install-apk FILE` opens the installer; with mynx off screen it
+  says so; a chat card for an APK shows Install. Release builds get it
+  with the next release.
 
 ### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (PR #100; passed)
 
