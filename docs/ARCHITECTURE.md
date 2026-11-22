@@ -343,6 +343,16 @@ See `docs/ROADMAP.md` "How it works". The details:
   status after the last block is success: the board restarts first.
   Tested natively against a fake drive (`tests/mynx/test_uf2.py`);
   the usbfs ioctls only on the phone.
+- **Android SDK** (`tools/lib/mynx/androidsdk.py`, `mynx android-sdk`;
+  maintainer's decision, 2026-11-22): the guide's Android apps build
+  with Debian's `aapt`, `zipalign`, `apksigner` and JDK (apt, shown and
+  asked first) plus two of Google's files, `r8.jar` and Android 14's
+  `android.jar` (taken out of the platform zip), downloaded into
+  `~/androidsdk` where `build.sh` looks. Their URLs, sizes and SHA-256
+  are pinned in `FILES`; a download is checked before it's moved into
+  place, so a failed or wrong one leaves nothing. Only what's missing
+  is installed. Tested against a local HTTP server
+  (`tests/mynx/test_androidsdk.py`).
 - **Bluetooth serial** (`core/.../Bluetooth.kt`, `app/.../BtBridge.kt`,
   `BtLine.kt`, `ServedPort.kt`; maintainer's
   decisions, 2026-10-26, entry 147: Classic SPP, Linux's `rfcomm

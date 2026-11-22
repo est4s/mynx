@@ -210,9 +210,7 @@ setup() {
 
 @test "the guide says to ask which kind of app, and how to build an Android one" {
     for text in "## Making an app" "ask which kind" "~/apps" "~/terminal-apps" "**An app** in HTML" \
-        "apt install aapt zipalign apksigner openjdk-21-jdk-headless" \
-        "https://dl.google.com/android/maven2/com/android/tools/r8/" \
-        "https://dl.google.com/android/repository/platform-34-" \
+        "mynx android-sdk install" "~/androidsdk/android-34/android.jar" "~/androidsdk/r8.jar" \
         "com.android.tools.r8.D8" "apksigner sign" "versionCode" \
         "mynx open" "cleartextTrafficPermitted" "updatePeriodMillis"; do
         grep -qF "$text" "$GUIDE" || { echo "not in the guide: $text"; false; }

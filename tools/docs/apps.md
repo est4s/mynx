@@ -231,16 +231,12 @@ for await (const r of mynx.sensor.stream('compass', { rate: 10 })) {
 
 ## Building an Android app
 
-The tools, once (about 110 MB; `r8.jar` gives `d8`, `android.jar` is
-Android 14's API):
-
-```
-apt install aapt zipalign apksigner openjdk-21-jdk-headless unzip
-mkdir -p ~/androidsdk && cd ~/androidsdk
-curl -fLo r8.jar https://dl.google.com/android/maven2/com/android/tools/r8/8.13.25/r8-8.13.25.jar
-curl -fLo platform.zip https://dl.google.com/android/repository/platform-34-ext7_r03.zip
-unzip -j platform.zip android-34/android.jar -d android-34 && rm platform.zip
-```
+The tools, once: `mynx android-sdk install` (it asks first; run it in
+a tab the user sees, or with `--yes` once they agree). It installs
+Debian's `aapt`, `zipalign`, `apksigner` and JDK, and downloads about
+80 MB from Google, checked against pinned checksums: `r8.jar` (which
+has `d8`) and Android 14's API, `android.jar`, into `~/androidsdk`.
+`mynx android-sdk` says what's there.
 
 A project is `AndroidManifest.xml`, `res/` and `src/`, with a
 `build.sh` that runs, with `JAR=~/androidsdk/android-34/android.jar`:

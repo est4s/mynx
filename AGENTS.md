@@ -201,7 +201,7 @@ colours, settings, the app's tools, title art and icon, volume keys,
 who checks what, `mynx` ↔ app, requests answered later and streams,
 location, sensors, camera and flashlight, sound files, sound device,
 USB serial bridge, serial preload, serial port names, proot's
-mynx_serial and mynx_links extensions, raw USB, UF2, Bluetooth serial,
+mynx_serial and mynx_links extensions, raw USB, UF2, Android SDK, Bluetooth serial,
 Bluetooth LE, BLE UART ports, rotation lock, vibration, sharing,
 updates, release notes, time zone, wakelock, background services, web
 apps (part 1, and part 2: the bridge), touch mode's Home, touch

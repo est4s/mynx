@@ -1521,6 +1521,96 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
             self.assertEqual(run.returncode, 2)
             self.assertIn("usage: mynx update [--check] [--yes]", run.stderr)
 
+    # --- android-sdk ---------------------------------------------------------
+
+    def android_sdk(self, *args, tools=(), stdin="", apt="echo ran apt-get $*"):
+        """mynx android-sdk with only [tools] of the build's commands on the PATH."""
+        path = self.fake_commands(**{"apt-get": apt}, **{tool: "true" for tool in tools})
+        bin_dir = path.split(":")[0]
+        return self.mynx("android-sdk", *args, input=stdin, env={"PATH": bin_dir + ":" + self.python_dir()})
+
+    def python_dir(self):
+        # Only python3, so the machine's own aapt or javac can't count.
+        folder = os.path.join(self.tmp.name, "python")
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+            os.symlink(shutil.which("python3"), os.path.join(folder, "python3"))
+            os.symlink(shutil.which("sh"), os.path.join(folder, "sh"))
+            os.symlink(shutil.which("bash"), os.path.join(folder, "bash"))
+        return folder
+
+    def sdk_files(self):
+        for path in ("androidsdk/r8.jar", "androidsdk/android-34/android.jar"):
+            self.write(os.path.join(self.home, path), "jar")
+
+    def test_android_sdk_status_says_what_is_missing(self):
+        run = self.android_sdk(tools=["javac"])
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines(), [
+            f"Android SDK: not set up (mynx android-sdk install sets it up)",
+            "  aapt         not installed",
+            "  zipalign     not installed",
+            "  apksigner    not installed",
+            "  javac        installed",
+            "  r8.jar       not downloaded",
+            "  android.jar  not downloaded",
+        ])
+
+    def test_android_sdk_status_when_ready(self):
+        self.sdk_files()
+        run = self.android_sdk(tools=["aapt", "zipalign", "apksigner", "javac"])
+        lines = run.stdout.splitlines()
+        self.assertEqual(lines[0], "Android SDK: ready")
+        self.assertIn(f"  android.jar  {self.home}/androidsdk/android-34/android.jar", lines)
+
+    def test_android_sdk_status_as_json(self):
+        run = self.android_sdk("status", "--json", tools=["javac"])
+        answer = json.loads(run.stdout)
+        self.assertEqual(answer["ok"], True)
+        self.assertEqual(answer["ready"], False)
+        self.assertEqual(answer["folder"], os.path.join(self.home, "androidsdk"))
+        self.assertEqual(answer["tools"]["javac"], True)
+        self.assertEqual(answer["files"], {"r8.jar": None, "android.jar": None})
+
+    def test_android_sdk_install_shows_what_it_does_and_asks_first(self):
+        run = self.android_sdk("install", stdin="n\n", tools=["javac"])
+        before, after = run.stdout.split("Set it up?")
+        self.assertIn("  apt-get update\n  apt-get install -y aapt zipalign apksigner\n", before)
+        self.assertIn("r8.jar (17.4 MB) from https://dl.google.com/android/maven2/", before)
+        self.assertIn("android.jar from https://dl.google.com/android/repository/platform-34-ext7_r03.zip "
+                      "(60.3 MB)", before)
+        self.assertNotIn("ran apt-get", run.stdout)
+        self.assertIn("Nothing was changed.", after)
+        self.assertEqual(run.returncode, 1)
+        self.assertFalse(os.path.exists(os.path.join(self.home, "androidsdk")))
+
+    def test_android_sdk_install_only_downloads_when_the_tools_are_there(self):
+        self.write(os.path.join(self.home, "androidsdk/r8.jar"), "jar")
+        run = self.android_sdk("install", stdin="n\n", tools=["aapt", "zipalign", "apksigner", "javac"])
+        self.assertNotIn("apt-get", run.stdout)
+        self.assertNotIn("r8.jar (", run.stdout)
+        self.assertIn("android.jar from", run.stdout)
+
+    def test_android_sdk_install_when_ready_changes_nothing(self):
+        self.sdk_files()
+        run = self.android_sdk("install", tools=["aapt", "zipalign", "apksigner", "javac"])
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout.splitlines()[0], "Android SDK: ready")
+        self.assertNotIn("apt-get", run.stdout)
+
+    def test_android_sdk_install_stops_when_apt_fails(self):
+        self.sdk_files()
+        run = self.android_sdk("install", "--yes", tools=["javac"], apt="exit 100")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("'apt-get update' failed (exit 100)", run.stderr)
+
+    def test_android_sdk_usage(self):
+        for args in (["install", "--now"], ["frobnicate"], ["install", "--json"]):
+            run = self.android_sdk(*args)
+            self.assertEqual(run.returncode, 2, args)
+            # With --json, the error is the JSON answer on stdout.
+            self.assertIn("usage: mynx android-sdk [status] | install [--yes]", run.stderr + run.stdout)
+
     # --- install-apk ---------------------------------------------------------
 
     def test_install_apk_sends_the_full_path(self):

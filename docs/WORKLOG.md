@@ -57,8 +57,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ### 3. Smaller things
 
 - **Maybe:** `CONTRIBUTING.md`, `SECURITY.md`.
-- **Maybe, for Android apps built in Debian** (the guide's "Making an
-  app"): a `mynx` command that fetches `r8.jar` and `android.jar`.
 - The wakelock is a setting; a notification action to toggle it (like
   Termux) could come later if people want it.
 - The interrupted-install check (swipe the app away while unpacking,
@@ -82,6 +80,39 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-22 (208): `mynx android-sdk` (PR pending; to test)
+
+The maintainer asked for the other half of the Android-apps item: a
+command that sets up what building an Android app in Debian needs,
+instead of the guide's five lines of apt, curl and unzip.
+- `mynx android-sdk [status] | install [--yes]`
+  (`tools/lib/mynx/androidsdk.py`, the command in `cli.py`): status
+  lists the build commands (aapt, zipalign, apksigner, javac) and the
+  two files; install shows the apt commands for the missing packages
+  and the downloads, asks once, then installs and downloads only
+  what's missing. `r8.jar` 8.13.25 and `android.jar` (taken out of
+  `platform-34-ext7_r03.zip`, the zip isn't kept) go into
+  `~/androidsdk`, where the guide's `build.sh` looks. URLs, sizes and
+  SHA-256 are pinned; a download is checked before it's moved into
+  place, so a failed or wrong one leaves nothing. Python's zipfile
+  does the unzip, so `unzip` isn't needed any more.
+- `apt_install` is split into `apt_steps` and `run_steps`, so the
+  command asks once for packages and downloads together.
+- Tests: `test_androidsdk.py` (downloads from a local HTTP server:
+  checked, from a zip, a mismatch or failure leaves nothing,
+  progress, status, the pins), `test_mynx.py` (status, JSON, the plan
+  and asking, only what's missing, apt failing, usage),
+  `home-docs.bats` (the guide gives the command, not the old lines).
+  Docs: the guide's table, `apps.md`'s "Building an Android app",
+  ARCHITECTURE.md's new entry.
+- Checked here: status read the maintainer's existing setup as ready,
+  and a real install into an empty scratch home downloaded both files
+  (`android.jar` the same as the one in use).
+- To test in mynx dev: `mynx android-sdk` (status), then
+  `mynx android-sdk install` in a Debian without the tools: it shows
+  the apt commands and downloads, asks, installs, then says ready;
+  running it again changes nothing.
 
 ### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; passed)
 
