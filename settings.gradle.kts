@@ -9,6 +9,12 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        // Robolectric's Android (150 MB) from Google's mirror of Maven Central:
+        // Maven Central answered CI's runners with 429 Too Many Requests (2026-11-22).
+        exclusiveContent {
+            forRepository { maven("https://maven-central.storage-download.googleapis.com/maven2") }
+            filter { includeModule("org.robolectric", "android-all-instrumented") }
+        }
         google()
         mavenCentral()
         // Termux's terminal libraries and usb-serial-for-android are only published on JitPack.

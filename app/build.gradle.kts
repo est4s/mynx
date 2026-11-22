@@ -3,10 +3,11 @@ plugins {
 }
 
 // The Android Robolectric runs the tests on (SDK 34, as their @Config), fetched by
-// Gradle, which retries and caches it: Robolectric's own download failed from
-// CI on every run (2026-11-22). Its version is Robolectric's own for SDK 34
-// (-i7 is 4.14.1's PREINSTRUMENTED_VERSION): change it with Robolectric's.
-val robolectricAndroid by configurations.creating { isTransitive = false }
+// Gradle (from a mirror, see settings.gradle.kts), which retries and caches it:
+// Robolectric's own download from Maven Central failed from CI (2026-11-22). Its
+// version is Robolectric's own for SDK 34 (-i7 is 4.14.1's
+// PREINSTRUMENTED_VERSION): change it with Robolectric's.
+val robolectricAndroid = configurations.create("robolectricAndroid") { isTransitive = false }
 
 dependencies {
     robolectricAndroid("org.robolectric:android-all-instrumented:14-robolectric-10818077-i7")

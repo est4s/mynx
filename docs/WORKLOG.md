@@ -99,9 +99,10 @@ browser (Android still asks before every install).
 - CI: Robolectric's own download of its Android jar failed on both
   runs of this PR (an `IOException` from Maven Central, which
   answered fine from the phone), failing every screenshot test.
-  `app/build.gradle.kts` now has Gradle fetch
-  `android-all-instrumented` (retried, cached by `setup-gradle`) and
-  runs Robolectric offline from it.
+  Gradle then got 429 Too Many Requests for it too. So
+  `app/build.gradle.kts` has Gradle fetch `android-all-instrumented`
+  from Google's mirror of Maven Central (`settings.gradle.kts`, for
+  that module only) and runs Robolectric offline from it.
 - To test in mynx dev: build a small APK in Debian (or take any APK),
   `mynx install-apk FILE` opens the installer; with mynx off screen it
   says so; a chat card for an APK shows Install. Release builds get it
