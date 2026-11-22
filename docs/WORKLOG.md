@@ -82,7 +82,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-22 (207): `mynx install-apk` in every build (PR pending; to test)
+### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; mostly passed)
 
 The maintainer chose to let release builds open Android's installer
 for an APK built in Debian, so agents needn't serve it to the
@@ -106,10 +106,13 @@ browser (Android still asks before every install).
   two: SDK 34 for the tests and 35 (its newest) for the app's
   resources, each in a configuration of its own (in one, Gradle kept
   only 15). Test failures now print their messages in CI.
-- To test in mynx dev: build a small APK in Debian (or take any APK),
-  `mynx install-apk FILE` opens the installer; with mynx off screen it
-  says so; a chat card for an APK shows Install. Release builds get it
-  with the next release.
+- In mynx dev (build 45003725619, with F-Droid's APK): on screen the
+  installer opened (exit 0); off screen it said "the app must be on
+  screen to open the installer" (exit 2). `mynx help` showed
+  `install-apk` one column off, as it's longer than the name column:
+  the column is two wider now, with a test that every line lines up.
+  Still to try: a chat card for an APK shows Install. Release builds
+  get it with the next release.
 
 ### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (PR #100; passed)
 
