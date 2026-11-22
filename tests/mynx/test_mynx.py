@@ -183,7 +183,7 @@ class MynxTest(unittest.TestCase):
             self.assertIn("--json", run.stdout)
 
     def test_help_lists_bluetooth(self):
-        self.assertIn("\n  bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings", self.mynx("help").stdout)
+        self.assertIn("\n  bt           bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings", self.mynx("help").stdout)
 
     def test_unknown_command_fails_with_help(self):
         run = self.mynx("frobnicate")
@@ -2739,7 +2739,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
 
     def test_help_lists_app(self):
         help = self.mynx("help").stdout
-        self.assertIn("\n  app        app [list] | open|reload|shortcut NAME | log NAME [-n N]", help)
+        self.assertIn("\n  app          app [list] | open|reload|shortcut NAME | log NAME [-n N]", help)
         self.assertIn("permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]", help)
 
     PERMISSIONS = [
@@ -3242,7 +3242,13 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
 
     def test_install_apk_is_in_help(self):
         # For apps built in Debian, in every build of the app.
-        self.assertIn("  install-apk install-apk FILE: open Android's installer for an APK", self.mynx("help").stdout)
+        self.assertIn("  install-apk  install-apk FILE: open Android's installer for an APK", self.mynx("help").stdout)
+
+    def test_help_lines_up_every_command(self):
+        lines = self.mynx("help").stdout.split("Commands:\n")[1].split("\n\n")[0].splitlines()
+        starts = {len(line) - len(line.lstrip()) if line.lstrip().startswith("|")
+                  else len(line) - len(line[2:].split(" ", 1)[1].lstrip()) for line in lines}
+        self.assertEqual(len(starts), 1, lines)
 
 
 if __name__ == "__main__":

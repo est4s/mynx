@@ -21,49 +21,49 @@ HELP = """\
 usage: mynx COMMAND [ARGS] [--json]
 
 Commands:
-  check      apply config changes now and list problems in them
-  settings   list the settings: font size, font, cursor
-  get        get KEY: one setting's value
-  set        set KEY VALUE: change a setting (applies at once)
-  reset      reset KEY|all: settings back to their defaults
-  theme      theme [list] | show NAME | set NAME | reset: colour themes
-  keybar     keybar [list] | show NAME | edit NAME | reset NAME
-  menu       menu [show] | edit | reset: the launcher menu's items
-  undo       undo [--list]: take back the last config change
-  edit       edit [settings|theme|keybars|menu]: the settings editors
-  notify     notify [--if-away] TITLE [TEXT]: a phone notification
-  agent      agent [list] | install [NAME] | notify NAME on|off: AI agents
-  open       open URL | FILE [--with mynx|android] [--edit]: a link in the browser, a file in its viewer
-  vibrate    vibrate [MS] [--strength PCT] | effect NAME | wave STEP... [--repeat] | chain PRIM... | list | stop
-  clipboard  clipboard get | set [TEXT]: the phone's clipboard
-  share      share FILE... | --text [TEXT]: send to another app
-  location   location [--gps] [--stream]: where the phone is
-  sensor     sensor list | NAME [--stream]: the phone's sensors
-  battery    battery [--stream [--every SECONDS]]: charge, health, power
-  camera     camera FILE [--quick front|back]: take a photo
-  torch      torch on [PERCENT] | off: the flashlight
-  rotation   rotation [status] | lock [portrait|landscape] | unlock
-  storage    storage [status] | allow: let Debian see all of the phone's storage
-  audio      audio play FILE | record FILE [--seconds N]: sound
-  sound      sound [status] | start | install: the sound device
-  usb        usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
-  bt         bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
-  ble        ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
-  uf2        uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
-  install-apk install-apk FILE: open Android's installer for an APK (an app built here)
-  fix-links  fix-links DIR...: repair what moving a folder did to its hard links
-  app        app [list] | open|reload|shortcut NAME | log NAME [-n N]
-             | permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]: apps (HTML and JavaScript)
-  service    service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
-  hook       hook claude|codex|gemini: run by an agent's hooks to notify you
-  welcome    the welcome page: what's here and how to get around
-  notes      notes [all] | new | seen: release notes, and what's new since the last update
-  update     update [--check] [--yes]: update the app to its latest release
-  report     report [TEXT]: report a bug (shows it, asks, then sends it with gh or opens GitHub)
-  github     github [status] [--yes]: install git and gh, sign in to GitHub, set git's name
-  about      version, credits and licences
-  version    the app tools' version
-  help       this list
+  check        apply config changes now and list problems in them
+  settings     list the settings: font size, font, cursor
+  get          get KEY: one setting's value
+  set          set KEY VALUE: change a setting (applies at once)
+  reset        reset KEY|all: settings back to their defaults
+  theme        theme [list] | show NAME | set NAME | reset: colour themes
+  keybar       keybar [list] | show NAME | edit NAME | reset NAME
+  menu         menu [show] | edit | reset: the launcher menu's items
+  undo         undo [--list]: take back the last config change
+  edit         edit [settings|theme|keybars|menu]: the settings editors
+  notify       notify [--if-away] TITLE [TEXT]: a phone notification
+  agent        agent [list] | install [NAME] | notify NAME on|off: AI agents
+  open         open URL | FILE [--with mynx|android] [--edit]: a link in the browser, a file in its viewer
+  vibrate      vibrate [MS] [--strength PCT] | effect NAME | wave STEP... [--repeat] | chain PRIM... | list | stop
+  clipboard    clipboard get | set [TEXT]: the phone's clipboard
+  share        share FILE... | --text [TEXT]: send to another app
+  location     location [--gps] [--stream]: where the phone is
+  sensor       sensor list | NAME [--stream]: the phone's sensors
+  battery      battery [--stream [--every SECONDS]]: charge, health, power
+  camera       camera FILE [--quick front|back]: take a photo
+  torch        torch on [PERCENT] | off: the flashlight
+  rotation     rotation [status] | lock [portrait|landscape] | unlock
+  storage      storage [status] | allow: let Debian see all of the phone's storage
+  audio        audio play FILE | record FILE [--seconds N]: sound
+  sound        sound [status] | start | install: the sound device
+  usb          usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
+  bt           bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
+  ble          ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
+  uf2          uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
+  install-apk  install-apk FILE: open Android's installer for an APK (an app built here)
+  fix-links    fix-links DIR...: repair what moving a folder did to its hard links
+  app          app [list] | open|reload|shortcut NAME | log NAME [-n N]
+               | permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]: apps (HTML and JavaScript)
+  service      service [list] | start|stop|restart|log|open|remove NAME | add NAME -- COMMAND | autostart NAME on|off | adopt|save NAME: background services
+  hook         hook claude|codex|gemini: run by an agent's hooks to notify you
+  welcome      the welcome page: what's here and how to get around
+  notes        notes [all] | new | seen: release notes, and what's new since the last update
+  update       update [--check] [--yes]: update the app to its latest release
+  report       report [TEXT]: report a bug (shows it, asks, then sends it with gh or opens GitHub)
+  github       github [status] [--yes]: install git and gh, sign in to GitHub, set git's name
+  about        version, credits and licences
+  version      the app tools' version
+  help         this list
 
 --json prints the answer as JSON: {"ok": true, ...} or
 {"ok": false, "error": "..."}. Exit codes: 0 fine, 1 problems found,
