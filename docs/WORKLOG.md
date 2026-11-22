@@ -25,7 +25,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   selection) and HTML files (#95), with Find in PDFs and Replace in the text
   viewers (#96, into #95's branch), and the chat history listing
   every folder's chats (#98), and asking for all of the phone's
-  storage (#99). Every
+  storage (#99), and app and game logos in touch mode with Terminal
+  apps moved into Apps (#100). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -83,6 +84,39 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-22 (206): App and game logos in touch mode; Terminal apps moves into Apps (PR #100; passed)
+
+The maintainer asked for the apps' logos in touch mode's menu, and for
+the Terminal apps folder to move into Apps in both the terminal's
+launcher and touch mode.
+- Logos: `HomeItem.logo` (`HomeLogo.App`, `HomeLogo.Terminal`). An
+  app's logo is its home screen shortcut's (`appShortcut()`:
+  `app.conf`'s `icon`, else the letter on a theme colour), drawn by
+  `appIcon()`, which is now shared with `AppShortcuts` (the
+  shortcut's drawing is unchanged). Terminal apps gets the pixel
+  terminal icon. 36 dp squares in a 2 dp border (`HomeView.logo()`).
+  Screenshot `home-apps`.
+- Terminal apps moves: it's no longer in `tools/menu.conf` or the
+  built-in lists (`BUILT_IN_MENU`, the menu's fallback), so the
+  existing rule adds it at the end of Apps, before "Add to home
+  screen…". A user's own `menu.conf` with `terminal-apps` keeps it
+  in the main menu (it's their file; the guide says so). The main
+  menu's numbers after Apps move up by one.
+- Games too (the maintainer, after the first build): touch mode's
+  Games list shows logos, a picture beside the game with its name
+  (`neon-flap.png` for `neon-flap.py`; PNG, WebP or JPEG), else the
+  letter tile (`gameLogo()`, sharing `appShortcut()`'s rule). Games
+  stay in the main menu. Screenshot `home-games`.
+- Tests: `HomeTest`, `menu.bats` (key-number and Apps-list tests
+  follow the new order). Docs: the guide, `usb.md`, `apps.md`,
+  README, ARCHITECTURE.md, TOUCH-DESIGN.md.
+- Passed in mynx dev (build 44959185452): touch mode's Apps shows logos (Sketch and
+  Gadgets as letters; an app with an `icon` shows it); Terminal apps
+  is last before "Add to home screen…" and opens; the drawer and
+  Home's main list have no Terminal apps; Games shows letter tiles
+  (a `~/games/NAME.png` beside a game shows instead); in the terminal's menu,
+  Apps → Terminal apps works and the main menu has no Terminal apps.
 
 ### 2026-11-21 (205): Asking for all of the phone's storage (PR #99; passed)
 

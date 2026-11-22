@@ -1,6 +1,10 @@
 package io.github.est4s.terminal
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import io.github.est4s.terminal.core.HomeMenus
 import io.github.est4s.terminal.core.HomeService
 import io.github.est4s.terminal.core.LOGO_PALETTE
@@ -71,6 +75,38 @@ class HomeScreenshotTest {
 
     @Test
     fun mainList() = shoot(home(1080, 2400), "home-main")
+
+    // Apps with their logos: app.conf's icon, else the shortcut's letter; Terminal apps is the last folder.
+    @Test
+    fun apps() {
+        write("apps/sketch/index.html", "<title>Sketch</title>")
+        write("apps/gadgets/index.html", "<title>Gadgets</title>")
+        write("apps/weather/index.html", "<title>Weather</title>")
+        write("apps/weather/app.conf", "icon = icon.png\n")
+        val icon = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        Canvas(icon).apply {
+            drawColor(Color.rgb(0x1E, 0x88, 0xE5))
+            drawCircle(24f, 24f, 14f, Paint().apply { color = Color.rgb(0xFF, 0xD5, 0x4F) })
+        }
+        File(home, "apps/weather/icon.png").outputStream().use { icon.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        shoot(home(1080, 2400), "home-apps", "apps", "Apps")
+    }
+
+    // Games with their logos: letter tiles, and a picture beside the game when it has one.
+    @Test
+    fun games() {
+        listOf("games/neon-rogue.py", "games/neon-drive.py", "games/flap").forEach { name ->
+            write(name, "#!/bin/sh\n")
+            File(home, name).setExecutable(true)
+        }
+        val picture = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+        Canvas(picture).apply {
+            drawColor(Color.rgb(0x2E, 0x7D, 0x32))
+            drawRect(16f, 28f, 48f, 44f, Paint().apply { color = Color.rgb(0xFF, 0x40, 0x81) })
+        }
+        File(home, "games/neon-drive.png").outputStream().use { picture.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        shoot(home(1080, 2400), "home-games", "games", "Games")
+    }
 
     @Test
     fun services() = shoot(home(1080, 2400), "home-services", "services", "Services")

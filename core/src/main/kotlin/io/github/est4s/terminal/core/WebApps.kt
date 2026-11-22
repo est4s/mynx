@@ -993,16 +993,28 @@ data class AppShortcut(
 )
 
 /** [app]'s shortcut under the theme [colors]; [iconFile] is its icon's host file, if it has one. */
-fun appShortcut(app: WebApp, iconFile: File?, colors: ColorScheme): AppShortcut {
-    val letter = (app.label.firstOrNull { it.isLetterOrDigit() } ?: app.name.first()).uppercase()
-    val index = SHORTCUT_COLORS[Math.floorMod(app.name.hashCode(), SHORTCUT_COLORS.size)]
+fun appShortcut(app: WebApp, iconFile: File?, colors: ColorScheme): AppShortcut =
+    letterTile(webAppShortcutId(app.name), app.name, app.label, iconFile, colors)
+
+/**
+ * A game's logo in touch mode's Games list, by [appShortcut]'s rules:
+ * [picture] (its own picture file) if it has one, else the letter tile
+ * for [name] (the file's name without its ending) and [label]. Its id is
+ * `game-NAME`; games have no shortcuts.
+ */
+fun gameLogo(name: String, label: String, picture: File?, colors: ColorScheme): AppShortcut =
+    letterTile("game-$name", name, label, picture, colors)
+
+private fun letterTile(id: String, name: String, label: String, icon: File?, colors: ColorScheme): AppShortcut {
+    val letter = (label.firstOrNull { it.isLetterOrDigit() } ?: name.first()).uppercase()
+    val index = SHORTCUT_COLORS[Math.floorMod(name.hashCode(), SHORTCUT_COLORS.size)]
     val background = colors.palette[index] ?: colors.foreground
     val foreground = if (contrast(background, colors.background) >= contrast(background, colors.foreground)) {
         colors.background
     } else {
         colors.foreground
     }
-    return AppShortcut(webAppShortcutId(app.name), app.name, app.label, iconFile, letter, background, foreground)
+    return AppShortcut(id, name, label, icon, letter, background, foreground)
 }
 
 // The theme's chromatic colours, normal then bright.

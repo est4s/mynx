@@ -548,7 +548,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   and HTTP errors go to `/tmp/.mynx/apps/NAME.log` (`WebAppLog`).
   The bridge is part 2 (below). Today's programs in a tab are
   **terminal apps** (`tools/terminal-apps/`, `~/terminal-apps`, and
-  old Debians' executables in `~/apps`); the menu's bash scan of apps
+  old Debians' executables in `~/apps`), a folder at the end of Apps
+  in both menus unless `menu.conf` lists `terminal-apps` itself
+  (maintainer's decision, 2026-11-22); the menu's bash scan of apps
   must give core's labels (both tested on `tests/fixtures/apps/`).
 - **Apps (web apps, part 2): the bridge** (`core/.../Bridge.kt`,
   `AppPermissions.kt`, `BridgeSerial.kt`, `Rfc2217Client.kt`, whose
@@ -588,7 +590,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   suites). Anything that runs a program is a tab running `menu --act
   ACTION`, so both views run the same code; apps open their own screen.
   `HomeView` lies over the terminal, which keeps its size so tabs start
-  as usual. Exit isn't listed. Services is a list of its own:
+  as usual. Apps' rows carry a `HomeLogo` (maintainer's decision,
+  2026-11-22): each app's is its home screen shortcut's `appShortcut()`,
+  drawn by the same `appIcon()`, and the Terminal apps folder's is the
+  pixel terminal icon. Games get one too, by the same rules
+  (`gameLogo()`): a picture beside the game with its name, else the
+  letter tile. Exit isn't listed. Services is a list of its own:
   `HomeMenus` takes a snapshot (`ServiceManager.homeServices()`) and
   `HomeAction.Service` goes to `ServiceManager.act()`, both on the main
   thread; `ServiceHost.changed` refreshes it while it shows, and in

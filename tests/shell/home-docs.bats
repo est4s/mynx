@@ -363,6 +363,12 @@ setup() {
     grep -q "nnn is in Terminal" "$CORE"
 }
 
+@test "the guide says Terminal apps is in Apps, and how apps and games get their logos" {
+    grep -q "Terminal apps is a folder at the end of the Apps list" "$CORE"
+    grep -q "shows each" "$CORE"
+    grep -qF '`~/games/my-game.png` for `my-game.py`' "$CORE"
+}
+
 @test "the guide says the PDF viewer selects and finds text on Android 15 and later" {
     grep -q "on Android 15 and later a long press selects text" "$DOCS/phone.md"
     grep -q "⋮ Find (Ctrl+F) searches" "$DOCS/phone.md"

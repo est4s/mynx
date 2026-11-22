@@ -37,7 +37,7 @@ one back.
   | Key | Means |
   |---|---|
   | `name` | its name in the menu and on its screen (up to 20 characters) |
-  | `icon` | a PNG, JPEG or WebP file in the folder: its home screen shortcut's icon (below) |
+  | `icon` | a PNG, JPEG or WebP file in the folder: its home screen shortcut's icon (below) and its logo in touch view's Apps list |
   | `url` | `http://127.0.0.1:PORT/…` or `http://localhost:PORT/…`: a served app (below) |
   | `service` | the background service that serves `url` |
   | `fullscreen` | `no` (default), `yes` or `edge`: the status and navigation bars hidden, for games (below) |

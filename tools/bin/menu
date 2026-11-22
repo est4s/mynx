@@ -15,8 +15,8 @@
 # Apps (web apps): folders in ~/apps and /opt/mynx/apps with an index.html,
 #   or an app.conf with a url, labelled as core labels them
 #   (core/.../WebApps.kt; both are tested on tests/fixtures/apps). Picking
-#   one runs mynx app open. A menu file from before terminal apps (apps, no
-#   terminal-apps) gets a "Terminal apps" entry at the end of Apps; the very
+#   one runs mynx app open. Unless the main menu has terminal-apps itself,
+#   Apps ends with a "Terminal apps" entry, its folder; the very
 #   last, with any apps, is "Add to home screen…": the apps again, each
 #   running mynx app shortcut.
 # menu --boot plays the boot splash first (the app does this on a fresh start),
@@ -290,8 +290,8 @@ main_menu_file() { # fills ITEMS and ACTS: the user's file, else the built-in on
     read_menu_file "$file"
     ((${#ITEMS[@]})) && return
   done
-  ITEMS=(Shell "AI agents" Services Apps "Terminal apps" Games Files Settings Exit)
-  ACTS=(exit menu:agents menu:services menu:apps menu:terminal-apps menu:games files menu:settings quit_session)
+  ITEMS=(Shell "AI agents" Services Apps Games Files Settings Exit)
+  ACTS=(exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session)
 }
 
 main_menu_has() { # main_menu_has <action>: whether the main menu's items have it
@@ -356,7 +356,7 @@ menu_items() { # menu_items <menu>: fills ITEMS (labels) and ACTS (actions)
         ITEMS+=("$label") ACTS+=("webapp:$name")
       done < <(web_apps | LC_ALL=C sort -f -t $'\t' -k1,1)
       ((${#ITEMS[@]})) || { ITEMS=("(no apps yet)"); ACTS=(none); }
-      # A menu file from before terminal apps: they stay a pick away.
+      # A folder in Apps, unless the main menu lists them itself.
       if ! main_menu_has menu:terminal-apps; then
         ITEMS+=("Terminal apps") ACTS+=(menu:terminal-apps)
       fi

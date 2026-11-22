@@ -114,7 +114,7 @@ and the CH340/CH341, CP210x, FTDI and PL2303 chips.
 - The URL is on localhost: other apps on the phone could reach it
   too, while mynx runs and the device is plugged in.
 - **Serial monitor:** `mynx usb monitor [PORT] [--baud N]` (the
-  `serial` command, the menu's Terminal apps → Serial monitor) shows what the
+  `serial` command, the menu's Apps → Terminal apps → Serial monitor) shows what the
   board sends and sends what you type, Enter as CR, at 115200 baud
   unless given. With several ports it asks which. Its key bar,
   `serial`, has Esc, Ctrl, Tab, the arrows, Ctrl+C, Ctrl+D (a

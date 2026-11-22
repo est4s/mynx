@@ -43,7 +43,7 @@ no edge swipe, which is Android's Back):
   history screen (`ChatHistoryView`, unchanged).
 - **Linux:** Home's main list, `HomeMenus.items(HOME_MAIN)`, in
   `menu.conf`'s order and with its actions: Shell, AI agents,
-  Services (with the count), Apps, Terminal apps, Games, Files,
+  Services (with the count), Apps, Games, Files,
   Settings by default. The mock-ups show a subset; show them all.
   Items that open a list (`HomeAction.Menu`: Apps, Games, …) get a
   › and open Home's list screen at that list (`HomeView.showMenu()`),
@@ -108,7 +108,7 @@ against its background.
 
 The maintainer's decisions (2026-11-21): touch mode's **Files**
 opens this screen in place of nnn (nnn stays, as "Files (nnn)" in
-Terminal apps and in the terminal's menu); Delete is permanent, after
+Apps → Terminal apps and in the terminal's menu); Delete is permanent, after
 a confirmation; it starts at `~`, with the phone's storage among the
 places.
 

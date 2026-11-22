@@ -12,6 +12,7 @@ private const val LABEL_MAX = 20
 private const val LABEL_LINES = 5
 private const val LABEL_BYTES = 4096
 private val GAME_DIRS = listOf("/opt/neon-games", "games")
+private val GAME_PICTURES = listOf("png", "webp", "jpg", "jpeg")
 private val AGENTS = listOf("claude" to "Claude Code", "codex" to "Codex", "gemini" to "Gemini CLI")
 // The one agent touch mode opens as a chat; the others run in a tab.
 private const val CHAT_AGENT = "claude"
@@ -27,7 +28,7 @@ fun agentBinary(apps: WebApps, command: String): String? =
 private val LABEL_LINE = Regex("""^#\s*label:\s*(.*\S)""")
 private val BUILT_IN_MENU = listOf(
     "Shell" to "shell", "AI agents" to "agents", "Services" to "services", "Apps" to "apps",
-    "Terminal apps" to "terminal-apps", "Games" to "games", "Files" to "files", "Settings" to "settings",
+    "Games" to "games", "Files" to "files", "Settings" to "settings",
 )
 private val EXECUTE_BITS = setOf(
     PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE, PosixFilePermission.OTHERS_EXECUTE,
@@ -70,9 +71,18 @@ enum class HomeRow { BUTTON, SECTION, TEXT, INFO }
  */
 data class HomeService(val name: String, val state: String, val saved: Boolean, val autostart: Boolean)
 
+/** The picture before a [HomeItem]'s label. */
+sealed interface HomeLogo {
+    /** A picture or a letter tile: a web app's home screen shortcut's ([appShortcut]), or a game's ([gameLogo]). */
+    data class Tile(val shortcut: AppShortcut) : HomeLogo
+    /** The Terminal apps folder's. */
+    data object Terminal : HomeLogo
+}
+
 /**
  * A row of a Home list: [detail] is its value, shown after the label;
- * [checked], the choice in use; [swatch], a theme's colours (ARGB).
+ * [checked], the choice in use; [swatch], a theme's colours (ARGB);
+ * [logo], the picture before the label.
  */
 data class HomeItem(
     val label: String,
@@ -81,6 +91,7 @@ data class HomeItem(
     val checked: Boolean = false,
     val swatch: List<Int> = emptyList(),
     val kind: HomeRow = HomeRow.BUTTON,
+    val logo: HomeLogo? = null,
 )
 
 /**
@@ -182,14 +193,20 @@ class HomeMenus(
         else -> HomeItem(label, act("cmd:" + action.removePrefix("run ")))
     }
 
+    private val colors by lazy { loadColorScheme(File(apps.home, "$CONFIG_DIR/colors.properties")).scheme }
+
     private fun byLabel(list: List<WebApp>) = list.sortedWith(compareBy({ it.label.uppercase() }, { it.label }))
 
     private fun webApps(): List<HomeItem> {
-        val found = byLabel(apps.list()).map { HomeItem(it.label, HomeAction.App(it.name)) }
+        val found = byLabel(apps.list()).map { app ->
+            val logo = HomeLogo.Tile(appShortcut(app, app.icon?.let(apps::host), colors))
+            HomeItem(app.label, HomeAction.App(app.name), logo = logo)
+        }
         val items = found.ifEmpty { listOf(HomeItem("(no apps yet)", HomeAction.None)) }
-        val keepTerminalApps = mainEntries().none { it.second == "terminal-apps" }
+        val terminalApps = mainEntries().none { it.second == "terminal-apps" }
+        val folder = HomeItem("Terminal apps", HomeAction.Menu("terminal-apps"), logo = HomeLogo.Terminal)
         return items +
-            (if (keepTerminalApps) listOf(HomeItem("Terminal apps", HomeAction.Menu("terminal-apps"))) else emptyList()) +
+            (if (terminalApps) listOf(folder) else emptyList()) +
             (if (found.isEmpty()) emptyList() else listOf(HomeItem("Add to home screen…", HomeAction.Menu("shortcuts"))))
     }
 
@@ -215,8 +232,18 @@ class HomeMenus(
     private fun games(): List<HomeItem> {
         val found = GAME_DIRS.map { if (it.startsWith("/")) it else "$guestHome/$it" }
             .flatMap(::programs)
-            .map { (guest, _) -> HomeItem(gameLabel(guest), act("game:$guest")) }
+            .map { (guest, _) ->
+                val label = gameLabel(guest)
+                val name = guest.substringAfterLast('/').let { if ('.' in it) it.substringBeforeLast('.') else it }
+                val logo = gameLogo(name, label, gamePicture(guest.substringBeforeLast('/'), name), colors)
+                HomeItem(label, act("game:$guest"), logo = HomeLogo.Tile(logo))
+            }
         return found.ifEmpty { listOf(HomeItem("(no games yet)", HomeAction.None)) }
+    }
+
+    // A picture beside the game with its name: neon-flap.png for neon-flap.py.
+    private fun gamePicture(folder: String, name: String): File? = GAME_PICTURES.firstNotNullOfOrNull { ending ->
+        apps.resolve("$folder/$name.$ending")?.let(apps::host)?.takeIf { it.isFile }
     }
 
     private fun installed(command: String) = agentBinary(apps, command) != null
