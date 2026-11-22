@@ -102,7 +102,9 @@ browser (Android still asks before every install).
   Gradle then got 429 Too Many Requests for it too. So
   `app/build.gradle.kts` has Gradle fetch `android-all-instrumented`
   from Google's mirror of Maven Central (`settings.gradle.kts`, for
-  that module only) and runs Robolectric offline from it.
+  that module only) and runs Robolectric offline from it. It needs
+  two: SDK 34 for the tests and 35 (its newest) for the app's
+  resources. Test failures now print their messages in CI.
 - To test in mynx dev: build a small APK in Debian (or take any APK),
   `mynx install-apk FILE` opens the installer; with mynx off screen it
   says so; a chat card for an APK shows Install. Release builds get it

@@ -2,15 +2,17 @@ plugins {
     id("com.android.application")
 }
 
-// The Android Robolectric runs the tests on (SDK 34, as their @Config), fetched by
-// Gradle (from a mirror, see settings.gradle.kts), which retries and caches it:
-// Robolectric's own download from Maven Central failed from CI (2026-11-22). Its
-// version is Robolectric's own for SDK 34 (-i7 is 4.14.1's
-// PREINSTRUMENTED_VERSION): change it with Robolectric's.
+// The Androids Robolectric runs the tests on (SDK 34, as their @Config) and loads
+// the app's resources with (its newest, 35, as compileSdk is past it), fetched by
+// Gradle (from a mirror, see settings.gradle.kts), which retries and caches them:
+// Robolectric's own download from Maven Central failed from CI (2026-11-22). The
+// versions are Robolectric's own (DefaultSdkProvider; -i7 is 4.14.1's
+// PREINSTRUMENTED_VERSION): change them with Robolectric's.
 val robolectricAndroid = configurations.create("robolectricAndroid") { isTransitive = false }
 
 dependencies {
     robolectricAndroid("org.robolectric:android-all-instrumented:14-robolectric-10818077-i7")
+    robolectricAndroid("org.robolectric:android-all-instrumented:15-robolectric-12650502-i7")
     implementation(project(":core"))
     implementation("com.github.termux.termux-app:terminal-view:v0.118.3")
     // USB serial drivers (CDC ACM, CH34x, CP210x, FTDI, PL2303) over Android's USB host API.
@@ -26,7 +28,6 @@ val robolectricDir = layout.buildDirectory.dir("robolectric-jars").get().asFile.
 val robolectricJars = tasks.register<Sync>("robolectricJars") {
     from(robolectricAndroid)
     into(robolectricDir)
-    doLast { destinationDir.listFiles()?.forEach { println("robolectricJars: $it (${it.length()} bytes)") } }
 }
 
 android {
