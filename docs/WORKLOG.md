@@ -81,7 +81,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-22 (208): `mynx android-sdk` (PR pending; to test)
+### 2026-11-22 (208): `mynx android-sdk` (PR #102; passed in mynx dev)
 
 The maintainer asked for the other half of the Android-apps item: a
 command that sets up what building an Android app in Debian needs,
@@ -109,10 +109,22 @@ instead of the guide's five lines of apt, curl and unzip.
 - Checked here: status read the maintainer's existing setup as ready,
   and a real install into an empty scratch home downloaded both files
   (`android.jar` the same as the one in use).
-- To test in mynx dev: `mynx android-sdk` (status), then
-  `mynx android-sdk install` in a Debian without the tools: it shows
-  the apt commands and downloads, asks, installs, then says ready;
-  running it again changes nothing.
+- In mynx dev (build 45074118407, an agent following a test prompt):
+  status and JSON said what was missing; no answer changed nothing
+  (exit 1); `install --yes` installed the packages and both files and
+  said ready; again, it changed nothing. The agent then built a hello
+  app from the guide and `mynx install-apk` opened the installer.
+- The guide's build steps failed on that first try, so they're
+  rewritten (checked by building a hello app here): `build.sh` is a
+  whole script with `set -euo pipefail` (a failed step had still
+  left a signed APK with no `classes.dex`, which would crash), makes
+  its `build/` folders (aapt and D8 don't), and signs with the
+  password from `keystore.pass`, so `apksigner` doesn't ask for it.
+  There's a full `keytool` command, the smallest manifest
+  (`minSdkVersion` = D8's `--min-api`, `android:exported="true"`)
+  and Activity, and "a few seconds" for a build, not "a minute". The
+  plan's `android.jar` line now reads "(out of a 60.3 MB zip)".
+- Still to check: the hello app opens on the phone.
 
 ### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; passed)
 

@@ -238,10 +238,16 @@ Debian's `aapt`, `zipalign`, `apksigner` and JDK, and downloads about
 has `d8`) and Android 14's API, `android.jar`, into `~/androidsdk`.
 `mynx android-sdk` says what's there.
 
-A project is `AndroidManifest.xml`, `res/` and `src/`, with a
-`build.sh` that runs, with `JAR=~/androidsdk/android-34/android.jar`:
+A project is `AndroidManifest.xml`, `res/` and `src/`, and a
+`build.sh` (NAME is the APK's name):
 
 ```
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
+NAME=hello
+JAR=~/androidsdk/android-34/android.jar
+rm -rf build && mkdir -p build/gen build/classes build/dex
 aapt package -f -m -J build/gen -M AndroidManifest.xml -S res -I "$JAR"
 javac --release 11 -cp "$JAR" -d build/classes $(find src build/gen -name '*.java')
 java -cp ~/androidsdk/r8.jar com.android.tools.r8.D8 --release --min-api 24 \
@@ -249,15 +255,46 @@ java -cp ~/androidsdk/r8.jar com.android.tools.r8.D8 --release --min-api 24 \
 aapt package -f -M AndroidManifest.xml -S res -I "$JAR" -F build/unsigned.apk
 (cd build/dex && aapt add ../unsigned.apk classes.dex)
 zipalign -f -p 4 build/unsigned.apk build/aligned.apk
-apksigner sign --ks release.keystore --out NAME.apk build/aligned.apk
+apksigner sign --ks release.keystore --ks-pass file:keystore.pass --out "$NAME.apk" build/aligned.apk
+echo "Built $NAME.apk"
 ```
 
-(`-A assets` on the second `aapt package` adds an `assets/` folder.)
-A build takes about a minute.
+`set -e` matters: without it a failed step still leaves a signed APK
+with no code in it, which installs and then crashes. A build takes
+a few seconds. (`-A assets` on the second `aapt package` adds an
+`assets/` folder.)
 
-- **Signing:** make the keystore once per app (`keytool -genkeypair
-  -keystore release.keystore …`) and keep it: Android installs an
-  update only when it's signed with the same key. Raise
+The smallest app: `AndroidManifest.xml`
+
+```
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.NAME.app" android:versionCode="1" android:versionName="1.0">
+    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />
+    <application android:label="@string/app_name">
+        <activity android:name=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+with `res/values/strings.xml` (`<resources><string
+name="app_name">Hello</string></resources>`) and
+`src/com/NAME/app/MainActivity.java`, an `Activity` whose `onCreate`
+calls `setContentView(view)`. `minSdkVersion` matches D8's
+`--min-api`; an Activity with an intent filter needs
+`android:exported="true"`, or Android refuses to install the app.
+
+- **Signing:** make the key once per app, with its password in a
+  file so `apksigner` doesn't stop to ask for it:
+  `head -c 18 /dev/urandom | base64 > keystore.pass`, then
+  `keytool -genkeypair -keystore release.keystore -alias app -keyalg
+  RSA -keysize 2048 -validity 10000 -dname "CN=NAME" -storepass:file
+  keystore.pass`. Keep both files (and out of a public repo): Android
+  installs an update only when it's signed with the same key. Raise
   `versionCode` in the manifest for each update.
 - **The package name** (`package=` in the manifest) must be unique on
   the phone, e.g. `com.NAME.app`.

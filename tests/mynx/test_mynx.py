@@ -1577,8 +1577,8 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         before, after = run.stdout.split("Set it up?")
         self.assertIn("  apt-get update\n  apt-get install -y aapt zipalign apksigner\n", before)
         self.assertIn("r8.jar (17.4 MB) from https://dl.google.com/android/maven2/", before)
-        self.assertIn("android.jar from https://dl.google.com/android/repository/platform-34-ext7_r03.zip "
-                      "(60.3 MB)", before)
+        self.assertIn("android.jar (out of a 60.3 MB zip) from "
+                      "https://dl.google.com/android/repository/platform-34-ext7_r03.zip\n", before)
         self.assertNotIn("ran apt-get", run.stdout)
         self.assertIn("Nothing was changed.", after)
         self.assertEqual(run.returncode, 1)
@@ -1589,7 +1589,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.android_sdk("install", stdin="n\n", tools=["aapt", "zipalign", "apksigner", "javac"])
         self.assertNotIn("apt-get", run.stdout)
         self.assertNotIn("r8.jar (", run.stdout)
-        self.assertIn("android.jar from", run.stdout)
+        self.assertIn("android.jar (out of", run.stdout)
 
     def test_android_sdk_install_when_ready_changes_nothing(self):
         self.sdk_files()

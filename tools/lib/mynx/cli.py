@@ -1513,9 +1513,8 @@ def install_android_sdk(yes):
     if downloads:
         print(f"Downloads Google's into {sdk}:")
         for d in downloads:
-            source = (f"from {d.url} ({size_text(d.size)})" if d.member
-                      else f"({size_text(d.size)}) from {d.url}")
-            print(f"  {d.name} {source}")
+            size = f"out of a {size_text(d.size)} zip" if d.member else size_text(d.size)
+            print(f"  {d.name} ({size}) from {d.url}")
     print()
     if not yes and not ask("Set it up? [y/N] (--yes skips this question)"):
         print("Nothing was changed.")
