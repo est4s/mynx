@@ -14,7 +14,7 @@ import threading
 import time
 import urllib.parse
 
-from . import agents, links, notes, ports, uf2
+from . import agents, androidsdk, links, notes, ports, uf2
 from .client import TOOLS, Failure, read, record, request, tools_version
 
 HELP = """\
@@ -51,6 +51,7 @@ Commands:
   ble          ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
   uf2          uf2 [list] | flash FILE [DEVICE]: flash a board's UF2 bootloader drive
   install-apk  install-apk FILE: open Android's installer for an APK (an app built here)
+  android-sdk  android-sdk [status] | install [--yes]: the tools and files for building Android apps here
   fix-links    fix-links DIR...: repair what moving a folder did to its hard links
   app          app [list] | open|reload|shortcut NAME | log NAME [-n N]
                | permissions [NAME [PERMISSION allow|deny|ask] | NAME reset]: apps (HTML and JavaScript)
@@ -1451,18 +1452,104 @@ def install_sound(yes):
 def apt_install(packages, yes, question):
     """Shows the apt-get commands, asks [question] (unless [yes]), runs
     them. False when the answer is no; a Failure when a command fails."""
-    steps = ["apt-get update", "apt-get install -y " + " ".join(packages)]
+    steps = apt_steps(packages)
     for step in steps:
         print(f"  {step}")
     print()
     if not yes and not ask(f"{question} [y/N] (--yes skips this question)"):
         return False
+    run_steps(steps)
+    return True
+
+
+def apt_steps(packages):
+    return ["apt-get update", "apt-get install -y " + " ".join(packages)]
+
+
+def run_steps(steps):
+    """Runs shell commands in turn; a Failure when one fails."""
     for step in steps:
         sys.stdout.flush()
         code = subprocess.run(["bash", "-c", step]).returncode
         if code != 0:
             raise Failure(f"'{step}' failed (exit {code})")
-    return True
+
+
+ANDROID_SDK_USAGE = "usage: mynx android-sdk [status] | install [--yes]"
+
+
+def cmd_android_sdk(args, as_json):
+    sub = args[0] if args else "status"
+    if sub == "status" and len(args) <= 1:
+        status = androidsdk.status(androidsdk.folder(os.path.expanduser("~")))
+        out(as_json, dict(ok=True, **status), android_sdk_summary(status))
+        return 0
+    if sub == "install" and args[1:] in ([], ["--yes"]) and not as_json:
+        return install_android_sdk("--yes" in args)
+    raise Usage(ANDROID_SDK_USAGE)
+
+
+def android_sdk_summary(status):
+    head = "ready" if status["ready"] else "not set up (mynx android-sdk install sets it up)"
+    lines = [f"Android SDK: {head}"]
+    lines += [f"  {tool:<11}  {'installed' if there else 'not installed'}" for tool, there in status["tools"].items()]
+    lines += [f"  {name:<11}  {path or 'not downloaded'}" for name, path in status["files"].items()]
+    return "\n".join(lines)
+
+
+def install_android_sdk(yes):
+    sdk = androidsdk.folder(os.path.expanduser("~"))
+    status = androidsdk.status(sdk)
+    if status["ready"]:
+        print(android_sdk_summary(status))
+        return 0
+    packages = androidsdk.missing_packages(status)
+    downloads = [d for d in androidsdk.FILES if not status["files"][d.name]]
+    print("Setting up the Android SDK (for building Android apps here):\n")
+    if packages:
+        print("Installs Debian's build tools:")
+        for step in apt_steps(packages):
+            print(f"  {step}")
+    if downloads:
+        print(f"Downloads Google's into {sdk}:")
+        for d in downloads:
+            size = f"out of a {size_text(d.size)} zip" if d.member else size_text(d.size)
+            print(f"  {d.name} ({size}) from {d.url}")
+    print()
+    if not yes and not ask("Set it up? [y/N] (--yes skips this question)"):
+        print("Nothing was changed.")
+        return 1
+    if packages:
+        run_steps(apt_steps(packages))
+    sys.stdout.flush()
+    for d in downloads:
+        show = file_progress(d.name)
+        try:
+            androidsdk.fetch(d, sdk, progress=show)
+        except (OSError, ValueError) as e:
+            raise Failure(str(e)) from None
+        finally:
+            print(file=sys.stderr)
+    print("\n" + android_sdk_summary(androidsdk.status(sdk)))
+    print("\nBuilding an app: \"Building an Android app\" in /opt/mynx/docs/apps.md.")
+    return 0
+
+
+def file_progress(name):
+    """Prints a download's progress on one line (a terminal), or once."""
+    tty = sys.stderr.isatty()
+    started = False
+
+    def show(done, total):
+        nonlocal started
+        if tty:
+            print(f"\rDownloading {name}… {done * 100 // total}% of {size_text(total)}   ",
+                  end="", file=sys.stderr, flush=True)
+        elif not started:
+            print(f"Downloading {name}…", end="", file=sys.stderr, flush=True)
+        started = True
+
+    return show
 
 
 # The app answers it in every build after 0.4.0 (up to it, debug builds only).
@@ -2444,7 +2531,7 @@ COMMANDS = {
     "rotation": cmd_rotation, "storage": cmd_storage,
     "audio": cmd_audio, "sound": cmd_sound, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
-    "install-apk": cmd_install_apk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
+    "install-apk": cmd_install_apk, "android-sdk": cmd_android_sdk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }
 
 
