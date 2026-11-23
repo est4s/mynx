@@ -11,26 +11,13 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Current status
 
-- **Released:** v0.1.0 to v0.4.0 (v0.4.0 on 2026-11-01: Bluetooth
-  serial, BLE, BLE UART ports), signed with the release key
+- **Released:** v0.1.0 to v0.5.0 (v0.5.0 on 2026-11-23: web apps,
+  touch mode with Home, Files, Chat for Claude Code and the viewers,
+  all-files storage, app logos, `mynx install-apk` in release builds,
+  `mynx android-sdk`; PRs #58-#102), signed with the release key
   (certificate SHA-256 `24b7fefa…2b40`). The maintainer's daily mynx
-  is the release, updated through `mynx update`.
-- **Done, confirmed on the phone and merged since:** web apps parts 1
-  and 2 (PR #59, #64), the services count in the menu (#58), touch
-  mode's Home and Services, Chat for Claude Code (#67-#81), touch
-  mode's chat home with its drawer and the pixel style (#83),
-  Chat's pictures (thumbnails #91, full screen and image cards #92),
-  touch mode's Files (#93), viewers for text, code, Markdown, audio
-  and video (#94), and a turn's changes in chat, PDF (with text
-  selection) and HTML files (#95), with Find in PDFs and Replace in the text
-  viewers (#96, into #95's branch), and the chat history listing
-  every folder's chats (#98), and asking for all of the phone's
-  storage (#99), and app and game logos in touch mode with Terminal
-  apps moved into Apps (#100), and `mynx install-apk` in every build
-  (#101; release builds get it with the next release), and
-  `mynx android-sdk` with the guide's build steps fixed (#102). Every
-  roadmap step before them (Debian through proot to development boards
-  and Bluetooth) is confirmed and released.
+  is the release, updated through `mynx update`. Every roadmap step
+  so far is confirmed on the phone and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
   PRs; `scripts/deliver.sh` installs a build in mynx dev.
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
@@ -81,6 +68,19 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-23 (209): v0.5.0 released
+
+- Main's build for `8bd3d39` (the #102 merge) was green; tagged it
+  `v0.5.0` and pushed the tag at the maintainer's request (they asked
+  the agent to push it this time; the rule that only the maintainer
+  tags stands otherwise). `release.yml` built and published
+  `mynx-0.5.0.apk`.
+- Status above now says v0.5.0; the list of merged-since features
+  went into it.
+- **To check on the phone:** `mynx update` in the release mynx finds
+  0.5.0, installs it, and What's new shows its notes;
+  `mynx install-apk` now works in the release build.
 
 ### 2026-11-22 (208): `mynx android-sdk` (PR #102; passed)
 
