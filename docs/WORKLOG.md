@@ -27,7 +27,8 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   every folder's chats (#98), and asking for all of the phone's
   storage (#99), and app and game logos in touch mode with Terminal
   apps moved into Apps (#100), and `mynx install-apk` in every build
-  (#101; release builds get it with the next release). Every
+  (#101; release builds get it with the next release), and
+  `mynx android-sdk` with the guide's build steps fixed (#102). Every
   roadmap step before them (Debian through proot to development boards
   and Bluetooth) is confirmed and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
@@ -81,7 +82,7 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
-### 2026-11-22 (208): `mynx android-sdk` (PR #102; passed in mynx dev)
+### 2026-11-22 (208): `mynx android-sdk` (PR #102; passed)
 
 The maintainer asked for the other half of the Android-apps item: a
 command that sets up what building an Android app in Debian needs,
@@ -124,7 +125,7 @@ instead of the guide's five lines of apt, curl and unzip.
   (`minSdkVersion` = D8's `--min-api`, `android:exported="true"`)
   and Activity, and "a few seconds" for a build, not "a minute". The
   plan's `android.jar` line now reads "(out of a 60.3 MB zip)".
-- Still to check: the hello app opens on the phone.
+- The hello app opened on the phone, showing its text.
 
 ### 2026-11-22 (207): `mynx install-apk` in every build (PR #101; passed)
 
