@@ -623,7 +623,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
   (maintainer's decision, 2026-11-10). **A row's long press**, there
   and in the drawer (`ChatRowMenu.kt`; maintainer's request,
-  2026-11-24): `pixelMenu` with Pin, Rename, Delete. Pins are app
+  2026-11-24): `pixelMenu` with Pin, Rename, Delete, which ask in a
+  `pixelDialog` (`PixelStyle.kt`: Android's AlertDialog takes the
+  system theme; Files' dialogs still do). Pins are app
   state (`ChatPins`, `filesDir/state/chat-pins`, a session id a line);
   pinned rows lead `chatHistory()`, both screens show them under
   Pinned above Recents (the drawer's are `ChatHome.drawerPinned`, all

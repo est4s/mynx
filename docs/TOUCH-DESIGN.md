@@ -47,7 +47,9 @@ no edge swipe, which is Android's Back):
   request, 2026-11-24): the app's own menu (`pixelMenu`, as the ⋮
   menus), dropped from the row: **Pin** (or Unpin), **Rename**,
   **Delete** (after a confirmation). Pinned rows have a pin at their
-  end.
+  end. Rename and Delete ask in `pixelDialog`s: the menu's box (card,
+  cyan border, pink shadow), the title in Pixelify, Cancel outlined
+  and the main button filled (cyan; Delete pink).
 - **Linux:** Home's main list, `HomeMenus.items(HOME_MAIN)`, in
   `menu.conf`'s order and with its actions: Shell, AI agents,
   Services (with the count), Apps, Games, Files,

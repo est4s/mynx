@@ -1,14 +1,11 @@
 package io.github.est4s.terminal
 
-import android.app.AlertDialog
 import android.content.Context
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.view.WindowManager
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.ImageView
 import io.github.est4s.terminal.core.ChatHistoryRow
 import io.github.est4s.terminal.core.chatTitle
@@ -41,14 +38,14 @@ internal fun showChatRowMenu(anchor: View, row: ChatHistoryRow, actions: ChatRow
 }
 
 private fun confirmChatDelete(context: Context, row: ChatHistoryRow, actions: ChatRowActions) {
-    AlertDialog.Builder(context)
-        .setMessage("Delete \"${row.title}\"? Its transcript goes too; this can't be undone.")
-        .setPositiveButton("Delete") { _, _ -> actions.deleteChat(row) }
-        .setNegativeButton("Cancel", null)
-        .show()
+    pixelDialog(
+        context, "Delete chat?",
+        message = "\"${row.title}\" and its transcript go for good. This can't be undone.",
+        ok = "Delete", danger = true,
+    ) { actions.deleteChat(row) }
 }
 
-// A text field in a dialog, as Files' Rename: OK only while the name isn't blank.
+// A text field in a pixel dialog: Rename only while the name isn't blank.
 private fun askChatName(context: Context, row: ChatHistoryRow, actions: ChatRowActions) {
     val field = EditText(context).apply {
         setText(row.title)
@@ -56,21 +53,11 @@ private fun askChatName(context: Context, row: ChatHistoryRow, actions: ChatRowA
         imeOptions = EditorInfo.IME_ACTION_DONE
         selectAll()
     }
-    val dialog = AlertDialog.Builder(context)
-        .setTitle("Rename chat")
-        .setView(FrameLayout(context).apply {
-            setPadding(Pixel.dp(context, 20), Pixel.dp(context, 8), Pixel.dp(context, 20), 0)
-            addView(field)
-        })
-        .setPositiveButton("Rename") { _, _ -> chatTitle(field.text.toString())?.let { actions.renameChat(row, it) } }
-        .setNegativeButton("Cancel", null)
-        .create()
-    fun check(): Boolean {
-        val ok = chatTitle(field.text.toString()) != null
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = ok
-        return ok
+    val dialog = pixelDialog(context, "Rename chat", field = field, ok = "Rename") {
+        chatTitle(field.text.toString())?.let { actions.renameChat(row, it) }
     }
-    dialog.setOnShowListener { check() }
+    fun check() = dialog.setOkEnabled(chatTitle(field.text.toString()) != null)
+    check()
     field.addTextChangedListener(object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
         override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
@@ -80,13 +67,7 @@ private fun askChatName(context: Context, row: ChatHistoryRow, actions: ChatRowA
     })
     field.setOnEditorActionListener { _, actionId, _ ->
         if (actionId != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
-        if (check()) {
-            dialog.dismiss()
-            chatTitle(field.text.toString())?.let { actions.renameChat(row, it) }
-        }
+        dialog.ok()
         true
     }
-    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-    dialog.show()
-    field.requestFocus()
 }

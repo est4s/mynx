@@ -32,6 +32,9 @@ in mynx dev:
   (as the ⋮ menus) drops from the row with Pin / Rename / Delete. A
   pinned chat goes under Pinned, above Recents, in both; with none
   pinned there's no Pinned heading.
+- Rename and Delete open pixel-style dialogs (not Android's): the
+  keyboard comes up for Rename's field, Rename greys out while it's
+  blank, Done on the keyboard renames, Cancel and a tap outside close.
 - Rename one: the new name shows in both lists, and in a terminal
   `claude --resume` lists it by that name. Rename a chat while it
   works, let it finish: the name should stay (Claude re-writes its own
@@ -95,8 +98,11 @@ in mynx dev:
   show Pinned (only when there are pins) and Recents headings; core's
   `ChatHome` gives the drawer `drawerPinned` (all pins) beside its 5
   recents (`drawerChats`), so pins no longer take recents' places.
-- Rename's field and Delete's confirmation are still AlertDialogs,
-  as Files' are.
+- Then, at their request, Rename and Delete ask in a `pixelDialog`
+  (`PixelStyle.kt`, beside `pixelMenu`): the menu's box, a styled
+  field, Cancel and a filled main button (Delete's pink). Files'
+  dialogs are still AlertDialogs: they could move to it later.
+  Screenshots: `chat-rename`, `chat-rename-blank`, `chat-delete`.
 
 ### 2026-11-24 (210): pin, rename and delete chats in touch mode
 

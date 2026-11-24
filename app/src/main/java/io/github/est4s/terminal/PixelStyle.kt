@@ -1,5 +1,6 @@
 package io.github.est4s.terminal
 
+import android.app.Dialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Canvas
@@ -19,8 +20,12 @@ import android.text.style.MetricAffectingSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
+import android.view.Window
+import android.view.WindowManager
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.TextView
@@ -267,6 +272,114 @@ fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
     popup.showAsDropDown(anchor, 0, 0, Gravity.END)
+}
+
+/** A [pixelDialog] on screen: [setOkEnabled] greys its main button (a [PixelDialog] field's check), [ok] presses it. */
+class PixelDialog internal constructor(val dialog: Dialog, private val okButton: TextView, private val onOk: () -> Unit) {
+    fun setOkEnabled(enabled: Boolean) {
+        okButton.isEnabled = enabled
+        okButton.alpha = if (enabled) 1f else 0.4f
+    }
+
+    /** As a tap on the main button, if it's enabled (a field's Done). */
+    fun ok() {
+        if (!okButton.isEnabled) return
+        dialog.dismiss()
+        onOk()
+    }
+}
+
+/**
+ * A small dialog in the pixel style, as [pixelMenu]'s box: [title], then
+ * [message] and/or [field] (styled here, the keyboard up for it), then
+ * Cancel and the filled main button [ok] (pink when [danger]: it can't be
+ * undone). Android's AlertDialog takes the system theme.
+ */
+fun pixelDialog(
+    context: Context,
+    title: String,
+    message: String? = null,
+    field: EditText? = null,
+    ok: String,
+    danger: Boolean = false,
+    onOk: () -> Unit,
+): PixelDialog {
+    val dp = { v: Int -> Pixel.dp(context, v) }
+    val shadow = dp(Pixel.SHADOW_DP)
+    val dialog = Dialog(context).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
+    fun button(label: String, fill: Int, border: Int, color: Int, onTap: () -> Unit) = TextView(context).apply {
+        text = label
+        typeface = Pixel.label(context, 600)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+        setTextColor(color)
+        gravity = Gravity.CENTER
+        minHeight = dp(44)
+        minWidth = dp(96)
+        setPadding(dp(16), 0, dp(16), 0)
+        background = Pixel.box(context, fill = fill, border = border, ripple = Pixel.LINE)
+        isFocusable = true
+        setOnClickListener { onTap() }
+    }
+    val okButton = if (danger) {
+        button(ok, Pixel.PINK, 0, Pixel.PINK_TEXT) {}
+    } else {
+        button(ok, Pixel.CYAN, 0, Pixel.BACKGROUND) {}
+    }
+    val handle = PixelDialog(dialog, okButton, onOk)
+    okButton.setOnClickListener { handle.ok() }
+    val column = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.CYAN, shadow = true)
+        // Inside the 2 dp border, and the shadow's room right and bottom.
+        setPadding(dp(20), dp(18), dp(20) + shadow, dp(16) + shadow)
+        addView(TextView(context).apply {
+            text = title
+            typeface = Pixel.label(context, 700)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            setTextColor(Pixel.TEXT)
+        })
+        if (message != null) {
+            addView(TextView(context).apply {
+                text = message
+                typeface = Pixel.text(context)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Pixel.DIM)
+                setLineSpacing(0f, 1.15f)
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+        }
+        if (field != null) {
+            field.typeface = Pixel.text(context)
+            field.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            field.setTextColor(Pixel.TEXT)
+            field.setHintTextColor(Pixel.DIM)
+            field.highlightColor = (Pixel.CYAN and 0x00FFFFFF) or 0x60000000
+            field.background = Pixel.box(context, fill = Pixel.BACKGROUND, border = Pixel.LINE)
+            field.setPadding(dp(12), dp(10), dp(12), dp(10))
+            // A 2 dp cyan bar: the cursor's width is its drawable's own.
+            if (Build.VERSION.SDK_INT >= 29) field.textCursorDrawable = GradientDrawable().apply {
+                setColor(Pixel.CYAN)
+                setSize(dp(2), 0)
+            }
+            addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) })
+        }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            addView(button("Cancel", Pixel.CARD, Pixel.LINE, Pixel.TEXT) { dialog.dismiss() })
+            addView(okButton, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(10) })
+        }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(20) })
+    }
+    dialog.setContentView(FrameLayout(context).apply { addView(column) })
+    dialog.window?.apply {
+        setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        if (field != null) setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+    }
+    dialog.show()
+    // A phone's width less 16 dp each side, at most 420 dp.
+    val width = minOf(context.resources.displayMetrics.widthPixels - dp(32), dp(420))
+    dialog.window?.setLayout(width, WRAP_CONTENT)
+    field?.requestFocus()
+    return handle
 }
 
 enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH, PLAY, PAUSE, NEXT, PREVIOUS, REPLAY, NOTE, PIN }

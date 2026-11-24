@@ -79,6 +79,22 @@ object Screenshots {
         settle()
         val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         view.draw(Canvas(bitmap))
+        write(bitmap, name)
+    }
+
+    /** A window's own view (a dialog's `decorView`), [w] pixels wide and as tall as it wants, on [background]. */
+    fun saveWindow(view: View, w: Int, background: Int, name: String) {
+        settle()
+        view.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        view.layout(0, 0, w, view.measuredHeight)
+        val bitmap = Bitmap.createBitmap(w, maxOf(1, view.measuredHeight), Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(background)
+        view.draw(canvas)
+        write(bitmap, name)
+    }
+
+    private fun write(bitmap: Bitmap, name: String) {
         dir.mkdirs()
         File(dir, "$name.png").outputStream().use { out ->
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) { "couldn't write $name.png" }
