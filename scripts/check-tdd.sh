@@ -14,6 +14,7 @@ pairs=(
     "proot/ tests/"
     "scripts/backup-root.sh tests/shell/"
     "scripts/restore-root.sh tests/shell/"
+    "scripts/check-x11-apk.sh tests/shell/"
 )
 
 files=$(cat)
