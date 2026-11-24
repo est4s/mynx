@@ -42,7 +42,6 @@ echo "== native (libXlorie.so)"
 cmake -S "$src/lorie/src/main/cpp" -B "$work/cmake" -G Ninja \
     -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
     -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-$API \
-    -DANDROID_WEAK_API_DEFS=ON \
     -DCMAKE_LIBRARY_OUTPUT_DIRECTORY="$work/lib"
 ninja -C "$work/cmake" Xlorie
 mkdir -p "$out"
