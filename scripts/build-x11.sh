@@ -69,7 +69,7 @@ echo 'package androidx.annotation; public @interface Keep {}' >"$java/stubs/andr
 stubsrc=$src/shell-loader/stub/src/main/java
 javac -nowarn -d "$java/stub-classes" -cp "$platform/android.jar" \
     $(find "$stubsrc" "$java/stubs" -name '*.java')
-javac -nowarn -source 11 -target 11 -d "$java/classes" \
+javac -nowarn -source 8 -target 8 -d "$java/classes" \
     -bootclasspath "$platform/android.jar" -cp "$java/stub-classes" \
     "$src/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java" \
     $(find "$java/gen" -name '*.java')
