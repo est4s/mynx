@@ -19,7 +19,9 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
   is the release, updated through `mynx update`. Every roadmap step
   so far is confirmed on the phone and released.
 - **Workflow:** trunk-based, `main` protected (PRs only). CI builds
-  PRs; `scripts/deliver.sh` installs a build in mynx dev.
+  PRs; `scripts/deliver.sh` installs a build in mynx dev. Desktop
+  mode is built on `desktop-dev`: branch from it, PRs into it
+  (`AGENTS.md`, "Conventions").
 - The code's layout and decisions: `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ## Next
@@ -68,6 +70,14 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-24 (213): A `desktop-dev` branch for desktop mode
+
+- The maintainer wants desktop mode kept off `main` while it's built:
+  `desktop-dev` (cut from `main` at 2b4d7f4, pushed) takes its
+  feature branches' PRs. `build.yml` builds pushes to it, as for
+  `main`, so `scripts/deliver.sh` finds its runs after a merge.
+  `AGENTS.md` ("Conventions") has the rule.
 
 ### 2026-11-24 (212): Files' dialogs in the pixel style
 

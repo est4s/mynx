@@ -2,7 +2,7 @@
 # Download the latest CI build of the APK and hand it to Android's installer.
 # Runs in the app's own Debian on the phone (see AGENTS.md, "Build → install loop").
 #
-#   scripts/deliver.sh            wait for HEAD's run (main, or the PR of this
+#   scripts/deliver.sh            wait for HEAD's run (main, desktop-dev, or the PR of this
 #                                 branch), then install
 #   scripts/deliver.sh <run-id>   use a specific run
 #   scripts/deliver.sh --no-open  copy to Download only, don't open the installer
@@ -31,7 +31,7 @@ if [[ -z $run ]]; then
     done
     [[ -n $run ]] || {
         echo "No build found for $(git rev-parse --short HEAD) on ${branch:-main}."
-        echo "Only main and pull requests build: push, and open a PR for a branch."
+        echo "Only main, desktop-dev and pull requests build: push, and open a PR for a branch."
         exit 1
     }
 fi
