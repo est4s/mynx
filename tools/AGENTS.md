@@ -224,7 +224,8 @@ One `key = value` per line; `mynx settings` describes each.
   Code's chat history: New chat, then its chats from every folder
   (another folder's named on its row; it goes on there), newest
   first, marked while one works or waits for you; long-press one to
-  pin it to the top, rename or delete it (in the drawer too). A
+  pin it (it goes under Pinned, above the Recents), rename or delete
+  it (in the drawer too). A
   rename is Claude Code's own (`/rename`), so `claude --resume`
   shows it; Delete removes the transcript for good. A chat shows
   messages, tool cards and Allow/Deny; Back goes to the history, and

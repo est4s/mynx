@@ -4,6 +4,7 @@ import android.app.AlertDialog
 import android.content.Context
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.WindowManager
 import android.widget.EditText
@@ -29,17 +30,14 @@ internal fun pinMark(context: Context) = ImageView(context).apply {
     contentDescription = "Pinned"
 }
 
-/** A chat row's long press: Pin to top (or Unpin), Rename, Delete (after a confirmation). */
-internal fun showChatRowMenu(context: Context, row: ChatHistoryRow, actions: ChatRowActions) {
-    val items = listOf<Pair<String, () -> Unit>>(
-        (if (row.pinned) "Unpin" else "Pin to top") to { actions.pinChat(row, !row.pinned) },
-        "Rename" to { askChatName(context, row, actions) },
-        "Delete" to { confirmChatDelete(context, row, actions) },
-    )
-    AlertDialog.Builder(context)
-        .setTitle(row.title)
-        .setItems(items.map { it.first }.toTypedArray()) { _, which -> items[which].second() }
-        .show()
+/** A chat row's long press, the app's own [pixelMenu] dropped from [anchor] (the row): Pin (or Unpin), Rename, Delete (after a confirmation). */
+internal fun showChatRowMenu(anchor: View, row: ChatHistoryRow, actions: ChatRowActions) {
+    val context = anchor.context
+    pixelMenu(anchor, listOf(
+        PixelMenuEntry(if (row.pinned) "Unpin" else "Pin") { actions.pinChat(row, !row.pinned) },
+        PixelMenuEntry("Rename") { askChatName(context, row, actions) },
+        PixelMenuEntry("Delete") { confirmChatDelete(context, row, actions) },
+    ))
 }
 
 private fun confirmChatDelete(context: Context, row: ChatHistoryRow, actions: ChatRowActions) {

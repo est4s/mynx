@@ -19,7 +19,7 @@ import io.github.est4s.terminal.core.DrawerItem
 import io.github.est4s.terminal.core.HomeAction
 
 /**
- * The chat home's drawer: New chat, the latest chats, All chats, Home's main
+ * The chat home's drawer: New chat, the pinned chats, the latest ones (Recents), All chats, Home's main
  * list (Linux) and, outside the scroll, Terminal. Every tap that leaves the
  * home runs [close] first. A chat's long press offers pin, rename and delete
  * ([showChatRowMenu]); the drawer stays open for them.
@@ -31,6 +31,8 @@ class DrawerView(
     private val actions: ChatHomeActions,
     private val close: () -> Unit,
 ) : LinearLayout(context) {
+    private val pinnedLabel = sectionLabel(context, "Pinned")
+    private val pinned = LinearLayout(context).apply { orientation = VERTICAL }
     private val chats = LinearLayout(context).apply { orientation = VERTICAL }
     private val linux = LinearLayout(context).apply { orientation = VERTICAL }
     private val column = LinearLayout(context).apply {
@@ -41,7 +43,9 @@ class DrawerView(
             bottomMargin = dp(16)
         })
         addView(newChatButton(), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
-        addView(sectionLabel(context, "Chats"), labelParams())
+        addView(pinnedLabel, labelParams())
+        addView(pinned, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        addView(sectionLabel(context, "Recents"), labelParams())
         addView(chats, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(textRow("All chats ›", Pixel.DIM, Pixel.label(context, 500), 15f) { leave { actions.allChats() } },
             LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
@@ -73,8 +77,13 @@ class DrawerView(
 
     /** Draws the drawer's part of [model]. */
     fun show(model: ChatHome) {
+        pinned.removeAllViews()
+        model.drawerPinned.forEach { pinned.addView(chatRow(it), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)) }
+        val anyPinned = model.drawerPinned.isNotEmpty()
+        pinnedLabel.visibility = if (anyPinned) View.VISIBLE else View.GONE
+        pinned.visibility = pinnedLabel.visibility
         chats.removeAllViews()
-        if (model.drawerChats.isEmpty()) {
+        if (model.drawerChats.isEmpty() && !anyPinned) {
             chats.addView(textRow("No chats yet.", Pixel.DIM, Pixel.text(context), 14f, null))
         }
         model.drawerChats.forEach { chats.addView(chatRow(it), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)) }
@@ -126,7 +135,7 @@ class DrawerView(
         if (row.pinned) addView(pinMark(context), LayoutParams(dp(14), dp(14)).apply { marginStart = dp(8) })
         setOnClickListener { leave { actions.openChat(row) } }
         setOnLongClickListener {
-            showChatRowMenu(context, row, actions)
+            showChatRowMenu(this, row, actions)
             true
         }
     }

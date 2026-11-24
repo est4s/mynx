@@ -24,13 +24,14 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
-### 0. Chat rows: pin, rename, delete (entry 210, to try on the phone)
+### 0. Chat rows: pin, rename, delete (PR #104, entries 210-211)
 
-Not committed yet: branch, PR, `scripts/deliver.sh`, then in mynx dev:
-- Long-press a chat in All chats and in the drawer: the menu shows
-  Pin to top / Rename / Delete. Pin one: it moves to the top of both
-  lists with a pin at its end; it stays pinned after the app restarts;
-  Unpin puts it back in date order.
+Pin, rename and delete passed on the phone (2026-11-24). To try now,
+in mynx dev:
+- Long-press a chat in All chats and in the drawer: the pixel menu
+  (as the ⋮ menus) drops from the row with Pin / Rename / Delete. A
+  pinned chat goes under Pinned, above Recents, in both; with none
+  pinned there's no Pinned heading.
 - Rename one: the new name shows in both lists, and in a terminal
   `claude --resume` lists it by that name. Rename a chat while it
   works, let it finish: the name should stay (Claude re-writes its own
@@ -83,6 +84,19 @@ Not committed yet: branch, PR, `scripts/deliver.sh`, then in mynx dev:
 ---
 
 ## Log
+
+### 2026-11-24 (211): chat rows' menu in the pixel style, Pinned and Recents
+
+- The maintainer tried entry 210's build: pin, rename and delete all
+  worked. They asked for the menu in the app's design, "Pin" for "Pin
+  to top", and a Pinned group above the rest, called Recents.
+- The long press now drops `pixelMenu` from the row (Android's
+  dialog list took the system theme). The history and the drawer
+  show Pinned (only when there are pins) and Recents headings; core's
+  `ChatHome` gives the drawer `drawerPinned` (all pins) beside its 5
+  recents (`drawerChats`), so pins no longer take recents' places.
+- Rename's field and Delete's confirmation are still AlertDialogs,
+  as Files' are.
 
 ### 2026-11-24 (210): pin, rename and delete chats in touch mode
 

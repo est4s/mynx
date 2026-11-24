@@ -94,9 +94,6 @@ class ChatHistoryView(
             // The shadow sticks out 4 dp: keep the button's own edge 16 dp from the screen's.
             setMargins(dp(16), dp(16), dp(16) - dp(Pixel.SHADOW_DP), dp(8))
         })
-        addView(sectionLabel(context, "Recent").apply {
-            setPadding(dp(16), dp(12), dp(16), dp(8))
-        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         render()
     }
@@ -129,11 +126,20 @@ class ChatHistoryView(
             list.isEmpty() -> rows.addView(note("No chats yet."))
             else -> {
                 val now = System.currentTimeMillis()
-                list.forEach {
-                    rows.addView(row(it, now), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                        bottomMargin = dp(8)
-                    })
+                // The pinned ones (first in the list) under a heading of their own, then the recents.
+                val (pinned, recents) = list.partition { it.pinned }
+                fun group(label: String, group: List<ChatHistoryRow>) {
+                    if (group.isEmpty()) return
+                    rows.addView(sectionLabel(context, label).apply { setPadding(0, dp(12), 0, dp(8)) },
+                        LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                    group.forEach {
+                        rows.addView(row(it, now), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                            bottomMargin = dp(8)
+                        })
+                    }
                 }
+                group("Pinned", pinned)
+                group("Recents", recents)
             }
         }
     }
@@ -175,7 +181,7 @@ class ChatHistoryView(
         setOnClickListener { openChat(chat) }
         rowActions?.let { actions ->
             setOnLongClickListener {
-                showChatRowMenu(context, chat, actions)
+                showChatRowMenu(this, chat, actions)
                 true
             }
         }

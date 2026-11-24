@@ -50,12 +50,14 @@ class ChatHomeTest {
     }
 
     @Test
-    fun drawerChatsPutPinnedOnesFirst() {
+    fun drawerPinsAreAGroupOfTheirOwnAboveTheRecents() {
         val history = listOf(
             row("p", ChatRowState.IDLE).copy(pinned = true), row("q").copy(pinned = true),
-            row("a"), row("c", ChatRowState.WORKING), row("d"), row("e"),
+            row("a"), row("c", ChatRowState.WORKING), row("d"), row("e"), row("f"), row("g"),
         )
-        assertEquals(listOf("p", "q", "c", "a", "d"), home(history).drawerChats.map { it.sessionId })
+        val model = home(history)
+        assertEquals(listOf("p", "q"), model.drawerPinned.map { it.sessionId })
+        assertEquals(listOf("c", "a", "d", "e", "f"), model.drawerChats.map { it.sessionId })
     }
 
     @Test

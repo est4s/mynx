@@ -623,9 +623,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
   (maintainer's decision, 2026-11-10). **A row's long press**, there
   and in the drawer (`ChatRowMenu.kt`; maintainer's request,
-  2026-11-24): Pin to top, Rename, Delete. Pins are app state
-  (`ChatPins`, `filesDir/state/chat-pins`, a session id a line);
-  pinned rows lead `chatHistory()` and the drawer, and are listed
+  2026-11-24): `pixelMenu` with Pin, Rename, Delete. Pins are app
+  state (`ChatPins`, `filesDir/state/chat-pins`, a session id a line);
+  pinned rows lead `chatHistory()`, both screens show them under
+  Pinned above Recents (the drawer's are `ChatHome.drawerPinned`, all
+  of them, beside its 5 recents), and they're listed
   past the 50-chat cap (`listClaudeSessions`' `keep`). Rename appends
   Claude's own `custom-title` line to the transcript
   (`appendClaudeTitle`; last one wins, as `/rename` writes it), and
