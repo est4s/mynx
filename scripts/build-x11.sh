@@ -69,8 +69,9 @@ echo 'package androidx.annotation; public @interface Keep {}' >"$java/stubs/andr
 stubsrc=$src/shell-loader/stub/src/main/java
 javac -nowarn -d "$java/stub-classes" -cp "$platform/android.jar" \
     $(find "$stubsrc" "$java/stubs" -name '*.java')
-javac -nowarn -source 8 -target 8 -d "$java/classes" \
-    -bootclasspath "$platform/android.jar" -cp "$java/stub-classes" \
+# The JDK's own classes (javac needs its LambdaMetafactory), Android's on the class path.
+javac -nowarn --release 11 -d "$java/classes" \
+    -cp "$platform/android.jar:$java/stub-classes" \
     "$src/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java" \
     $(find "$java/gen" -name '*.java')
 "$tools/d8" --release --min-api $API --lib "$platform/android.jar" \
