@@ -391,3 +391,9 @@ setup() {
     grep -q "mynx storage allow" "$CORE"
     grep -q "Allow access to manage all files" "$DOCS/phone.md"
 }
+
+@test "the guide gives desktop mode's settings and their defaults" {
+    grep -qF '`view`: `terminal` (default), `touch` or `desktop`' "$CORE"
+    grep -qF '`desktop`: `xfce` (default) or `none`' "$CORE"
+    grep -qF '`desktop-touch`: `touchpad` (default) or `direct`' "$CORE"
+}

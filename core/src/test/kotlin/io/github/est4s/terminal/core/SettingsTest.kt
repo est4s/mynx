@@ -63,7 +63,7 @@ class SettingsTest {
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
-                "update-check", "serial-preload", "serial-names", "view", "chat-mode", "chat-model",
+                "update-check", "serial-preload", "serial-names", "view", "desktop", "desktop-touch", "chat-mode", "chat-model",
                 "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
             SETTINGS.map { it.key },
         )
@@ -83,6 +83,7 @@ class SettingsTest {
                 "android-bluetooth" to "off",
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off", "view" to "touch",
+                "desktop" to "none", "desktop-touch" to "direct",
                 "chat-mode" to "plan", "chat-model" to "opus",
                 "open-pictures" to "android", "open-markdown" to "mynx", "open-code" to "android",
                 "open-text" to "mynx", "open-audio" to "android", "open-video" to "android",
@@ -91,7 +92,8 @@ class SettingsTest {
             Settings(fontSize = 14, cursorBlink = true, agentNotify = false, agentNotifyAfter = 45, undoKeep = 3,
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
-                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH, chatMode = "plan", chatModel = "opus",
+                wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH,
+                desktop = DesktopSession.NONE, desktopTouch = DesktopTouch.DIRECT, chatMode = "plan", chatModel = "opus",
                 openPictures = OpenWith.ANDROID, openCode = OpenWith.ANDROID, openAudio = OpenWith.ANDROID,
                 openVideo = OpenWith.ANDROID, openPdf = OpenWith.ANDROID).values(),
         )
@@ -230,13 +232,34 @@ class SettingsTest {
     }
 
     @Test
-    fun `the view is the terminal by default and can be touch`() {
+    fun `the view is the terminal by default and can be touch or desktop`() {
         assertEquals(AppView.TERMINAL, Settings().view)
         assertEquals("terminal", SETTINGS.single { it.key == "view" }.default)
-        assertEquals(listOf("terminal", "touch"), SETTINGS.single { it.key == "view" }.choices)
-        val parsed = parseSettings("view = touch\nview = desktop\n")
-        assertEquals(AppView.TOUCH, parsed.settings.view)
-        assertEquals(listOf("line 2: view must be one of: terminal, touch"), parsed.problems)
+        assertEquals(listOf("terminal", "touch", "desktop"), SETTINGS.single { it.key == "view" }.choices)
+        assertEquals(AppView.TOUCH, parseSettings("view = touch\n").settings.view)
+        val parsed = parseSettings("view = desktop\nview = phone\n")
+        assertEquals(AppView.DESKTOP, parsed.settings.view)
+        assertEquals(listOf("line 2: view must be one of: terminal, touch, desktop"), parsed.problems)
+    }
+
+    @Test
+    fun `the desktop is XFCE by default, or none for the X server alone`() {
+        assertEquals(DesktopSession.XFCE, Settings().desktop)
+        assertEquals("xfce", SETTINGS.single { it.key == "desktop" }.default)
+        assertEquals(listOf("xfce", "none"), SETTINGS.single { it.key == "desktop" }.choices)
+        val parsed = parseSettings("desktop = none\ndesktop = gnome\n")
+        assertEquals(DesktopSession.NONE, parsed.settings.desktop)
+        assertEquals(listOf("line 2: desktop must be one of: xfce, none"), parsed.problems)
+    }
+
+    @Test
+    fun `touch on the desktop is a touchpad by default, or direct taps`() {
+        assertEquals(DesktopTouch.TOUCHPAD, Settings().desktopTouch)
+        assertEquals("touchpad", SETTINGS.single { it.key == "desktop-touch" }.default)
+        assertEquals(listOf("touchpad", "direct"), SETTINGS.single { it.key == "desktop-touch" }.choices)
+        val parsed = parseSettings("desktop-touch = direct\ndesktop-touch = mouse\n")
+        assertEquals(DesktopTouch.DIRECT, parsed.settings.desktopTouch)
+        assertEquals(listOf("line 2: desktop-touch must be one of: touchpad, direct"), parsed.problems)
     }
 
     @Test

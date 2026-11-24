@@ -20,6 +20,7 @@ val HOME_SETTING_GROUPS = listOf(
         listOf("open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
     ),
     HomeSettingGroup("settings:terminal", "Terminal", listOf("font-size", "font", "cursor-style", "cursor-blink", "tab-swipe")),
+    HomeSettingGroup("settings:desktop", "Desktop", listOf("desktop", "desktop-touch")),
     HomeSettingGroup(
         "settings:phone", "Phone access",
         listOf(
@@ -35,6 +36,8 @@ val HOME_SETTING_GROUPS = listOf(
 
 private val SETTING_LABELS = mapOf(
     "view" to "View",
+    "desktop" to "Desktop",
+    "desktop-touch" to "Touch",
     "chat-mode" to "Permission mode",
     "chat-model" to "Model for new chats",
     "agent-notify" to "Notifications",
@@ -187,6 +190,8 @@ internal class HomeSettings(
         "chat-mode" -> chatModeName(value)
         "chat-model" -> chatDefaultModelChoices(emptyList()).firstOrNull { it.value == value }?.name ?: value
         "view" -> value.replaceFirstChar { it.uppercase() }
+        "desktop" -> if (value == DesktopSession.XFCE.word) "XFCE" else "X server only"
+        "desktop-touch" -> if (value == DesktopTouch.DIRECT.word) "Direct taps" else "Touchpad"
         else -> if (key.startsWith("open-") && value == OpenWith.ANDROID.word) "Another app" else value
     }
 

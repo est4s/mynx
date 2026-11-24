@@ -43,6 +43,7 @@ class HomeSettingsTest {
                 HomeItem("AI agents", HomeAction.Menu("settings:agents")),
                 HomeItem("Default apps", HomeAction.Menu("settings:apps")),
                 HomeItem("Terminal", HomeAction.Menu("settings:terminal")),
+                HomeItem("Desktop", HomeAction.Menu("settings:desktop")),
                 HomeItem("Phone access", HomeAction.Menu("settings:phone")),
                 HomeItem("Background", HomeAction.Menu("settings:background")),
                 HomeItem("Undo", HomeAction.Menu("undo")),
@@ -110,6 +111,16 @@ class HomeSettingsTest {
         assertEquals(listOf("View", "Theme"), look.map { it.label })
         assertEquals("Touch", look[0].detail)
         assertEquals(HomeItem("Theme", HomeAction.Menu("themes"), detail = "neon"), look[1])
+    }
+
+    @Test
+    fun `desktop has the session and how touch works, with their choices named`() {
+        settings("desktop = none\n")
+        val desktop = items("settings:desktop")
+        assertEquals(listOf("Desktop", "Touch"), desktop.map { it.label })
+        assertEquals(listOf("X server only", "Touchpad"), desktop.map { it.detail })
+        assertEquals(listOf("XFCE", "X server only"), items("setting:desktop").drop(1).map { it.label })
+        assertEquals(listOf("Touchpad", "Direct taps"), items("setting:desktop-touch").drop(1).map { it.label })
     }
 
     @Test

@@ -211,7 +211,7 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
-- `view`: `terminal` (default) or `touch`: what the app shows (the
+- `view`: `terminal` (default), `touch` or `desktop`: what the app shows (the
   launcher menu's Settings → Touch view switches to it). `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Its
@@ -247,6 +247,11 @@ One `key = value` per line; `mynx settings` describes each.
   apps): long-press to select, then Copy, Cut, Rename, Delete
   (permanent) or Share; Paste here; Chat here and Terminal here start
   Claude Code's chat or a shell in the folder shown.
+  `desktop` is desktop mode (`mynx desktop`).
+- `desktop`: `xfce` (default) or `none`: what `mynx desktop start`
+  runs on the X server; `none` is the server alone.
+- `desktop-touch`: `touchpad` (default) or `direct`: a finger moves
+  a pointer, or clicks where it taps.
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
   the permission mode new chats of touch view's Chat start in. `auto`
   lets Claude Code decide what's safe to run, asking less; `default`
