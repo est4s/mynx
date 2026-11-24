@@ -203,7 +203,7 @@ location, sensors, camera and flashlight, sound files, sound device,
 USB serial bridge, serial preload, serial port names, proot's
 mynx_serial and mynx_links extensions, raw USB, UF2, Android SDK, Bluetooth serial,
 Bluetooth LE, BLE UART ports, rotation lock, vibration, sharing,
-updates, release notes, time zone, wakelock, background services, web
+updates, release notes, time zone, wakelock, background services, desktop mode, web
 apps (part 1, and part 2: the bridge), touch mode's Home, touch
 mode's Files, viewers, more viewers, chat protocol, launcher shortcut, blocked `/proc` files, battery stand-in;
 then Termux library notes and proot notes.

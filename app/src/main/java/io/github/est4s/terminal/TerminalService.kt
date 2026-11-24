@@ -66,6 +66,8 @@ import io.github.est4s.terminal.core.ChatNotice
 import io.github.est4s.terminal.core.ChatNoticeRules
 import io.github.est4s.terminal.core.ChatTab
 import io.github.est4s.terminal.core.Launch
+import io.github.est4s.terminal.core.Desktop
+import io.github.est4s.terminal.core.desktopRequests
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
 import io.github.est4s.terminal.core.claudeAuthStatusCommand
@@ -431,7 +433,17 @@ class TerminalService : Service() {
                 bluetoothRequests(File(rootfs, "root"), bluetooth) +
                 bleRequests(File(rootfs, "root"), ble, bluetooth) +
                 webAppRequests(webApps) +
-                appPermissions.requests(),
+                appPermissions.requests() +
+                desktopRequests(desktop),
+        )
+    }
+    // Desktop mode's X server and session (mynx desktop); core decides what runs.
+    private val desktop: Desktop by lazy {
+        Desktop(
+            File(rootfs),
+            DesktopProcesses(this, mainHandler) { command -> debianLaunch(workDir = "/root", command = command) },
+            signal = Os::kill,
+            later = { ms, action -> mainHandler.postDelayed(action, ms) },
         )
     }
     // Apps (mynx app): each opens in a WebAppActivity of its own; core decides the rest.
@@ -966,6 +978,7 @@ class TerminalService : Service() {
         recorder.stopAll()
         mic.stop()
         sound.stop()
+        runCatching { desktop.stop() }
         runCatching { usb.stop() }
         runCatching { usbFds.stop() }
         runCatching { bluetooth.stop() }
@@ -1311,7 +1324,7 @@ class TerminalService : Service() {
         openMenu: Boolean = false,
         keyBarFile: String? = null,
         service: String? = null,
-    ): Launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = cwdFile, openMenu = openMenu, keyBarFile = keyBarFile, toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, ownDev = ownDev(), preload = serialPreload(tools.tools, currentSettings()?.serialPreload ?: true), service = service, command = command, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
+    ): Launch = prootLaunch(prootPaths(), soundSocket = SOUND_SOCKET, timeZone = phoneTimeZone(), shellId = shellId, workDir = workDir, cwdFile = cwdFile, openMenu = openMenu, keyBarFile = keyBarFile, toolsDir = tools.tools.absolutePath, requestDir = REQUEST_DIR, powerSupply = powerSupply.absolutePath, serialDir = serialDir.takeIf { it.isDirectory }?.absolutePath, ownDev = ownDev(), preload = serialPreload(tools.tools, currentSettings()?.serialPreload ?: true), service = service, display = desktop.display, command = command, fakeProc = writeFakeProc(File(filesDir, "fake-proc"), Runtime.getRuntime().availableProcessors()) { path ->
         runCatching { File(path).inputStream().use { it.read() } }.isSuccess
     })
 
