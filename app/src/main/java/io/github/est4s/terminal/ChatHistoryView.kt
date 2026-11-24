@@ -20,15 +20,17 @@ private const val HISTORY_TITLE = "Chats"
 /**
  * The agent's home in touch mode, in the pixel style: New chat, then its
  * chats ([ChatHub.rows]: the live ones with their marks, and every folder's
- * past ones, a row outside the hub's folder naming it), newest first. A row
- * goes to [openChat], New chat with null. [back] is the header's ←; the terminal is the chat
- * home drawer's.
+ * past ones, a row outside the hub's folder naming it), newest first, the
+ * pinned ones on top. A row goes to [openChat], New chat with null; a long
+ * press offers [rowActions] ([showChatRowMenu]). [back] is the header's ←;
+ * the terminal is the chat home drawer's.
  */
 @SuppressLint("ViewConstructor")
 class ChatHistoryView(
     context: Context,
     private val hub: () -> ChatHub?,
     private val back: () -> Unit,
+    private val rowActions: ChatRowActions?,
     private val openChat: (ChatHistoryRow?) -> Unit,
 ) : LinearLayout(context) {
     private val rows = LinearLayout(context).apply {
@@ -92,9 +94,6 @@ class ChatHistoryView(
             // The shadow sticks out 4 dp: keep the button's own edge 16 dp from the screen's.
             setMargins(dp(16), dp(16), dp(16) - dp(Pixel.SHADOW_DP), dp(8))
         })
-        addView(sectionLabel(context, "Recent").apply {
-            setPadding(dp(16), dp(12), dp(16), dp(8))
-        }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         addView(scroll, LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f))
         render()
     }
@@ -127,11 +126,20 @@ class ChatHistoryView(
             list.isEmpty() -> rows.addView(note("No chats yet."))
             else -> {
                 val now = System.currentTimeMillis()
-                list.forEach {
-                    rows.addView(row(it, now), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-                        bottomMargin = dp(8)
-                    })
+                // The pinned ones (first in the list) under a heading of their own, then the recents.
+                val (pinned, recents) = list.partition { it.pinned }
+                fun group(label: String, group: List<ChatHistoryRow>) {
+                    if (group.isEmpty()) return
+                    rows.addView(sectionLabel(context, label).apply { setPadding(0, dp(12), 0, dp(8)) },
+                        LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+                    group.forEach {
+                        rows.addView(row(it, now), LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                            bottomMargin = dp(8)
+                        })
+                    }
                 }
+                group("Pinned", pinned)
+                group("Recents", recents)
             }
         }
     }
@@ -169,7 +177,14 @@ class ChatHistoryView(
                 }
             }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
         }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        if (chat.pinned) addView(pinMark(context), LayoutParams(dp(16), dp(16)).apply { marginStart = dp(8) })
         setOnClickListener { openChat(chat) }
+        rowActions?.let { actions ->
+            setOnLongClickListener {
+                showChatRowMenu(this, chat, actions)
+                true
+            }
+        }
     }
 
     private fun smallText(text: String, color: Int) = TextView(context).apply {

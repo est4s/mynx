@@ -40,6 +40,10 @@ prompt line ("Ask Claude…") with a mic button at its end.
 - To check: whether each agent keeps what's typed while it starts.
 
 ### Touch mode
+- **Files' dialogs in the pixel style:** Rename and Delete (and New
+  folder, which shares Rename's) in `pixelDialog`, as the chat rows'
+  already are, in place of Android's dialogs (maintainer's request,
+  2026-11-24).
 - **Other agents in Chat:** Codex (its `app-server`) and Gemini (ACP),
   with the same artifact cards and "Open in terminal" hand-off
   (`codex resume` and the others' equivalents).

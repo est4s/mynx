@@ -38,9 +38,18 @@ differ, the text wins.
 scrim over the rest; tap ☰ to open, tap the scrim or Back to close;
 no edge swipe, which is Android's Back):
 - The title art, then **New chat** (the main action).
-- **Chats:** the latest few from `chatHistory()` (live ones first,
-  marked as on the chat home), then **All chats**, which opens the
-  history screen (`ChatHistoryView`, unchanged).
+- **Pinned:** every pinned chat, under a heading of its own (none
+  pinned, no heading); then **Recents:** the latest few others from
+  `chatHistory()` (live ones first, marked as on the chat home), then
+  **All chats**, which opens the history screen (`ChatHistoryView`),
+  grouped the same way: Pinned, then Recents.
+- **A chat's long press** (here and in the history; maintainer's
+  request, 2026-11-24): the app's own menu (`pixelMenu`, as the ⋮
+  menus), dropped from the row: **Pin** (or Unpin), **Rename**,
+  **Delete** (after a confirmation). Pinned rows have a pin at their
+  end. Rename and Delete ask in `pixelDialog`s: the menu's box (card,
+  cyan border, pink shadow), the title in Pixelify, Cancel outlined
+  and the main button filled (cyan; Delete pink).
 - **Linux:** Home's main list, `HomeMenus.items(HOME_MAIN)`, in
   `menu.conf`'s order and with its actions: Shell, AI agents,
   Services (with the count), Apps, Games, Files,

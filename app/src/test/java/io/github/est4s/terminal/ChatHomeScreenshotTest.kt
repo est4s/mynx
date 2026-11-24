@@ -20,8 +20,9 @@ import java.nio.file.Files
 
 private const val HOME_MINUTE = 60_000L
 
-// Two live chats (working, waiting for you) and three past ones.
+// A pinned chat, two live ones (working, waiting for you) and three past ones.
 private fun homeRows(now: Long) = listOf(
+    ChatHistoryRow("pin", "Plan the weather station", now - 30 * 24 * 60 * HOME_MINUTE, pinned = true),
     ChatHistoryRow("n", "Make a tip calculator app for the home screen", now - 5_000, ChatRowState.WORKING),
     ChatHistoryRow("w", "Why does esptool say the port is busy?", now - 3 * HOME_MINUTE, ChatRowState.WAITING),
     ChatHistoryRow("p1", "Rename the photos in Download by date", now - 40 * HOME_MINUTE),
@@ -39,6 +40,9 @@ private val noActions = object : ChatHomeActions {
     override fun openList(menu: String, title: String) = Unit
     override fun openServices() = Unit
     override fun showTerminal() = Unit
+    override fun pinChat(row: ChatHistoryRow, on: Boolean) = Unit
+    override fun renameChat(row: ChatHistoryRow, title: String) = Unit
+    override fun deleteChat(row: ChatHistoryRow) = Unit
 }
 
 /** Touch view's chat home and its drawer, with an empty Debian: see [Screenshots]. */

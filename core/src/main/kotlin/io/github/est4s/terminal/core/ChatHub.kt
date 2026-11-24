@@ -5,7 +5,8 @@ data class LiveChat(val sessionId: String, val title: String?, val touchedMs: Lo
 
 /**
  * One row of the chat history: [state] is null for a past chat no controller
- * holds; [cwd] the folder it runs in, null for the hub's own.
+ * holds; [cwd] the folder it runs in, null for the hub's own; [pinned] when
+ * it's pinned to the top.
  */
 data class ChatHistoryRow(
     val sessionId: String,
@@ -13,6 +14,7 @@ data class ChatHistoryRow(
     val modifiedMs: Long,
     val state: ChatRowState? = null,
     val cwd: String? = null,
+    val pinned: Boolean = false,
 )
 
 const val CHAT_UNTITLED = "New chat"
@@ -24,9 +26,15 @@ const val CHAT_UNTITLED = "New chat"
  * replaces its transcript's, keeping the transcript's title (Claude's own
  * pick of the first prompt), and is as new as the later of the two. Live
  * chats not in a transcript yet come first, titled by their first prompt;
- * then the rest, newest first.
+ * then the rest, newest first. The [pinned] ones go before all, in that
+ * same order.
  */
-fun chatHistory(live: List<LiveChat>, past: List<ClaudeSessionSummary>, here: String): List<ChatHistoryRow> {
+fun chatHistory(
+    live: List<LiveChat>,
+    past: List<ClaudeSessionSummary>,
+    here: String,
+    pinned: Set<String> = emptySet(),
+): List<ChatHistoryRow> {
     val byId = past.associateBy { it.sessionId }
     val liveIds = live.map { it.sessionId }.toSet()
     val (known, fresh) = live.partition { it.sessionId in byId }
@@ -39,7 +47,32 @@ fun chatHistory(live: List<LiveChat>, past: List<ClaudeSessionSummary>, here: St
     }
     val pastRows = past.filter { it.sessionId !in liveIds }
         .map { ChatHistoryRow(it.sessionId, it.title, it.modifiedMs, cwd = folder(it.cwd)) }
-    return freshRows + (knownRows + pastRows).sortedByDescending { it.modifiedMs }
+    val rows = (freshRows + (knownRows + pastRows).sortedByDescending { it.modifiedMs })
+        .map { if (it.sessionId in pinned) it.copy(pinned = true) else it }
+    val (top, rest) = rows.partition { it.pinned }
+    return top + rest
+}
+
+/** The chats pinned to the history's top: session ids, a line each in [file] (none kept without it). */
+class ChatPins(private val file: java.io.File?) {
+    private val ids: LinkedHashSet<String> by lazy {
+        val text = file?.let { runCatching { it.takeIf(java.io.File::isFile)?.readText() }.getOrNull() }.orEmpty()
+        text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toCollection(LinkedHashSet())
+    }
+
+    val all: Set<String> get() = ids.toSet()
+
+    operator fun contains(id: String) = id in ids
+
+    fun set(id: String, on: Boolean) {
+        val changed = if (on) ids.add(id) else ids.remove(id)
+        if (!changed) return
+        val file = file ?: return
+        runCatching {
+            file.parentFile?.mkdirs()
+            file.writeText(ids.joinToString("") { "$it\n" })
+        }
+    }
 }
 
 internal fun promptTitle(prompt: String?): String =
@@ -89,8 +122,11 @@ class ChatHub(
     private val now: () -> Long = System::currentTimeMillis,
     /** Where each session's picks are kept for the next start ([ChatShared]); in memory only without it. */
     picksFile: java.io.File? = null,
+    /** Where the pinned chats are kept ([ChatPins]); in memory only without it. */
+    pinsFile: java.io.File? = null,
 ) {
     private val shared = ChatShared(picksFile)
+    private val pins = ChatPins(pinsFile)
     private val chats = ArrayList<ChatController>()
     // Session id → notice slot, the most recently posted last.
     private val noticeSlots = LinkedHashMap<String, Int>()
@@ -153,14 +189,62 @@ class ChatHub(
     }
 
     /** The history's rows, with the past sessions as last read ([history]). */
-    fun rows(): List<ChatHistoryRow> = chatHistory(liveChats(), past, cwd)
+    fun rows(): List<ChatHistoryRow> = chatHistory(liveChats(), past, cwd, pins.all)
+
+    /** The pinned chats' session ids. */
+    val pinned: Set<String> get() = pins.all
+
+    /** Pins the chat on [sessionId] to the history's top, or takes it off ([on] false); kept for the next start. */
+    fun setPinned(sessionId: String, on: Boolean) = pins.set(sessionId, on)
+
+    /**
+     * Names the chat on [sessionId] [title] ([chatTitle] of it) in its
+     * transcript, off the main thread ([appendClaudeTitle]); [done] gets
+     * null once it's done, else why not, on the main thread.
+     */
+    fun rename(sessionId: String, title: String, done: (String?) -> Unit) {
+        val name = chatTitle(title) ?: return done("Type a name")
+        val file = host.hostFile(claudeTranscriptPath(home, folderOf(sessionId), sessionId))
+        host.background {
+            val problem = when {
+                !file.isFile -> "Send it a prompt first"
+                else -> runCatching { appendClaudeTitle(file, sessionId, name) }.exceptionOrNull()
+                    ?.let { "Couldn't name it: ${it.message ?: it.javaClass.simpleName}" }
+            }
+            post {
+                if (problem == null) past = past.map { if (it.sessionId == sessionId) it.copy(title = name) else it }
+                done(problem)
+            }
+        }
+    }
+
+    /**
+     * Deletes the chat on [sessionId] for good, run in Debian: its transcript,
+     * the folder Claude keeps beside it and its file history. Not while a
+     * chat holds it with a process (it would write them again). Once it
+     * worked, tell the hub with [deleted].
+     */
+    fun deleteJob(sessionId: String): FileJob {
+        if (chats.any { it.sessionId == sessionId && it.live }) return FileJob.Refused("It's still running: stop it first")
+        val transcript = claudeTranscriptPath(home, folderOf(sessionId), sessionId)
+        val job = io.github.est4s.terminal.core.deleteJob(listOf(transcript, transcript.removeSuffix(".jsonl"), "$home/.claude/file-history/$sessionId"))
+        return if (job is FileJob.Run) job.copy(title = "Deleting the chat") else job
+    }
+
+    /** The chat on [sessionId] was deleted: it leaves the history and the pins. */
+    fun deleted(sessionId: String) {
+        chats.filter { it.sessionId == sessionId }.forEach { settle(it) }
+        past = past.filter { it.sessionId != sessionId }
+        pins.set(sessionId, false)
+    }
 
     /** Reads every folder's past chats off the main thread, then gives [rows] on it. */
     fun history(done: (List<ChatHistoryRow>) -> Unit) {
         val dir = host.hostFile(claudeProjectsDir(home))
+        val keep = pins.all
         host.background {
             val exists = { path: String -> host.hostFile(path).isDirectory }
-            val list = runCatching { listClaudeSessions(dir, cwd, exists) }.getOrDefault(emptyList())
+            val list = runCatching { listClaudeSessions(dir, cwd, exists, keep = keep) }.getOrDefault(emptyList())
             post {
                 past = list
                 done(rows())
@@ -224,6 +308,12 @@ class ChatHub(
             }
         }
     }
+
+    // Where the chat on [sessionId] runs: a held one's folder, else the one the history last read for it, else the hub's own.
+    private fun folderOf(sessionId: String): String =
+        chats.firstOrNull { it.sessionId == sessionId }?.cwd
+            ?: past.firstOrNull { it.sessionId == sessionId }?.cwd
+            ?: cwd
 
     private fun liveChats(): List<LiveChat> = chats.mapNotNull { chat ->
         chat.sessionId?.let { LiveChat(it, chat.title, chat.touchedMs, chat.rowState, chat.cwd) }

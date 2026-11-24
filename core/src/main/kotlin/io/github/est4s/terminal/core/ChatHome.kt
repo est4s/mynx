@@ -9,13 +9,16 @@ data class DrawerItem(val label: String, val action: HomeAction, val opensList: 
 /**
  * What touch view's chat home and its drawer show (docs/TOUCH-DESIGN.md).
  * [continueRows]: the live chats (working or waiting for you), in history
- * order, at most [CHAT_HOME_CONTINUE_MAX]. [drawerChats]: live ones first,
- * then the rest, each in history order, at most [DRAWER_CHATS_MAX].
+ * order, at most [CHAT_HOME_CONTINUE_MAX]. [drawerPinned]: the pinned ones,
+ * all of them, in history order. [drawerChats] (its Recents): the others,
+ * live ones first, then the rest, each in history order, at most
+ * [DRAWER_CHATS_MAX].
  * [linux]: Home's main list as it is. [servicesActive] 0 shows nothing.
  * Without the agent, the prompt box gives way to [installAction].
  */
 data class ChatHome(
     val continueRows: List<ChatHistoryRow>,
+    val drawerPinned: List<ChatHistoryRow>,
     val drawerChats: List<ChatHistoryRow>,
     val linux: List<DrawerItem>,
     val servicesActive: Int,
@@ -38,9 +41,12 @@ fun chatHome(
     cwd: String,
     home: String,
 ): ChatHome {
-    val (live, rest) = history.partition { it.state == ChatRowState.WORKING || it.state == ChatRowState.WAITING }
+    fun isLive(row: ChatHistoryRow) = row.state == ChatRowState.WORKING || row.state == ChatRowState.WAITING
+    val (pinned, others) = history.partition { it.pinned }
+    val (live, rest) = others.partition(::isLive)
     return ChatHome(
-        continueRows = live.take(CHAT_HOME_CONTINUE_MAX),
+        continueRows = history.filter(::isLive).take(CHAT_HOME_CONTINUE_MAX),
+        drawerPinned = pinned,
         drawerChats = (live + rest).take(DRAWER_CHATS_MAX),
         linux = main.map { DrawerItem(it.label, it.action, it.action is HomeAction.Menu) },
         servicesActive = servicesActive,

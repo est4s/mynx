@@ -69,6 +69,48 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
+### 2026-11-24 (211): chat rows' menu in the pixel style, Pinned and Recents
+
+- Passed on the phone (2026-11-24): the pixel menu, the Pinned and
+  Recents groups and the pixel Rename and Delete dialogs. PR #104
+  merged.
+
+- The maintainer tried entry 210's build: pin, rename and delete all
+  worked. They asked for the menu in the app's design, "Pin" for "Pin
+  to top", and a Pinned group above the rest, called Recents.
+- The long press now drops `pixelMenu` from the row (Android's
+  dialog list took the system theme). The history and the drawer
+  show Pinned (only when there are pins) and Recents headings; core's
+  `ChatHome` gives the drawer `drawerPinned` (all pins) beside its 5
+  recents (`drawerChats`), so pins no longer take recents' places.
+- Then, at their request, Rename and Delete ask in a `pixelDialog`
+  (`PixelStyle.kt`, beside `pixelMenu`): the menu's box, a styled
+  field, Cancel and a filled main button (Delete's pink). Files'
+  dialogs are still AlertDialogs: moving them to it is on the roadmap
+  (Touch mode), at the maintainer's request.
+  Screenshots: `chat-rename`, `chat-rename-blank`, `chat-delete`.
+
+### 2026-11-24 (210): pin, rename and delete chats in touch mode
+
+- The maintainer asked for a long press on a chat, in the history and
+  in the drawer: pin to top, rename, delete. One menu
+  (`app/.../ChatRowMenu.kt`, AlertDialogs as Files' Rename/Delete),
+  `ChatRowActions` implemented in `MainActivity`'s `chatHomeActions`.
+- Pins: app state (`ChatPins`, `filesDir/state/chat-pins`, beside
+  `chat-picks`), not a setting; pinned rows lead `chatHistory()` and
+  the drawer, and `listClaudeSessions(keep =)` lists them past the
+  50-chat cap without reading every transcript's head.
+- Rename writes Claude Code's own `custom-title` line (found in its
+  binary, 2.1.331: `{"type":"custom-title","customTitle":…,
+  "sessionId":…}`, last wins), so Claude's `/resume` agrees and names
+  given with `/rename` show in mynx; read from each transcript's last
+  64 KB. Not for a chat with no transcript yet ("Send it a prompt
+  first").
+- Delete runs in Debian (`rm -rf` of the transcript, its folder and
+  its file history), refused while a chat holds a process on it.
+- Core tests in `ClaudeHistoryTest`, `ChatHubTest`, `ChatHomeTest`;
+  the screenshots now have a pinned row. Not committed yet.
+
 ### 2026-11-23 (209): v0.5.0 released
 
 - Main's build for `8bd3d39` (the #102 merge) was green; tagged it

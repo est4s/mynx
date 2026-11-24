@@ -247,6 +247,48 @@ class ClaudeHistoryTest {
     }
 
     @Test
+    fun `a renamed chat is listed by its name, the last one given`() {
+        val file = session("/root", id(1), "the first prompt", 1000_000)
+        file.appendText("""{"type":"custom-title","customTitle":"Old name","sessionId":"${id(1)}"}""" + "\n")
+        file.appendText(user(2, "more").dropLast(1) + "}\n")
+        file.appendText("""{"type":"custom-title","customTitle":"  New\nname ","sessionId":"${id(1)}"}""" + "\n")
+        assertEquals(listOf("New name"), listClaudeSessions(projects, "/root").map { it.title })
+    }
+
+    @Test
+    fun `a name is found at the end of a long transcript`() {
+        val file = session("/root", id(1), "first", 1000_000)
+        val filler = user(2, "x".repeat(1000))
+        repeat(200) { file.appendText(filler + "\n") }
+        file.appendText("""{"type":"custom-title","customTitle":"Named","sessionId":"${id(1)}"}""" + "\n")
+        assertEquals("Named", listClaudeSessions(projects, "/root").single().title)
+    }
+
+    @Test
+    fun `naming a chat appends Claude's own line, on a line of its own`() {
+        val file = session("/root", id(1), "first", 1000_000)
+        file.appendText("""{"type":"mode"}""")
+        appendClaudeTitle(file, id(1), "My chat")
+        val last = file.readLines().last()
+        assertEquals(mapOf("type" to "custom-title", "customTitle" to "My chat", "sessionId" to id(1)), parseJson(last))
+        assertEquals("""{"type":"mode"}""", file.readLines().dropLast(1).last())
+        assertEquals("My chat", listClaudeSessions(projects, "/root").single().title)
+    }
+
+    @Test
+    fun `a chat's new name is one trimmed line, none when blank`() {
+        assertEquals("a b", chatTitle("  a\n b "))
+        assertEquals(CLAUDE_TITLE_MAX, chatTitle("x".repeat(500))!!.length)
+        assertNull(chatTitle(" \n "))
+    }
+
+    @Test
+    fun `chats to keep are listed past the cap`() {
+        for (n in 1..5) session("/root", id(n), "p$n", n * 1000_000L)
+        assertEquals(listOf("p5", "p4", "p1"), listClaudeSessions(projects, "/root", max = 2, keep = setOf(id(1))).map { it.title })
+    }
+
+    @Test
     fun `relative times`() {
         val now = 100L * 24 * 3_600_000
         fun ago(ms: Long) = chatRelativeTime(now, now - ms)

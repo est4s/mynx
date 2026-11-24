@@ -621,7 +621,23 @@ See `docs/ROADMAP.md` "How it works". The details:
   (`HomeAction.Chat`) opens the agent's home, the chat history
   (`app/.../ChatHistoryView.kt`, over the terminal too): New chat, then
   `ChatHub.rows()`; a chat's Back goes to it, its Back to Home's list
-  (maintainer's decision, 2026-11-10). The service keeps which chat
+  (maintainer's decision, 2026-11-10). **A row's long press**, there
+  and in the drawer (`ChatRowMenu.kt`; maintainer's request,
+  2026-11-24): `pixelMenu` with Pin, Rename, Delete, which ask in a
+  `pixelDialog` (`PixelStyle.kt`: Android's AlertDialog takes the
+  system theme; Files' dialogs still do). Pins are app
+  state (`ChatPins`, `filesDir/state/chat-pins`, a session id a line);
+  pinned rows lead `chatHistory()`, both screens show them under
+  Pinned above Recents (the drawer's are `ChatHome.drawerPinned`, all
+  of them, beside its 5 recents), and they're listed
+  past the 50-chat cap (`listClaudeSessions`' `keep`). Rename appends
+  Claude's own `custom-title` line to the transcript
+  (`appendClaudeTitle`; last one wins, as `/rename` writes it), and
+  the list reads it from the transcript's last 64 KB
+  (`claudeCustomTitle`), so names given in a terminal show too.
+  Delete is `ChatHub.deleteJob()`: `rm -rf` in Debian of the
+  transcript, its folder beside it and `~/.claude/file-history/ID`,
+  refused while a chat holds a process on it. The service keeps which chat
   screen shows (`chatPlace`) for a recreated activity.
   **Chat home** (maintainer's decision, 2026-11-11; the spec is
   `docs/TOUCH-DESIGN.md`): touch view starts on `ChatHomeView`
