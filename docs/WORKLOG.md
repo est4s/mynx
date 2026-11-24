@@ -101,7 +101,8 @@ in mynx dev:
 - Then, at their request, Rename and Delete ask in a `pixelDialog`
   (`PixelStyle.kt`, beside `pixelMenu`): the menu's box, a styled
   field, Cancel and a filled main button (Delete's pink). Files'
-  dialogs are still AlertDialogs: they could move to it later.
+  dialogs are still AlertDialogs: moving them to it is on the roadmap
+  (Touch mode), at the maintainer's request.
   Screenshots: `chat-rename`, `chat-rename-blank`, `chat-delete`.
 
 ### 2026-11-24 (210): pin, rename and delete chats in touch mode
