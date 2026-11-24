@@ -625,7 +625,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   and in the drawer (`ChatRowMenu.kt`; maintainer's request,
   2026-11-24): `pixelMenu` with Pin, Rename, Delete, which ask in a
   `pixelDialog` (`PixelStyle.kt`: Android's AlertDialog takes the
-  system theme; Files' dialogs still do). Pins are app
+  system theme), as Files' do. Pins are app
   state (`ChatPins`, `filesDir/state/chat-pins`, a session id a line);
   pinned rows lead `chatHistory()`, both screens show them under
   Pinned above Recents (the drawer's are `ChatHome.drawerPinned`, all
@@ -662,7 +662,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   runs in a proot of its own; never `java.io.File`, because proot's
   `--link2symlink` fakes hard links with `.l2s.*` files holding host
   paths, and `deleteRecursively()` follows links. Delete is permanent,
-  after a confirmation. Chat here is `ChatHub.newChat(cwd)`; Terminal
+  after a confirmation. Rename, New folder and Delete ask in a
+  `pixelDialog` (`askFileName()`, `confirmFilesDelete()`); a name
+  core refuses greys the main button and `fileNameProblem()` says why
+  in the dialog's note line (`PixelDialog.setNote`: EditText's error
+  popup takes the system theme). Errors (`tell()`) and Open with are
+  still AlertDialogs. Chat here is `ChatHub.newChat(cwd)`; Terminal
   here a tab started in the folder. Pictures' thumbnails come from a
   `ChatThumbnails` of its own (40 dp), only for rows near sight.
   **The phone's storage** (`core/.../Storage.kt`; maintainer's

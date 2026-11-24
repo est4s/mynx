@@ -69,6 +69,24 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Log
 
+### 2026-11-24 (212): Files' dialogs in the pixel style
+
+- Passed on the phone (2026-11-24); PR #105 merged.
+
+- Rename, New folder and Delete in touch mode's Files now ask in
+  `pixelDialog` (roadmap item, maintainer's request), as the chat
+  rows' do: `askFileName()` and `confirmFilesDelete()`, top-level in
+  `FilesView.kt` so the screenshots drive them.
+- `pixelDialog` gained a note line under the field,
+  `PixelDialog.setNote()` (hidden until set): `fileNameProblem()`'s
+  reason goes there, since EditText's `error` popup takes the system
+  theme. The chat rows don't use it.
+- Left as AlertDialogs: Files' `tell()` (errors) and Open with (a
+  list of choices).
+- Screenshots: `files-rename`, `files-rename-refused`,
+  `files-new-folder`, `files-delete`, `files-delete-many`. Not
+  compiled here (CI only).
+
 ### 2026-11-24 (211): chat rows' menu in the pixel style, Pinned and Recents
 
 - Passed on the phone (2026-11-24): the pixel menu, the Pinned and

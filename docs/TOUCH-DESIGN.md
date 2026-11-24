@@ -136,6 +136,10 @@ places.
   `ShareProvider`), else Share.
 - Long-press selects; then taps toggle, and the top row becomes
   "N selected" with Copy, Cut, Rename (one only), Delete, Share, ✕.
+- Rename, New folder and Delete ask in `pixelDialog`s, as a chat
+  row's do (title "Rename", "New folder", "Delete?"): Rename selects
+  the name before its extension; a name that won't do greys the main
+  button, with why in a pink line under the field.
 - Copy/Cut keep a clip (paths and the op) across folders; a bar at
   the bottom says "N to paste" with **Paste here** and ✕.
 - Bottom actions, always: **Chat here** (a new chat whose agent runs
