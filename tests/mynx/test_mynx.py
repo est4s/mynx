@@ -3225,6 +3225,115 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(run.returncode, 2)
         self.assertIn("usage: mynx sound [status] | start | install [--yes]", run.stderr)
 
+    # --- desktop ------------------------------------------------------------
+
+    def desktop_status(self, **fields):
+        """The app's desktop-* answer: nothing running, unless [fields] say."""
+        answer = {"ok": True, "running": False, "display": None, "session": "xfce", "sessionRunning": False,
+                  "socket": os.path.join(self.tmp.name, "X0"), "log": "/tmp/.mynx/desktop/x11.log", "problem": None}
+        answer.update(fields)
+        if answer["running"]:
+            answer["display"] = ":0"
+        return answer
+
+    def x_server(self, after=0):
+        """An X server's socket in the test's folder, [after] seconds from now."""
+        def listen():
+            server = socket.socket(socket.AF_UNIX)
+            server.bind(os.path.join(self.tmp.name, "X0"))
+            server.listen()
+            self.addCleanup(server.close)
+        timer = threading.Timer(after, listen)
+        timer.start()
+        self.addCleanup(timer.cancel)
+
+    def test_desktop_status_says_what_runs(self):
+        self.start_app({"desktop-status": self.desktop_status(running=True, sessionRunning=True)})
+        run = self.mynx("desktop")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Desktop: running on DISPLAY=:0 (XFCE)\n")
+        self.assertEqual(self.app.seen, ["desktop-status"])
+
+    def test_desktop_status_of_the_x_server_alone(self):
+        self.start_app({"desktop-status": self.desktop_status(running=True, session="none")})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, "Desktop: running on DISPLAY=:0 (the X server alone)\n")
+
+    def test_desktop_status_says_when_the_session_has_ended(self):
+        self.start_app({"desktop-status": self.desktop_status(running=True)})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, "Desktop: running on DISPLAY=:0; the XFCE session has ended "
+                                     "(mynx desktop start starts it again)\n")
+
+    def test_desktop_status_when_stopped(self):
+        self.start_app({"desktop-status": self.desktop_status()})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, "Desktop: not running (mynx desktop start starts it)\n")
+
+    def test_desktop_status_says_what_stops_a_start(self):
+        self.start_app({"desktop-status": self.desktop_status(problem="XFCE isn't installed: apt install xfce4")})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Desktop: not running: XFCE isn't installed: apt install xfce4\n")
+
+    def test_desktop_status_as_json(self):
+        answer = self.desktop_status(running=True, sessionRunning=True)
+        self.start_app({"desktop-status": answer})
+        run = self.mynx("desktop", "status", "--json")
+        self.assertEqual(json.loads(run.stdout), answer)
+
+    def test_desktop_start_waits_for_the_x_server(self):
+        self.x_server(after=0.5)
+        self.start_app({"desktop-start": self.desktop_status(started=True, running=True, sessionRunning=True)})
+        started = time.monotonic()
+        run = self.mynx("desktop", "start")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertGreaterEqual(time.monotonic() - started, 0.5)
+        self.assertEqual(run.stdout, "Desktop: started on DISPLAY=:0 (XFCE)\n")
+        self.assertEqual(self.app.seen, ["desktop-start"])
+
+    def test_desktop_start_when_it_runs(self):
+        self.x_server()
+        self.start_app({"desktop-start": self.desktop_status(started=False, running=True, session="none")})
+        run = self.mynx("desktop", "start")
+        self.assertEqual(run.stdout, "Desktop: already running on DISPLAY=:0 (the X server alone)\n")
+
+    def test_desktop_start_says_so_when_the_x_server_doesnt_come_up(self):
+        self.start_app({"desktop-start": self.desktop_status(started=True, running=True)})
+        run = self.mynx("desktop", "start")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("the X server didn't start: see /tmp/.mynx/desktop/x11.log", run.stderr)
+
+    def test_desktop_start_passes_on_the_refusal(self):
+        self.start_app({"desktop-start": {"ok": False, "error": "this build of mynx has no X server yet"}})
+        run = self.mynx("desktop", "start")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "mynx: this build of mynx has no X server yet\n")
+
+    def test_desktop_start_as_json(self):
+        self.x_server()
+        answer = self.desktop_status(started=True, running=True, sessionRunning=True)
+        self.start_app({"desktop-start": answer})
+        run = self.mynx("desktop", "start", "--json")
+        self.assertEqual(json.loads(run.stdout), answer)
+
+    def test_desktop_stop(self):
+        self.start_app({"desktop-stop": self.desktop_status(stopped=True)})
+        run = self.mynx("desktop", "stop")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Desktop: stopped\n")
+        self.assertEqual(self.app.seen, ["desktop-stop"])
+
+    def test_desktop_stop_when_nothing_runs(self):
+        self.start_app({"desktop-stop": self.desktop_status(stopped=False)})
+        run = self.mynx("desktop", "stop")
+        self.assertEqual(run.stdout, "Desktop: not running\n")
+
+    def test_desktop_usage(self):
+        run = self.mynx("desktop", "begin")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("usage: mynx desktop [status] | start | stop", run.stderr)
+
     # --- audio --------------------------------------------------------------
 
     def test_audio_play_waits_for_the_end_quietly(self):
