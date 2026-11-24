@@ -11,8 +11,8 @@ data class ProotPaths(
     val tmpDir: String,
 )
 
-/** A process to start: [argv] and the extra [env] it needs. */
-data class Launch(val argv: List<String>, val env: Map<String, String>)
+/** A process to start: [argv], the extra [env] it needs, and the app's variables it must not inherit ([unset]). */
+data class Launch(val argv: List<String>, val env: Map<String, String>, val unset: List<String> = emptyList())
 
 internal val HOST_BINDS = listOf("/dev", "/proc", "/sys", "/storage")
 
