@@ -382,6 +382,10 @@ setup() {
     grep -q "its chats from every folder" "$GUIDE"
 }
 
+@test "the guide says a chat can be pinned, renamed or deleted" {
+    grep -q "pin it to the top, rename or delete it" "$GUIDE"
+}
+
 @test "the guide says how to let Debian see all of the phone's storage" {
     grep -q "mynx storage allow" "$CORE"
     grep -q "Allow access to manage all files" "$DOCS/phone.md"

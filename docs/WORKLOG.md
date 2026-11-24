@@ -24,6 +24,21 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
+### 0. Chat rows: pin, rename, delete (entry 210, to try on the phone)
+
+Not committed yet: branch, PR, `scripts/deliver.sh`, then in mynx dev:
+- Long-press a chat in All chats and in the drawer: the menu shows
+  Pin to top / Rename / Delete. Pin one: it moves to the top of both
+  lists with a pin at its end; it stays pinned after the app restarts;
+  Unpin puts it back in date order.
+- Rename one: the new name shows in both lists, and in a terminal
+  `claude --resume` lists it by that name. Rename a chat while it
+  works, let it finish: the name should stay (Claude re-writes its own
+  cached title at times; if it reverts, rename only idle chats).
+- Delete one: it asks first, then it's gone from both lists, and
+  `ls ~/.claude/projects/*/ID*` finds nothing. Deleting a chat that's
+  working says "It's still running: stop it first".
+
 ### 1. Development boards: what's left (the maintainer picks)
 
 - Raw USB hotplug while a program runs (libudev's monitor wants
@@ -68,6 +83,27 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-24 (210): pin, rename and delete chats in touch mode
+
+- The maintainer asked for a long press on a chat, in the history and
+  in the drawer: pin to top, rename, delete. One menu
+  (`app/.../ChatRowMenu.kt`, AlertDialogs as Files' Rename/Delete),
+  `ChatRowActions` implemented in `MainActivity`'s `chatHomeActions`.
+- Pins: app state (`ChatPins`, `filesDir/state/chat-pins`, beside
+  `chat-picks`), not a setting; pinned rows lead `chatHistory()` and
+  the drawer, and `listClaudeSessions(keep =)` lists them past the
+  50-chat cap without reading every transcript's head.
+- Rename writes Claude Code's own `custom-title` line (found in its
+  binary, 2.1.331: `{"type":"custom-title","customTitle":…,
+  "sessionId":…}`, last wins), so Claude's `/resume` agrees and names
+  given with `/rename` show in mynx; read from each transcript's last
+  64 KB. Not for a chat with no transcript yet ("Send it a prompt
+  first").
+- Delete runs in Debian (`rm -rf` of the transcript, its folder and
+  its file history), refused while a chat holds a process on it.
+- Core tests in `ClaudeHistoryTest`, `ChatHubTest`, `ChatHomeTest`;
+  the screenshots now have a pinned row. Not committed yet.
 
 ### 2026-11-23 (209): v0.5.0 released
 

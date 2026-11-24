@@ -440,6 +440,13 @@ class MainActivity : Activity(), FrontActivity {
         }
     }
 
+    // A chat was pinned, renamed or deleted: the hub's rows as they are now, on whichever list shows.
+    private fun chatRowsChanged() {
+        val chats = service?.chats ?: return
+        if (chatHistoryShown) chatHistory?.show(chats.rows())
+        if (chatHomeShown) chatHomeView?.refresh()
+    }
+
     // A new chat, shown, with the home's box carried over.
     private fun newChatFromHome(draft: String): ChatController? {
         val controller = service?.chats?.newChat() ?: return null
@@ -469,6 +476,40 @@ class MainActivity : Activity(), FrontActivity {
         override fun openChat(row: ChatHistoryRow?) = this@MainActivity.openChat(row?.sessionId, row?.cwd)
 
         override fun allChats() = showChatHistory()
+
+        override fun pinChat(row: ChatHistoryRow, on: Boolean) {
+            val chats = service?.chats ?: return
+            chats.setPinned(row.sessionId, on)
+            chatRowsChanged()
+        }
+
+        override fun renameChat(row: ChatHistoryRow, title: String) {
+            val chats = service?.chats ?: return
+            chats.rename(row.sessionId, title) { problem ->
+                toastError(problem)
+                chatRowsChanged()
+            }
+        }
+
+        override fun deleteChat(row: ChatHistoryRow) {
+            val service = service ?: return
+            when (val job = service.chats.deleteJob(row.sessionId)) {
+                is FileJob.Refused -> toastError(job.reason)
+                is FileJob.Run -> service.runInDebian(job.argv) { code, output ->
+                    if (code == 0) {
+                        service.chats.deleted(row.sessionId)
+                    } else if (!isDestroyed) {
+                        // On screen until it's read: there's no log to look in on the phone.
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("${job.title}: failed")
+                            .setMessage(output.ifBlank { "It stopped with exit code $code." })
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                    chatRowsChanged()
+                }
+            }
+        }
 
         override fun act(action: HomeAction) = onHomeAction(action)
 
@@ -832,7 +873,7 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
-        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }) { openChat(it?.sessionId, it?.cwd) }.also {
+        chatHistory = ChatHistoryView(this, { service?.chats }, { goBack() }, chatHomeActions) { openChat(it?.sessionId, it?.cwd) }.also {
             it.visibility = View.GONE
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }

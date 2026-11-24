@@ -212,6 +212,12 @@ object Pixel {
             10, 3, 2, 11,             // the stem
             12, 3, 4, 2, 15, 5, 2, 3, // the flag
         )
+        PixelIcon.PIN -> intArrayOf(
+            6, 2, 8, 3,  // the head
+            7, 5, 6, 5,  // the body
+            4, 10, 12, 2, // the rim
+            9, 12, 2, 6, // the needle
+        )
     }
 
     // Turned left to right, for icons that go the other way.
@@ -263,7 +269,7 @@ fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
     popup.showAsDropDown(anchor, 0, 0, Gravity.END)
 }
 
-enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH, PLAY, PAUSE, NEXT, PREVIOUS, REPLAY, NOTE }
+enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH, PLAY, PAUSE, NEXT, PREVIOUS, REPLAY, NOTE, PIN }
 
 /** Text in another typeface (TypefaceSpan(Typeface) is API 28+): Pixelify Sans for headings in Chat's Markdown. */
 class PixelFontSpan(private val face: Typeface) : MetricAffectingSpan() {

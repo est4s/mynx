@@ -20,15 +20,17 @@ private const val HISTORY_TITLE = "Chats"
 /**
  * The agent's home in touch mode, in the pixel style: New chat, then its
  * chats ([ChatHub.rows]: the live ones with their marks, and every folder's
- * past ones, a row outside the hub's folder naming it), newest first. A row
- * goes to [openChat], New chat with null. [back] is the header's ←; the terminal is the chat
- * home drawer's.
+ * past ones, a row outside the hub's folder naming it), newest first, the
+ * pinned ones on top. A row goes to [openChat], New chat with null; a long
+ * press offers [rowActions] ([showChatRowMenu]). [back] is the header's ←;
+ * the terminal is the chat home drawer's.
  */
 @SuppressLint("ViewConstructor")
 class ChatHistoryView(
     context: Context,
     private val hub: () -> ChatHub?,
     private val back: () -> Unit,
+    private val rowActions: ChatRowActions?,
     private val openChat: (ChatHistoryRow?) -> Unit,
 ) : LinearLayout(context) {
     private val rows = LinearLayout(context).apply {
@@ -169,7 +171,14 @@ class ChatHistoryView(
                 }
             }, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
         }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        if (chat.pinned) addView(pinMark(context), LayoutParams(dp(16), dp(16)).apply { marginStart = dp(8) })
         setOnClickListener { openChat(chat) }
+        rowActions?.let { actions ->
+            setOnLongClickListener {
+                showChatRowMenu(context, chat, actions)
+                true
+            }
+        }
     }
 
     private fun smallText(text: String, color: Int) = TextView(context).apply {

@@ -431,6 +431,102 @@ class ChatHubTest {
         assertEquals("/root/site", hub.rows().single().cwd)
     }
 
+    @Test
+    fun `pinned chats come first in the history, in history order`() {
+        val past = listOf(
+            ClaudeSessionSummary("a", "newest", 300, "/root"),
+            ClaudeSessionSummary("b", "middle", 200, "/root"),
+            ClaudeSessionSummary("c", "oldest", 100, "/root"),
+        )
+        val live = listOf(LiveChat("n", "fresh", 50, ChatRowState.IDLE, "/root"))
+        assertEquals(
+            listOf("b" to true, "c" to true, "n" to false, "a" to false),
+            chatHistory(live, past, "/root", pinned = setOf("c", "b")).map { it.sessionId to it.pinned },
+        )
+    }
+
+    @Test
+    fun `a pin is kept in its file for the next start, and taken off again`() {
+        val pins = File(top, "state/chat-pins")
+        val id = "aaaaaaaa-0000-0000-0000-000000000001"
+        transcript(id, "keep me", 1_000_000L)
+        transcript("aaaaaaaa-0000-0000-0000-000000000002", "newer", 2_000_000L)
+        val one = ChatHub(host, { posted.addLast(it) }, picksFile = File(top, "state/chat-picks"), pinsFile = pins)
+        one.history {}
+        work()
+        one.setPinned(id, true)
+        assertEquals(listOf("keep me" to true, "newer" to false), one.rows().map { it.title to it.pinned })
+        val again = ChatHub(host, { posted.addLast(it) }, pinsFile = pins)
+        var rows: List<ChatHistoryRow>? = null
+        again.history { rows = it }
+        work()
+        assertEquals(listOf("keep me", "newer"), rows!!.map { it.title })
+        again.setPinned(id, false)
+        assertEquals(listOf("newer", "keep me"), again.rows().map { it.title })
+        assertEquals(emptyList(), ChatHub(host, { posted.addLast(it) }, pinsFile = pins).pinned.toList())
+    }
+
+    @Test
+    fun `renaming a chat writes its name into its transcript, off the main thread`() {
+        val id = "aaaaaaaa-0000-0000-0000-000000000001"
+        transcript(id, "the prompt", 1_000_000L, cwd = "/root/site")
+        hub.history {}
+        work()
+        var problem: String? = "not yet"
+        hub.rename(id, " Site work ") { problem = it }
+        assertEquals("not yet", problem)
+        work()
+        assertNull(problem)
+        assertEquals("Site work", hub.rows().single().title)
+        val file = File(top, claudeTranscriptPath("/root", "/root/site", id).removePrefix("/"))
+        assertTrue(file.readText().contains(""""customTitle":"Site work""""))
+        var rows: List<ChatHistoryRow>? = null
+        hub.history { rows = it }
+        work()
+        assertEquals("Site work", rows!!.single().title)
+    }
+
+    @Test
+    fun `a chat with no transcript yet or a blank name can't be renamed`() {
+        val chat = hub.newChat()
+        start(chat)
+        var problem: String? = null
+        hub.rename(chat.sessionId!!, "Name") { problem = it }
+        work()
+        assertEquals("Send it a prompt first", problem)
+        transcript("aaaaaaaa-0000-0000-0000-000000000001", "p", 1_000_000L)
+        hub.rename("aaaaaaaa-0000-0000-0000-000000000001", "  ") { problem = it }
+        work()
+        assertEquals("Type a name", problem)
+    }
+
+    @Test
+    fun `deleting a past chat removes its transcript, its folder and its file history, and its pin`() {
+        val id = "aaaaaaaa-0000-0000-0000-000000000001"
+        transcript(id, "gone soon", 1_000_000L, cwd = "/root/site")
+        transcript("aaaaaaaa-0000-0000-0000-000000000002", "stays", 2_000_000L)
+        hub.history {}
+        work()
+        hub.setPinned(id, true)
+        val job = hub.deleteJob(id) as FileJob.Run
+        val dir = claudeTranscriptDir("/root", "/root/site")
+        assertEquals(
+            "rm -rf -- '$dir/$id.jsonl' '$dir/$id' '/root/.claude/file-history/$id'",
+            job.argv.last().lines().last(),
+        )
+        hub.deleted(id)
+        assertEquals(listOf("stays"), hub.rows().map { it.title })
+        assertFalse(id in hub.pinned)
+    }
+
+    @Test
+    fun `a chat that's running can't be deleted`() {
+        val chat = hub.newChat()
+        start(chat)
+        hub.leave()
+        assertEquals(FileJob.Refused("It's still running: stop it first"), hub.deleteJob(chat.sessionId!!))
+    }
+
     private fun flag(name: String, launch: AgentLaunch = host.launches.last()): String? =
         launch.argv.indexOf(name).takeIf { it >= 0 }?.let { launch.argv[it + 1] }
 

@@ -28,7 +28,7 @@ import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.servicesMark
 
 /** What the chat home's taps do; MainActivity implements it. */
-interface ChatHomeActions {
+interface ChatHomeActions : ChatRowActions {
     /** A new chat with this first prompt, shown. */
     fun send(text: String)
     /** +: a new chat with [draft] in its box and its Add context sheet open. */

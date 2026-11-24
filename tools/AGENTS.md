@@ -223,7 +223,10 @@ One `key = value` per line; `mynx settings` describes each.
   back to Home. In `touch`, Home's AI agents opens an installed Claude
   Code's chat history: New chat, then its chats from every folder
   (another folder's named on its row; it goes on there), newest
-  first, marked while one works or waits for you. A chat shows
+  first, marked while one works or waits for you; long-press one to
+  pin it to the top, rename or delete it (in the drawer too). A
+  rename is Claude Code's own (`/rename`), so `claude --resume`
+  shows it; Delete removes the transcript for good. A chat shows
   messages, tool cards and Allow/Deny; Back goes to the history, and
   Back again to Home. Several chats can work at once, each its own
   Claude Code: one left while it works keeps going, one left idle is

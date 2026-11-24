@@ -38,9 +38,13 @@ differ, the text wins.
 scrim over the rest; tap ☰ to open, tap the scrim or Back to close;
 no edge swipe, which is Android's Back):
 - The title art, then **New chat** (the main action).
-- **Chats:** the latest few from `chatHistory()` (live ones first,
-  marked as on the chat home), then **All chats**, which opens the
-  history screen (`ChatHistoryView`, unchanged).
+- **Chats:** the latest few from `chatHistory()` (pinned ones first,
+  then live ones, marked as on the chat home), then **All chats**,
+  which opens the history screen (`ChatHistoryView`).
+- **A chat's long press** (here and in the history; maintainer's
+  request, 2026-11-24): **Pin to top** (or Unpin), **Rename**,
+  **Delete** (after a confirmation). Pinned chats lead both lists,
+  with a pin at the row's end.
 - **Linux:** Home's main list, `HomeMenus.items(HOME_MAIN)`, in
   `menu.conf`'s order and with its actions: Shell, AI agents,
   Services (with the count), Apps, Games, Files,

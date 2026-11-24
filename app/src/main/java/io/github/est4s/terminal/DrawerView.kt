@@ -21,7 +21,8 @@ import io.github.est4s.terminal.core.HomeAction
 /**
  * The chat home's drawer: New chat, the latest chats, All chats, Home's main
  * list (Linux) and, outside the scroll, Terminal. Every tap that leaves the
- * home runs [close] first.
+ * home runs [close] first. A chat's long press offers pin, rename and delete
+ * ([showChatRowMenu]); the drawer stays open for them.
  */
 @SuppressLint("ViewConstructor")
 class DrawerView(
@@ -122,7 +123,12 @@ class DrawerView(
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }, LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+        if (row.pinned) addView(pinMark(context), LayoutParams(dp(14), dp(14)).apply { marginStart = dp(8) })
         setOnClickListener { leave { actions.openChat(row) } }
+        setOnLongClickListener {
+            showChatRowMenu(context, row, actions)
+            true
+        }
     }
 
     private fun linuxRow(item: DrawerItem) = LinearLayout(context).apply {

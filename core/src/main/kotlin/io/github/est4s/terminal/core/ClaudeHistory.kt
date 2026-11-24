@@ -1,6 +1,7 @@
 package io.github.est4s.terminal.core
 
 import java.io.File
+import java.io.RandomAccessFile
 
 /** How many rows of a past chat the Chat screen shows. */
 const val CHAT_HISTORY_MAX = 300
@@ -10,10 +11,13 @@ const val CHAT_HISTORY_EARLIER = "Earlier messages not shown."
 const val CLAUDE_TITLE_HEAD_BYTES = 16 * 1024
 const val CLAUDE_TITLE_MAX = 120
 
+/** How much of a transcript's end is read for its name (Claude's `custom-title`, which it writes again as the chat goes on). */
+const val CLAUDE_NAME_TAIL_BYTES = 64 * 1024
+
 /** How many past chats the list reads. */
 const val CLAUDE_SESSIONS_MAX = 50
 
-/** A past chat for the chat history: [title] is its first prompt, on one line; [cwd] the folder it ran in. */
+/** A past chat for the chat history: [title] is its name, else its first prompt, on one line; [cwd] the folder it ran in. */
 data class ClaudeSessionSummary(val sessionId: String, val title: String, val modifiedMs: Long, val cwd: String)
 
 // User lines Claude writes itself: slash commands and their output, `!`
@@ -207,6 +211,42 @@ private fun fileEdit(id: String, result: Map<*, *>): FileEdit? {
     return FileEdit(id, path, result["originalFile"] as? String, result["content"] as? String, hunks)
 }
 
+/** A name typed for a chat, as it's kept: one trimmed line of at most [CLAUDE_TITLE_MAX]; null when blank. */
+fun chatTitle(text: String): String? = oneLine(text).takeIf { it.isNotEmpty() }
+
+/**
+ * The name the chat in [file] was given (`/rename`, or [appendClaudeTitle]):
+ * the last `custom-title` line in its last [tail] bytes; null when none.
+ */
+fun claudeCustomTitle(file: File, tail: Int = CLAUDE_NAME_TAIL_BYTES): String? =
+    RandomAccessFile(file, "r").use { input ->
+        val length = input.length()
+        val start = maxOf(0L, length - tail)
+        val buffer = ByteArray((length - start).toInt())
+        input.seek(start)
+        input.readFully(buffer)
+        val lines = String(buffer, Charsets.UTF_8).split('\n')
+        // A line cut by the start isn't whole.
+        (if (start > 0) lines.drop(1) else lines).asReversed().firstNotNullOfOrNull { line ->
+            if (!line.contains("\"custom-title\"")) return@firstNotNullOfOrNull null
+            val parsed = parseLine(line)?.takeIf { it["type"] == "custom-title" }
+            (parsed?.get("customTitle") as? String)?.let(::chatTitle)
+        }
+    }
+
+/**
+ * Names the chat in [file] [title], as Claude's `/rename` does: a
+ * `custom-title` line at its end (the last one wins), so Claude's own
+ * `--resume` list shows the name too.
+ */
+fun appendClaudeTitle(file: File, sessionId: String, title: String) {
+    val line = toJson(linkedMapOf("type" to "custom-title", "customTitle" to title, "sessionId" to sessionId))
+    val endsLine = RandomAccessFile(file, "r").use { input ->
+        input.length() == 0L || input.run { seek(length() - 1); read() } == '\n'.code
+    }
+    file.appendText((if (endsLine) "" else "\n") + line + "\n")
+}
+
 internal fun oneLine(text: String): String =
     text.take(CLAUDE_TITLE_MAX * 4).trim().replace(Regex("\\s+"), " ").take(CLAUDE_TITLE_MAX)
 
@@ -265,29 +305,42 @@ private val ASIDE_KEYS = listOf("\"isSidechain\":true", "\"isMeta\":true", "\"is
  * ([claudeProjectName]: else `--resume` there wouldn't find it); one naming
  * none is [here]'s if it's in [here]'s folder. Left out: chats with no
  * prompt or no folder, and those whose folder [exists] says is gone (Claude
- * can't start there; a script's temp folders).
+ * can't start there; a script's temp folders). The chats in [keep] (pinned
+ * ones) are listed even past [max]. A chat's title is its name if it was
+ * given one ([claudeCustomTitle]), else its first prompt.
  */
 fun listClaudeSessions(
     projects: File,
     here: String,
     exists: (String) -> Boolean = { true },
     max: Int = CLAUDE_SESSIONS_MAX,
+    keep: Set<String> = emptySet(),
 ): List<ClaudeSessionSummary> {
     val hereName = claudeProjectName(here)
     val there = HashMap<String, Boolean>()
-    return projects.listFiles().orEmpty().filter { it.isDirectory }
+    fun summary(dir: File, transcript: ClaudeTranscript): ClaudeSessionSummary? {
+        val file = File(dir, "${transcript.sessionId}.jsonl")
+        val head = runCatching { claudeSessionHead(file) }.getOrNull()
+        val title = head?.title ?: return null
+        val cwd = head.cwd ?: here.takeIf { dir.name == hereName } ?: return null
+        if (claudeProjectName(cwd) != dir.name || !there.getOrPut(cwd) { exists(cwd) }) return null
+        val name = runCatching { claudeCustomTitle(file) }.getOrNull()
+        return ClaudeSessionSummary(transcript.sessionId, name ?: title, transcript.modifiedMs, cwd)
+    }
+    val listed = ArrayList<ClaudeSessionSummary>()
+    var newest = 0
+    val toKeep = keep.toMutableSet()
+    for ((dir, transcript) in projects.listFiles().orEmpty().filter { it.isDirectory }
         .flatMap { dir -> listClaudeTranscripts(dir).map { dir to it } }
-        .sortedByDescending { (_, transcript) -> transcript.modifiedMs }
-        .asSequence()
-        .mapNotNull { (dir, transcript) ->
-            val head = runCatching { claudeSessionHead(File(dir, "${transcript.sessionId}.jsonl")) }.getOrNull()
-            val title = head?.title ?: return@mapNotNull null
-            val cwd = head.cwd ?: here.takeIf { dir.name == hereName } ?: return@mapNotNull null
-            if (claudeProjectName(cwd) != dir.name || !there.getOrPut(cwd) { exists(cwd) }) return@mapNotNull null
-            ClaudeSessionSummary(transcript.sessionId, title, transcript.modifiedMs, cwd)
-        }
-        .take(max)
-        .toList()
+        .sortedByDescending { (_, transcript) -> transcript.modifiedMs }) {
+        if (newest >= max && toKeep.isEmpty()) break
+        val kept = toKeep.remove(transcript.sessionId)
+        if (newest >= max && !kept) continue
+        val found = summary(dir, transcript) ?: continue
+        if (newest < max) newest++
+        listed += found
+    }
+    return listed
 }
 
 /** How long ago [then] was, for the chat history. */

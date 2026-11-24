@@ -12,8 +12,9 @@ import org.robolectric.annotation.GraphicsMode
 private const val MINUTE = 60_000L
 
 // One row in each state: working, waiting for you, idle, and past chats with no controller;
-// some in other folders, one with a long path.
+// some in other folders, one with a long path; a pinned one on top.
 private fun sampleRows(now: Long) = listOf(
+    ChatHistoryRow("pin", "Plan the weather station", now - 30 * 24 * 60 * MINUTE, pinned = true),
     ChatHistoryRow("n", "Make a tip calculator app for the home screen", now - 5_000, ChatRowState.WORKING, cwd = "/root/apps/tip"),
     ChatHistoryRow("w", "Why does esptool say the port is busy?", now - 3 * MINUTE, ChatRowState.WAITING),
     ChatHistoryRow("i", "Rename the photos in Download by date", now - 40 * MINUTE, ChatRowState.IDLE),
@@ -29,7 +30,7 @@ private fun sampleRows(now: Long) = listOf(
 class ChatHistoryScreenshotTest {
     private fun shoot(w: Int, h: Int, name: String, rows: List<ChatHistoryRow>? = sampleRows(System.currentTimeMillis())) {
         val view = Screenshots.open(w, h) { activity ->
-            ChatHistoryView(activity, hub = { null }, back = {}, openChat = {})
+            ChatHistoryView(activity, hub = { null }, back = {}, rowActions = null, openChat = {})
         }
         rows?.let { view.show(it) }
         Screenshots.settle()
