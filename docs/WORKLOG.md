@@ -30,13 +30,10 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 Plan (maintainer's, 2026-11-24; roadmap "Desktop mode"). Each step is
 a PR into `desktop-dev`.
-1. **Spike** (a throwaway branch): build Termux:X11's X server from
-   source in CI; the app starts it with `app_process` outside proot,
-   its socket where Debian's `/tmp/.X11-unix` sees it; a bare
-   `SurfaceView` of ours hands it the `Surface`. Check `xterm`,
-   `xeyes`, a browser: drawing, speed, typing and touch, rotation,
-   background and back, and no GPL classes in mynx's dex. If it
-   fails, the maintainer decides (VNC maybe).
+1. **Spike: done, it works** (entry 215; draft PR #108, never to be
+   merged, kept for reference). The rebuild must fix: a full redraw
+   on a new surface, the keyboard panning instead of resizing the X
+   screen, the screen starting below our own controls.
 2. **core:** `view = desktop`, a `desktop` setting, `mynx desktop
    start | stop | status --json`, `DISPLAY` in new tabs.
 3. **Build:** `scripts/build-x11.sh` (cached), `COMPONENTS`, licence,
@@ -44,7 +41,10 @@ a PR into `desktop-dev`.
 4. **View:** `DesktopView`, switching views, touchpad touch (default)
    or direct taps (setting), a desktop key bar, rotation (RandR), the
    server kept alive in the background.
-5. **Debian:** installing XFCE when asked; sound through Pulse.
+5. **Debian:** installing XFCE when asked; sound through Pulse;
+   Firefox (crashed in the spike: try `MOZ_FAKE_NO_SANDBOX=1`,
+   proot's `--sysvipc` for MIT-SHM), the X server's font path
+   (xterm couldn't load xfonts-base's semicondensed font).
 6. **Docs:** `tools/docs/desktop.md`.
 
 ### 1. Development boards: what's left (the maintainer picks)
@@ -91,6 +91,33 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (215): Desktop spike: Termux:X11 runs in mynx
+
+- Draft PR #108 (`desktop-spike`, throwaway). Termux:X11 @ 24ce207:
+  `scripts/build-x11.sh` builds `libXlorie.so` (NDK 29.0.14206865,
+  CMake, its 16 submodules) and a jar of only `CmdEntryPoint` + its
+  AIDL stub (aidl, javac, d8; no Gradle), with a GPL patch in `x11/`
+  (no activity classes needed, library path from `MYNX_X11_LIB`,
+  app ID from `MYNX_X11_PACKAGE`, stretch the screen when no view
+  was set). The app runs `app_process … CmdEntryPoint :0 -ac`
+  outside proot with `TMPDIR=<rootfs>/tmp` (so the socket is
+  Debian's `/tmp/.X11-unix/X0`; xkb and fonts are found from
+  `dirname(TMPDIR)/usr/share`). The server broadcasts its binder to
+  the app; our MIT side hands it the `Surface` (`windowChanged`)
+  and writes 24-byte `lorieEvent`s to `getXConnection()`'s socket.
+  CI checks no `Lcom/termux/x11/` class is in mynx's dex.
+- **On the phone** (Pixel 10, maintainer): xeyes follows the finger,
+  xterm draws and types (Backspace, Enter), sensible text size at
+  SCALE=2, smooth scrolling at 120 Hz, rotation resizes, programs
+  survive Home and Back. Wrong: the picture is stale after
+  reopening until a resize (the server only redraws damage), the
+  keyboard resizes the X screen (should pan), the screen is drawn
+  under our button bar. Firefox crashed or showed no window; not
+  looked into yet.
+- Licence points for step 3: our side copies the binder's
+  transaction order and the event layout (interface facts);
+  releases must publish the patched server's source.
 
 ### 2026-11-24 (214): Desktop mode planned
 
