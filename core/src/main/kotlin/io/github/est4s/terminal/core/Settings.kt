@@ -41,8 +41,12 @@ data class Settings(
     val serialPreload: Boolean = true,
     /** Whether USB serial ports also get the names Linux tools look for, in a `/dev` of Debian's own (new tabs and services). */
     val serialNames: Boolean = true,
-    /** What the app shows: the terminal, or touch mode's Home. */
+    /** What the app shows: the terminal, touch mode's Home, or the desktop. */
     val view: AppView = AppView.TERMINAL,
+    /** The session `mynx desktop start` starts on the X server. */
+    val desktop: DesktopSession = DesktopSession.XFCE,
+    /** What a finger on the desktop does. */
+    val desktopTouch: DesktopTouch = DesktopTouch.TOUCHPAD,
     /** The permission mode new chats of touch mode's Chat start in: one of [CHAT_MODES]. */
     val chatMode: String = "auto",
     /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
@@ -80,6 +84,8 @@ data class Settings(
         "serial-preload" to if (serialPreload) "on" else "off",
         "serial-names" to if (serialNames) "on" else "off",
         "view" to view.word,
+        "desktop" to desktop.word,
+        "desktop-touch" to desktopTouch.word,
         "chat-mode" to chatMode,
         "chat-model" to chatModel,
         "open-pictures" to openPictures.word,
@@ -94,7 +100,17 @@ data class Settings(
 }
 
 /** The `view` setting: what the app shows. */
-enum class AppView(val word: String) { TERMINAL("terminal"), TOUCH("touch") }
+enum class AppView(val word: String) { TERMINAL("terminal"), TOUCH("touch"), DESKTOP("desktop") }
+
+/** The `desktop` setting: what runs on the X server (see Desktop.kt). */
+enum class DesktopSession(val word: String) {
+    XFCE("xfce"),
+    /** The X server alone: programs started with DISPLAY=:0 show on it. */
+    NONE("none"),
+}
+
+/** The `desktop-touch` setting: a touchpad moves a pointer; direct taps click where the finger is. */
+enum class DesktopTouch(val word: String) { TOUCHPAD("touchpad"), DIRECT("direct") }
 
 /** The `wakelock` setting: when the app keeps the phone's CPU awake. */
 enum class Wakelock(val word: String) {
@@ -258,10 +274,22 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(serialNames = it == "on") },
     ),
     SettingDef(
-        "view", "What the app shows when it starts: the terminal, or touch mode's Home, lists to tap.",
+        "view", "What the app shows when it starts: the terminal, touch mode's Home (lists to tap), or the desktop (mynx desktop).",
         "terminal", AppView.entries.map { it.word },
         oneOf("view", AppView.entries.map { it.word }),
         { v -> copy(view = AppView.entries.first { it.word == v }) },
+    ),
+    SettingDef(
+        "desktop", "What mynx desktop start runs on the X server: xfce (the XFCE desktop) or none (the X server alone, for programs started with DISPLAY=:0).",
+        "xfce", DesktopSession.entries.map { it.word },
+        oneOf("desktop", DesktopSession.entries.map { it.word }),
+        { v -> copy(desktop = DesktopSession.entries.first { it.word == v }) },
+    ),
+    SettingDef(
+        "desktop-touch", "What a finger does on the desktop: touchpad (moves a pointer; tap to click, two fingers to scroll or right-click) or direct (clicks where you tap).",
+        "touchpad", DesktopTouch.entries.map { it.word },
+        oneOf("desktop-touch", DesktopTouch.entries.map { it.word }),
+        { v -> copy(desktopTouch = DesktopTouch.entries.first { it.word == v }) },
     ),
     SettingDef(
         "chat-mode", "The permission mode new chats in touch view's Chat start in: auto (Claude decides what to allow, asking less), default (asks first), plan or acceptEdits. A chat's own pick wins for that chat.",

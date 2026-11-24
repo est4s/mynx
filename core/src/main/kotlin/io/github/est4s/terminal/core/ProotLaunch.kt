@@ -11,8 +11,8 @@ data class ProotPaths(
     val tmpDir: String,
 )
 
-/** A process to start: [argv] and the extra [env] it needs. */
-data class Launch(val argv: List<String>, val env: Map<String, String>)
+/** A process to start: [argv], the extra [env] it needs, and the app's variables it must not inherit ([unset]). */
+data class Launch(val argv: List<String>, val env: Map<String, String>, val unset: List<String> = emptyList())
 
 internal val HOST_BINDS = listOf("/dev", "/proc", "/sys", "/storage")
 
@@ -49,6 +49,7 @@ fun serialPreload(toolsDir: File, enabled: Boolean): String? =
  * [ownDev] gives Debian a `/dev` of its own instead of the host's (see [OwnDev]);
  * with its `sysBus`, also a `/sys/bus` with USB devices' stand-in and the
  * app's socket for their fds (`MYNX_USB_SOCKET`, for proot's mynx_usb extension).
+ * [display] is the desktop's X display while it runs (`DISPLAY`).
  * [preload] (a Debian path) is a library every program in Debian loads
  * (`LD_PRELOAD`, set inside the guest only: Android's linker must not
  * see it in proot's own environment).
@@ -71,6 +72,7 @@ fun prootLaunch(
     serialDir: String? = null,
     ownDev: OwnDev? = null,
     preload: String? = null,
+    display: String? = null,
     command: List<String> = listOf("/bin/bash", "--login"),
 ): Launch {
     val argv = buildList {
@@ -113,6 +115,7 @@ fun prootLaunch(
         soundSocket?.let { add("PULSE_SERVER=unix:$it") }
         // Debian's own zone is UTC; a TZ set in .bashrc still wins.
         timeZone?.let { add("TZ=$it") }
+        display?.let { add("DISPLAY=$it") }
         preload?.let { add("LD_PRELOAD=$it") }
         // libudev (libusb's) refuses device folders outside a real sysfs unless told not to check.
         if (ownDev?.sysBus != null) add("SYSTEMD_DEVICE_VERIFY_SYSFS=0")

@@ -46,6 +46,7 @@ Commands:
   storage      storage [status] | allow: let Debian see all of the phone's storage
   audio        audio play FILE | record FILE [--seconds N]: sound
   sound        sound [status] | start | install: the sound device
+  desktop      desktop [status] | start | stop: desktop mode's X server and desktop (XFCE)
   usb          usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   bt           bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
   ble          ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
@@ -1475,6 +1476,45 @@ def run_steps(steps):
             raise Failure(f"'{step}' failed (exit {code})")
 
 
+DESKTOP_USAGE = "usage: mynx desktop [status] | start | stop"
+DESKTOP_SESSIONS = {"xfce": "XFCE", "none": "the X server alone"}
+
+
+def cmd_desktop(args, as_json):
+    sub = args[0] if args else "status"
+    if len(args) > 1 or sub not in ("status", "start", "stop"):
+        raise Usage(DESKTOP_USAGE)
+    answer = request("desktop-" + sub)
+    session = DESKTOP_SESSIONS.get(answer["session"], answer["session"])
+    where = f"DISPLAY={answer['display']} ({session})"
+    if sub == "start":
+        wait_for_x_server(answer)
+        text = f"Desktop: {'started' if answer['started'] else 'already running'} on {where}"
+    elif sub == "stop":
+        text = "Desktop: stopped" if answer["stopped"] else "Desktop: not running"
+    elif answer["running"] and answer["session"] != "none" and not answer["sessionRunning"]:
+        text = (f"Desktop: running on DISPLAY={answer['display']}; the {session} session has ended "
+                "(mynx desktop start starts it again)")
+    elif answer["running"]:
+        text = f"Desktop: running on {where}"
+    elif answer["problem"]:
+        text = f"Desktop: not running: {answer['problem']}"
+    else:
+        text = "Desktop: not running (mynx desktop start starts it)"
+    out(as_json, answer, text)
+    return 0
+
+
+def wait_for_x_server(answer):
+    """Returns once the X server takes connections on its socket."""
+    deadline = time.monotonic() + 4 * float(os.environ.get("MYNX_TIMEOUT", "5"))
+    while time.monotonic() < deadline:
+        if server_answers("unix:" + answer["socket"]):
+            return
+        time.sleep(0.1)
+    raise Failure(f"the X server didn't start: see {answer['log']}")
+
+
 ANDROID_SDK_USAGE = "usage: mynx android-sdk [status] | install [--yes]"
 
 
@@ -2529,7 +2569,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation, "storage": cmd_storage,
-    "audio": cmd_audio, "sound": cmd_sound, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
+    "audio": cmd_audio, "sound": cmd_sound, "desktop": cmd_desktop, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "android-sdk": cmd_android_sdk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }

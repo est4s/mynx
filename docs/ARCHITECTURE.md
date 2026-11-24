@@ -531,6 +531,30 @@ See `docs/ROADMAP.md` "How it works". The details:
   `mynx service autostart` and the menu's Autostart item.
   `onTerminalCursorStateChange` doesn't say whose terminal changed, so
   the blinker always asks the shown one.
+- **Desktop mode** (`core/.../Desktop.kt`, `app/.../DesktopProcesses.kt`,
+  `tools/docs/desktop.md`; roadmap "Desktop mode", work log "Next" 0;
+  being built on `desktop-dev`): Termux:X11's X server, a separate GPL
+  program (`libXlorie.so` and the asset `x11/termux-x11.jar`, from
+  `scripts/build-x11.sh`, step 3), run by the service outside proot
+  through `app_process` (`x11Launch()`: `TMPDIR` is Debian's `/tmp`, so
+  its socket is Debian's `/tmp/.X11-unix/X0`; `-ac` with `-nolisten
+  local`, so not the abstract socket every app could reach; the app's
+  `LD_*` unset). `Desktop` answers `desktop-start|stop|status`
+  (`desktopRequests()`): before a start it says what's missing (no X
+  server in this build, `xkb-data`, XFCE and `dbus-launch` for the
+  `xfce` session) and clears display :0 (`/tmp/.X0-lock`: a gone
+  server's lock and socket removed, a leftover `mynx-x11` of ours
+  TERMed, then KILLed after 2 s, another program's server left alone),
+  then starts the server and the `desktop` setting's session
+  (`desktopSessionCommand()`: a login bash that waits for the socket,
+  then `dbus-launch --exit-with-session startxfce4`), in a proot of
+  its own like the sound server's. Logs: `/tmp/.mynx/desktop/x11.log`
+  and `session.log`, written afresh each start. `mynx desktop start`
+  returns once the socket takes connections. New tabs and services get
+  `DISPLAY=:0` while the server runs (`prootLaunch(display =)`). The
+  server's start broadcast (its binder, for the view) is unanswered
+  until the view (step 4); `view = desktop` shows the terminal until
+  then. `desktop-touch` is read by the view too.
 - **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
   the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
   `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):

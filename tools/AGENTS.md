@@ -21,6 +21,7 @@ comes up:
 | `/opt/mynx/docs/apps.md` | apps in HTML and JavaScript, the phone from JavaScript (`mynx.js`), building an Android app (APK) |
 | `/opt/mynx/docs/services.md` | background services: servers and daemons kept running by the app |
 | `/opt/mynx/docs/usb.md` | USB serial devices (Arduino, ESP32, adapters, board tools' recipes), raw USB devices (libusb, picotool, UF2, JTAG) |
+| `/opt/mynx/docs/desktop.md` | desktop mode: the X server, XFCE, `DISPLAY` |
 | `/opt/mynx/docs/bluetooth.md` | Bluetooth serial devices (SPP) and Bluetooth LE devices (GATT, BLE UART ports) |
 
 ## How it runs
@@ -141,6 +142,7 @@ their own.
 | `mynx usb`, `uf2`, `fix-links` | USB serial ports and raw USB devices, a serial monitor, UF2 flashing (`/opt/mynx/docs/usb.md`) |
 | `mynx android-sdk [install]` | the tools and files for building Android apps: what's there; `install` installs Debian's build tools and downloads Google's `r8.jar` and `android.jar` into `~/androidsdk` (shows what it does and asks; `--yes` skips that) |
 | `mynx install-apk FILE` | open Android's installer for an APK built here; the user taps Install (see "Building an Android app" in `/opt/mynx/docs/apps.md`) |
+| `mynx desktop` | desktop mode: `start`, `stop`, `status` of the X server and XFCE (`/opt/mynx/docs/desktop.md`) |
 | `mynx bt`, `ble` | Bluetooth serial ports, Bluetooth LE devices (`/opt/mynx/docs/bluetooth.md`) |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
@@ -211,7 +213,7 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
-- `view`: `terminal` (default) or `touch`: what the app shows (the
+- `view`: `terminal` (default), `touch` or `desktop`: what the app shows (the
   launcher menu's Settings → Touch view switches to it). `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Its
@@ -247,6 +249,11 @@ One `key = value` per line; `mynx settings` describes each.
   apps): long-press to select, then Copy, Cut, Rename, Delete
   (permanent) or Share; Paste here; Chat here and Terminal here start
   Claude Code's chat or a shell in the folder shown.
+  `desktop` is desktop mode (`/opt/mynx/docs/desktop.md`).
+- `desktop`: `xfce` (default) or `none`: what `mynx desktop start`
+  runs on the X server; `none` is the server alone.
+- `desktop-touch`: `touchpad` (default) or `direct`: a finger moves
+  a pointer, or clicks where it taps.
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
   the permission mode new chats of touch view's Chat start in. `auto`
   lets Claude Code decide what's safe to run, asking less; `default`

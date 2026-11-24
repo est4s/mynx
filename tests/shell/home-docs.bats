@@ -391,3 +391,17 @@ setup() {
     grep -q "mynx storage allow" "$CORE"
     grep -q "Allow access to manage all files" "$DOCS/phone.md"
 }
+
+@test "the guide gives desktop mode's settings and their defaults" {
+    grep -qF '`view`: `terminal` (default), `touch` or `desktop`' "$CORE"
+    grep -qF '`desktop`: `xfce` (default) or `none`' "$CORE"
+    grep -qF '`desktop-touch`: `touchpad` (default) or `direct`' "$CORE"
+}
+
+@test "the guide explains desktop mode: the commands, DISPLAY, the logs, installing XFCE" {
+    for text in "mynx desktop start" "mynx desktop stop" "DISPLAY=:0" "export DISPLAY=:0" \
+        "/tmp/.X11-unix/X0" "/tmp/.mynx/desktop/x11.log" "/tmp/.mynx/desktop/session.log" \
+        "apt install xfce4" "xkb-data" "Xvfb :0"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}

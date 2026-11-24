@@ -34,8 +34,17 @@ a PR into `desktop-dev`.
    merged, kept for reference). The rebuild must fix: a full redraw
    on a new surface, the keyboard panning instead of resizing the X
    screen, the screen starting below our own controls.
-2. **core:** `view = desktop`, a `desktop` setting, `mynx desktop
-   start | stop | status --json`, `DISPLAY` in new tabs.
+2. **core: built** (entry 216, PR into `desktop-dev`): `view =
+   desktop`, `desktop = xfce | none`, `desktop-touch = touchpad |
+   direct`, `mynx desktop start | stop | status`, `DISPLAY=:0` in new
+   tabs. Not tried on the phone: it needs step 3's server in the APK
+   (until then `mynx desktop start` says "this build of mynx has no X
+   server yet"). To check once step 3 is in: `mynx desktop start`
+   with `xkb-data` (and `xfce4 dbus-x11`) installed, `xeyes &` in a new
+   tab, and that the server has no abstract socket: `python3 -c
+   "import socket; socket.socket(socket.AF_UNIX).connect('\0/tmp/.X11-unix/X0')"`
+   must fail with ConnectionRefusedError (if it connects, `-nolisten
+   local` is wrong for this server).
 3. **Build:** `scripts/build-x11.sh` (cached), `COMPONENTS`, licence,
    `release.yml`.
 4. **View:** `DesktopView`, switching views, touchpad touch (default)
@@ -91,6 +100,36 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (216): Desktop mode, step 2: settings and `mynx desktop`
+
+- Branch `desktop-core` from `desktop-dev`, PR into it. Rebuilt
+  test-first from the spike's findings, none of its code copied.
+- **Settings:** `view` takes `desktop` (the app shows the terminal
+  for it until step 4); `desktop = xfce | none` (the session; `none`
+  is the X server alone, for programs started with `DISPLAY=:0`);
+  `desktop-touch = touchpad | direct` (maintainer's decision,
+  touchpad default; named like `tab-swipe`, read by step 4's view).
+  Touch view's Settings has a Desktop list for the two.
+- **core** (`Desktop.kt`): `x11Launch()` is the spike's command line
+  plus `-nolisten local` (`-ac` lets any client in, and Android's
+  abstract sockets are shared by every app); `desktopSessionCommand()`
+  waits for the socket, then `dbus-launch --exit-with-session
+  startxfce4`; `Desktop` says what's missing (with the apt command),
+  clears a stale `/tmp/.X0-lock`/socket, TERMs (then KILLs) a leftover
+  `mynx-x11` and refuses when another program's server holds :0.
+  `desktopRequests()` answers `desktop-start|stop|status`;
+  `prootLaunch(display =)` puts `DISPLAY` in new tabs and services.
+- **app:** `DesktopProcesses` runs the server (copying the jar
+  read-only from the assets each start) and the session's proot; with
+  no `libXlorie.so` or jar in the APK, `server` is null and the
+  requests say so. Not compiled here (CI only).
+- **`mynx desktop [status] | start | stop`** (`--json`): `start`
+  returns once the socket takes connections, else points to
+  `/tmp/.mynx/desktop/x11.log`. No `mynx desktop install`: installing
+  XFCE is step 5; the refusal names `apt install xfce4 dbus-x11`.
+- Docs: `tools/docs/desktop.md`, the guide's settings and command
+  rows, ARCHITECTURE "Desktop mode".
 
 ### 2026-11-25 (215): Desktop spike: Termux:X11 runs in mynx
 
