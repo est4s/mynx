@@ -53,7 +53,7 @@ platform=$(ls -d "$sdk"/platforms/android-* | sort -V | tail -1)
 tools=$(ls -d "$sdk"/build-tools/* | sort -V | tail -1)
 java=$work/java
 rm -rf "$java" && mkdir -p "$java/gen" "$java/stubs" "$java/classes" "$java/stub-classes"
-"$tools/aidl" -o"$java/gen" -I"$src/lorie/src/main/aidl" \
+"$tools/aidl" -p"$platform/framework.aidl" -o"$java/gen" -I"$src/lorie/src/main/aidl" \
     "$src/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl"
 # BuildConfig: the broadcast goes to the app that started the server.
 cat >"$java/gen/BuildConfig.java" <<EOF
