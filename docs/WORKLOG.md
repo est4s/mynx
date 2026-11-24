@@ -24,25 +24,6 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
-### 0. Chat rows: pin, rename, delete (PR #104, entries 210-211)
-
-Pin, rename and delete passed on the phone (2026-11-24). To try now,
-in mynx dev:
-- Long-press a chat in All chats and in the drawer: the pixel menu
-  (as the ⋮ menus) drops from the row with Pin / Rename / Delete. A
-  pinned chat goes under Pinned, above Recents, in both; with none
-  pinned there's no Pinned heading.
-- Rename and Delete open pixel-style dialogs (not Android's): the
-  keyboard comes up for Rename's field, Rename greys out while it's
-  blank, Done on the keyboard renames, Cancel and a tap outside close.
-- Rename one: the new name shows in both lists, and in a terminal
-  `claude --resume` lists it by that name. Rename a chat while it
-  works, let it finish: the name should stay (Claude re-writes its own
-  cached title at times; if it reverts, rename only idle chats).
-- Delete one: it asks first, then it's gone from both lists, and
-  `ls ~/.claude/projects/*/ID*` finds nothing. Deleting a chat that's
-  working says "It's still running: stop it first".
-
 ### 1. Development boards: what's left (the maintainer picks)
 
 - Raw USB hotplug while a program runs (libudev's monitor wants
@@ -89,6 +70,10 @@ in mynx dev:
 ## Log
 
 ### 2026-11-24 (211): chat rows' menu in the pixel style, Pinned and Recents
+
+- Passed on the phone (2026-11-24): the pixel menu, the Pinned and
+  Recents groups and the pixel Rename and Delete dialogs. PR #104
+  merged.
 
 - The maintainer tried entry 210's build: pin, rename and delete all
   worked. They asked for the menu in the app's design, "Pin" for "Pin
