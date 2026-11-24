@@ -26,6 +26,27 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
+### 0. Desktop mode (on `desktop-dev`)
+
+Plan (maintainer's, 2026-11-24; roadmap "Desktop mode"). Each step is
+a PR into `desktop-dev`.
+1. **Spike** (a throwaway branch): build Termux:X11's X server from
+   source in CI; the app starts it with `app_process` outside proot,
+   its socket where Debian's `/tmp/.X11-unix` sees it; a bare
+   `SurfaceView` of ours hands it the `Surface`. Check `xterm`,
+   `xeyes`, a browser: drawing, speed, typing and touch, rotation,
+   background and back, and no GPL classes in mynx's dex. If it
+   fails, the maintainer decides (VNC maybe).
+2. **core:** `view = desktop`, a `desktop` setting, `mynx desktop
+   start | stop | status --json`, `DISPLAY` in new tabs.
+3. **Build:** `scripts/build-x11.sh` (cached), `COMPONENTS`, licence,
+   `release.yml`.
+4. **View:** `DesktopView`, switching views, touchpad touch (default)
+   or direct taps (setting), a desktop key bar, rotation (RandR), the
+   server kept alive in the background.
+5. **Debian:** installing XFCE when asked; sound through Pulse.
+6. **Docs:** `tools/docs/desktop.md`.
+
 ### 1. Development boards: what's left (the maintainer picks)
 
 - Raw USB hotplug while a program runs (libudev's monitor wants
@@ -70,6 +91,11 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-24 (214): Desktop mode planned
+
+- Plan in "Next" 0 and the roadmap: XFCE, touchpad by default with
+  direct taps as a setting, no external display yet, VNC only maybe.
 
 ### 2026-11-24 (213): A `desktop-dev` branch for desktop mode
 
