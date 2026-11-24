@@ -10,10 +10,8 @@ import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -585,14 +583,14 @@ class FilesView(
         val path = selected.first()
         val taken = takenNames() ?: return
         val old = path.substringAfterLast('/')
-        askName("Rename", old, "Rename") { name ->
+        askFileName(context, "Rename", old, "Rename") { name ->
             start(renameJob(path, name, taken)) { selected.clear() }
         }
     }
 
     private fun newFolder() {
         val taken = takenNames() ?: return
-        askName("New folder", "", "Create") { name ->
+        askFileName(context, "New folder", "", "Create") { name ->
             start(newFolderJob(folder, name, taken))
         }
     }
@@ -600,12 +598,7 @@ class FilesView(
     private fun confirmDelete() {
         val paths = selected.toList()
         if (paths.isEmpty()) return
-        val what = if (paths.size == 1) "\"${paths[0].substringAfterLast('/')}\"" else "${paths.size} items"
-        AlertDialog.Builder(context)
-            .setMessage("Delete $what? This can't be undone.")
-            .setPositiveButton("Delete") { _, _ -> start(deleteJob(paths)) { selected.clear() } }
-            .setNegativeButton("Cancel", null)
-            .show()
+        confirmFilesDelete(context, paths) { start(deleteJob(paths)) { selected.clear() } }
     }
 
     // Runs [job] unless one is running; [after] once it worked. Either way the folder is read again.
@@ -628,53 +621,6 @@ class FilesView(
                 }
             }
         }
-    }
-
-    // A text field in a dialog; OK only while core finds the name fine (fileNameProblem says why not).
-    private fun askName(title: String, start: String, ok: String, then: (String) -> Unit) {
-        val field = EditText(context).apply {
-            setText(start)
-            setSingleLine(true)
-            imeOptions = EditorInfo.IME_ACTION_DONE
-            // The name without its extension, ready to type over.
-            val dot = start.lastIndexOf('.')
-            setSelection(0, if (dot > 0) dot else start.length)
-        }
-        val dialog = AlertDialog.Builder(context)
-            .setTitle(title)
-            .setView(FrameLayout(context).apply {
-                setPadding(dp(20), dp(8), dp(20), 0)
-                addView(field)
-            })
-            .setPositiveButton(ok) { _, _ -> then(field.text.toString().trim()) }
-            .setNegativeButton("Cancel", null)
-            .create()
-        fun check(): Boolean {
-            val name = field.text.toString().trim()
-            val why = fileNameProblem(name)
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = why == null
-            field.error = if (name.isEmpty()) null else why
-            return why == null
-        }
-        dialog.setOnShowListener { check() }
-        field.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                check()
-            }
-        })
-        field.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
-            if (check()) {
-                dialog.dismiss()
-                then(field.text.toString().trim())
-            }
-            true
-        }
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-        dialog.show()
-        field.requestFocus()
     }
 
     // A failure stays on screen until it's read: there's no log to look in on the phone.
@@ -752,4 +698,47 @@ class FilesView(
         /** A row's icon and a picture's square. */
         const val FILES_THUMBNAIL_DP = 40
     }
+}
+
+/** Files' Delete: [paths] (one or more) go for good once it's confirmed, through [then]. */
+internal fun confirmFilesDelete(context: Context, paths: List<String>, then: () -> Unit): PixelDialog {
+    val what = if (paths.size == 1) "\"${paths[0].substringAfterLast('/')}\"" else "${paths.size} items"
+    return pixelDialog(context, "Delete?", message = "Delete $what? This can't be undone.", ok = "Delete", danger = true) { then() }
+}
+
+/**
+ * Asks for a file or folder name (Rename, New folder), starting from [start]
+ * with its name before the extension selected: [ok] only while core finds the
+ * name fine, and the note line says why not ([fileNameProblem]).
+ */
+internal fun askFileName(context: Context, title: String, start: String, ok: String, then: (String) -> Unit): PixelDialog {
+    val field = EditText(context).apply {
+        setText(start)
+        setSingleLine(true)
+        imeOptions = EditorInfo.IME_ACTION_DONE
+        // The name without its extension, ready to type over.
+        val dot = start.lastIndexOf('.')
+        setSelection(0, if (dot > 0) dot else start.length)
+    }
+    val dialog = pixelDialog(context, title, field = field, ok = ok) { then(field.text.toString().trim()) }
+    fun check() {
+        val name = field.text.toString().trim()
+        val why = fileNameProblem(name)
+        dialog.setOkEnabled(why == null)
+        dialog.setNote(if (name.isEmpty()) null else why)
+    }
+    check()
+    field.addTextChangedListener(object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        override fun afterTextChanged(s: Editable?) {
+            check()
+        }
+    })
+    field.setOnEditorActionListener { _, actionId, _ ->
+        if (actionId != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
+        dialog.ok()
+        true
+    }
+    return dialog
 }

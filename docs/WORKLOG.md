@@ -24,6 +24,14 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
+### 0. Files' dialogs in the pixel style (entry 212, to try on the phone)
+
+In mynx dev, in Files: Rename, ⋮ → New folder and Delete open pixel
+dialogs. Rename selects the name before its extension; typing a `/`
+greys Rename with "A name can't have a /" in pink under the field
+(readable in a light theme too?); Done creates or renames; Delete
+says "Delete "x"? …" (or "N items") with a pink Delete.
+
 ### 1. Development boards: what's left (the maintainer picks)
 
 - Raw USB hotplug while a program runs (libudev's monitor wants
@@ -68,6 +76,22 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ---
 
 ## Log
+
+### 2026-11-24 (212): Files' dialogs in the pixel style
+
+- Rename, New folder and Delete in touch mode's Files now ask in
+  `pixelDialog` (roadmap item, maintainer's request), as the chat
+  rows' do: `askFileName()` and `confirmFilesDelete()`, top-level in
+  `FilesView.kt` so the screenshots drive them.
+- `pixelDialog` gained a note line under the field,
+  `PixelDialog.setNote()` (hidden until set): `fileNameProblem()`'s
+  reason goes there, since EditText's `error` popup takes the system
+  theme. The chat rows don't use it.
+- Left as AlertDialogs: Files' `tell()` (errors) and Open with (a
+  list of choices).
+- Screenshots: `files-rename`, `files-rename-refused`,
+  `files-new-folder`, `files-delete`, `files-delete-many`. Not
+  compiled here (CI only).
 
 ### 2026-11-24 (211): chat rows' menu in the pixel style, Pinned and Recents
 

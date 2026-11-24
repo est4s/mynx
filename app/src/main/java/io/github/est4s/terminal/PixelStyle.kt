@@ -274,11 +274,22 @@ fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
     popup.showAsDropDown(anchor, 0, 0, Gravity.END)
 }
 
-/** A [pixelDialog] on screen: [setOkEnabled] greys its main button (a [PixelDialog] field's check), [ok] presses it. */
-class PixelDialog internal constructor(val dialog: Dialog, private val okButton: TextView, private val onOk: () -> Unit) {
+/** A [pixelDialog] on screen: [setOkEnabled] greys its main button (a [PixelDialog] field's check), [setNote] says why, [ok] presses it. */
+class PixelDialog internal constructor(
+    val dialog: Dialog,
+    private val okButton: TextView,
+    private val note: TextView,
+    private val onOk: () -> Unit,
+) {
     fun setOkEnabled(enabled: Boolean) {
         okButton.isEnabled = enabled
         okButton.alpha = if (enabled) 1f else 0.4f
+    }
+
+    /** A small pink line under the field (or message), e.g. why a name won't do; null hides it. EditText's error popup takes the system theme. */
+    fun setNote(text: CharSequence?) {
+        note.text = text
+        note.visibility = if (text.isNullOrEmpty()) View.GONE else View.VISIBLE
     }
 
     /** As a tap on the main button, if it's enabled (a field's Done). */
@@ -292,8 +303,9 @@ class PixelDialog internal constructor(val dialog: Dialog, private val okButton:
 /**
  * A small dialog in the pixel style, as [pixelMenu]'s box: [title], then
  * [message] and/or [field] (styled here, the keyboard up for it), then
- * Cancel and the filled main button [ok] (pink when [danger]: it can't be
- * undone). Android's AlertDialog takes the system theme.
+ * a note line ([PixelDialog.setNote], hidden until set), then Cancel and
+ * the filled main button [ok] (pink when [danger]: it can't be undone).
+ * Android's AlertDialog takes the system theme.
  */
 fun pixelDialog(
     context: Context,
@@ -325,7 +337,13 @@ fun pixelDialog(
     } else {
         button(ok, Pixel.CYAN, 0, Pixel.BACKGROUND) {}
     }
-    val handle = PixelDialog(dialog, okButton, onOk)
+    val note = TextView(context).apply {
+        typeface = Pixel.text(context)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        setTextColor(Pixel.PINK)
+        visibility = View.GONE
+    }
+    val handle = PixelDialog(dialog, okButton, note, onOk)
     okButton.setOnClickListener { handle.ok() }
     val column = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -362,6 +380,7 @@ fun pixelDialog(
             }
             addView(field, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(14) })
         }
+        addView(note, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
         addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.END
