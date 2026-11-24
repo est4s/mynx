@@ -470,6 +470,13 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
   PR's branch when it's merged (the repo's auto-delete setting, on
   since 2026-10-13, maintainer's decision); delete the local branch
   yourself.
+- **`desktop-dev`** (maintainer's decision, 2026-11-24): desktop
+  mode is built on a longer-lived branch, `desktop-dev`, cut from
+  `main`. Its feature branches are cut from `desktop-dev` and their
+  PRs go into it (`gh pr create --base desktop-dev`), not `main`; CI
+  builds them and `desktop-dev` after a merge, like `main`. Merge
+  `main` into it now and then; it goes into `main` in one PR when the
+  maintainer says desktop mode is ready.
 - **Docs before a merge** (maintainer's rule, 2026-10-20): never
   merge a branch without first updating the docs it makes stale (the
   work log's status and "Next", the roadmap, the README, this file),
