@@ -1,0 +1,55 @@
+mynx's changes to Termux:X11 (scripts/build-x11.sh applies them). Like the
+code they change, they're under the GPL-3.0 (Termux:X11's LICENSE), not
+mynx's MIT licence.
+
+diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
+index 1ec125c..2d9710a 100644
+--- a/lorie/src/main/cpp/lorie/activity.cpp
++++ b/lorie/src/main/cpp/lorie/activity.cpp
+@@ -577,6 +577,12 @@ JNIEXPORT jint JNI_OnLoad(JavaVM *vm, __unused void *reserved) {
+     };
+     vm->AttachCurrentThread(&env, nullptr);
+     jclass cls = env->FindClass("com/termux/x11/LorieView");
++    if (!cls) {
++        // mynx: only the X server's classes are loaded (no activity side), so only its natives are registered.
++        env->ExceptionClear();
++        registerCmdEntryPointNatives(env);
++        return JNI_VERSION_1_6;
++    }
+ 
+     // Checks whether this runtime honors @CriticalNative at all: it does if probe() receives its argument first.
+     constexpr jlong probeValue = 0x7e57;
+diff --git a/lorie/src/main/cpp/lorie/renderer.cpp b/lorie/src/main/cpp/lorie/renderer.cpp
+index b53c230..6ba255d 100644
+--- a/lorie/src/main/cpp/lorie/renderer.cpp
++++ b/lorie/src/main/cpp/lorie/renderer.cpp
+@@ -927,6 +927,15 @@ void Renderer::redrawLocked(bool* waitingForBuffers) {
+ 
+     desc = LorieBuffer_description(buffer);
+ 
++    // mynx: an activity that never sets a view gets the whole screen stretched over the whole surface.
++    if (!state->view.expectedWidth || !state->view.expectedHeight) {
++        expectedW = (int) desc->width;
++        expectedH = (int) desc->height;
++        viewportX = viewportY = 0;
++        viewportW = ANativeWindow_getWidth(win);
++        viewportH = ANativeWindow_getHeight(win);
++    }
++
+     int alignedExpectedW = expectedW - (expectedW % CVT_H_GRANULARITY);
+ 
+     if (!expectedW || !expectedH || desc->height != expectedH ||
+diff --git a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
+index 6196631..1d6faa4 100644
+--- a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
++++ b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
+@@ -202,6 +202,9 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+         ClassLoader loader = CmdEntryPoint.class.getClassLoader();
+         URL res = loader != null ? loader.getResource(path) : null;
+         String libPath = res != null ? res.getFile().replace("file:", "") : null;
++        // mynx: the library ships in the app's native library dir, not inside the jar.
++        if (libPath == null)
++            libPath = System.getenv("MYNX_X11_LIB");
+         if (libPath != null) {
+             try {
+                 System.load(libPath);

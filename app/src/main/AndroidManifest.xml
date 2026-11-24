@@ -100,6 +100,15 @@
             android:autoRemoveFromRecents="true"
             android:exported="false" />
 
+        <!-- SPIKE (desktop-spike): the X server's screen, from the launcher shortcut. Exported
+             so the launcher can surely open it; it only starts our own X server. -->
+        <activity
+            android:name=".X11SpikeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="adjustNothing|stateHidden"
+            android:taskAffinity=".desktop"
+            android:exported="true" />
+
         <!-- Chat's pictures full screen. -->
         <activity
             android:name=".ImageViewActivity"

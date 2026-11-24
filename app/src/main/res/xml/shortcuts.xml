@@ -12,4 +12,14 @@
             android:targetPackage="io.github.est4s.terminal"
             android:targetClass="io.github.est4s.terminal.MainActivity" />
     </shortcut>
+    <shortcut
+        android:shortcutId="desktop-spike"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_desktop_spike">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="io.github.est4s.terminal"
+            android:targetClass="io.github.est4s.terminal.X11SpikeActivity" />
+    </shortcut>
 </shortcuts>
