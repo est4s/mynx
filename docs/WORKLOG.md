@@ -45,8 +45,16 @@ a PR into `desktop-dev`.
    "import socket; socket.socket(socket.AF_UNIX).connect('\0/tmp/.X11-unix/X0')"`
    must fail with ConnectionRefusedError (if it connects, `-nolisten
    local` is wrong for this server).
-3. **Build:** `scripts/build-x11.sh` (cached), `COMPONENTS`, licence,
-   `release.yml`.
+3. **Build: built** (entry 217, PR `desktop-build` into
+   `desktop-dev`): `scripts/build-x11.sh` in both workflows (cached),
+   `COMPONENTS`, `X11-libraries.txt`, the source tarball on releases.
+   To check on the phone (with step 2's checks above): `mynx desktop
+   start` (with `mynx set desktop none` and `xkb-data`) says the
+   server runs; `echo $DISPLAY` in a new tab is `:0`; `xeyes &`
+   there keeps running (nothing shows until step 4); the abstract
+   socket check fails with ConnectionRefusedError; `mynx desktop
+   stop`; `mynx about` lists Termux:X11 and the X.Org libraries.
+   If the server doesn't start: `/tmp/.mynx/desktop/x11.log`.
 4. **View:** `DesktopView`, switching views, touchpad touch (default)
    or direct taps (setting), a desktop key bar, rotation (RandR), the
    server kept alive in the background.
@@ -100,6 +108,34 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (217): Desktop mode, step 3: the X server built in CI
+
+- Branch `desktop-build` from `desktop-dev`, PR into it. The spike's
+  build script and patch, reviewed: `scripts/build-x11.sh` now
+  installs the NDK it pins itself and checks its version, fails if no
+  library was built, checks the licence notices and packs the source;
+  outputs land where `DesktopProcesses` looks
+  (`jniLibs/arm64-v8a/libXlorie.so`, `assets/x11/termux-x11.jar`) and
+  the patch reads core's `MYNX_X11_LIB`/`MYNX_X11_PACKAGE`.
+- **Patch:** the knock port (TCP 7892) listens on 127.0.0.1 only (it
+  was every network). Kept, not turned off: the server rebroadcasts
+  its binder each second until connected, so our view won't knock,
+  but Termux:X11 also uses the bound port as a lock; a local knock
+  only makes it send the broadcast to mynx again.
+- **CI:** an X server step in `build.yml` and `release.yml`, cached
+  on the scripts, patch and licence file;
+  `scripts/check-x11-apk.sh` (bats-tested) fails a build whose APK
+  lacks the library or jar or has `Lcom/termux/x11/` in mynx's dex.
+- **Licences** (maintainer to confirm): About lists Termux:X11
+  (GPL-3.0, commit 24ce207) and "X.Org X server and libraries"
+  (21.1.26; pixman, libtirpc, libepoxy, libandroid-shmem too; bzip2
+  is a submodule but not linked). Their notices are one file,
+  `tools/licenses/X11-libraries.txt` (250 KB, from each `COPYING`,
+  by `scripts/x11-licenses.sh`; the build fails if it's stale).
+  Source: each release attaches `mynx-X.Y.Z-x11-source.tar.xz`
+  (upstream tree with submodules, unpatched, plus our patch, scripts
+  and a README), so no written offer. PR builds don't attach it.
 
 ### 2026-11-25 (216): Desktop mode, step 2: settings and `mynx desktop`
 
