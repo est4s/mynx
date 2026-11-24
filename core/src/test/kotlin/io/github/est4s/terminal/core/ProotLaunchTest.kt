@@ -292,6 +292,15 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `tells programs the desktop's display while it runs`() {
+        val argv = prootLaunch(paths, display = ":0").argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("DISPLAY=:0" in shellEnv, shellEnv.toString())
+        assertTrue(prootLaunch(paths).argv.none { it.startsWith("DISPLAY=") })
+    }
+
+    @Test
     fun `tells programs the phone's time zone`() {
         val argv = prootLaunch(paths, timeZone = "Europe/Istanbul").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
