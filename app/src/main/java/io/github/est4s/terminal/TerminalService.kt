@@ -67,6 +67,7 @@ import io.github.est4s.terminal.core.ChatNoticeRules
 import io.github.est4s.terminal.core.ChatTab
 import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.Desktop
+import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.desktopRequests
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
@@ -446,6 +447,19 @@ class TerminalService : Service() {
             later = { ms, action -> mainHandler.postDelayed(action, ms) },
         )
     }
+    /** The X server's binder and event socket, for the desktop's view; connected whenever a server of ours runs. */
+    val desktopLink: DesktopLink by lazy { DesktopLink(this, mainHandler) }
+
+    fun desktopStatus(): DesktopStatus = desktop.status()
+
+    /** Starts the desktop, as `mynx desktop start`; [done] gets null, or why it didn't start. Main thread. */
+    fun startDesktop(done: (String?) -> Unit) {
+        desktop.start { result -> done(result.exceptionOrNull()?.let { it.message ?: "the desktop didn't start" }) }
+    }
+
+    /** What the desktop's view shows as its log: the link's, then the ends of the server's and the session's. */
+    fun desktopLogs(): String = io.github.est4s.terminal.core.desktopLogs(File(rootfs), desktopLink.log())
+
     // Apps (mynx app): each opens in a WebAppActivity of its own; core decides the rest.
     private val webAppFiles by lazy { WebApps(File(rootfs, "root"), rootfs, tools.tools) }
     private val webApps by lazy { WebAppLauncher(webAppFiles, webAppHost, serviceManager.forWebApps()) }
@@ -745,6 +759,8 @@ class TerminalService : Service() {
         // After cwdDir is cleared: the menu's update notice lives there too.
         runCatching { updater.start() }
         mainHandler.post(updateTick)
+        // A server left running when the app went is found again by its broadcast.
+        runCatching { desktopLink.start() }
     }
 
     // Rewrites the stand-in on every change, and often enough for the current; until onDestroy.
@@ -978,6 +994,7 @@ class TerminalService : Service() {
         recorder.stopAll()
         mic.stop()
         sound.stop()
+        runCatching { desktopLink.stop() }
         runCatching { desktop.stop() }
         runCatching { usb.stop() }
         runCatching { usbFds.stop() }

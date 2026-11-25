@@ -249,7 +249,8 @@ One `key = value` per line; `mynx settings` describes each.
   apps): long-press to select, then Copy, Cut, Rename, Delete
   (permanent) or Share; Paste here; Chat here and Terminal here start
   Claude Code's chat or a shell in the folder shown.
-  `desktop` is desktop mode (`/opt/mynx/docs/desktop.md`).
+  `desktop` is desktop mode (`/opt/mynx/docs/desktop.md`);
+  Ctrl+Shift+D goes to the desktop and back from any view.
 - `desktop`: `xfce` (default) or `none`: what `mynx desktop start`
   runs on the X server; `none` is the server alone.
 - `desktop-touch`: `touchpad` (default) or `direct`: a finger moves
@@ -444,7 +445,7 @@ with `pager`.
 Built-in bars: `shell`, `nnn`, `menu`, `mynx-edit`, `pager`, the games'
 `neon-rogue`, `neon-drive`, `neon-flap`, `game` for any other game, the
 apps' `compass`, `incline`, `torch`, `spectrum`, `dbmeter`, `tuner` and
-`metronome`, `serial` for the serial monitor, `service` for a background service shown as a tab, and
+`metronome`, `serial` for the serial monitor, `service` for a background service shown as a tab, `desktop` for desktop mode, and
 `agent` for AI agents (`claude`, `codex` and `gemini` typed in the shell,
 or started with `mynx agent start`; an agent's own bar, e.g. `claude`,
 wins when it exists). Typing them by name works through bash functions
@@ -468,7 +469,8 @@ Ctrl   = Ctrl
 - Any single character is a key: `l`, `/`, `=`.
 - Modifiers: `Ctrl+R`, `Alt+Left`, `Shift+Tab`, `Ctrl+Alt+Delete` (Shift: named keys only).
 - `"text"` is typed as is (`\"` for a quote).
-- `Ctrl` on its own is a sticky Ctrl for the next key typed.
+- `Ctrl` (or `Alt`) on its own is sticky: it holds for the next key
+  typed. `Super` and `Super+Up` work on the desktop only.
 - `Repeat` anywhere on the line: the button repeats while held. Arrows,
   PgUp/PgDn, Backspace and Delete repeat anyway. Repeating buttons send
   as soon as they're touched; others on release.

@@ -64,6 +64,10 @@ import io.github.est4s.terminal.core.swipeTarget
 import io.github.est4s.terminal.core.NEON
 import io.github.est4s.terminal.core.RootfsInstaller
 import io.github.est4s.terminal.core.AppView
+import io.github.est4s.terminal.core.DesktopStatus
+import io.github.est4s.terminal.core.DesktopTouch
+import io.github.est4s.terminal.core.KeyPress
+import io.github.est4s.terminal.core.desktopShortcut
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeMenus
 import io.github.est4s.terminal.core.ServiceOp
@@ -108,6 +112,7 @@ class MainActivity : Activity(), FrontActivity {
     private lateinit var stripScroll: HorizontalScrollView
     private lateinit var stripRow: LinearLayout
     private lateinit var keyBar: KeyBarView
+    private lateinit var terminalKeys: TerminalKeys
     private var shownKeyBarProblems = emptyList<String>()
     // Output triggers a bar check, but a program that starts quietly (e.g.
     // waiting for input) prints nothing after `keybar` switched the bar.
@@ -160,6 +165,11 @@ class MainActivity : Activity(), FrontActivity {
         if (chatHomeShown) chatHomeView?.refresh()
     }
     private var touchView = false
+    // `view = desktop`: the desktop is the app's start, as the chat home is touch view's.
+    private var desktopMode = false
+    private var desktopView: DesktopView? = null
+    // Ctrl+Shift+D was taken: its key up is too.
+    private var desktopShortcutHeld = false
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
 
@@ -172,6 +182,8 @@ class MainActivity : Activity(), FrontActivity {
             showTerminal(s.currentSession())
             s.chats.listener = chatListener
             s.chats.historyListener = chatHistoryListener
+            s.desktopLink.listener = ::onDesktopChanged
+            if (desktopMode && shellToShow == null && tabToOpen == null && !chatToShow) showDesktop()
             if (touchView && shellToShow == null && tabToOpen == null) {
                 val homeLevels = s.homeLevels
                 s.homeLevels = null
@@ -280,6 +292,7 @@ class MainActivity : Activity(), FrontActivity {
         hideChatHome()
         hideHome()
         hideFiles()
+        hideDesktop()
     }
 
     private fun shellOf(intent: Intent?): Int? =
@@ -295,6 +308,7 @@ class MainActivity : Activity(), FrontActivity {
         hideChatHome()
         hideFiles()
         hideHome()
+        hideDesktop()
     }
 
     // Picks up edits to the colours file when the user comes back to the app.
@@ -310,6 +324,7 @@ class MainActivity : Activity(), FrontActivity {
             if (chatHistoryShown) chatHistory?.refresh()
             if (chatHomeShown) chatHomeView?.refresh()
             if (filesShown) filesView?.refresh()
+            if (desktopShown) desktopView?.shown()
         }
         root.post(keyBarPoll)
         service?.cameOnScreen()
@@ -326,6 +341,7 @@ class MainActivity : Activity(), FrontActivity {
 
     override fun onStop() {
         root.removeCallbacks(keyBarPoll)
+        if (desktopShown) desktopView?.hidden()
         dictation.finish()
         visible = false
         setCursorBlinking(false)
@@ -341,6 +357,7 @@ class MainActivity : Activity(), FrontActivity {
             if (it.activity === this) it.activity = null
             if (it.chats.listener === chatListener) it.chats.listener = null
             if (it.chats.historyListener === chatHistoryListener) it.chats.historyListener = null
+            if (it.activity == null) it.desktopLink.listener = null
         }
         service = null
         if (bound) unbindService(connection)
@@ -373,8 +390,12 @@ class MainActivity : Activity(), FrontActivity {
     // the history, Home's lists after their levels, Files after its selection and
     // folders, the terminal unless a chat sent it there); the chat home closes its
     // drawer, then the app is left.
+    // Desktop view: Back on the terminal goes to the desktop, on the desktop leaves the app;
+    // from another view the desktop backs out to the terminal.
     private fun goBack() {
         when {
+            desktopShown -> if (desktopMode) moveTaskToBack(true) else hideDesktop()
+            desktopMode -> showDesktop()
             filesShown && filesView?.back() == true -> Unit
             filesShown -> showChatHome()
             chatShown && chat?.sheetBack() == true -> Unit
@@ -393,6 +414,7 @@ class MainActivity : Activity(), FrontActivity {
     private fun showChatHome() {
         val view = chatHomeView ?: return
         val service = service ?: return
+        hideDesktop()
         hideHome()
         hideChat()
         hideChatHistory()
@@ -527,6 +549,7 @@ class MainActivity : Activity(), FrontActivity {
     /** Touch mode's Home, over the terminal, which keeps its size so tabs start as usual. */
     private fun showHome() {
         val view = home ?: return
+        hideDesktop()
         hideChatHome()
         hideFiles()
         chatAfterTab = false
@@ -557,6 +580,7 @@ class MainActivity : Activity(), FrontActivity {
     private fun showFiles(folder: String) {
         val view = filesView ?: return
         val service = service ?: return
+        hideDesktop()
         hideHome()
         hideChatHome()
         hideChat()
@@ -637,6 +661,7 @@ class MainActivity : Activity(), FrontActivity {
         val view = chat ?: return
         val service = service ?: return
         if (service.chats.shown == null) return showChatHistory()
+        hideDesktop()
         hideHome()
         hideChatHome()
         hideChatHistory()
@@ -665,6 +690,7 @@ class MainActivity : Activity(), FrontActivity {
     private fun showChatHistory() {
         val view = chatHistory ?: return
         val service = service ?: return
+        hideDesktop()
         hideHome()
         hideChatHome()
         hideChat()
@@ -818,7 +844,8 @@ class MainActivity : Activity(), FrontActivity {
             isHorizontalScrollBarEnabled = false
             addView(stripRow)
         }
-        keyBar = KeyBarView(this, terminalView, font, File(installer.rootfs, KEY_BARS_DIR))
+        terminalKeys = TerminalKeys(terminalView)
+        keyBar = KeyBarView(this, terminalKeys, font, File(installer.rootfs, KEY_BARS_DIR))
         // Before attaching: a session's emulator copies the scheme when it starts.
         applyColors()
         // TerminalView ignores its own padding, so it sits inside the inset root.
@@ -902,10 +929,59 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
+        // Last: over everything else while it shows.
+        desktopView = DesktopView(this, font, File(installer.rootfs, KEY_BARS_DIR), desktopHost).also {
+            it.colors = strip
+            it.visibility = View.GONE
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
         terminalView.attachSession(session)
         terminalView.requestFocus()
         renderStrip()
         refreshKeyBar(force = true)
+    }
+
+    private val desktopHost = object : DesktopView.Host {
+        override val link: DesktopScreenLink? get() = service?.desktopLink
+        override fun status(): DesktopStatus? = service?.desktopStatus()
+        override fun start(done: (String?) -> Unit) {
+            val running = service ?: return done("the app isn't ready yet")
+            running.startDesktop(done)
+        }
+        override fun logs(): String = service?.desktopLogs() ?: ""
+        override fun touch(): DesktopTouch = loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.desktopTouch
+        override fun showTabs() = hideDesktop()
+    }
+
+    private val desktopShown get() = desktopView?.visibility == View.VISIBLE
+
+    /** The desktop, over the terminal and the touch screens; it starts the desktop if nothing runs. */
+    private fun showDesktop() {
+        val view = desktopView ?: return
+        hideHome()
+        hideChat()
+        hideChatHistory()
+        hideChatHome()
+        hideFiles()
+        hideKeyboard()
+        if (desktopShown) return
+        view.visibility = View.VISIBLE
+        view.shown()
+    }
+
+    /** Back to the terminal and its tabs. */
+    private fun hideDesktop() {
+        if (!desktopShown) return
+        desktopView?.hidden()
+        desktopView?.visibility = View.GONE
+        if (::terminalView.isInitialized) terminalView.requestFocus()
+    }
+
+    /** The X server connected or went, or the link logged something: the view and the strip's desktop mark follow. */
+    fun onDesktopChanged() {
+        if (desktopShown) desktopView?.refresh()
+        if (::terminalView.isInitialized) renderStrip()
     }
 
     // Rebuilt on every change; changes are rare (output only reports when a
@@ -916,6 +992,11 @@ class MainActivity : Activity(), FrontActivity {
         if (touchView) stripRow.addView(stripText("⌂", strip.accent).apply {
             setPadding(dp(14), dp(8), dp(10), dp(8))
             setOnClickListener { showChatHome() }
+        })
+        // The desktop: always in desktop view, else while its X server runs.
+        if (desktopMode || service?.desktopLink?.connected == true) stripRow.addView(stripText("▣", strip.accent).apply {
+            setPadding(dp(14), dp(8), dp(10), dp(8))
+            setOnClickListener { showDesktop() }
         })
         tabs.tabs.forEachIndexed { i, tab ->
             stripRow.addView(tabView(tab, selected = i == tabs.selectedIndex))
@@ -1135,6 +1216,7 @@ class MainActivity : Activity(), FrontActivity {
         terminalView.setBackgroundColor(next.background)
         stripScroll.setBackgroundColor(strip.background)
         keyBar.colors = strip
+        desktopView?.colors = strip
         renderStrip()
         terminalView.onScreenUpdated()
     }
@@ -1309,7 +1391,7 @@ class MainActivity : Activity(), FrontActivity {
         service?.setCursorStyle(settings.cursorStyle)
         terminalView.setTerminalCursorBlinkerRate(if (settings.cursorBlink) CURSOR_BLINK_MS else 0)
         tabSwipeOn = settings.tabSwipe
-        applyView(settings.view == AppView.TOUCH)
+        applyView(settings.view)
         setCursorBlinking(true)
         terminalView.onScreenUpdated()
         if (!quiet && problems.isNotEmpty() && problems != shownSettingsProblems) {
@@ -1323,18 +1405,24 @@ class MainActivity : Activity(), FrontActivity {
     }
 
     // `mynx set view …` takes effect at once; the first read only records it.
-    private fun applyView(touch: Boolean) {
-        if (touch == touchView) return
+    private fun applyView(view: AppView) {
+        val touch = view == AppView.TOUCH
+        val desktop = view == AppView.DESKTOP
+        if (touch == touchView && desktop == desktopMode) return
         touchView = touch
+        desktopMode = desktop
         if (home == null) return
-        if (touch) {
-            showChatHome()
-        } else {
-            hideChat()
-            hideChatHistory()
-            hideChatHome()
-            hideHome()
-            hideFiles()
+        when {
+            touch -> showChatHome()
+            desktop -> showDesktop()
+            else -> {
+                hideChat()
+                hideChatHistory()
+                hideChatHome()
+                hideHome()
+                hideFiles()
+                hideDesktop()
+            }
         }
         renderStrip()
     }
@@ -1359,16 +1447,39 @@ class MainActivity : Activity(), FrontActivity {
         if (::terminalView.isInitialized) terminalView.setTerminalCursorBlinkerState(on && visible, true)
     }
 
-    fun takeCtrlLatch() = ::keyBar.isInitialized && keyBar.takeCtrlLatch()
+    fun takeCtrlLatch() = ::terminalKeys.isInitialized && terminalKeys.takeCtrlLatch()
+    fun takeAltLatch() = ::terminalKeys.isInitialized && terminalKeys.takeAltLatch()
 
     // Before any view: the volume keys work whatever has focus, keyboard up or down.
+    // On the desktop every key is the X server's but Ctrl+Shift+D, Back and the volume keys.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (desktopShortcutTaken(event)) return true
+        if (desktopShown) {
+            val view = desktopView ?: return super.dispatchKeyEvent(event)
+            return view.onVolumeKey(event) || view.onKey(event) || super.dispatchKeyEvent(event)
+        }
         // A hardware keyboard must reach Chat's box, not the terminal under it.
         if (chatShown && chat?.hasFocus() != true) chat?.focusInput()
         // Typing on one, the chat home's box (the terminal under it may have the focus).
         if (chatHomeShown && event.isPrintingKey && chatHomeView?.hasFocus() != true) chatHomeView?.focusInput()
         return (::keyBar.isInitialized && !homeShown && !chatShown && !chatHistoryShown && !chatHomeShown && !filesShown && keyBar.onVolumeKey(event)) ||
             super.dispatchKeyEvent(event)
+    }
+
+    // Ctrl+Shift+D: to the desktop and back, from any view.
+    private fun desktopShortcutTaken(event: KeyEvent): Boolean {
+        if (event.keyCode != KeyEvent.KEYCODE_D) return false
+        if (event.action == KeyEvent.ACTION_UP && desktopShortcutHeld) {
+            desktopShortcutHeld = false
+            return true
+        }
+        val press = KeyPress("D", ctrl = event.isCtrlPressed, shift = event.isShiftPressed, alt = event.isAltPressed)
+        if (event.action != KeyEvent.ACTION_DOWN || !desktopShortcut(press) || desktopView == null) return false
+        desktopShortcutHeld = true
+        if (event.repeatCount == 0) {
+            if (desktopShown) hideDesktop() else showDesktop()
+        }
+        return true
     }
 
     /** A tap on a link opens it; anywhere else brings up the keyboard. */

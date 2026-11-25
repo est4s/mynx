@@ -15,10 +15,7 @@ import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.termux.terminal.KeyHandler
-import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.KeyButton
-import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.LoadedKeyBar
 import io.github.est4s.terminal.core.SHELL_KEY_BAR
 import io.github.est4s.terminal.core.StripColors
@@ -33,23 +30,19 @@ import kotlin.math.abs
 private const val REPEAT_DELAY_MS = 400L
 private const val REPEAT_MS = 50L
 
-private val KEY_CODES: Map<String, Int> = mapOf(
-    "Enter" to KeyEvent.KEYCODE_ENTER,
-    "Esc" to KeyEvent.KEYCODE_ESCAPE,
-    "Tab" to KeyEvent.KEYCODE_TAB,
-    "Space" to KeyEvent.KEYCODE_SPACE,
-    "Backspace" to KeyEvent.KEYCODE_DEL,
-    "Delete" to KeyEvent.KEYCODE_FORWARD_DEL,
-    "Insert" to KeyEvent.KEYCODE_INSERT,
-    "Up" to KeyEvent.KEYCODE_DPAD_UP,
-    "Down" to KeyEvent.KEYCODE_DPAD_DOWN,
-    "Left" to KeyEvent.KEYCODE_DPAD_LEFT,
-    "Right" to KeyEvent.KEYCODE_DPAD_RIGHT,
-    "Home" to KeyEvent.KEYCODE_MOVE_HOME,
-    "End" to KeyEvent.KEYCODE_MOVE_END,
-    "PgUp" to KeyEvent.KEYCODE_PAGE_UP,
-    "PgDn" to KeyEvent.KEYCODE_PAGE_DOWN,
-) + (1..12).associate { "F$it" to KeyEvent.KEYCODE_F1 + it - 1 }
+/** Where a key bar's buttons send their keys: a terminal ([TerminalKeys]) or the desktop. */
+interface KeyBarTarget {
+    fun press(button: KeyButton)
+
+    /** Whether [button] is a sticky modifier that's on: it shows lit. */
+    fun latched(button: KeyButton): Boolean
+
+    /** Another bar shows: sticky modifiers go off. */
+    fun reset()
+
+    /** Set by the bar: called when a sticky modifier goes on or off, so it redraws. */
+    var onLatchChange: (() -> Unit)?
+}
 
 /**
  * The buttons between the terminal and the keyboard: two rows (one when
@@ -57,11 +50,11 @@ private val KEY_CODES: Map<String, Int> = mapOf(
  * selected tab's program asked for (see the `keybar` command in Debian),
  * else the shell's. Buttons that don't fit go on more pages; swipe
  * sideways to switch. Buttons aren't focusable, so typing stays on the
- * terminal.
+ * terminal. [target] gets the keys.
  */
 class KeyBarView(
     context: Context,
-    private val terminalView: TerminalView,
+    private val target: KeyBarTarget,
     private val font: Typeface,
     private val userDir: File,
 ) : FrameLayout(context) {
@@ -70,7 +63,6 @@ class KeyBarView(
     // length (two quick writes can share a timestamp, not a length), and the
     // bar to fall back on.
     private var loadedFrom: List<Any?>? = null
-    private var ctrlLatched = false
     private var pages: List<List<List<Int>>> = emptyList()
     private var page = 0
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -109,6 +101,7 @@ class KeyBarView(
     init {
         isFocusable = false
         setWillNotDraw(false)
+        target.onLatchChange = { render() }
     }
 
     /**
@@ -130,18 +123,10 @@ class KeyBarView(
         stopRepeat()
         volumeHeld = null
         bar = loaded
-        ctrlLatched = false
+        target.reset()
         page = 0
         render()
         return loaded
-    }
-
-    /** The sticky Ctrl, if on; turns it off. */
-    fun takeCtrlLatch(): Boolean {
-        if (!ctrlLatched) return false
-        ctrlLatched = false
-        render()
-        return true
     }
 
     /**
@@ -228,7 +213,7 @@ class KeyBarView(
     }
 
     private fun button(button: KeyButton?, colors: StripColors) = TextView(context).apply {
-        val latched = ctrlLatched && button?.strokes == listOf(KeyStroke.CtrlLatch)
+        val latched = button != null && target.latched(button)
         text = button?.label ?: " "
         typeface = font
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -325,38 +310,7 @@ class KeyBarView(
         return true
     }
 
-    private fun press(button: KeyButton) {
-        // Not started yet (or finished): there's nothing to type into.
-        val session = terminalView.currentSession?.takeIf { it.emulator != null } ?: return
-        for (stroke in button.strokes) {
-            when (stroke) {
-                KeyStroke.CtrlLatch -> {
-                    ctrlLatched = !ctrlLatched
-                    render()
-                }
-                is KeyStroke.Text -> session.write(stroke.text)
-                is KeyStroke.Key -> sendKey(stroke)
-            }
-        }
-    }
-
-    private fun sendKey(key: KeyStroke.Key) {
-        val code = KEY_CODES[key.key]
-        if (code == null) {
-            // A single character; inputCodePoint applies the sticky Ctrl itself.
-            terminalView.inputCodePoint(key.key.codePointAt(0), key.ctrl, key.alt)
-            return
-        }
-        val ctrl = key.ctrl || takeCtrlLatch()
-        var mod = 0
-        if (ctrl) mod = mod or KeyHandler.KEYMOD_CTRL
-        if (key.alt) mod = mod or KeyHandler.KEYMOD_ALT
-        if (key.shift) mod = mod or KeyHandler.KEYMOD_SHIFT
-        // The library has no sequence for a plain Space; type it instead.
-        if (!terminalView.handleKeyCode(code, mod) && key.key == "Space") {
-            terminalView.inputCodePoint(' '.code, ctrl, key.alt)
-        }
-    }
+    private fun press(button: KeyButton) = target.press(button)
 
     private fun dp(value: Int) = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()

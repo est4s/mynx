@@ -55,14 +55,37 @@ a PR into `desktop-dev`.
    socket check fails with ConnectionRefusedError; `mynx desktop
    stop`; `mynx about` lists Termux:X11 and the X.Org libraries.
    If the server doesn't start: `/tmp/.mynx/desktop/x11.log`.
-4. **View:** `DesktopView`, switching views, touchpad touch (default)
-   or direct taps (setting), a desktop key bar, rotation (RandR), the
-   server kept alive in the background.
+4. **View: built** (entry 218, PR #112 `desktop-view`, stacked on
+   #111 `desktop-build`; merge #111 first). Not tried on the phone.
+   To check (with step 3's checks), in mynx dev, `xkb-data` and
+   `mynx set desktop none` (or XFCE installed):
+   - `mynx set view desktop`: the desktop opens and starts itself; a
+     notice says why while there's no picture (missing package,
+     connecting, a failed start, with Start and the logs). With
+     `none`: `xeyes &` / `xterm &` in a tab (☰ Tabs, then ▣ or Back
+     to return) show on the desktop.
+   - Touchpad (default): one finger moves the arrow, tap clicks, two
+     quick taps double-click, two-finger tap right-clicks, three a
+     middle click, two fingers scroll (content follows), hold still
+     ½ s or tap-then-touch to drag. `mynx set desktop-touch direct`,
+     reopen the desktop: tap clicks where touched, move drags, long
+     press right-clicks.
+   - Keys: xterm types from the soft keyboard (⌨), Enter, Backspace;
+     the bar's Ctrl then `c` interrupts; a hardware keyboard types,
+     Ctrl+C works, Ctrl+Shift+D goes to the terminal and back.
+   - The soft keyboard doesn't resize the X screen (`xdpyinfo |
+     grep dimensions` before and after; the screen moves up so the
+     pointer stays visible); rotating does resize it.
+   - Home, then back; Back (leaves the app), then reopen: the
+     picture is current at once (no stale frame until a resize).
+   - The X screen never lies under the bar or the key bar.
+   - If anything's off: Log (top right) shows the link's lines and
+     the ends of `x11.log` and `session.log`.
 5. **Debian:** installing XFCE when asked; sound through Pulse;
    Firefox (crashed in the spike: try `MOZ_FAKE_NO_SANDBOX=1`,
    proot's `--sysvipc` for MIT-SHM), the X server's font path
    (xterm couldn't load xfonts-base's semicondensed font).
-6. **Docs:** `tools/docs/desktop.md`.
+6. **Docs:** `tools/docs/desktop.md` (the view's part done in step 4).
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -108,6 +131,47 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (218): Desktop mode, step 4: the desktop view
+
+- Branch `desktop-view` from `desktop-build` (PR #112, base
+  `desktop-build`). Rebuilt test-first from the spike: protocol,
+  gestures, keys and layout logic in core (`X11Input.kt`,
+  `DesktopScreen.kt`, `DesktopGestures.kt`, `DesktopKeys.kt`); the
+  app's `DesktopLink` (binder, socket, in the service) and
+  `DesktopView` are thin. CI compiled it and drew the screenshots
+  (`desktop*.png`); nothing tried on the phone.
+- **The spike's three faults:** (1) stale picture after reopening:
+  the renderer uploads only damaged rows; a screen-size event with
+  only the frame rate changed (rate+1, then the rate) makes the
+  server build a new root buffer, drawn whole
+  (`DesktopSurface.handover()`); if the phone still shows a stale
+  frame, the cause is elsewhere. (2) The soft keyboard no longer
+  resizes the X screen: the layer keeps its height and moves up to
+  keep the pointer in sight (`keyboardPan()`; API 30+). (3) The
+  screen lies between our bar and the key bar.
+- **Decisions to confirm (maintainer's):** Ctrl+Shift+D switches
+  desktop ⇄ terminal from any view (Windows Terminal uses it for
+  duplicate tab, which mynx lacks); Back on the desktop leaves the
+  app in desktop view, else goes to the terminal; ▣ on the strip
+  (always in desktop view, else while the server runs); opening the
+  desktop starts it when nothing runs and nothing is missing; an X
+  pixel is 0.75 dp, whole phone pixels (2 on the Pixel 10, as the
+  spike); natural scrolling (content follows the fingers), 40 X px a
+  notch; three-finger tap = middle click; direct mode's long press =
+  right click; our own arrow (the server's cursor needs its shared
+  memfd, which we drop unmapped, so cursor shapes don't show); the
+  hardware keyboard by scan code (X's layout is US unless
+  `setxkbmap`); a keyboard's Esc that Android calls Back is Esc.
+- **Key bars:** sticky `Alt` and `Super`, `Super+KEY` chords (the
+  terminal gets the sticky Alt through `readAltKey`; Super does
+  nothing there); built-in `desktop` bar (Esc Tab Ctrl Alt Super
+  arrows); `KeyBarView` sends through a `KeyBarTarget`
+  (`TerminalKeys`, or the desktop's). Sticky modifiers on the
+  desktop also hold for the next click or scroll.
+- Also: a USB/Bluetooth mouse points, clicks and scrolls; held keys
+  are released when the desktop hides. Not done: clipboard sync,
+  touch view's Home entry for the desktop (Ctrl+Shift+D and ▣ only).
 
 ### 2026-11-25 (217): Desktop mode, step 3: the X server built in CI
 

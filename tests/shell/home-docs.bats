@@ -405,3 +405,11 @@ setup() {
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done
 }
+
+@test "the guide explains the desktop view: switching, touch, keys and its bar" {
+    grep -qF 'Ctrl+Shift+D' "$CORE"
+    for text in "Ctrl+Shift+D" "Tabs" "two-finger tap is a right click" "long press is a right click" \
+        "setxkbmap" "mynx keybar edit desktop" "Super+Up" "Log"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}
