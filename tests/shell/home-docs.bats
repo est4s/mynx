@@ -421,6 +421,7 @@ setup() {
     for text in "Ctrl+Shift+D" "view switcher" "Ctrl+Shift+1, 2 and 3" "back to where you came from" \
         "two-finger tap is a right click" "long press is a right click" \
         "a flick flings on" "pinch to" "drag or select text" \
+        "The clipboard** is shared, text only" "Up to 64 KB" \
         "setxkbmap" "mynx keybar edit desktop" "Super+Up" "Log"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done

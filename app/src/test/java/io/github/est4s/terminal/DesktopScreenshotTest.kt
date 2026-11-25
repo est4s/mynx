@@ -22,6 +22,7 @@ private class NoServer(override val connected: Boolean = false) : DesktopScreenL
     override fun send(events: List<X11Input>) = Unit
     override fun surface(surface: Surface, width: Int, height: Int, framerate: Int, fresh: Boolean) = Unit
     override fun surfaceGone() = Unit
+    override fun androidClipboard(text: String?) = Unit
 }
 
 private class SampleHost(private val status: DesktopStatus, override val link: DesktopScreenLink) : DesktopView.Host {

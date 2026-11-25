@@ -1,6 +1,8 @@
 package io.github.est4s.terminal
 
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -10,8 +12,11 @@ import android.os.IBinder
 import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import android.view.Surface
+import io.github.est4s.terminal.core.DesktopClipboard
 import io.github.est4s.terminal.core.DesktopSurface
+import io.github.est4s.terminal.core.X11Events
 import io.github.est4s.terminal.core.X11Input
+import io.github.est4s.terminal.core.X11ServerEvent
 import io.github.est4s.terminal.core.X11_GET_X_CONNECTION
 import io.github.est4s.terminal.core.X11_INTERFACE
 import io.github.est4s.terminal.core.X11_START_ACTION
@@ -43,6 +48,9 @@ interface DesktopScreenLink {
 
     /** The view's surface is going: the server must stop drawing into it first. */
     fun surfaceGone()
+
+    /** Android's clipboard as text (null: none, or not readable), read while the desktop shows. */
+    fun androidClipboard(text: String?)
 }
 
 /**
@@ -53,8 +61,9 @@ interface DesktopScreenLink {
  * was running when the app came back is found again. Through the binder
  * the view's surface is handed over (`windowChanged`); through the socket
  * it gives (`getXConnection`) the input is written, and what the server
- * sends back (heartbeats, its state) is read and dropped. Lives in the
- * service; main thread.
+ * sends back is read: X's clipboard goes to Android's, and a paste in X
+ * of what Android had is answered (core's DesktopClipboard); the rest
+ * (heartbeats, its state) is dropped. Lives in the service; main thread.
  */
 class DesktopLink(private val context: Context, private val main: Handler) : DesktopScreenLink {
     override var listener: (() -> Unit)? = null
@@ -68,6 +77,7 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     private var height = 0
     private var framerate = 0
     private val screen = DesktopSurface()
+    private val clipboard = DesktopClipboard()
 
     override val connected: Boolean get() = events != null
 
@@ -125,8 +135,9 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
             }
             connection = pfd
             events = FileOutputStream(pfd.fileDescriptor)
-            drain(binder, pfd)
+            read(binder, pfd)
             screen.reconnected()
+            send(clipboard.connected())
             note("connected to the X server")
             surface?.let { handOver(it, fresh = true) }
         } catch (e: Exception) {
@@ -135,15 +146,38 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
         }
     }
 
-    // Unread, the socket would fill and the server would block writing to it.
+    // Always read: unread, the socket would fill and the server would block writing to it.
     // The stream isn't closed: the descriptor is the ParcelFileDescriptor's.
-    private fun drain(binder: IBinder, pfd: ParcelFileDescriptor) {
+    private fun read(binder: IBinder, pfd: ParcelFileDescriptor) {
         thread(name = "x11-events", isDaemon = true) {
-            val buffer = ByteArray(4096)
-            val input = FileInputStream(pfd.fileDescriptor)
-            runCatching { while (input.read(buffer) >= 0) Unit }
+            val events = X11Events(FileInputStream(pfd.fileDescriptor))
+            runCatching {
+                while (true) {
+                    val event = events.next() ?: break
+                    if (event is X11ServerEvent.Other) continue
+                    main.post { if (server === binder) serverSent(event) }
+                }
+            }
             main.post { if (server === binder) gone("the X server closed the connection") }
         }
+    }
+
+    private fun serverSent(event: X11ServerEvent) {
+        when (event) {
+            is X11ServerEvent.Clipboard -> clipboard.fromX(event.text)?.let { text ->
+                runCatching {
+                    context.getSystemService(ClipboardManager::class.java)
+                        .setPrimaryClip(ClipData.newPlainText("desktop", text))
+                }.onFailure { note("copying X's clipboard to Android's failed: $it") }
+            }
+            is X11ServerEvent.ClipboardTooBig -> note("X's clipboard (${event.bytes} bytes) is too big for Android's")
+            X11ServerEvent.ClipboardRequest -> send(clipboard.request())
+            is X11ServerEvent.Other -> Unit
+        }
+    }
+
+    override fun androidClipboard(text: String?) {
+        if (connected) send(clipboard.fromAndroid(text))
     }
 
     private fun gone(why: String) {

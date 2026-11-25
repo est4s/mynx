@@ -1,6 +1,8 @@
 package io.github.est4s.terminal
 
 import android.annotation.SuppressLint
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -109,6 +111,10 @@ class DesktopView(
     private var starting = false
     private var error: String? = null
     private var mouseButtons = 0
+    private var wasConnected = false
+    private val clipboard = context.getSystemService(ClipboardManager::class.java)
+    // Android's clipboard changed while the desktop shows (another app over it, or ours).
+    private val clipChanged = ClipboardManager.OnPrimaryClipChangedListener { sendClipboard() }
 
     private val barTarget = object : KeyBarTarget {
         override var onLatchChange: (() -> Unit)? = null
@@ -284,6 +290,9 @@ class DesktopView(
         }
         keyBar.refresh(null, force = true, fallback = DESKTOP_KEY_BAR)
         requestFocus()
+        clipboard.removePrimaryClipChangedListener(clipChanged)
+        clipboard.addPrimaryClipChangedListener(clipChanged)
+        if (hasWindowFocus()) sendClipboard()
         if (desktopStartsOnOpen(host.link?.connected == true, host.status())) start()
         removeCallbacks(poll)
         post(poll)
@@ -294,6 +303,7 @@ class DesktopView(
         removeCallbacks(poll)
         removeCallbacks(longPress)
         removeCallbacks(flingFrame)
+        clipboard.removePrimaryClipChangedListener(clipChanged)
         send(keys.releaseAll() + gestures.cancel())
         hideKeyboard()
     }
@@ -302,8 +312,30 @@ class DesktopView(
         removeCallbacks(poll)
         removeCallbacks(longPress)
         removeCallbacks(flingFrame)
+        clipboard.removePrimaryClipChangedListener(clipChanged)
         super.onDetachedFromWindow()
     }
+
+    // Android 10+ lets an app read the clipboard only while it has the focus: back to the app is when.
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (hasWindowFocus && visibility == VISIBLE) sendClipboard()
+    }
+
+    /** Android's clipboard to X's, if it's text X doesn't have (core's DesktopClipboard decides). */
+    private fun sendClipboard() {
+        val link = host.link ?: return
+        if (!link.connected) return
+        link.androidClipboard(clipText())
+    }
+
+    private fun clipText(): String? = runCatching {
+        val description = clipboard.primaryClipDescription ?: return null
+        val text = description.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
+            description.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)
+        if (!text) return null
+        clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()
+    }.getOrNull()
 
     /** Marks the `view` setting's view on the switcher. */
     fun markView() {
@@ -320,6 +352,9 @@ class DesktopView(
     fun refresh() {
         markView()
         val connected = host.link?.connected == true
+        // A new connection's server has nothing of Android's clipboard yet.
+        if (connected && !wasConnected && visibility == VISIBLE && hasWindowFocus()) sendClipboard()
+        wasConnected = connected
         val status = host.status()
         val shown = desktopNotice(connected, status, starting, error)
         val session = status?.session?.word ?: "desktop"
