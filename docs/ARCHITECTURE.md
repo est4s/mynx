@@ -553,6 +553,26 @@ See `docs/ROADMAP.md` "How it works". The details:
   returns once the socket takes connections. New tabs and services get
   `DISPLAY=:0` while the server runs (`prootLaunch(display =)`). The
   server's start broadcast is taken by **the view's link**, below.
+  **Debian's side** (step 5): `desktopPackages()` is what a session
+  needs (xkb-data, xfonts-base; for XFCE xfce4, xfce4-terminal,
+  dbus-x11, tango-icon-theme, XFCE's default icons); the status's
+  `install` is those `/var/lib/dpkg/status` doesn't list as installed
+  (`installedPackages()`), which `mynx desktop install` installs with
+  `--no-install-recommends` (xfce4 recommends Xorg's server), and the
+  view's notice offers Install (a tab, `DESKTOP_INSTALL_TAB_COMMAND`)
+  when one is missing and a problem stops the start. **Fonts:**
+  Termux:X11 takes the first of `dirname(TMPDIR)`'s `/etc/X11/fonts`,
+  `/usr/share/fonts/X11` that exists, and xfonts-base makes the first
+  (only an alias file), so `x11Launch()` passes `-fp` (`x11FontPath()`:
+  the `/usr/share/fonts/X11/*` folders with a `fonts.dir`, then
+  `built-ins`; dix's `-fp` overrides the default it set). **Sound:**
+  the session is a `debianLaunch`, so it has `PULSE_SERVER` as tabs do.
+  **Firefox** (not confirmed): every proot has `MOZ_FAKE_NO_SANDBOX=1`
+  and `MOZ_SHM_NO_SEALS=1`, and the own `/dev` a `shm` folder
+  (`prepareOwnDev()`; glibc's `shm_open` failed with ENOENT), as
+  proot-distro gives. No `--sysvipc`: SysV shm fails with ENOSYS, so
+  clients should fall back from MIT-SHM, while segments proot emulated would
+  be unknown to the server outside proot.
   **The view** (`app/.../DesktopLink.kt`, `DesktopView.kt`; core's
   `X11Input.kt`, `DesktopScreen.kt`, `DesktopGestures.kt`,
   `DesktopKeys.kt`; step 4): the service's `DesktopLink` registers

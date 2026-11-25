@@ -81,11 +81,34 @@ a PR into `desktop-dev`.
    - The X screen never lies under the bar or the key bar.
    - If anything's off: Log (top right) shows the link's lines and
      the ends of `x11.log` and `session.log`.
-5. **Debian:** installing XFCE when asked; sound through Pulse;
-   Firefox (crashed in the spike: try `MOZ_FAKE_NO_SANDBOX=1`,
-   proot's `--sysvipc` for MIT-SHM), the X server's font path
-   (xterm couldn't load xfonts-base's semicondensed font).
-6. **Docs:** `tools/docs/desktop.md` (the view's part done in step 4).
+5. **Debian: built** (entry 219, PR `desktop-debian`, stacked on
+   #112 `desktop-view`; merge #111, then #112 first). Not tried on
+   the phone. To check (after step 4's), in mynx dev:
+   - With XFCE not installed and `desktop = xfce`: the desktop's
+     notice says "XFCE isn't installed: mynx desktop install …" with
+     **Install** (no Start); Install opens a tab running `mynx
+     desktop install`, which shows `apt-get install -y
+     --no-install-recommends …` and asks. Answer y; then ▣ (or
+     Ctrl+Shift+D): Start, and XFCE's panel and desktop show, with
+     Tango icons. `mynx desktop install` again: "everything it needs
+     (XFCE) is installed". `mynx desktop status --json` has
+     `"install":[]`.
+   - Fonts: `xterm &` from XFCE's terminal (or a tab with
+     `DISPLAY=:0`, after `apt install xterm`) opens without "cannot
+     load font"; `xset q | grep -A2 "Font Path"` (x11-xserver-utils)
+     shows `…/usr/share/fonts/X11/misc,…,built-ins`.
+   - Sound: in XFCE's terminal `echo $PULSE_SERVER` is
+     `unix:/tmp/.mynx/sound/native`; `paplay
+     /usr/share/sounds/alsa/Front_Center.wav` (alsa-utils' sounds)
+     plays on the phone; the panel's volume plugin shows the
+     device.
+   - Firefox (hypothesis): `apt install firefox-esr`, start it from
+     XFCE's menu: does it open and load a page? If not, run
+     `MOZ_CRASHREPORTER_DISABLE=1 firefox-esr` in XFCE's terminal
+     and report the last lines; then the tries in
+     `/opt/mynx/docs/desktop.md` ("Firefox").
+     `ls -ld /dev/shm` in a new tab is a folder.
+6. **Docs:** `tools/docs/desktop.md` (the view's part done in step 4, Debian's in step 5): a last pass once the phone has tried it.
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -131,6 +154,44 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (219): Desktop mode, step 5: Debian's side
+
+- Branch `desktop-debian` from `desktop-view` (PR into it). Core and
+  `mynx` tested here; the app's Install button only compiled in CI.
+- **Installing:** `mynx desktop install [--yes]` (like `mynx sound
+  install`: shows the apt commands, asks) installs the status's new
+  `install` list: `desktopPackages()` minus what dpkg lists as
+  installed. XFCE: `xfce4 xfce4-terminal dbus-x11 tango-icon-theme`,
+  both sessions `xkb-data xfonts-base`, all `--no-install-recommends`
+  (xfce4 recommends `xorg`, Xorg's own server, plus polkit and
+  more); ~70 packages on a bare trixie. tango because XFCE's default
+  icon theme is Tango (xfce4-settings' xsettings.xml). Refusals now
+  name `mynx desktop install`; the view's notice offers Install (a
+  tab running it) instead of Start when a package is missing.
+- **Fonts, the cause found:** Termux:X11 (24ce207,
+  `cmdentrypoint.cpp`) takes the first of `<rootfs>/etc/X11/fonts`,
+  `<rootfs>/usr/share/fonts/X11` that exists, and xfonts-base ships
+  `/etc/X11/fonts/misc/xfonts-base.alias`, so the font path pointed
+  at folders with no fonts. `x11Launch()` now passes `-fp` with the
+  `/usr/share/fonts/X11/*` folders that have a `fonts.dir`, then
+  `built-ins` (read at each start).
+- **Sound:** nothing to change: the session is a `debianLaunch`, so
+  it already had `PULSE_SERVER`. Not checked: XFCE autostarts
+  `start-pulseaudio-x11`, which loads Pulse's X11 modules into our
+  server (should be harmless).
+- **Firefox (hypotheses, untested):** proot-distro gives every login
+  `MOZ_FAKE_NO_SANDBOX=1`, `MOZ_SHM_NO_SEALS=1`, a `/dev/shm` bind
+  and `--sysvipc`. mynx had none: here `shm_open` fails with ENOENT
+  and `shmget` with ENOSYS. Now every proot has the two variables
+  and the own `/dev` a `shm` folder (not with `serial-names = off`).
+  No `--sysvipc` (decision, conservative): segments proot emulates
+  would be unknown to the X server outside proot, so MIT-SHM attaches
+  could fail where now clients see no SysV shm and fall back.
+- **Decisions to confirm (maintainer's):** the package set; the two
+  MOZ variables in every tab, not only the desktop's; Install opens a
+  tab rather than installing from the view; `/dev/shm`'s files are
+  never cleaned (they'd go at a reboot on Linux).
 
 ### 2026-11-25 (218): Desktop mode, step 4: the desktop view
 
