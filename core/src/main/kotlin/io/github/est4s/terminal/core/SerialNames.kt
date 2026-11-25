@@ -62,7 +62,7 @@ data class OwnDev(
 /**
  * Sets up [devDir] and [sysTtyDir] for an [OwnDev]: a placeholder for each
  * of [HOST_DEVICES] that [probe] (given a host path) finds, so listings
- * show it, Linux's links, and the folder for `/dev/serial`. The ports'
+ * show it, Linux's links, the folders for `/dev/serial` and `/dev/shm`. The ports'
  * names are left alone. With [sysBusDir], USB devices' stand-in and their
  * nodes' folder, and a placeholder for each of [HOST_BUSES] the phone has.
  */
@@ -72,6 +72,8 @@ fun prepareOwnDev(devDir: File, sysTtyDir: File, sysBusDir: File? = null, probe:
     val devices = placeholders(devDir, HOST_DEVICES) { probe("/dev/$it") }
     DEV_LINKS.forEach { (name, target) -> setLink(File(devDir, name), target) }
     File(devDir, "serial").mkdirs()
+    // Android has no /dev/shm; glibc's shm_open (Firefox, Chromium, Python's multiprocessing) needs one.
+    File(devDir, "shm").mkdirs()
     if (sysBusDir == null) return OwnDev(devDir.absolutePath, devices, sysTtyDir.absolutePath)
     File(sysBusDir, "usb/devices").mkdirs()
     File(devDir, "bus/usb").mkdirs()

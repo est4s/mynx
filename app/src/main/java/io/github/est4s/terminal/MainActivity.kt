@@ -79,6 +79,7 @@ import io.github.est4s.terminal.core.SERVICE_KEY_BAR
 import io.github.est4s.terminal.core.SHELL_KEY_BAR
 import io.github.est4s.terminal.core.suggestServiceName
 import io.github.est4s.terminal.core.UPDATE_TAB_COMMAND
+import io.github.est4s.terminal.core.DESKTOP_INSTALL_TAB_COMMAND
 import io.github.est4s.terminal.core.Tab
 import io.github.est4s.terminal.core.TabAction
 import io.github.est4s.terminal.core.hostPath
@@ -952,6 +953,10 @@ class MainActivity : Activity(), FrontActivity {
         override fun logs(): String = service?.desktopLogs() ?: ""
         override fun touch(): DesktopTouch = loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.desktopTouch
         override fun showTabs() = hideDesktop()
+        override fun install() {
+            service?.newSession(DESKTOP_INSTALL_TAB_COMMAND) ?: return
+            hideDesktop()
+        }
     }
 
     private val desktopShown get() = desktopView?.visibility == View.VISIBLE

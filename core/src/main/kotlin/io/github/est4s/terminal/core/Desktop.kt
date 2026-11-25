@@ -18,6 +18,8 @@ const val DESKTOP_SESSION_LOG = "$DESKTOP_DIR/session.log"
 const val X11_PROCESS_NAME = "mynx-x11"
 private const val X11_ENTRY = "com.termux.x11.CmdEntryPoint"
 private const val XKB = "/usr/share/X11/xkb"
+private const val X11_FONTS = "/usr/share/fonts/X11"
+private val X11_FONT_DIRS = listOf("misc", "TTF", "OTF", "Type1", "100dpi", "75dpi")
 private const val SIGKILL = 9
 private const val SIGTERM = 15
 private const val LEFTOVER_CHECK_MS = 100L
@@ -33,15 +35,17 @@ data class X11Server(val library: String, val jar: String, val packageName: Stri
 /**
  * The X server, run outside proot by app_process (the jar isn't in the
  * app's own classes). Its TMPDIR is Debian's /tmp, so its socket is
- * Debian's [X11_SOCKET]; it finds xkb and fonts from `dirname(TMPDIR)`.
- * `-ac` lets any client in, so it listens only on that socket, not on
- * the abstract one (`-nolisten local`), which every app could reach.
- * Android's linker must not see the app's LD_* variables.
+ * Debian's [X11_SOCKET]; it finds xkb from `dirname(TMPDIR)`. Its fonts
+ * are [x11FontPath]'s: by itself it would take Debian's `/etc/X11/fonts`
+ * first, which holds only xfonts-base's alias file. `-ac` lets any client
+ * in, so it listens only on that socket, not on the abstract one
+ * (`-nolisten local`), which every app could reach. Android's linker
+ * must not see the app's LD_* variables.
  */
 fun x11Launch(server: X11Server, rootfs: String): Launch = Launch(
     argv = listOf(
         "/system/bin/app_process", "-Xnoimage-dex2oat", "/", "--nice-name=$X11_PROCESS_NAME",
-        X11_ENTRY, DESKTOP_DISPLAY, "-ac", "-nolisten", "local",
+        X11_ENTRY, DESKTOP_DISPLAY, "-ac", "-nolisten", "local", "-fp", x11FontPath(rootfs),
     ),
     env = mapOf(
         "CLASSPATH" to server.jar,
@@ -52,6 +56,15 @@ fun x11Launch(server: X11Server, rootfs: String): Launch = Launch(
     ),
     unset = listOf("LD_PRELOAD", "LD_LIBRARY_PATH"),
 )
+
+/**
+ * The X server's font path (host paths): Debian's core font folders that
+ * have a catalogue (`fonts.dir`, which xfonts-utils writes), then the
+ * server's built-in fonts. Read at each start: fonts installed while it
+ * runs need `xset fp rehash`, or a restart.
+ */
+fun x11FontPath(rootfs: String): String =
+    (X11_FONT_DIRS.map { "$rootfs$X11_FONTS/$it" }.filter { File(it, "fonts.dir").isFile } + "built-ins").joinToString(",")
 
 /**
  * The command that runs [session] in Debian (a login bash, as a tab's),
@@ -83,12 +96,16 @@ interface DesktopHost {
     fun stopSession()
 }
 
-/** What `mynx desktop status` reports. [problem] is why it can't start, with how to fix it. */
+/**
+ * What `mynx desktop status` reports. [problem] is why it can't start,
+ * with how to fix it; [install] the [desktopPackages] not installed.
+ */
 data class DesktopStatus(
     val running: Boolean,
     val session: DesktopSession,
     val sessionRunning: Boolean,
     val problem: String?,
+    val install: List<String> = emptyList(),
 ) {
     val display: String? get() = DESKTOP_DISPLAY.takeIf { running }
 
@@ -100,8 +117,34 @@ data class DesktopStatus(
         "socket" to json(X11_SOCKET),
         "log" to json(X11_LOG),
         "problem" to (problem?.let(::json) ?: "null"),
+        "install" to array(install.map(::json)),
     )
 }
+
+/**
+ * The Debian packages [session] needs (`mynx desktop install` installs
+ * them without their recommends: xfce4's would bring Xorg's own server).
+ * xkb-data for the X server's keyboard, xfonts-base for programs that
+ * draw with the server's fonts (xterm); for XFCE a terminal, dbus-launch
+ * for its session bus, and the icons its default theme names.
+ */
+fun desktopPackages(session: DesktopSession): List<String> = listOf("xkb-data", "xfonts-base") + when (session) {
+    DesktopSession.NONE -> emptyList()
+    DesktopSession.XFCE -> listOf("xfce4", "xfce4-terminal", "dbus-x11", "tango-icon-theme")
+}
+
+/** The packages dpkg lists as installed in the Debian at [rootfs]. */
+fun installedPackages(rootfs: File): Set<String> {
+    val text = runCatching { File(rootfs, "var/lib/dpkg/status").readText() }.getOrNull() ?: return emptySet()
+    return text.split(Regex("\n\n+")).mapNotNull { block ->
+        val fields = block.lines()
+        val name = fields.firstOrNull { it.startsWith("Package: ") }?.removePrefix("Package: ")?.trim()
+        name.takeIf { fields.any { it.startsWith("Status: ") && it.trim().endsWith(" installed") } }
+    }.toSet()
+}
+
+/** The tab the desktop's Install opens: `mynx desktop install`, then a shell. */
+val DESKTOP_INSTALL_TAB_COMMAND: List<String> = runThenShell("mynx desktop install")
 
 /**
  * Desktop mode's X server and session, for the Debian at [rootfs]
@@ -129,16 +172,22 @@ class Desktop(
 
     fun status(): DesktopStatus {
         val session = session()
-        return DesktopStatus(host.serverRunning(), session, host.sessionRunning(), problem(session))
+        val installed = installedPackages(rootfs)
+        return DesktopStatus(
+            host.serverRunning(), session, host.sessionRunning(), problem(session),
+            desktopPackages(session).filter { it !in installed },
+        )
     }
 
     // What stops a start, and how to fix it.
     private fun problem(session: DesktopSession): String? = when {
         host.server == null -> "this build of mynx has no X server yet"
-        !File(rootfs, XKB.removePrefix("/")).isDirectory -> "the X server needs Debian's keyboard layouts: apt install xkb-data"
+        !File(rootfs, XKB.removePrefix("/")).isDirectory ->
+            "the X server needs Debian's keyboard layouts (xkb-data): mynx desktop install installs them"
         session == DesktopSession.XFCE && !present("/usr/bin/startxfce4") ->
-            "XFCE isn't installed: apt install xfce4 dbus-x11 installs it (or mynx set desktop none runs the X server alone)"
-        session == DesktopSession.XFCE && !present("/usr/bin/dbus-launch") -> "XFCE needs dbus-launch: apt install dbus-x11"
+            "XFCE isn't installed: mynx desktop install installs it (or mynx set desktop none runs the X server alone)"
+        session == DesktopSession.XFCE && !present("/usr/bin/dbus-launch") ->
+            "XFCE needs dbus-launch (dbus-x11): mynx desktop install installs it"
         else -> null
     }
 

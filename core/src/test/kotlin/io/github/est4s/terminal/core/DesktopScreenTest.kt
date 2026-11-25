@@ -148,6 +148,18 @@ class DesktopNoticeTest {
     }
 
     @Test
+    fun `missing packages are offered to install instead of a start`() {
+        val missing = status(problem = "XFCE isn't installed").copy(install = listOf("xfce4"))
+        assertEquals(
+            DesktopNotice("XFCE isn't installed", canStart = false, showLog = false, canInstall = true),
+            desktopNotice(false, missing, false, null),
+        )
+        // Packages that are only nice to have (xfonts-base) don't stop a start.
+        val fonts = status().copy(install = listOf("xfonts-base"))
+        assertEquals(DesktopNotice("The desktop isn't running.", canStart = true, showLog = false), desktopNotice(false, fonts, false, null))
+    }
+
+    @Test
     fun `a desktop that isn't running can be started`() {
         assertEquals(DesktopNotice("The desktop isn't running.", canStart = true, showLog = false), desktopNotice(false, status(), false, null))
     }

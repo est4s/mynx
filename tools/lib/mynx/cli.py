@@ -1476,12 +1476,14 @@ def run_steps(steps):
             raise Failure(f"'{step}' failed (exit {code})")
 
 
-DESKTOP_USAGE = "usage: mynx desktop [status] | start | stop"
+DESKTOP_USAGE = "usage: mynx desktop [status] | start | stop | install [--yes]"
 DESKTOP_SESSIONS = {"xfce": "XFCE", "none": "the X server alone"}
 
 
 def cmd_desktop(args, as_json):
     sub = args[0] if args else "status"
+    if sub == "install" and args[1:] in ([], ["--yes"]) and not as_json:
+        return install_desktop("--yes" in args)
     if len(args) > 1 or sub not in ("status", "start", "stop"):
         raise Usage(DESKTOP_USAGE)
     answer = request("desktop-" + sub)
@@ -1502,6 +1504,23 @@ def cmd_desktop(args, as_json):
     else:
         text = "Desktop: not running (mynx desktop start starts it)"
     out(as_json, answer, text)
+    return 0
+
+
+def install_desktop(yes):
+    """Installs the packages the app says the `desktop` setting's session
+    lacks, without their recommends (xfce4's would bring Xorg's server)."""
+    answer = request("desktop-status")
+    session = DESKTOP_SESSIONS.get(answer["session"], answer["session"])
+    packages = answer.get("install") or []
+    if not packages:
+        print(f"Desktop: everything it needs ({session}) is installed")
+        return 0
+    print(f"Installing what the desktop ({session}) needs runs:\n")
+    if not apt_install(["--no-install-recommends", *packages], yes, "Run it?"):
+        print("Not installed.")
+        return 1
+    print("\nDesktop: installed. mynx desktop start starts it, as opening the desktop does.")
     return 0
 
 

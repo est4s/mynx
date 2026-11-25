@@ -7,8 +7,9 @@ Part of the guide to this Debian, `/opt/mynx/AGENTS.md`.
 | `mynx desktop [status]` | whether the X server and the desktop run, and what stops a start (a missing package, with the command that installs it) |
 | `mynx desktop start` | start the X server on `DISPLAY=:0`, then the desktop the `desktop` setting names; returns once the server takes connections. Run again, it only starts a desktop that has ended |
 | `mynx desktop stop` | stop the desktop and the X server |
+| `mynx desktop install [--yes]` | install the Debian packages the `desktop` setting's desktop needs (shows the apt commands and asks first) |
 
-Each takes `--json`.
+Each but `install` takes `--json`.
 
 Debian's graphical programs run on an X server the app ships
 (Termux:X11, a separate program: see `mynx about`). It runs outside
@@ -18,8 +19,24 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 
 - **The desktop** is the `desktop` setting: `xfce` (default) runs
   XFCE (`dbus-launch --exit-with-session startxfce4`), `none` the
-  X server alone. XFCE isn't in a new Debian: `apt install xfce4
-  dbus-x11` installs it. The server needs `xkb-data` either way.
+  X server alone. XFCE isn't in a new Debian: `mynx desktop install`
+  installs it (`--no-install-recommends`: xfce4's recommends would
+  bring Xorg's own server): `xfce4`, `xfce4-terminal`, `dbus-x11`
+  and `tango-icon-theme` (XFCE's default icons), and for either
+  setting `xkb-data` (the server's keyboard layouts) and
+  `xfonts-base`. The status's `install` lists what's missing; the
+  desktop's notice offers Install, which runs it in a new tab.
+- **Fonts:** GTK and Qt programs draw with fontconfig's fonts
+  (`apt install fonts-noto` for more scripts). Programs that use the
+  X server's own fonts (xterm, xfontsel) need `xfonts-base`: the
+  server reads Debian's `/usr/share/fonts/X11/*` folders that have a
+  `fonts.dir` when it starts, so after installing more, run
+  `xset fp rehash` (in `x11-xserver-utils`) or stop and start the
+  desktop.
+- **Sound:** the desktop, and everything started from it, gets
+  `PULSE_SERVER` as tabs do, so programs play through the sound
+  device (`/opt/mynx/docs/phone.md`; `mynx sound install` for a
+  Debian from before it).
 - **`DISPLAY=:0`** is set in tabs and services started while the X
   server runs, so a program started there (`xterm &`, `xeyes &`)
   opens on the desktop. In a tab from before, `export DISPLAY=:0`.
@@ -27,6 +44,16 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   of the app is stopped at a start; another X server on :0 (say
   `Xvfb :0`) is left alone, and the start says so: use another
   display for it.
+- **Firefox** (`apt install firefox-esr`): its sandbox can't work
+  under proot, so tabs and the desktop have `MOZ_FAKE_NO_SANDBOX=1`
+  and `MOZ_SHM_NO_SEALS=1` (as proot-distro sets), and Debian's
+  `/dev` has a `/dev/shm` for shared memory. If it still crashes at
+  start, try `MOZ_DISABLE_CONTENT_SANDBOX=1 MOZ_DISABLE_GMP_SANDBOX=1
+  firefox-esr`, then `MOZ_CRASHREPORTER_DISABLE=1 firefox-esr` in a
+  tab with `DISPLAY=:0` to see its own error, and
+  `firefox-esr --safe-mode`. With `serial-names = off`, Debian sees
+  Android's `/dev`, which has no `/dev/shm`.
+
 ## The desktop on screen
 
 - **Getting there:** `mynx set view desktop` makes the desktop what

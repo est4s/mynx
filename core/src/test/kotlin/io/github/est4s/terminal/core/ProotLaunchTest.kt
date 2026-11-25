@@ -301,6 +301,15 @@ class ProotLaunchTest {
     }
 
     @Test
+    fun `tells Firefox it can't have its sandbox or sealed shared memory under proot`() {
+        val argv = prootLaunch(paths).argv
+        val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))
+
+        assertTrue("MOZ_FAKE_NO_SANDBOX=1" in shellEnv, shellEnv.toString())
+        assertTrue("MOZ_SHM_NO_SEALS=1" in shellEnv, shellEnv.toString())
+    }
+
+    @Test
     fun `tells programs the phone's time zone`() {
         val argv = prootLaunch(paths, timeZone = "Europe/Istanbul").argv
         val shellEnv = argv.subList(argv.indexOf("/usr/bin/env"), argv.indexOf("/bin/bash"))

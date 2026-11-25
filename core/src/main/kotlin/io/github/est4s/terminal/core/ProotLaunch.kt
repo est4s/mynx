@@ -103,6 +103,10 @@ fun prootLaunch(
         add("PATH=" + (if (toolsDir != null) "$TOOLS_MOUNT/bin:" else "") + DEBIAN_PATH)
         // Programs that open a browser (agents signing in) use this; it asks the app.
         if (toolsDir != null) add("BROWSER=$TOOLS_MOUNT/bin/xdg-open")
+        // Firefox's sandbox can't be set up under proot, nor its shared memory's
+        // seals relied on: proot-distro sets both (Firefox crashed at start without).
+        add("MOZ_FAKE_NO_SANDBOX=1")
+        add("MOZ_SHM_NO_SEALS=1")
         // Silent if the file can't be written (e.g. its folder was deleted).
         cwdFile?.let { add("PROMPT_COMMAND={ printf '%s' \"\$PWD\" > $it; } 2>/dev/null") }
         // Root's .bashrc opens the launcher menu when this is set.
