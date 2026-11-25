@@ -567,7 +567,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   the `/usr/share/fonts/X11/*` folders with a `fonts.dir`, then
   `built-ins`; dix's `-fp` overrides the default it set). **Sound:**
   the session is a `debianLaunch`, so it has `PULSE_SERVER` as tabs do.
-  **Firefox** (not confirmed): every proot has `MOZ_FAKE_NO_SANDBOX=1`
+  **Firefox** (works, 2026-11-25): every proot has `MOZ_FAKE_NO_SANDBOX=1`
   and `MOZ_SHM_NO_SEALS=1`, and the own `/dev` a `shm` folder
   (`prepareOwnDev()`; glibc's `shm_open` failed with ENOENT), as
   proot-distro gives. No `--sysvipc`: SysV shm fails with ENOSYS, so
