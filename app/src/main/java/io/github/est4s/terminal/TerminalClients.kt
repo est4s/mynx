@@ -94,9 +94,9 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
 
     override fun onKeyUp(keyCode: Int, e: KeyEvent) = false
     override fun onLongPress(event: MotionEvent) = false
-    // The key bar's sticky Ctrl, used up by the next key typed.
+    // The key bar's sticky Ctrl and Alt, used up by the next key typed.
     override fun readControlKey() = activity.takeCtrlLatch()
-    override fun readAltKey() = false
+    override fun readAltKey() = activity.takeAltLatch()
     override fun readShiftKey() = false
     override fun readFnKey() = false
     override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
