@@ -40,10 +40,8 @@ a PR into `desktop-dev`.
    touch as a touchscreen and the view switcher were built and rolled
    back (maintainer's decision, 2026-11-25); they're on branch
    `desktop-touch-clipboard-full` if wanted again.
-4. **The desktop opens from either view** (branch `desktop-app`, PR
-   into `desktop-dev`, entry 221): built, CI green, **not yet tried
-   on the phone**. Its phone test is in entry 221; then the maintainer
-   confirms its decisions and merges.
+4. **The desktop opens from either view: passed on the phone** (PR
+   #115, entry 221).
 5. **Then, what's left:** start the X server and session again if
    either dies (now the notice offers Start); an external display
    (Android's desktop windowing) later; a last pass over
@@ -96,6 +94,8 @@ a PR into `desktop-dev`.
 
 ### 2026-11-25 (221): Desktop mode: the desktop opens from either view
 
+- **Passed on the phone** (maintainer, 2026-11-26): the whole test,
+  and its decisions stand.
 - Branch `desktop-app` from `desktop-touch-clipboard` (= what PR #114
   merges), PR into `desktop-dev`. Core, `mynx` and the menu tested
   here; the app's side only compiled in CI (screenshots looked at).
