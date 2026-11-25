@@ -36,12 +36,41 @@ a PR into `desktop-dev`.
    the view (touchpad, keys, keyboard pan, rotation, no stale picture
    on reopening), Debian's side (XFCE install and start, fonts,
    sound, Firefox), the abstract socket refused, About.
-3. **Next: PR `desktop-touch-clipboard`** (into `desktop-dev`): direct
-   mode as a phone-style touchscreen (tap clicks, a finger scrolls
-   with fling, long press right-clicks or drags, pinch zooms), a view
-   switcher on the desktop's bar (Back goes to the view the desktop
-   came from), and the clipboard both ways (text). Its phone test is
-   in its work log entry.
+3. **Built, not tried on the phone: PR `desktop-touch-clipboard`**
+   (entry 220, into `desktop-dev`): direct mode as a phone-style
+   touchscreen, a view switcher on the desktop's bar (Back goes to the
+   view the desktop came from), the clipboard both ways (text). To
+   check, in mynx dev (XFCE installed):
+   - **Direct:** `mynx set desktop-touch direct`, open the desktop
+     (the bar says `direct`). A tap on a menu or button clicks it; two
+     quick taps on a word in XFCE's terminal or Mousepad select it. In
+     a long list or page (XFCE's terminal with `seq 500`, Firefox), a
+     finger up/down scrolls with the content following it, smoothly;
+     a mostly vertical drag doesn't drift sideways; a flick goes on and
+     slows to a stop, a touch stops it without clicking. Hold still ½ s
+     (it buzzes) and lift: a right-click menu where you held. Hold,
+     then move: text is selected (left button held), released on
+     lifting. Pinch out: the picture zooms (up to 4×) around the
+     fingers, two fingers pan it, taps land where they point; pinch
+     back in: the whole screen. A two-finger tap right-clicks, a
+     three-finger tap pastes X's selection. Touchpad mode
+     (`mynx set desktop-touch touchpad`) as before.
+   - **Switcher:** the bar's top left reads Terminal Touch Desktop,
+     the `view` setting's one marked. From view terminal: ▣, then
+     Touch: touch view's Home shows, and `mynx get view` (or Settings)
+     says `touch`; Ctrl+Shift+D there opens the desktop and Back
+     returns to Home (not the terminal), as does Ctrl+Shift+D. Desktop
+     on the switcher: `view` is `desktop`, Back leaves the app. With a
+     keyboard: Ctrl+Shift+1, 2, 3 on the desktop do the same as the
+     buttons. Settings' undo takes a switch back.
+   - **Clipboard:** copy text in XFCE's terminal (Ctrl+Shift+C) or
+     Mousepad (Ctrl+C), leave the app, paste in another app: it's
+     there. Copy in another app (a browser), come back to the
+     desktop, Ctrl+V in Mousepad (or Ctrl+Shift+V in the terminal):
+     it pastes. Copy, then copy again in X: Android's clipboard
+     follows each time, with no repeat or loop (Android 13+ shows its
+     "copied" notice once per copy). Non-ASCII text (`ä ✓ 日本`) both
+     ways. If anything's off: Log.
 4. **Then, what's left:** start the X server and session again if
    either dies (now the notice offers Start); a desktop entry on touch
    mode's Home (now Ctrl+Shift+D and ▣ only); an external display
@@ -92,6 +121,53 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (220): Desktop mode: direct touch like a phone, a view switcher, the clipboard
+
+- Branch `desktop-touch-clipboard` from `desktop-dev`, PR into it.
+  Core tested here; the app's side only compiled in CI (screenshots
+  `desktop*.png` show the bar). Not tried on the phone: "Next" 0.3
+  has the test.
+- **Direct touch** (maintainer's option A): `DirectGestures` is a
+  touchscreen. Scrolling is fractions of a wheel notch as the finger
+  moves (40 X px a notch, as the touchpad): lorieEvent's only scroll
+  is the mouse event's detail 4, which the server turns into its
+  smooth-scroll valuators (increment 1.0), emulating buttons 4-7 for
+  old clients, so it is smooth already. Axis lock at 2:1 on the first
+  move. Fling: the speed over the last 100 ms (none if the finger
+  rested 50 ms first, or slower than 0.5 X px/ms; capped at 8),
+  decaying as exp(-t/325 ms), stopped below 0.05; the view steps it
+  each frame (`postOnAnimation`). A long press only arms: lifting is a
+  right click, moving a left drag (the haptic buzz says it's armed).
+  A tap is any lift before the long press, not only within 250 ms.
+  Pinch zooms our view only (`DesktopZoom`, 1-4×; the view scales the
+  SurfaceView's parent, touches map back); **reset is pinching back
+  to 1×** (no double tap: that's X's double click), or a new screen
+  size. Fixed on the way: a touchpad drag that got a second finger
+  never released the button.
+- **Switcher** (replaces ☰ Tabs): Terminal, Touch, Desktop **set the
+  `view` setting** (decision: that's how the terminal and touch
+  views switch, the menu's Touch view and Settings' View; touch's
+  drawer Terminal is a peek, as ☰ Tabs was), recorded for undo, then
+  show that view; the setting's view is marked. Ctrl+Shift+1/2/3 on
+  the desktop for the keyboard. Back on the desktop goes to what it
+  covered (touch's screens → touch's Home, else the terminal); in
+  desktop view Back still leaves the app (its terminal's Back comes to
+  the desktop, so going back there would loop). Ctrl+Shift+D on the
+  desktop goes back the same way, never out of the app.
+- **Clipboard** (Termux:X11 24ce207's protocol, `clipboard.c` and
+  `cmdentrypoint.cpp`): enable (11) per connection, which the server
+  needs (off by default, off again when a connection closes); X → us:
+  14 with a count and UTF-8 when a program takes CLIPBOARD; us → X:
+  announce (12), then 14 at once; requests (13) answered with the
+  same text. CLIPBOARD only (PRIMARY would mean every selection
+  overwrites Android's clipboard). Limits: 64 KiB to X (the server
+  reads it with one `read()`), 256 KiB from X (binder).
+- **Decisions to confirm (maintainer's):** the switcher sets `view`
+  (not a peek); Ctrl+Shift+1/2/3; Back in desktop view still leaves;
+  zoom reset by pinching; 40 px a notch in direct too; the limits;
+  CLIPBOARD only; Android's text sent to X at once on coming back
+  (the server holds a copy), not only when X pastes.
 
 ### 2026-11-25 (219): Desktop mode, step 5: Debian's side
 
