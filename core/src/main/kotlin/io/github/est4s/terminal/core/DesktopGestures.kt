@@ -236,11 +236,7 @@ class DirectGestures(slop: Float) : DesktopGestures(slop) {
     private var startX = 0f
     private var startY = 0f
 
-    private fun at(finger: Finger): X11Input.Move {
-        pointerX = clampX(finger.x)
-        pointerY = clampY(finger.y)
-        return X11Input.Move(pointerX, pointerY)
-    }
+    private fun at(finger: Finger): X11Input.Move = moveTo(finger.x, finger.y)
 
     override fun firstDown(finger: Finger, ms: Long): List<X11Input> {
         pressed = false
