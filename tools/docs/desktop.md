@@ -82,16 +82,10 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   (X's paste of the selection); two fingers moving scroll, the
   content following them; to drag, hold a finger still for half a
   second, or tap and then touch again and move.
-- **Touch, `desktop-touch = direct`**: the screen works as a phone's
-  touchscreen, the pointer where you touch. A tap clicks there (two
-  taps double-click); a finger that moves scrolls, the content
-  following it, and a flick flings on, slowing down (a touch stops
-  it); a long press is a right click, or, moved before you let go,
-  holds the left button to drag or select text. Two fingers pinch to
-  zoom the picture (up to 4×; the X screen keeps its size) and, zoomed
-  in, move it; pinch back in to see the whole screen, as turning the
-  phone does. A two-finger tap is a right click, three a middle click.
-  Changes apply when the desktop next shows.
+- **Touch, `desktop-touch = direct`**: the pointer is where you
+  touch. A tap clicks there, a finger that moves drags from where it
+  went down, a long press is a right click, and two fingers scroll
+  or, tapped, right-click. Changes apply when the desktop next shows.
 - **The clipboard** is shared, text only: what a program on the
   desktop copies (to X's clipboard, as Ctrl+C or a Copy menu does, not
   a mere selection) is on the phone's clipboard, and what you copy in

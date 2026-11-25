@@ -191,7 +191,7 @@ internal class HomeSettings(
         "chat-model" -> chatDefaultModelChoices(emptyList()).firstOrNull { it.value == value }?.name ?: value
         "view" -> value.replaceFirstChar { it.uppercase() }
         "desktop" -> if (value == DesktopSession.XFCE.word) "XFCE" else "X server only"
-        "desktop-touch" -> if (value == DesktopTouch.DIRECT.word) "Direct touch" else "Touchpad"
+        "desktop-touch" -> if (value == DesktopTouch.DIRECT.word) "Direct taps" else "Touchpad"
         else -> if (key.startsWith("open-") && value == OpenWith.ANDROID.word) "Another app" else value
     }
 

@@ -109,7 +109,7 @@ enum class DesktopSession(val word: String) {
     NONE("none"),
 }
 
-/** The `desktop-touch` setting: a touchpad moves a pointer; direct is a phone's touchscreen (taps click where the finger is, a finger scrolls). */
+/** The `desktop-touch` setting: a touchpad moves a pointer; direct taps click where the finger is. */
 enum class DesktopTouch(val word: String) { TOUCHPAD("touchpad"), DIRECT("direct") }
 
 /** The `wakelock` setting: when the app keeps the phone's CPU awake. */
@@ -286,7 +286,7 @@ val SETTINGS: List<SettingDef> = listOf(
         { v -> copy(desktop = DesktopSession.entries.first { it.word == v }) },
     ),
     SettingDef(
-        "desktop-touch", "What a finger does on the desktop: touchpad (moves a pointer; tap to click, two fingers to scroll or right-click) or direct (as on a phone: tap to click, a finger scrolls, long press to right-click or, moved, to select, pinch to zoom).",
+        "desktop-touch", "What a finger does on the desktop: touchpad (moves a pointer; tap to click, two fingers to scroll or right-click) or direct (clicks where you tap).",
         "touchpad", DesktopTouch.entries.map { it.word },
         oneOf("desktop-touch", DesktopTouch.entries.map { it.word }),
         { v -> copy(desktopTouch = DesktopTouch.entries.first { it.word == v }) },
