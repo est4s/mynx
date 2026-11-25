@@ -51,7 +51,14 @@ interface DesktopScreenLink {
 
     /** Android's clipboard as text (null: none, or not readable), read while the desktop shows. */
     fun androidClipboard(text: String?)
+
+    /** Spike: the second monitor's surface, [width] × [height] X pixels; null: no second monitor. */
+    fun secondSurface(surface: Surface?, width: Int, height: Int) {}
 }
+
+// Spike (screen-spike-x11): our patch's second-monitor call and event.
+private const val X11_SECOND_WINDOW_CHANGED = 6
+private const val EVENT_SECOND_SIZE = 100
 
 /**
  * mynx's side of Termux:X11's X server (the facts of its interface are
@@ -77,6 +84,9 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     private var height = 0
     private var framerate = 0
     private val screen = DesktopSurface()
+    private var second: Surface? = null
+    private var secondWidth = 0
+    private var secondHeight = 0
     private val clipboard = DesktopClipboard()
 
     override val connected: Boolean get() = events != null
@@ -140,6 +150,7 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
             send(clipboard.connected())
             note("connected to the X server")
             surface?.let { handOver(it, fresh = true) }
+            second?.let { handOverSecond(it) }
         } catch (e: Exception) {
             disconnect()
             note("connecting to the X server failed: ${e.stackTraceToString()}")
@@ -210,10 +221,10 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     }
 
     // The server waits until its renderer has let go of the old surface, so this returns after.
-    private fun windowChanged(s: Surface?) {
+    private fun windowChanged(s: Surface?, code: Int = X11_WINDOW_CHANGED) {
         val binder = server ?: return
         try {
-            call(binder, X11_WINDOW_CHANGED, { data ->
+            call(binder, code, { data ->
                 if (s != null) {
                     data.writeInt(1)
                     s.writeToParcel(data, 0)
@@ -237,6 +248,37 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     private fun handOver(s: Surface, fresh: Boolean) {
         windowChanged(s)
         send(screen.handover(width, height, framerate, fresh))
+    }
+
+    override fun secondSurface(surface: Surface?, width: Int, height: Int) {
+        second = surface
+        secondWidth = width
+        secondHeight = height
+        if (!connected) return
+        if (surface != null) {
+            handOverSecond(surface)
+        } else {
+            sendSecondSize(0, 0)
+            windowChanged(null, X11_SECOND_WINDOW_CHANGED)
+            note("second monitor off")
+        }
+    }
+
+    private fun handOverSecond(s: Surface) {
+        windowChanged(s, X11_SECOND_WINDOW_CHANGED)
+        sendSecondSize(secondWidth, secondHeight)
+        note("second monitor ${secondWidth}x$secondHeight handed over")
+    }
+
+    private fun sendSecondSize(width: Int, height: Int) {
+        val out = events ?: return
+        val e = java.nio.ByteBuffer.allocate(24).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        e.put(0, EVENT_SECOND_SIZE.toByte()).putShort(2, width.toShort()).putShort(4, height.toShort())
+        try {
+            out.write(e.array())
+        } catch (x: Exception) {
+            gone("sending to the X server failed: $x")
+        }
     }
 
     override fun surfaceGone() {

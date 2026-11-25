@@ -132,19 +132,25 @@ class DesktopView(
     private val backButton = barText(desktopBackLabel(fromTouch = false)).apply { setOnClickListener { host.back() } }
     private val keyboardButton = barText("⌨").apply { setOnClickListener { toggleKeyboard() } }
     private val logButton = barText("Log").apply { setOnClickListener { toggleLog() } }
+    // Spike (screen-spike-x11): a second X monitor, drawn into a second surface right of the first.
+    private var two = false
+    private val twoButton = barText("+B").apply { setOnClickListener { toggleTwo() } }
     private val topBar = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(backButton)
         addView(statusText, LayoutParams(0, WRAP_CONTENT, 1f))
+        addView(twoButton)
         addView(keyboardButton)
         addView(logButton)
     }
 
     private val surfaceView = SurfaceView(context)
+    private val surfaceViewB = SurfaceView(context).apply { visibility = GONE }
+    private val row = MonitorRow(context)
     private val pointer = PointerView(context)
     private val layer = FrameLayout(context).apply {
-        addView(surfaceView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(row, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(pointer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
 
@@ -208,7 +214,7 @@ class DesktopView(
         set(value) {
             field = value ?: return
             topBar.setBackgroundColor(value.background)
-            for (b in listOf(backButton, keyboardButton, logButton)) b.setTextColor(value.accent)
+            for (b in listOf(backButton, twoButton, keyboardButton, logButton)) b.setTextColor(value.accent)
             statusText.setTextColor(value.text)
             for (b in listOf(startButton, installButton, stopButton)) {
                 b.setTextColor(value.accent)
@@ -251,16 +257,30 @@ class DesktopView(
             }
 
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-                val g = DesktopGeometry(width, height, scale)
+                val a = DesktopGeometry(width, height, scale)
+                // Two monitors: both halves are as wide (a multiple of the mode step), so one linear map covers both.
+                val g = if (two) DesktopGeometry(2 * width, height, scale) else a
                 geometry = g
                 gestures.screen(g.width, g.height)
-                host.link?.surface(holder.surface, g.width, g.height, framerate(), fresh)
+                host.link?.surface(holder.surface, a.width, a.height, framerate(), fresh)
                 fresh = false
                 pointerMoved()
             }
 
             override fun surfaceDestroyed(holder: SurfaceHolder) {
                 host.link?.surfaceGone()
+            }
+        })
+        surfaceViewB.holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {}
+
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                val b = DesktopGeometry(width, height, scale)
+                host.link?.secondSurface(holder.surface, b.width, b.height)
+            }
+
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                host.link?.secondSurface(null, 0, 0)
             }
         })
         layer.setOnTouchListener { _, e -> touch(e) }
@@ -365,6 +385,48 @@ class DesktopView(
             starting = false
             error = failure
             refresh()
+        }
+    }
+
+    // Spike: +B shows the second monitor right of the first (landscape gives both room), −B hides it.
+    private fun toggleTwo() {
+        two = !two
+        twoButton.text = if (two) "−B" else "+B"
+        surfaceViewB.visibility = if (two) VISIBLE else GONE
+        row.requestLayout()
+    }
+
+    /**
+     * The monitors' surfaces side by side: one alone fills the row; two
+     * get the same width each, a multiple of the X mode step in phone
+     * pixels, so the X screen is exactly twice the first's width.
+     */
+    private inner class MonitorRow(context: Context) : android.view.ViewGroup(context) {
+        init {
+            addView(surfaceView)
+            addView(surfaceViewB)
+        }
+
+        private fun firstWidth(w: Int): Int {
+            if (!two) return w
+            val step = 8 * scale
+            return (w / 2 / step * step).coerceAtLeast(step)
+        }
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val w = MeasureSpec.getSize(widthMeasureSpec)
+            val h = MeasureSpec.getSize(heightMeasureSpec)
+            setMeasuredDimension(w, h)
+            val a = firstWidth(w)
+            val exact = { size: Int -> MeasureSpec.makeMeasureSpec(size, MeasureSpec.EXACTLY) }
+            surfaceView.measure(exact(a), exact(h))
+            if (two) surfaceViewB.measure(exact(a), exact(h))
+        }
+
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            val a = firstWidth(r - l)
+            surfaceView.layout(0, 0, a, b - t)
+            if (two) surfaceViewB.layout(a, 0, 2 * a, b - t)
         }
     }
 
