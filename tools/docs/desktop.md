@@ -5,6 +5,7 @@ Part of the guide to this Debian, `/opt/mynx/AGENTS.md`.
 | Command | Does |
 |---|---|
 | `mynx desktop [status]` | whether the X server and the desktop run, and what stops a start (a missing package, with the command that installs it) |
+| `mynx desktop open` | show the desktop on the phone, over the screen you're on (it starts if it isn't running); the app must be on screen |
 | `mynx desktop start` | start the X server on `DISPLAY=:0`, then the desktop the `desktop` setting names; returns once the server takes connections. Run again, it only starts a desktop that has ended |
 | `mynx desktop stop` | stop the desktop and the X server |
 | `mynx desktop install [--yes]` | install the Debian packages the `desktop` setting's desktop needs (shows the apt commands and asks first) |
@@ -56,20 +57,25 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 
 ## The desktop on screen
 
-- **Getting there:** `mynx set view desktop` makes the desktop what
-  the app opens on: Back on the terminal goes to it, Back on it leaves
-  the app. From any view, Ctrl+Shift+D (a hardware keyboard) goes to
-  the desktop and back, and ▣ on the tab strip opens it (always in
-  desktop view, else while the X server runs). On the desktop,
-  ☰ Tabs (top left) shows the terminal and its tabs.
+- **Opening it:** the desktop is a place you open, like a program,
+  from either view: Linux desktop in the launcher menu (terminal view)
+  or in touch view's ☰ (under Linux), ▣ on the tab strip (while the
+  X server runs), Ctrl+Shift+D on a hardware keyboard, or `mynx
+  desktop open`. A `menu.conf` of your own from before has no Linux
+  desktop: add `Linux desktop = desktop` (`mynx menu edit`).
+- **Leaving it:** Back, the bar's first button (top left: ← Terminal
+  or ← Touch view, where it goes) and Ctrl+Shift+D go back to the
+  screen you opened it from, as you left it. The desktop keeps
+  running meanwhile. **Stop desktop** (in Log) or `mynx desktop stop`
+  ends it.
 - **Starting:** opening the desktop starts it (as `mynx desktop
   start`) if nothing runs and nothing is missing. Otherwise it says
   why there's no picture: what to install, a start that failed, the
   server not answering yet, with Start to try again and the logs.
   **Log** (top right) shows them at any time: the app's own lines,
   then the ends of `x11.log` and `session.log`. The desktop keeps
-  running when you leave the app or switch to the terminal; it stops
-  with `mynx desktop stop`, or when the app exits.
+  running when you leave the app or go back from it; it stops
+  with Stop desktop, `mynx desktop stop`, or when the app exits.
 - **The screen** is the X server's, at about 0.75 dp a pixel (2 phone
   pixels on most phones), between the app's bar and the key bar.
   Turning the phone resizes it (RandR: programs see a new screen

@@ -142,7 +142,7 @@ their own.
 | `mynx usb`, `uf2`, `fix-links` | USB serial ports and raw USB devices, a serial monitor, UF2 flashing (`/opt/mynx/docs/usb.md`) |
 | `mynx android-sdk [install]` | the tools and files for building Android apps: what's there; `install` installs Debian's build tools and downloads Google's `r8.jar` and `android.jar` into `~/androidsdk` (shows what it does and asks; `--yes` skips that) |
 | `mynx install-apk FILE` | open Android's installer for an APK built here; the user taps Install (see "Building an Android app" in `/opt/mynx/docs/apps.md`) |
-| `mynx desktop` | desktop mode: `start`, `stop`, `status`, `install` of the X server and XFCE (`/opt/mynx/docs/desktop.md`) |
+| `mynx desktop` | desktop mode: `open`, `start`, `stop`, `status`, `install` of the X server and XFCE (`/opt/mynx/docs/desktop.md`) |
 | `mynx bt`, `ble` | Bluetooth serial ports, Bluetooth LE devices (`/opt/mynx/docs/bluetooth.md`) |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
@@ -213,7 +213,7 @@ One `key = value` per line; `mynx settings` describes each.
   swipe on the terminal goes to the next tab (swipe left) or the
   one before (swipe right). It stops at the first and last tab;
   scrolling, pinching and selecting text are left alone.
-- `view`: `terminal` (default), `touch` or `desktop`: what the app shows (the
+- `view`: `terminal` (default) or `touch`: what the app shows (the
   launcher menu's Settings → Touch view switches to it). `touch`
   opens on Home, the launcher menu's items as lists to tap, from the
   same `menu.conf` and app folders; programs open in a tab. Its
@@ -249,8 +249,8 @@ One `key = value` per line; `mynx settings` describes each.
   apps): long-press to select, then Copy, Cut, Rename, Delete
   (permanent) or Share; Paste here; Chat here and Terminal here start
   Claude Code's chat or a shell in the folder shown.
-  `desktop` is desktop mode (`/opt/mynx/docs/desktop.md`);
-  Ctrl+Shift+D goes to the desktop and back from any view.
+  The Linux desktop opens from either view (desktop mode:
+  `/opt/mynx/docs/desktop.md`): Linux desktop in the menu, Ctrl+Shift+D.
 - `desktop`: `xfce` (default) or `none`: what `mynx desktop start`
   runs on the X server; `none` is the server alone.
 - `desktop-touch`: `touchpad` (default) or `direct`: a finger moves
@@ -407,6 +407,7 @@ line, in order; labels up to 20 characters. Actions:
 | `help` | Getting started (`mynx welcome`), Release notes (`mynx notes`), Report a bug (`mynx report`), About (`mynx about`) |
 | `welcome` | the welcome page (`mynx welcome` prints it) |
 | `touch-view` | switch the app to touch view (`mynx set view touch`); touch view leaves it out |
+| `desktop` | the Linux desktop (`mynx desktop open`) |
 | `exit` | close the tab |
 | `run COMMAND` | run a command in bash, e.g. `Top = run htop` |
 
