@@ -26,6 +26,23 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 ## Next
 
+### 0a. Extended screen (on `screen-dev`)
+
+Plan (maintainer's, 2026-11-26; roadmap "Extended screen"). Phone A
+is the Pixel 10, phone B the OnePlus Nord 2 (Android 13). Each step a
+PR into `screen-dev`, by subagents.
+1. **Spikes** (throwaway branches, both phones needed to test):
+   streaming one of mynx's own screens (a `VirtualDisplay` of our own
+   with a `Presentation`, H.264 through `MediaCodec`, TCP over Wi-Fi;
+   B decodes and sends touches back; measure the delay), and a second
+   X output (RandR monitor) the X server draws and we stream.
+2. **Core, test-first:** pairing (a code shown on A, a key from it),
+   the messages between the phones, where B sits, settings and
+   `mynx screen pair | unpair | status | place`.
+3. After the spikes: B's Home and sending screens across, terminal
+   tabs on B as text, typing going to the screen touched last, then
+   the desktop as an extended monitor, then the second half.
+
 ### 0. Desktop mode (on `desktop-dev`)
 
 Plan (maintainer's, 2026-11-24; roadmap "Desktop mode"). Each step is
@@ -91,6 +108,14 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-26 (222): Extended screen planned, `screen-dev`
+
+- Plan in "Next" 0a and the roadmap. Maintainer's choices: video for
+  screens, text for terminals; typing to the screen touched last;
+  the desktop as an extended monitor first; the Nord 2 as phone B;
+  `screen-dev` from `desktop-dev` (AGENTS.md "Conventions"), which
+  CI builds after merges as it does `desktop-dev`.
 
 ### 2026-11-25 (221): Desktop mode: the desktop opens from either view
 
