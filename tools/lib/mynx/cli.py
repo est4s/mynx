@@ -47,6 +47,7 @@ Commands:
   audio        audio play FILE | record FILE [--seconds N]: sound
   sound        sound [status] | start | install: the sound device
   desktop      desktop [status] | open | start | stop: desktop mode's X server and desktop (XFCE)
+  screen       screen [status] | pair [CODE [ADDRESS]] | connect | disconnect | unpair NAME | place SIDE: another phone as a screen
   usb          usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   bt           bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
   ble          ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
@@ -1476,6 +1477,100 @@ def run_steps(steps):
             raise Failure(f"'{step}' failed (exit {code})")
 
 
+SCREEN_USAGE = ("usage: mynx screen [status] | pair [CODE [ADDRESS]] | connect [NAME] | disconnect"
+                " | unpair NAME|all | place left|right|above|below")
+SCREEN_SIDES = ("left", "right", "above", "below")
+
+
+def cmd_screen(args, as_json):
+    sub = args[0] if args else "status"
+    rest = args[1:]
+    if sub == "status" and not rest:
+        answer = request("screen-status")
+        out(as_json, answer, screen_status_text(answer))
+    elif sub == "pair" and not rest:
+        return host_pairing(as_json)
+    elif sub == "pair" and len(rest) <= 2:
+        answer = request("screen-join", *rest)
+        out(as_json, answer, f"Paired with {answer['paired']['name']}: this phone is its screen now.")
+    elif sub == "connect" and len(rest) <= 1:
+        answer = request("screen-connect", *rest)
+        out(as_json, answer, f"Linked with {answer['connected']['name']}.")
+    elif sub == "disconnect" and not rest:
+        answer = request("screen-disconnect")
+        out(as_json, answer, "Screen: disconnected" if answer["disconnected"] else "Screen: not linked")
+    elif sub == "unpair" and rest:
+        answer = request("screen-unpair", " ".join(rest))
+        out(as_json, answer, f"Unpaired {', '.join(answer['unpaired'])} (pairing again needs a new code).")
+    elif sub == "place" and len(rest) == 1 and rest[0] in SCREEN_SIDES:
+        answer = request("screen-place", rest[0])
+        side = rest[0] if rest[0] in ("above", "below") else f"{rest[0]} of"
+        out(as_json, answer, f"Asked the host to put this phone {side} it." if answer["asked"]
+            else f"The screen sits {side} this phone.")
+    else:
+        raise Usage(SCREEN_USAGE)
+    return 0
+
+
+def screen_status_text(answer):
+    linked = answer["connected"]
+    paired = answer["paired"]
+    if linked:
+        if linked["role"] == "screen":
+            what = "a screen of this phone"
+        else:
+            what = "this phone is its screen"
+        screen = linked.get("screen")
+        size = f" ({screen['width']}x{screen['height']}, {screen['density']} dpi)" if screen else ""
+        place = linked.get("place")
+        where = ""
+        if place in ("above", "below"):
+            where = f", {place} it"
+        elif place:
+            where = f", on its {place}" if linked["role"] == "screen" else f", {place} of it"
+        lines = [f"Screen: linked with {linked['name']}, {what}{size}{where}"]
+    elif not paired:
+        lines = ["Screen: not paired (mynx screen pair pairs another phone)"]
+    elif answer["lastEnd"]:
+        lines = [f"Screen: not linked ({answer['lastEnd']}; mynx screen connect links again)"]
+    else:
+        lines = ["Screen: not linked (mynx screen connect links again)"]
+    if paired:
+        lines.append("Paired: " + ", ".join(f"{p['name']} ({p['role']})" for p in paired))
+    if answer["pairing"]:
+        lines.append(f"Pairing: code {answer['pairing']}")
+    if answer["listening"]:
+        lines.append(f"Listening on port {answer['listening']}")
+    elif answer["problem"]:
+        lines.append(f"Not listening: {answer['problem']}")
+    return "\n".join(lines)
+
+
+def host_pairing(as_json):
+    """Shows the code (a new one after each wrong try) until a phone pairs."""
+    def show(line):
+        if as_json:
+            print(json.dumps(line), flush=True)
+            return
+        code = line["code"]
+        plain = code.replace(" ", "")
+        if line["wrong"]:
+            print(f"A wrong code was tried ({line['wrong']} of 3). New code: {code} (mynx screen pair {plain})", flush=True)
+            return
+        print(f"Pairing code: {code}\n"
+              "On the other phone (mynx dev or mynx, on the same Wi-Fi), run:\n"
+              f"  mynx screen pair {plain}", flush=True)
+        if line["addresses"]:
+            print(f"If it doesn't find this phone: mynx screen pair {plain} {line['addresses'][0]}", flush=True)
+        print("Waiting (Ctrl+C stops)…", flush=True)
+    answer = request("screen-pair", on_line=show)
+    if "paired" not in answer:
+        out(as_json, answer, "Pairing stopped.")
+        return 1
+    out(as_json, answer, f"Paired with {answer['paired']['name']}: it's this phone's screen now.")
+    return 0
+
+
 DESKTOP_USAGE = "usage: mynx desktop [status] | open | start | stop | install [--yes]"
 DESKTOP_SESSIONS = {"xfce": "XFCE", "none": "the X server alone"}
 
@@ -2610,7 +2705,7 @@ COMMANDS = {
     "vibrate": cmd_vibrate, "clipboard": cmd_clipboard, "share": cmd_share,
     "location": cmd_location, "sensor": cmd_sensor, "battery": cmd_battery, "camera": cmd_camera, "torch": cmd_torch,
     "rotation": cmd_rotation, "storage": cmd_storage,
-    "audio": cmd_audio, "sound": cmd_sound, "desktop": cmd_desktop, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
+    "audio": cmd_audio, "sound": cmd_sound, "desktop": cmd_desktop, "screen": cmd_screen, "app": cmd_app, "service": cmd_service, "usb": cmd_usb, "bt": cmd_bt, "ble": cmd_ble,
     "fix-links": cmd_fix_links, "uf2": cmd_uf2,
     "install-apk": cmd_install_apk, "android-sdk": cmd_android_sdk, "welcome": cmd_welcome, "notes": cmd_notes, "report": cmd_report, "github": cmd_github, "update": cmd_update, "about": cmd_about, "version": cmd_version, "help": cmd_help,
 }

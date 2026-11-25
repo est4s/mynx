@@ -3231,6 +3231,120 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertEqual(run.returncode, 2)
         self.assertIn("usage: mynx sound [status] | start | install [--yes]", run.stderr)
 
+    # --- screen -------------------------------------------------------------
+
+    def screen_status(self, **fields):
+        """The app's screen-* answer: not paired, not linked, unless [fields] say."""
+        answer = {"ok": True, "id": "aa" * 16, "name": "Pixel 10", "hosting": "auto", "listening": None,
+                  "problem": None, "pairing": None, "place": "right", "connected": None, "lastEnd": None,
+                  "paired": []}
+        answer.update(fields)
+        return answer
+
+    NORD = {"id": "bb" * 16, "name": "Nord 2", "role": "screen", "since": 0}
+
+    def test_screen_status_when_nothing_is_paired(self):
+        self.start_app({"screen-status": self.screen_status()})
+        run = self.mynx("screen")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Screen: not paired (mynx screen pair pairs another phone)\n")
+        self.assertEqual(self.app.seen, ["screen-status"])
+
+    def test_screen_status_of_a_linked_host(self):
+        linked = {"id": "bb" * 16, "name": "Nord 2", "role": "screen", "since": 0,
+                  "screen": {"width": 1080, "height": 2400, "density": 480, "rotation": 0}, "place": "left"}
+        self.start_app({"screen-status": self.screen_status(listening=7391, connected=linked, paired=[self.NORD],
+                                                            place="left")})
+        run = self.mynx("screen", "status")
+        self.assertEqual(run.stdout,
+                         "Screen: linked with Nord 2, a screen of this phone (1080x2400, 480 dpi), on its left\n"
+                         "Paired: Nord 2 (screen)\n"
+                         "Listening on port 7391\n")
+
+    def test_screen_status_of_a_screen_says_why_the_link_ended(self):
+        host = {"id": "aa" * 16, "name": "Pixel 10", "role": "host", "since": 0}
+        self.start_app({"screen-status": self.screen_status(name="Nord 2", paired=[host],
+                                                            lastEnd="Pixel 10 didn't answer for 15 s")})
+        run = self.mynx("screen", "status")
+        self.assertEqual(run.stdout,
+                         "Screen: not linked (Pixel 10 didn't answer for 15 s; mynx screen connect links again)\n"
+                         "Paired: Pixel 10 (host)\n")
+
+    def test_screen_status_as_json(self):
+        answer = self.screen_status(paired=[self.NORD])
+        self.start_app({"screen-status": answer})
+        run = self.mynx("screen", "status", "--json")
+        self.assertEqual(json.loads(run.stdout), answer)
+
+    def test_screen_pair_on_the_host_shows_the_code_until_a_phone_pairs(self):
+        line = {"code": "123 456", "name": "Pixel 10", "port": 7391, "addresses": ["192.168.1.10"], "wrong": 0}
+        again = dict(line, code="654 321", wrong=1)
+        self.start_app({"screen-pair": {"ok": True, "paired": self.NORD, "_lines": [line, again]}})
+        run = self.mynx("screen", "pair")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout,
+                         "Pairing code: 123 456\n"
+                         "On the other phone (mynx dev or mynx, on the same Wi-Fi), run:\n"
+                         "  mynx screen pair 123456\n"
+                         "If it doesn't find this phone: mynx screen pair 123456 192.168.1.10\n"
+                         "Waiting (Ctrl+C stops)…\n"
+                         "A wrong code was tried (1 of 3). New code: 654 321 (mynx screen pair 654321)\n"
+                         "Paired with Nord 2: it's this phone's screen now.\n")
+        self.assertEqual(self.app.requests, [["screen-pair"]])
+
+    def test_screen_pair_with_a_code_joins_the_host(self):
+        host = {"id": "aa" * 16, "name": "Pixel 10", "role": "host"}
+        self.start_app({"screen-join": {"ok": True, "paired": host}})
+        run = self.mynx("screen", "pair", "123 456")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Paired with Pixel 10: this phone is its screen now.\n")
+        self.assertEqual(self.app.requests, [["screen-join", "123 456"]])
+
+    def test_screen_pair_with_a_code_and_an_address(self):
+        self.start_app({"screen-join": {"ok": True, "paired": {"id": "aa" * 16, "name": "Pixel 10", "role": "host"}}})
+        self.mynx("screen", "pair", "123456", "192.168.1.10")
+        self.assertEqual(self.app.requests, [["screen-join", "123456", "192.168.1.10"]])
+
+    def test_screen_pair_with_a_wrong_code_says_so(self):
+        self.start_app({"screen-join": {"ok": False, "error": "wrong code: pairing failed (check the code the host shows)"}})
+        run = self.mynx("screen", "pair", "000000")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "mynx: wrong code: pairing failed (check the code the host shows)\n")
+
+    def test_screen_connect_disconnect_and_unpair(self):
+        host = {"id": "aa" * 16, "name": "Pixel 10", "role": "host"}
+        self.start_app({
+            "screen-connect": {"ok": True, "connected": host},
+            "screen-disconnect": self.screen_status(disconnected=True),
+            "screen-unpair": self.screen_status(unpaired=["Pixel 10"]),
+        })
+        self.assertEqual(self.mynx("screen", "connect").stdout, "Linked with Pixel 10.\n")
+        self.assertEqual(self.mynx("screen", "connect", "Pixel 10").stdout, "Linked with Pixel 10.\n")
+        self.assertEqual(self.mynx("screen", "disconnect").stdout, "Screen: disconnected\n")
+        self.assertEqual(self.mynx("screen", "unpair", "Pixel", "10").stdout,
+                         "Unpaired Pixel 10 (pairing again needs a new code).\n")
+        self.assertEqual(self.app.requests, [["screen-connect"], ["screen-connect", "Pixel 10"], ["screen-disconnect"],
+                                             ["screen-unpair", "Pixel 10"]])
+
+    def test_screen_place(self):
+        self.start_app({"screen-place": lambda side: self.screen_status(place=side, asked=False)})
+        run = self.mynx("screen", "place", "left")
+        self.assertEqual(run.stdout, "The screen sits left of this phone.\n")
+        self.assertEqual(self.app.requests, [["screen-place", "left"]])
+
+    def test_screen_place_from_the_screen_asks_the_host(self):
+        self.start_app({"screen-place": self.screen_status(asked=True)})
+        run = self.mynx("screen", "place", "above")
+        self.assertEqual(run.stdout, "Asked the host to put this phone above it.\n")
+
+    def test_screen_usage(self):
+        self.start_app({})
+        for args in (["place"], ["place", "behind"], ["unpair"], ["frobnicate"], ["disconnect", "x"]):
+            run = self.mynx("screen", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx screen", run.stderr)
+        self.assertEqual(self.app.requests, [])
+
     # --- desktop ------------------------------------------------------------
 
     def desktop_status(self, **fields):

@@ -22,6 +22,7 @@ comes up:
 | `/opt/mynx/docs/services.md` | background services: servers and daemons kept running by the app |
 | `/opt/mynx/docs/usb.md` | USB serial devices (Arduino, ESP32, adapters, board tools' recipes), raw USB devices (libusb, picotool, UF2, JTAG) |
 | `/opt/mynx/docs/desktop.md` | desktop mode: the X server, XFCE, `DISPLAY` |
+| `/opt/mynx/docs/screen.md` | another phone as a screen of this one: pairing, the link, settings |
 | `/opt/mynx/docs/bluetooth.md` | Bluetooth serial devices (SPP) and Bluetooth LE devices (GATT, BLE UART ports) |
 
 ## How it runs
@@ -143,6 +144,7 @@ their own.
 | `mynx android-sdk [install]` | the tools and files for building Android apps: what's there; `install` installs Debian's build tools and downloads Google's `r8.jar` and `android.jar` into `~/androidsdk` (shows what it does and asks; `--yes` skips that) |
 | `mynx install-apk FILE` | open Android's installer for an APK built here; the user taps Install (see "Building an Android app" in `/opt/mynx/docs/apps.md`) |
 | `mynx desktop` | desktop mode: `open`, `start`, `stop`, `status`, `install` of the X server and XFCE (`/opt/mynx/docs/desktop.md`) |
+| `mynx screen` | another phone as a screen: `pair`, `connect`, `status`, `place`, `unpair` (`/opt/mynx/docs/screen.md`) |
 | `mynx bt`, `ble` | Bluetooth serial ports, Bluetooth LE devices (`/opt/mynx/docs/bluetooth.md`) |
 | `mynx agent list` | the AI agents: installed or not, notifications on or off (`--tsv` for scripts) |
 | `mynx agent start [NAME [ARGS…]]` | start an agent in this terminal, with ARGS for it; offers to install it first if it's missing |
