@@ -88,6 +88,8 @@ class DesktopView(
         fun touch(): DesktopTouch
         /** Back to the terminal and its tabs. */
         fun showTabs()
+        /** A tab that installs what the desktop needs (`mynx desktop install`), shown. */
+        fun install()
     }
 
     private val scale = desktopScale(resources.displayMetrics.density)
@@ -144,6 +146,10 @@ class DesktopView(
         gravity = Gravity.CENTER
         setOnClickListener { start() }
     }
+    private val installButton = barText("Install").apply {
+        gravity = Gravity.CENTER
+        setOnClickListener { host.install() }
+    }
     private val noticeLog = logView()
     private val notice = ScrollView(context).apply {
         isFillViewport = true
@@ -153,6 +159,10 @@ class DesktopView(
             setPadding(dp(24), dp(24), dp(24), dp(24))
             addView(noticeText, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(startButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                topMargin = dp(16)
+            })
+            addView(installButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
                 topMargin = dp(16)
             })
@@ -177,8 +187,10 @@ class DesktopView(
             topBar.setBackgroundColor(value.background)
             for (b in listOf(tabsButton, keyboardButton, logButton)) b.setTextColor(value.accent)
             statusText.setTextColor(value.text)
-            startButton.setTextColor(value.accent)
-            startButton.setBackgroundColor(value.selectedBackground)
+            for (b in listOf(startButton, installButton)) {
+                b.setTextColor(value.accent)
+                b.setBackgroundColor(value.selectedBackground)
+            }
             notice.setBackgroundColor(value.background)
             noticeText.setTextColor(value.text)
             noticeLog.setTextColor(value.text)
@@ -283,6 +295,7 @@ class DesktopView(
             notice.visibility = VISIBLE
             noticeText.text = shown.text
             startButton.visibility = if (shown.canStart) VISIBLE else GONE
+            installButton.visibility = if (shown.canInstall) VISIBLE else GONE
             noticeLog.visibility = if (shown.showLog) VISIBLE else GONE
             if (shown.showLog) noticeLog.text = host.logs()
         }

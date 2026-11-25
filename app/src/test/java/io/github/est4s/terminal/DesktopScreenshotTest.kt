@@ -30,11 +30,13 @@ private class SampleHost(private val status: DesktopStatus, override val link: D
         "\n\n/tmp/.mynx/desktop/session.log:\nxfce4-session: Could not connect to the session bus\n"
     override fun touch() = DesktopTouch.TOUCHPAD
     override fun showTabs() = Unit
+    override fun install() = Unit
 }
 
 private val XFCE_MISSING = DesktopStatus(
     running = false, session = DesktopSession.XFCE, sessionRunning = false,
-    problem = "XFCE isn't installed: apt install xfce4 dbus-x11 installs it (or mynx set desktop none runs the X server alone)",
+    problem = "XFCE isn't installed: mynx desktop install installs it (or mynx set desktop none runs the X server alone)",
+    install = listOf("xfce4", "xfce4-terminal", "dbus-x11", "tango-icon-theme"),
 )
 private val RUNNING = DesktopStatus(running = true, session = DesktopSession.XFCE, sessionRunning = true, problem = null)
 
