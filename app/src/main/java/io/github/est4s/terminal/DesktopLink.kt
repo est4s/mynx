@@ -1,0 +1,221 @@
+package io.github.est4s.terminal
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
+import android.os.Handler
+import android.os.IBinder
+import android.os.Parcel
+import android.os.ParcelFileDescriptor
+import android.view.Surface
+import io.github.est4s.terminal.core.DesktopSurface
+import io.github.est4s.terminal.core.X11Input
+import io.github.est4s.terminal.core.X11_GET_X_CONNECTION
+import io.github.est4s.terminal.core.X11_INTERFACE
+import io.github.est4s.terminal.core.X11_START_ACTION
+import io.github.est4s.terminal.core.X11_WINDOW_CHANGED
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.concurrent.thread
+
+private const val LOG_LINES = 200
+
+/** What the desktop's view needs from the X server: [DesktopLink], or a stand-in for the screenshots. */
+interface DesktopScreenLink {
+    /** Whether the X server has taken our connection, so it's running and gets what's sent. */
+    val connected: Boolean
+
+    /** Called on the main thread when [connected] changes or [log] grows. */
+    var listener: (() -> Unit)?
+
+    /** What happened, newest last: connections, failures. */
+    fun log(): String
+
+    fun send(events: List<X11Input>)
+
+    /** The view's [surface], [width] × [height] X pixels at [framerate]; [fresh]: a new one (created since the last call). */
+    fun surface(surface: Surface, width: Int, height: Int, framerate: Int, fresh: Boolean)
+
+    /** The view's surface is going: the server must stop drawing into it first. */
+    fun surfaceGone()
+}
+
+/**
+ * mynx's side of Termux:X11's X server (the facts of its interface are
+ * core's X11Input.kt). The server, a process of its own, broadcasts its
+ * binder to this app every second until a connection is taken; we take
+ * it as soon as it comes, whatever the view is doing, so a server that
+ * was running when the app came back is found again. Through the binder
+ * the view's surface is handed over (`windowChanged`); through the socket
+ * it gives (`getXConnection`) the input is written, and what the server
+ * sends back (heartbeats, its state) is read and dropped. Lives in the
+ * service; main thread.
+ */
+class DesktopLink(private val context: Context, private val main: Handler) : DesktopScreenLink {
+    override var listener: (() -> Unit)? = null
+    private val lines = ArrayDeque<String>()
+    private var receiver: BroadcastReceiver? = null
+    private var server: IBinder? = null
+    private var connection: ParcelFileDescriptor? = null
+    private var events: FileOutputStream? = null
+    private var surface: Surface? = null
+    private var width = 0
+    private var height = 0
+    private var framerate = 0
+    private val screen = DesktopSurface()
+
+    override val connected: Boolean get() = events != null
+
+    override fun log(): String = lines.joinToString("\n")
+
+    private fun note(line: String) {
+        val time = SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(Date())
+        lines.addLast("$time $line")
+        while (lines.size > LOG_LINES) lines.removeFirst()
+        listener?.invoke()
+    }
+
+    /** Listens for the server's broadcast; until [stop]. */
+    fun start() {
+        if (receiver != null) return
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                val binder = intent.getBundleExtra(null)?.getBinder(null)
+                if (binder == null) {
+                    note("a start broadcast without the server's binder")
+                    return
+                }
+                if (binder == server && connected) return
+                connect(binder)
+            }
+        }
+        // Only this app's own processes (the X server runs as its uid) can reach it.
+        val filter = IntentFilter(X11_START_ACTION)
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(r, filter, null, main, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(r, filter, null, main)
+        }
+        receiver = r
+    }
+
+    fun stop() {
+        receiver?.let { runCatching { context.unregisterReceiver(it) } }
+        receiver = null
+        disconnect()
+    }
+
+    private fun connect(binder: IBinder) {
+        disconnect()
+        try {
+            server = binder
+            binder.linkToDeath({ main.post { if (server === binder) gone("the X server stopped") } }, 0)
+            val pfd = call(binder, X11_GET_X_CONNECTION, {}) { reply ->
+                if (reply.readInt() != 0) ParcelFileDescriptor.CREATOR.createFromParcel(reply) else null
+            }
+            if (pfd == null) {
+                server = null
+                note("the X server gave no connection")
+                return
+            }
+            connection = pfd
+            events = FileOutputStream(pfd.fileDescriptor)
+            drain(binder, pfd)
+            screen.reconnected()
+            note("connected to the X server")
+            surface?.let { handOver(it, fresh = true) }
+        } catch (e: Exception) {
+            disconnect()
+            note("connecting to the X server failed: ${e.stackTraceToString()}")
+        }
+    }
+
+    // Unread, the socket would fill and the server would block writing to it.
+    // The stream isn't closed: the descriptor is the ParcelFileDescriptor's.
+    private fun drain(binder: IBinder, pfd: ParcelFileDescriptor) {
+        thread(name = "x11-events", isDaemon = true) {
+            val buffer = ByteArray(4096)
+            val input = FileInputStream(pfd.fileDescriptor)
+            runCatching { while (input.read(buffer) >= 0) Unit }
+            main.post { if (server === binder) gone("the X server closed the connection") }
+        }
+    }
+
+    private fun gone(why: String) {
+        disconnect()
+        note(why)
+    }
+
+    private fun disconnect() {
+        val wasConnected = connected
+        runCatching { connection?.close() }
+        connection = null
+        events = null
+        server = null
+        if (wasConnected) listener?.invoke()
+    }
+
+    private fun <T> call(binder: IBinder, code: Int, write: (Parcel) -> Unit, read: (Parcel) -> T): T {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(X11_INTERFACE)
+            write(data)
+            binder.transact(code, data, reply, 0)
+            reply.readException()
+            return read(reply)
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    // The server waits until its renderer has let go of the old surface, so this returns after.
+    private fun windowChanged(s: Surface?) {
+        val binder = server ?: return
+        try {
+            call(binder, X11_WINDOW_CHANGED, { data ->
+                if (s != null) {
+                    data.writeInt(1)
+                    s.writeToParcel(data, 0)
+                } else {
+                    data.writeInt(0)
+                }
+            }) {}
+        } catch (e: Exception) {
+            note("handing the screen to the X server failed: $e")
+        }
+    }
+
+    override fun surface(surface: Surface, width: Int, height: Int, framerate: Int, fresh: Boolean) {
+        this.surface = surface
+        this.width = width
+        this.height = height
+        this.framerate = framerate
+        if (connected) handOver(surface, fresh)
+    }
+
+    private fun handOver(s: Surface, fresh: Boolean) {
+        windowChanged(s)
+        send(screen.handover(width, height, framerate, fresh))
+    }
+
+    override fun surfaceGone() {
+        surface = null
+        if (connected) windowChanged(null)
+    }
+
+    override fun send(events: List<X11Input>) {
+        val out = this.events ?: return
+        try {
+            for (e in events) out.write(e.encode())
+        } catch (e: Exception) {
+            gone("sending to the X server failed: $e")
+        }
+    }
+}
