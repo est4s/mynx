@@ -76,3 +76,25 @@ class DesktopSurface {
         sent = null
     }
 }
+
+/** What the desktop's view shows instead of its screen: [canStart] offers Start, [showLog] the logs under it. */
+data class DesktopNotice(val text: String, val canStart: Boolean, val showLog: Boolean)
+
+/**
+ * The notice over the desktop's screen, null when the X server is
+ * [connected] and the screen shows. [status] is null until the app is
+ * ready; [starting] while a start runs; [error] why the last start failed.
+ */
+fun desktopNotice(connected: Boolean, status: DesktopStatus?, starting: Boolean, error: String?): DesktopNotice? = when {
+    connected -> null
+    status == null -> DesktopNotice("Waiting for the app…", canStart = false, showLog = false)
+    error != null -> DesktopNotice("The desktop didn't start: $error", canStart = true, showLog = true)
+    starting -> DesktopNotice("Starting the desktop…", canStart = false, showLog = false)
+    status.running -> DesktopNotice("Connecting to the X server…", canStart = false, showLog = true)
+    status.problem != null -> DesktopNotice(status.problem, canStart = true, showLog = false)
+    else -> DesktopNotice("The desktop isn't running.", canStart = true, showLog = false)
+}
+
+/** Opening the desktop starts it when nothing runs and nothing it needs is missing. */
+fun desktopStartsOnOpen(connected: Boolean, status: DesktopStatus?): Boolean =
+    !connected && status != null && !status.running && status.problem == null

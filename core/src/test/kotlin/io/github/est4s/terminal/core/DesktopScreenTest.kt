@@ -2,6 +2,8 @@ package io.github.est4s.terminal.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DesktopScreenTest {
     @Test
@@ -103,5 +105,59 @@ class DesktopScreenTest {
         surface.handover(536, 1050, 120, fresh = true)
         surface.reconnected()
         assertEquals(listOf(X11Input.ScreenSize(536, 1050, 120)), surface.handover(536, 1050, 120, fresh = true))
+    }
+}
+
+class DesktopNoticeTest {
+    private fun status(running: Boolean = false, problem: String? = null) =
+        DesktopStatus(running, DesktopSession.XFCE, sessionRunning = running, problem = problem)
+
+    @Test
+    fun `a connected server shows its screen`() {
+        assertEquals(null, desktopNotice(connected = true, status = status(running = true), starting = false, error = null))
+    }
+
+    @Test
+    fun `before the app is ready there's nothing to start`() {
+        assertEquals(DesktopNotice("Waiting for the app…", canStart = false, showLog = false), desktopNotice(false, null, false, null))
+    }
+
+    @Test
+    fun `a failed start says why, with the log`() {
+        assertEquals(
+            DesktopNotice("The desktop didn't start: the X server didn't start: boom", canStart = true, showLog = true),
+            desktopNotice(false, status(), starting = false, error = "the X server didn't start: boom"),
+        )
+    }
+
+    @Test
+    fun `while starting, and while the server runs but hasn't connected, it says so`() {
+        assertEquals(DesktopNotice("Starting the desktop…", canStart = false, showLog = false), desktopNotice(false, status(), starting = true, error = null))
+        assertEquals(
+            DesktopNotice("Connecting to the X server…", canStart = false, showLog = true),
+            desktopNotice(false, status(running = true), starting = false, error = null),
+        )
+    }
+
+    @Test
+    fun `what stops a start is shown, to fix and try again`() {
+        assertEquals(
+            DesktopNotice("XFCE isn't installed: apt install xfce4 dbus-x11", canStart = true, showLog = false),
+            desktopNotice(false, status(problem = "XFCE isn't installed: apt install xfce4 dbus-x11"), false, null),
+        )
+    }
+
+    @Test
+    fun `a desktop that isn't running can be started`() {
+        assertEquals(DesktopNotice("The desktop isn't running.", canStart = true, showLog = false), desktopNotice(false, status(), false, null))
+    }
+
+    @Test
+    fun `opening the desktop starts it only when nothing runs and nothing's missing`() {
+        assertTrue(desktopStartsOnOpen(connected = false, status = status()))
+        assertFalse(desktopStartsOnOpen(connected = true, status = status(running = true)))
+        assertFalse(desktopStartsOnOpen(connected = false, status = status(running = true)))
+        assertFalse(desktopStartsOnOpen(connected = false, status = status(problem = "no xkb-data")))
+        assertFalse(desktopStartsOnOpen(connected = false, status = null))
     }
 }
