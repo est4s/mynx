@@ -66,6 +66,13 @@ sealed class DesktopGestures(private val slop: Float) {
         pointerY = clampY(pointerY)
     }
 
+    /** A mouse pointing at [x], [y]: the pointer goes there (kept on the screen). */
+    fun moveTo(x: Float, y: Float): X11Input.Move {
+        pointerX = clampX(x)
+        pointerY = clampY(y)
+        return X11Input.Move(pointerX, pointerY)
+    }
+
     protected fun clampX(x: Float) = x.coerceIn(0f, (screenWidth - 1).toFloat())
     protected fun clampY(y: Float) = y.coerceIn(0f, (screenHeight - 1).toFloat())
 

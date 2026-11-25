@@ -180,6 +180,14 @@ class TouchpadGesturesTest {
     }
 
     @Test
+    fun `a mouse moves the pointer where it points, and the finger goes on from there`() {
+        assertEquals(Move(499f, 10f), pad.moveTo(600f, 10f))
+        pad.down(0, 100f, 100f, 0)
+        slowMove(0, 100f, 100f, 100f, 160f, 0, steps = 6)
+        assertEquals(60f, pad.pointerY)
+    }
+
+    @Test
     fun `a smaller screen brings the pointer onto it`() {
         pad.screen(200, 100)
         assertEquals(199f, pad.pointerX)
