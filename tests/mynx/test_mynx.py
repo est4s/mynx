@@ -295,7 +295,7 @@ class MynxTest(unittest.TestCase):
     # --- about -------------------------------------------------------------
 
     LICENSES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "OFL-1.1-pixelify-sans",
-                "MIT-usb-serial-for-android"]
+                "MIT-usb-serial-for-android", "X11-libraries"]
 
     def write_about_files(self):
         with open(os.path.join(self.tools, ".version"), "w") as f:
@@ -319,7 +319,10 @@ class MynxTest(unittest.TestCase):
                      "Pixelify Sans", "https://github.com/google/fonts",
                      "usb-serial-for-android", "https://github.com/mik3y/usb-serial-for-android",
                      "Debian", "/usr/share/doc/", "PulseAudio",
-                     "separate program", "https://github.com/est4s/mynx/tree/main/proot"]:
+                     "separate program", "https://github.com/est4s/mynx/tree/main/proot",
+                     "Termux:X11", "https://github.com/termux/termux-x11", "GPL-3.0",
+                     "X.Org X server", "21.1.26", "https://gitlab.freedesktop.org/xorg/xserver",
+                     "https://github.com/est4s/mynx/tree/main/x11", "x11-source.tar.xz"]:
             self.assertIn(part, text)
         for name in self.LICENSES:
             self.assertIn(f"full text of {name}", text)
@@ -353,6 +356,9 @@ class MynxTest(unittest.TestCase):
         self.assertEqual(by_name["proot"]["license"], "GPL-2.0-or-later")
         self.assertEqual(by_name["proot"]["source"], "https://github.com/termux/proot")
         self.assertEqual(by_name["talloc"]["license"], "LGPL-3.0-or-later")
+        self.assertEqual(by_name["Termux:X11"]["license"], "GPL-3.0")
+        self.assertEqual(by_name["Termux:X11"]["source"], "https://github.com/termux/termux-x11")
+        self.assertEqual(by_name["X.Org X server and libraries"]["license"], "X11-libraries")
         for c in answer["components"]:
             self.assertEqual(set(c), {"name", "version", "license", "source", "note"}, c)
             self.assertTrue(c["license"] and c["source"], c)

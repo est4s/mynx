@@ -2085,6 +2085,25 @@ COMPONENTS = [
      "source": "https://www.samba.org/ftp/talloc/talloc-2.5.0.tar.gz",
      "note": "Samba's memory allocator, linked into proot statically, with its "
              "libreplace."},
+    {"name": "Termux:X11", "version": "24ce207", "license": "GPL-3.0",
+     "source": "https://github.com/termux/termux-x11",
+     "note": "The X server behind desktop mode. The app runs it as a separate "
+             "program (libXlorie.so, and termux-x11.jar with only its CmdEntryPoint), "
+             "built from that commit with the app's patch, which loads it from the "
+             "app and keeps it to this phone; the patch: "
+             "https://github.com/est4s/mynx/tree/main/x11. Each release's exact "
+             "source, patch, build script and libraries included, is "
+             "mynx-VERSION-x11-source.tar.xz on its page: "
+             "https://github.com/est4s/mynx/releases"},
+    {"name": "X.Org X server and libraries", "version": "21.1.26", "license": "X11-libraries",
+     "source": "https://gitlab.freedesktop.org/xorg/xserver",
+     "note": "Built into libXlorie.so at the commits Termux:X11 pins: the X server, "
+             "xorgproto, xtrans, libX11 (parts), libxkbfile, xkbcomp, libXau, libXdmcp, "
+             "libXfont2, libfontenc, libxshmfence, libxcvt (all from "
+             "https://gitlab.freedesktop.org/xorg), pixman, libtirpc, libepoxy and "
+             "libandroid-shmem. MIT/X11-style licences, libtirpc's and "
+             "libandroid-shmem's BSD-3-Clause; each one's notices are in the "
+             "X11-libraries text below."},
     {"name": "Termux terminal-emulator and terminal-view", "version": "v0.118.3",
      "license": "Apache-2.0", "source": "https://github.com/termux/termux-app",
      "note": "The terminal on screen (from termux-app, libraries only)."},
@@ -2111,7 +2130,7 @@ COMPONENTS = [
 # The licence files in /opt/mynx/licenses/, in the order they're shown:
 # the app's own first.
 LICENSE_FILES = ["MIT", "GPL-2.0", "LGPL-3.0", "GPL-3.0", "Apache-2.0", "OFL-1.1", "OFL-1.1-pixelify-sans",
-                 "MIT-usb-serial-for-android"]
+                 "MIT-usb-serial-for-android", "X11-libraries"]
 
 
 def wrap(text, indent="  ", width=56):

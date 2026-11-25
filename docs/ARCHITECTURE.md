@@ -555,6 +555,37 @@ See `docs/ROADMAP.md` "How it works". The details:
   server's start broadcast (its binder, for the view) is unanswered
   until the view (step 4); `view = desktop` shows the terminal until
   then. `desktop-touch` is read by the view too.
+  **The build** (`scripts/build-x11.sh`, run by both workflows and
+  cached on the script, the patch and the licence notices): Termux:X11
+  at a pinned commit with its submodules, built with the NDK version it
+  pins (`NDK_VERSION`; sdkmanager installs it, the runner's latest isn't
+  used) through CMake and Ninja into `libXlorie.so` (arm64-v8a, API 26,
+  stripped), and without Gradle into `termux-x11.jar`: aidl for
+  `ICmdEntryInterface`, javac against android.jar and Termux:X11's
+  stubs of hidden APIs, d8. The jar holds only `CmdEntryPoint`, its
+  stub and a `BuildConfig` whose `APPLICATION_ID` is
+  `MYNX_X11_PACKAGE` (where its start broadcast goes). CI copies them
+  to `jniLibs/arm64-v8a/` and `assets/x11/`; `scripts/check-x11-apk.sh`
+  fails the build if either is missing or any `Lcom/termux/x11/` class
+  is in mynx's `classes*.dex`. Our GPL patch, `x11/termux-x11.patch`:
+  `JNI_OnLoad` registers only `CmdEntryPoint`'s natives (no
+  `LorieView`), the library loads from `MYNX_X11_LIB`, the screen fills
+  the surface until a view gives its size, and the knock port (TCP
+  7892: a knock makes the server broadcast its binder again; Termux's
+  activity uses it) listens on 127.0.0.1, not every network. The
+  server rebroadcasts each second until a client takes its
+  connection, so our view won't need to knock. **Licences:** About
+  lists Termux:X11 (GPL-3.0) and the X.Org server and libraries built
+  into it; their notices are `tools/licenses/X11-libraries.txt`,
+  written by `scripts/x11-licenses.sh` from the submodules' `COPYING`
+  files, and the build fails if it doesn't match the pinned source.
+  The script also packs the corresponding source
+  (`x11-source.tar.xz`: the unpatched tree with its submodules, our
+  patch, the build scripts and a README), which `release.yml` attaches
+  to each release as `mynx-X.Y.Z-x11-source.tar.xz` (GPL-3.0 section 6
+  (d): the source offered from the same place as the binary; no
+  written offer needed). PR builds' APKs, only artifacts, don't carry
+  it: their source is the repo at that commit plus the pinned upstream.
 - **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
   the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
   `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):

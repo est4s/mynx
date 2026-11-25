@@ -106,6 +106,30 @@ jobs:
           mkdir -p app/src/main/jniLibs/arm64-v8a
           cp build/proot/*.so app/src/main/jniLibs/arm64-v8a/
 
+      # Termux:X11's X server, a separate GPL program like proot, built from
+      # source with the NDK it pins (the script installs it) and cached; the
+      # key changes with the script (which pins the commit), the patch and
+      # the licence notices it checks.
+      - uses: actions/cache@v6
+        id: x11-cache
+        with:
+          path: build/x11
+          key: x11-${{ hashFiles('scripts/build-x11.sh', 'scripts/x11-licenses.sh', 'x11/**', 'tools/licenses/X11-libraries.txt') }}
+
+      - name: Build the X server
+        if: steps.x11-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 45
+        run: |
+          command -v bison >/dev/null && command -v ninja >/dev/null ||
+            sudo apt-get install -y -qq bison ninja-build >/dev/null
+          scripts/build-x11.sh build/x11
+
+      - name: Add the X server to the APK
+        run: |
+          cp build/x11/libXlorie.so app/src/main/jniLibs/arm64-v8a/
+          mkdir -p app/src/main/assets/x11
+          cp build/x11/termux-x11.jar app/src/main/assets/x11/
+
       # Signed in, Docker Hub's pull limit is the account's, not the
       # runner's shared IP's (anonymous pulls ran out, 2026-10-09). Forks'
       # PRs get no secrets and pull anonymously.
@@ -161,6 +185,10 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew --no-daemon assembleDebug
+
+      # The X server's (GPL) classes stay in its own jar, never in mynx's dex.
+      - name: Check the X server is separate
+        run: scripts/check-x11-apk.sh app/build/outputs/apk/debug/*.apk
 
       - uses: actions/upload-artifact@v7
         with:

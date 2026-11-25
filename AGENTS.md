@@ -140,7 +140,9 @@ first, which deletes Debian).
 **Releases:** push a tag `vX.Y.Z` → `release.yml` runs the tests, builds
 the same assets as `build.yml` (its steps are copied: change both),
 `assembleRelease`, checks the signature and publishes `mynx-X.Y.Z.apk` on
-GitHub Releases with generated notes (a `-suffix` tag makes a pre-release).
+GitHub Releases with generated notes (a `-suffix` tag makes a pre-release),
+beside `mynx-X.Y.Z-x11-source.tar.xz`, the GPL X server's corresponding
+source (`scripts/build-x11.sh` makes it).
 The release workflow must keep attaching `mynx-X.Y.Z.apk` under that
 name: installed apps find their update by it (`apkName()`). Release
 builds have no minify (R8 problems would only show on the phone).
@@ -365,7 +367,9 @@ These come from the scope (`docs/ROADMAP.md`) and apply to every feature:
   `tools/lib/mynx/cli.py`; the licence texts ship in `tools/licenses/`
   (`/opt/mynx/licenses`). When you add, upgrade or patch a bundled
   component (proot or talloc versions in `scripts/build-proot.sh`, the
-  Termux libraries, the font), update both in the same change.
+  Termux:X11 commit in `scripts/build-x11.sh`, the Termux libraries, the
+  font), update both in the same change. For Termux:X11 that includes
+  `tools/licenses/X11-libraries.txt`, which its build checks.
 
 ---
 
