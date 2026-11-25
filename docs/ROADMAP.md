@@ -67,9 +67,9 @@ IDE) on the phone, through **Termux:X11**, an X server for Android.
 - **XFCE** is the desktop it offers (maintainer's decision,
   2026-11-24), installed when asked for, not shipped in the rootfs.
 - **Touch is a touchpad** by default (a pointer to move, tap to
-  click, two fingers to scroll or right-click), with a setting for a
-  phone-style touchscreen: tap, scroll, pinch to zoom (maintainer's
-  decisions, 2026-11-24 and 2026-11-25). The clipboard is shared (text).
+  click, two fingers to scroll or right-click), with a setting for
+  direct taps (maintainer's decision, 2026-11-24). The clipboard is
+  shared (text).
 - An external display with a keyboard and mouse (Android's desktop
   windowing) is a separate piece of work, after the first version.
 - If Termux:X11 can't work for us, a VNC server in Debian and a
