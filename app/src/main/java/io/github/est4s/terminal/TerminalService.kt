@@ -325,7 +325,7 @@ class TerminalService : Service() {
             val settings = currentSettings()
             val hooks = runCatching { File(rootfs, "root/.claude/settings.json").takeIf { it.isFile }?.readText() }.getOrNull()
             return ChatNoticeRules(
-                onScreen = chatPlace == ChatPlace.CHAT && activity?.onScreen == true,
+                onScreen = chatPlace == ChatPlace.CHAT && !desktopOpen && activity?.onScreen == true,
                 agentNotify = settings?.agentNotify ?: true,
                 afterSeconds = settings?.agentNotifyAfter ?: 30,
                 agentOn = claudeNotifyHooks(hooks),
@@ -435,7 +435,7 @@ class TerminalService : Service() {
                 bleRequests(File(rootfs, "root"), ble, bluetooth) +
                 webAppRequests(webApps) +
                 appPermissions.requests() +
-                desktopRequests(desktop),
+                desktopRequests(desktop) { activity?.openDesktop() == true },
         )
     }
     // Desktop mode's X server and session (mynx desktop); core decides what runs.
@@ -451,6 +451,14 @@ class TerminalService : Service() {
     val desktopLink: DesktopLink by lazy { DesktopLink(this, mainHandler) }
 
     fun desktopStatus(): DesktopStatus = desktop.status()
+
+    /** The desktop is open over the activity's screens, for a recreated activity (a theme's colours) to show again. */
+    var desktopOpen = false
+
+    /** Stops the desktop and the X server, as `mynx desktop stop`. Main thread. */
+    fun stopDesktop() {
+        desktop.stop()
+    }
 
     /** Starts the desktop, as `mynx desktop start`; [done] gets null, or why it didn't start. Main thread. */
     fun startDesktop(done: (String?) -> Unit) {

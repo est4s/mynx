@@ -28,7 +28,7 @@ fun agentBinary(apps: WebApps, command: String): String? =
 private val LABEL_LINE = Regex("""^#\s*label:\s*(.*\S)""")
 private val BUILT_IN_MENU = listOf(
     "Shell" to "shell", "AI agents" to "agents", "Services" to "services", "Apps" to "apps",
-    "Games" to "games", "Files" to "files", "Settings" to "settings",
+    "Games" to "games", "Files" to "files", "Linux desktop" to "desktop", "Settings" to "settings",
 )
 private val EXECUTE_BITS = setOf(
     PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE, PosixFilePermission.OTHERS_EXECUTE,
@@ -58,6 +58,8 @@ sealed interface HomeAction {
     data class Link(val url: String) : HomeAction
     /** Touch mode's file manager, at [folder] (a Debian path; see FileBrowser.kt). nnn is "Files (nnn)" in Terminal apps. */
     data class Files(val folder: String) : HomeAction
+    /** The Linux desktop (desktop mode), over the screen it's opened from, which Back returns to. */
+    data object Desktop : HomeAction
 }
 
 /** How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, or a label with its value. */
@@ -77,6 +79,8 @@ sealed interface HomeLogo {
     data class Tile(val shortcut: AppShortcut) : HomeLogo
     /** The Terminal apps folder's. */
     data object Terminal : HomeLogo
+    /** Linux desktop's: a screen. */
+    data object Desktop : HomeLogo
 }
 
 /**
@@ -190,6 +194,7 @@ class HomeMenus(
         "app-settings" -> HomeItem(label, HomeAction.Menu("settings"))
         "welcome" -> HomeItem(label, HomeAction.Menu("welcome"))
         "files" -> HomeItem(label, HomeAction.Files(guestHome))
+        "desktop" -> HomeItem(label, HomeAction.Desktop, logo = HomeLogo.Desktop)
         else -> HomeItem(label, act("cmd:" + action.removePrefix("run ")))
     }
 
@@ -303,5 +308,5 @@ private fun parseMenuFile(text: String): List<Pair<String, String>> = text.lines
 
 private val MENU_ACTIONS = setOf(
     "shell", "files", "apps", "terminal-apps", "games", "settings", "app-settings", "agents", "services",
-    "system", "help", "welcome", "touch-view", "exit",
+    "system", "help", "welcome", "touch-view", "desktop", "exit",
 )

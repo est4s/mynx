@@ -47,6 +47,7 @@ class HomeTest {
                 HomeItem("Top", act("cmd:htop -d 5")),
                 HomeItem("Tools", HomeAction.Menu("apps")),
                 HomeItem("Way too long a label", HomeAction.Files("/root")),
+                HomeItem("Desk", HomeAction.Desktop, logo = HomeLogo.Desktop),
             ),
             menus().items("main"),
         )
@@ -79,9 +80,17 @@ class HomeTest {
     fun `with no menu file at all it has the launcher's built-in items`() {
         gitHubReady()
         assertEquals(
-            listOf("Shell", "AI agents", "Services", "Apps", "Games", "Files", "Settings"),
+            listOf("Shell", "AI agents", "Services", "Apps", "Games", "Files", "Linux desktop", "Settings"),
             labels("main"),
         )
+    }
+
+    @Test
+    fun `the tools' menu has Linux desktop, which opens the desktop with its logo`() {
+        gitHubReady()
+        File(fixturesDir(), "../../tools/menu.conf").copyTo(File(tools, "menu.conf"))
+        val desktop = menus().items("main").single { it.label == "Linux desktop" }
+        assertEquals(HomeItem("Linux desktop", HomeAction.Desktop, logo = HomeLogo.Desktop), desktop)
     }
 
     @Test

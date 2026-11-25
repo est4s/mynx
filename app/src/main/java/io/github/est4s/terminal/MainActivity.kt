@@ -67,6 +67,7 @@ import io.github.est4s.terminal.core.AppView
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
 import io.github.est4s.terminal.core.KeyPress
+import io.github.est4s.terminal.core.desktopBackLabel
 import io.github.est4s.terminal.core.desktopShortcut
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeMenus
@@ -166,9 +167,9 @@ class MainActivity : Activity(), FrontActivity {
         if (chatHomeShown) chatHomeView?.refresh()
     }
     private var touchView = false
-    // `view = desktop`: the desktop is the app's start, as the chat home is touch view's.
-    private var desktopMode = false
+    // The desktop lies over whatever screen it was opened from, which Back shows again.
     private var desktopView: DesktopView? = null
+    private var desktopFromTouch = false
     // Ctrl+Shift+D was taken: its key up is too.
     private var desktopShortcutHeld = false
     private var appliedFont: String? = null
@@ -178,13 +179,14 @@ class MainActivity : Activity(), FrontActivity {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             val s = (binder as TerminalService.LocalBinder).service
             service = s
+            // Read first: showing a touch screen below closes the desktop.
+            val desktopWasOpen = s.desktopOpen
             s.activity = this@MainActivity
             applyRotation(s.rotationLock)
             showTerminal(s.currentSession())
             s.chats.listener = chatListener
             s.chats.historyListener = chatHistoryListener
             s.desktopLink.listener = ::onDesktopChanged
-            if (desktopMode && shellToShow == null && tabToOpen == null && !chatToShow) showDesktop()
             if (touchView && shellToShow == null && tabToOpen == null) {
                 val homeLevels = s.homeLevels
                 s.homeLevels = null
@@ -200,6 +202,8 @@ class MainActivity : Activity(), FrontActivity {
                     else -> showChatHome()
                 }
             }
+            // A recreated activity (a theme's colours) had the desktop open: over what it covered.
+            if (desktopWasOpen && shellToShow == null && tabToOpen == null && !chatToShow) showDesktop()
             chatToShow = false
             showShellFromNotification()
             openCommandTab()
@@ -390,13 +394,10 @@ class MainActivity : Activity(), FrontActivity {
     // Touch mode: everything backs out to the chat home (a chat after its sheet,
     // the history, Home's lists after their levels, Files after its selection and
     // folders, the terminal unless a chat sent it there); the chat home closes its
-    // drawer, then the app is left.
-    // Desktop view: Back on the terminal goes to the desktop, on the desktop leaves the app;
-    // from another view the desktop backs out to the terminal.
+    // drawer, then the app is left. The desktop backs out to the screen it was opened over.
     private fun goBack() {
         when {
-            desktopShown -> if (desktopMode) moveTaskToBack(true) else hideDesktop()
-            desktopMode -> showDesktop()
+            desktopShown -> hideDesktop()
             filesShown && filesView?.back() == true -> Unit
             filesShown -> showChatHome()
             chatShown && chat?.sheetBack() == true -> Unit
@@ -774,6 +775,7 @@ class MainActivity : Activity(), FrontActivity {
                 if (refusal != null || action.op != ServiceOp.OPEN) return
             }
             is HomeAction.Link -> return toastError(service.openLink(action.url))
+            HomeAction.Desktop -> return showDesktop()
             // HomeView runs these itself.
             is HomeAction.Menu, is HomeAction.Config, is HomeAction.Input, HomeAction.None -> return
         }
@@ -952,35 +954,59 @@ class MainActivity : Activity(), FrontActivity {
         }
         override fun logs(): String = service?.desktopLogs() ?: ""
         override fun touch(): DesktopTouch = loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.desktopTouch
-        override fun showTabs() = hideDesktop()
+        override fun back() = hideDesktop()
+        override fun backLabel() = desktopBackLabel(desktopFromTouch)
+        override fun stop() {
+            service?.stopDesktop()
+            hideDesktop()
+        }
+        // A tab, so the terminal shows, whatever the desktop covered.
         override fun install() {
             service?.newSession(DESKTOP_INSTALL_TAB_COMMAND) ?: return
             hideDesktop()
+            hideChat()
+            hideChatHistory()
+            hideChatHome()
+            hideHome()
+            hideFiles()
         }
     }
 
     private val desktopShown get() = desktopView?.visibility == View.VISIBLE
 
-    /** The desktop, over the terminal and the touch screens; it starts the desktop if nothing runs. */
+    // Touch view's screens, in the root's order: the last shown is the one on top.
+    private fun touchScreens(): List<View> =
+        listOfNotNull(home, chat, chatHistory, chatHomeView, filesView).filter { it.visibility == View.VISIBLE }
+
+    /**
+     * The desktop, over the screen it's opened from (the terminal, or a touch
+     * view screen), which stays as it is underneath; it starts the desktop if nothing runs.
+     */
     private fun showDesktop() {
         val view = desktopView ?: return
-        hideHome()
-        hideChat()
-        hideChatHistory()
-        hideChatHome()
-        hideFiles()
         hideKeyboard()
         if (desktopShown) return
+        desktopFromTouch = touchScreens().isNotEmpty()
+        service?.desktopOpen = true
         view.visibility = View.VISIBLE
         view.shown()
     }
 
-    /** Back to the terminal and its tabs. */
+    /** `mynx desktop open`: false when the app isn't on screen (Android won't bring it up from the background). */
+    fun openDesktop(): Boolean {
+        if (!onScreen || desktopView == null) return false
+        showDesktop()
+        return true
+    }
+
+    /** Back to the screen the desktop covered; it keeps running. */
     private fun hideDesktop() {
+        service?.desktopOpen = false
         if (!desktopShown) return
         desktopView?.hidden()
         desktopView?.visibility = View.GONE
-        if (::terminalView.isInitialized) terminalView.requestFocus()
+        val under = touchScreens().lastOrNull()
+        if (under != null) under.requestFocus() else if (::terminalView.isInitialized) terminalView.requestFocus()
     }
 
     /** The X server connected or went, or the link logged something: the view and the strip's desktop mark follow. */
@@ -998,8 +1024,8 @@ class MainActivity : Activity(), FrontActivity {
             setPadding(dp(14), dp(8), dp(10), dp(8))
             setOnClickListener { showChatHome() }
         })
-        // The desktop: always in desktop view, else while its X server runs.
-        if (desktopMode || service?.desktopLink?.connected == true) stripRow.addView(stripText("▣", strip.accent).apply {
+        // The desktop, while its X server runs (else the menu's Linux desktop opens it).
+        if (service?.desktopLink?.connected == true) stripRow.addView(stripText("▣", strip.accent).apply {
             setPadding(dp(14), dp(8), dp(10), dp(8))
             setOnClickListener { showDesktop() }
         })
@@ -1412,14 +1438,11 @@ class MainActivity : Activity(), FrontActivity {
     // `mynx set view …` takes effect at once; the first read only records it.
     private fun applyView(view: AppView) {
         val touch = view == AppView.TOUCH
-        val desktop = view == AppView.DESKTOP
-        if (touch == touchView && desktop == desktopMode) return
+        if (touch == touchView) return
         touchView = touch
-        desktopMode = desktop
         if (home == null) return
         when {
             touch -> showChatHome()
-            desktop -> showDesktop()
             else -> {
                 hideChat()
                 hideChatHistory()
@@ -1471,7 +1494,7 @@ class MainActivity : Activity(), FrontActivity {
             super.dispatchKeyEvent(event)
     }
 
-    // Ctrl+Shift+D: to the desktop and back, from any view.
+    // Ctrl+Shift+D: to the desktop and back to where it was opened, from either view.
     private fun desktopShortcutTaken(event: KeyEvent): Boolean {
         if (event.keyCode != KeyEvent.KEYCODE_D) return false
         if (event.action == KeyEvent.ACTION_UP && desktopShortcutHeld) {

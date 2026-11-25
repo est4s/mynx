@@ -3336,6 +3336,30 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("desktop", "stop")
         self.assertEqual(run.stdout, "Desktop: not running\n")
 
+    def test_desktop_open_shows_it(self):
+        self.start_app({"desktop-open": self.desktop_status(opened=True)})
+        run = self.mynx("desktop", "open")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Desktop: opened (it starts if it isn't running)\n")
+        self.assertEqual(self.app.seen, ["desktop-open"])
+
+    def test_desktop_open_when_it_runs(self):
+        self.start_app({"desktop-open": self.desktop_status(opened=True, running=True, sessionRunning=True)})
+        run = self.mynx("desktop", "open")
+        self.assertEqual(run.stdout, "Desktop: opened, running on DISPLAY=:0 (XFCE)\n")
+
+    def test_desktop_open_passes_on_the_refusal(self):
+        self.start_app({"desktop-open": {"ok": False, "error": "the app must be on screen to open the desktop"}})
+        run = self.mynx("desktop", "open")
+        self.assertEqual(run.returncode, 2)
+        self.assertEqual(run.stderr, "mynx: the app must be on screen to open the desktop\n")
+
+    def test_desktop_open_as_json(self):
+        answer = self.desktop_status(opened=True)
+        self.start_app({"desktop-open": answer})
+        run = self.mynx("desktop", "open", "--json")
+        self.assertEqual(json.loads(run.stdout), answer)
+
     def desktop_install(self, *args, missing, stdin="", apt="echo ran apt-get $*"):
         self.start_app({"desktop-status": self.desktop_status(install=missing)})
         path = self.fake_commands(**{"apt-get": apt})
@@ -3369,13 +3393,13 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.assertIn("'apt-get update' failed (exit 100)", run.stderr)
 
     def test_desktop_usage(self):
-        for args in (["install", "--now"], ["install", "--json"], ["start", "now"]):
+        for args in (["install", "--now"], ["install", "--json"], ["start", "now"], ["open", "now"]):
             run = self.mynx("desktop", *args)
             self.assertEqual(run.returncode, 2, args)
-            self.assertIn("usage: mynx desktop [status] | start | stop | install [--yes]", run.stderr + run.stdout)
+            self.assertIn("usage: mynx desktop [status] | open | start | stop | install [--yes]", run.stderr + run.stdout)
         run = self.mynx("desktop", "begin")
         self.assertEqual(run.returncode, 2)
-        self.assertIn("usage: mynx desktop [status] | start | stop", run.stderr)
+        self.assertIn("usage: mynx desktop [status] | open | start | stop", run.stderr)
 
     # --- audio --------------------------------------------------------------
 

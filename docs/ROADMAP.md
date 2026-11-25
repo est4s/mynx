@@ -53,8 +53,11 @@ prompt line ("Ask Claude…") with a mic button at its end.
 ### Desktop mode
 Debian's graphical programs (a desktop such as XFCE, a browser, an
 IDE) on the phone, through **Termux:X11**, an X server for Android.
-- A third view, `view = desktop`, beside `terminal` and `touch`, and
-  switching between them like the other two.
+- **Opened from either view, like a program** (maintainer's
+  decision, 2026-11-25: it was a third view, `view = desktop`, until
+  then): Linux desktop in the launcher menu and touch view's Home,
+  ▣ on the tab strip, Ctrl+Shift+D, `mynx desktop open`; Back returns
+  to where it was opened, and it keeps running until stopped.
 - **Shipped like proot** (maintainer's decision, 2026-11-20):
   Termux:X11 is GPL-3.0, so it stays a separate program, built from
   its source in CI (like `scripts/build-proot.sh`), shipped as a

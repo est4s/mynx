@@ -609,9 +609,26 @@ See `docs/ROADMAP.md` "How it works". The details:
   text with one `read()`, so it's cut to `CLIPBOARD_TO_X_MAX` (64 KiB)
   at a character's start and written with its event in one write.
   No echo: each side gets only text the other doesn't have (`xHas`),
-  so X's text set on Android isn't announced back and vice versa. `DesktopView` (over
-  everything in `MainActivity`'s root, shown by `showDesktop()`)
-  lays the screen out between its own bar (☰ Tabs, ⌨, Log) and the
+  so X's text set on Android isn't announced back and vice versa.
+  **Opening and leaving** (maintainer's decision, 2026-11-25: the
+  desktop isn't a view, it's opened from either, like a program; `view`
+  is `terminal | touch`, and an old `view = desktop` is the terminal,
+  with a problem saying why, `VIEW_DESKTOP_GONE`): `showDesktop()` lays
+  `DesktopView` over everything in `MainActivity`'s root *without
+  hiding what's under it*, so Back, the bar's back button
+  (`desktopBackLabel()`: ← Terminal or ← Touch view) and Ctrl+Shift+D
+  (`hideDesktop()`) show that screen again as it was, focus on the top
+  touch screen if one is visible, else the terminal. It opens from the
+  menu action `desktop` (Linux desktop in `tools/menu.conf`; the
+  terminal menu runs `mynx desktop open`, Home's is
+  `HomeAction.Desktop` with `HomeLogo.Desktop`, drawn after the
+  drawer's row as the Terminal button's icon is), ▣ (while connected),
+  Ctrl+Shift+D and `desktop-open` (`desktopRequests(open =)`, refused
+  off screen). A chat under it notifies as if left
+  (`noticeRules`), and the service's `desktopOpen` reopens it in a
+  recreated activity. Stop desktop (in the Log panel) stops it and
+  goes back. `DesktopView`
+  lays the screen out between its own bar (back, ⌨, Log) and the
   `desktop` key bar; an X pixel is `desktopScale()` phone pixels
   (0.75 dp, whole), the width a multiple of 8 (libxcvt's step)
   (`DesktopGeometry`). **A new surface is drawn whole:** the
@@ -740,7 +757,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   suites). Anything that runs a program is a tab running `menu --act
   ACTION`, so both views run the same code; apps open their own screen.
   `HomeView` lies over the terminal, which keeps its size so tabs start
-  as usual. Apps' rows carry a `HomeLogo` (maintainer's decision,
+  as usual. The menu's `desktop` item (Linux desktop) opens the desktop
+  over Home (`HomeAction.Desktop`, "Desktop mode" above). Apps' rows carry a `HomeLogo` (maintainer's decision,
   2026-11-22): each app's is its home screen shortcut's `appShortcut()`,
   drawn by the same `appIcon()`, and the Terminal apps folder's is the
   pixel terminal icon. Games get one too, by the same rules

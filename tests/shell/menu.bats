@@ -36,8 +36,8 @@ keys() {
 @test "main menu items come from the built-in menu file" {
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
-    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:games files menu:settings quit_session" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Linux desktop Settings Exit" ]
+    [ "${ACTS[*]}" = "exit menu:agents menu:services menu:apps menu:games files desktop menu:settings quit_session" ]
 }
 
 @test "the user's menu file replaces the built-in one" {
@@ -55,7 +55,7 @@ keys() {
     printf 'oops\n' >"$HOME/.config/mynx/menu.conf"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Services Apps Games Files Linux desktop Settings Exit" ]
 }
 
 @test "menu --check lists problems in a menu file" {
@@ -63,7 +63,7 @@ keys() {
     run bash "$MENU" --check "$BATS_TEST_TMPDIR/menu.conf"
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "line 2: expected Label = action" ]
-    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, touch-view, exit or run COMMAND)" ]
+    [ "${lines[1]}" = "line 3: unknown action 'fly' (shell, files, apps, terminal-apps, games, settings, app-settings, agents, services, system, help, welcome, touch-view, desktop, exit or run COMMAND)" ]
     [ "${lines[2]}" = "line 4: label longer than 20 characters" ]
     [ "${lines[3]}" = "line 5: run needs a command" ]
 }
@@ -145,27 +145,27 @@ keys() {
 }
 
 @test "Release notes shows mynx notes" {
-    run keys 742
+    run keys 842
     [[ $output == *"RUN: mynx notes"* ]]
 }
 
 @test "About shows mynx about" {
-    run keys 744
+    run keys 844
     [[ $output == *"RUN: mynx about"* ]]
 }
 
 @test "Help has Getting started" {
-    run keys 741xxxxxxqqq
+    run keys 841xxxxxxqqq
     [[ $output == *"A real Debian on your phone"* ]]
 }
 
 @test "Report a bug runs mynx report" {
-    run keys 743
+    run keys 843
     [[ $output == *"RUN: mynx report"* ]]
 }
 
 @test "GitHub setup runs mynx github" {
-    run keys 733
+    run keys 833
     [[ $output == *"RUN: mynx github"* ]]
 }
 
@@ -173,7 +173,7 @@ keys() {
     rm "$HOME/.config/gh/hosts.yml"
     source "$MENU"
     menu_items main
-    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Games Files Settings Exit" ]
+    [ "${ITEMS[*]}" = "Shell AI agents Set up GitHub Services Apps Games Files Linux desktop Settings Exit" ]
     [ "${ACTS[2]}" = github ]
     menu_items system
     [ "${ITEMS[*]}" = "Update all System info" ]
@@ -556,13 +556,18 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
 }
 
 @test "Exit asks the shell to close the tab" {
-    run keys 8
+    run keys 9
     [ "$status" -eq 10 ]
 }
 
 @test "Files opens the file manager" {
     run keys 6
     [[ $output == *"RUN: files"* ]]
+}
+
+@test "Linux desktop opens the desktop from the main menu" {
+    run keys 7
+    [[ $output == *"RUN: mynx desktop open"* ]]
 }
 
 @test "Games starts the chosen game" {
@@ -572,7 +577,7 @@ web_app() { # web_app DIR TITLE: a static app with that <title>
 }
 
 @test "Settings → App settings opens the settings editors" {
-    run keys 71
+    run keys 81
     [[ $output == *"RUN: mynx edit"* ]]
 }
 
@@ -791,7 +796,7 @@ no_services_mynx() {
 }
 
 @test "Update all runs apt" {
-    run keys 731
+    run keys 831
     [[ $output == *"RUN: bash -c apt update && apt upgrade -y"* ]]
 }
 
@@ -877,8 +882,8 @@ no_services_mynx() {
 @test "the menu file both views read parses to the same items" {
     source "$MENU"
     read_menu_file "$BATS_TEST_DIRNAME/../fixtures/menu.conf"
-    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Touch Leave" ]
-    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files touchview quit_session" ]
+    [ "${ITEMS[*]}" = "Shell Top Tools Way too long a label Touch Desk Leave" ]
+    [ "${ACTS[*]}" = "exit cmd:htop -d 5 menu:apps files touchview desktop quit_session" ]
 }
 
 @test "--act runs one action and leaves" {
@@ -890,7 +895,7 @@ no_services_mynx() {
 }
 
 @test "Touch view is in Settings" {
-    run keys 72
+    run keys 82
     [[ $output == *"RUN: mynx set view touch"* ]]
 }
 
@@ -898,6 +903,13 @@ no_services_mynx() {
     run bash -c "MENU_DRYRUN=1 bash '$MENU' --act touchview 2>&1 </dev/null"
     [ "$status" -eq 0 ]
     [[ "$output" == *"RUN: mynx set view touch"* ]]
+}
+
+@test "Linux desktop opens the desktop, and a refusal stays on screen" {
+    run bash -c "MENU_DRYRUN=1 bash '$MENU' --act desktop 2>&1 </dev/null"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"RUN: mynx desktop open"* ]]
+    grep -q '^act_desktop() { run mynx desktop open || pause; }' "$MENU"
 }
 
 @test "--act refuses what isn't an action" {

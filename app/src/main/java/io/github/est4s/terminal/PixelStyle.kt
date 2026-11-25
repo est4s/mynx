@@ -158,6 +158,11 @@ object Pixel {
             5, 7, 2, 2, 7, 9, 2, 2, 5, 11, 2, 2,                  // >
             10, 11, 5, 2,                                         // _
         )
+        PixelIcon.DESKTOP -> intArrayOf(
+            2, 2, 16, 2, 2, 12, 16, 2, 2, 2, 2, 12, 16, 2, 2, 12, // the screen
+            5, 5, 7, 2, 5, 7, 2, 3, 10, 7, 2, 3, 5, 9, 7, 1,      // a window on it
+            9, 14, 2, 2, 5, 16, 10, 2,                            // stand and base
+        )
         PixelIcon.CHAT -> intArrayOf(
             2, 3, 16, 2, 2, 12, 16, 2, 2, 3, 2, 11, 16, 3, 2, 11, // the bubble
             5, 14, 4, 2, 5, 16, 2, 2,                             // its tail
@@ -401,7 +406,7 @@ fun pixelDialog(
     return handle
 }
 
-enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH, PLAY, PAUSE, NEXT, PREVIOUS, REPLAY, NOTE, PIN }
+enum class PixelIcon { MENU, PLUS, MIC, SEND, STOP, BACK, CHEVRON, TERMINAL, CHAT, CLOSE, MORE, CHECK, CAMERA, IMAGE, FILE, FOLDER, LINK, BOLT, CHIP, REFRESH, PLAY, PAUSE, NEXT, PREVIOUS, REPLAY, NOTE, PIN, DESKTOP }
 
 /** Text in another typeface (TypefaceSpan(Typeface) is API 28+): Pixelify Sans for headings in Chat's Markdown. */
 class PixelFontSpan(private val face: Typeface) : MetricAffectingSpan() {

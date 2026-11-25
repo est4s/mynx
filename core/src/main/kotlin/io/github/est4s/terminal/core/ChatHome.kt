@@ -3,8 +3,8 @@ package io.github.est4s.terminal.core
 const val CHAT_HOME_CONTINUE_MAX = 3
 const val DRAWER_CHATS_MAX = 5
 
-/** One of the drawer's Linux items: Home's main list item; [opensList] when it's a [HomeAction.Menu] (drawn with ›). */
-data class DrawerItem(val label: String, val action: HomeAction, val opensList: Boolean)
+/** One of the drawer's Linux items: Home's main list item; [opensList] when it's a [HomeAction.Menu] (drawn with ›); [logo], its picture. */
+data class DrawerItem(val label: String, val action: HomeAction, val opensList: Boolean, val logo: HomeLogo? = null)
 
 /**
  * What touch view's chat home and its drawer show (docs/TOUCH-DESIGN.md).
@@ -48,7 +48,7 @@ fun chatHome(
         continueRows = history.filter(::isLive).take(CHAT_HOME_CONTINUE_MAX),
         drawerPinned = pinned,
         drawerChats = (live + rest).take(DRAWER_CHATS_MAX),
-        linux = main.map { DrawerItem(it.label, it.action, it.action is HomeAction.Menu) },
+        linux = main.map { DrawerItem(it.label, it.action, it.action is HomeAction.Menu, it.logo) },
         servicesActive = servicesActive,
         agentInstalled = agentInstalled,
         installAction = menuActTab("agent:claude"),

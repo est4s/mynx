@@ -24,7 +24,10 @@ class DesktopTest {
         signal = { pid, sig -> signals += pid to sig },
         later = { _, action -> action() },
     )
-    private val requests = MynxRequests(dir, home, later = desktopRequests(desktop))
+    // Whether the app is on screen, and how many times desktop-open showed the desktop.
+    private var onScreen = true
+    private var opened = 0
+    private val requests = MynxRequests(dir, home, later = desktopRequests(desktop) { onScreen.also { if (it) opened++ } })
 
     @AfterTest
     fun cleanup() {
@@ -283,6 +286,32 @@ class DesktopTest {
         assertTrue(ask("desktop-stop").startsWith("""{"ok":true,"stopped":true,"running":false,"display":null,"""))
         assertEquals(listOf("server", "session", "stop session", "stop server"), host.events)
         assertTrue(ask("desktop-stop").startsWith("""{"ok":true,"stopped":false,"""))
+    }
+
+    @Test
+    fun `open shows the desktop, which starts it, and answers with the status`() {
+        installXfce()
+
+        assertTrue(ask("desktop-open").startsWith("""{"ok":true,"opened":true,"running":false,"display":null,"session":"xfce","""))
+        assertEquals(1, opened)
+        assertEquals(emptyList(), host.events)
+    }
+
+    @Test
+    fun `open is refused while the app isn't on screen`() {
+        onScreen = false
+
+        assertEquals(
+            """{"ok":false,"error":"the app must be on screen to open the desktop: bring mynx to the front and try again"}""",
+            ask("desktop-open"),
+        )
+        assertEquals(0, opened)
+    }
+
+    @Test
+    fun `the desktop's back button names where it goes back to`() {
+        assertEquals("← Terminal", desktopBackLabel(fromTouch = false))
+        assertEquals("← Touch view", desktopBackLabel(fromTouch = true))
     }
 
     @Test

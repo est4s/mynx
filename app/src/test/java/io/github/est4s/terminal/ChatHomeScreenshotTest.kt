@@ -98,6 +98,14 @@ class ChatHomeScreenshotTest {
     @Test
     fun drawer() = shoot(1080, 2400, "chat-home-drawer", drawer = true)
 
+    // A short menu of the user's, so the drawer's Linux desktop row (with its screen icon) is in sight.
+    @Test
+    fun drawerDesktop() {
+        File(home, ".config/mynx").mkdirs()
+        File(home, ".config/mynx/menu.conf").writeText("Shell = shell\nFiles = files\nLinux desktop = desktop\nSettings = settings\n")
+        shoot(1080, 2400, "chat-home-drawer-desktop", drawer = true)
+    }
+
     @Test
     fun empty() = shoot(1080, 2400, "chat-home-empty", live = false, servicesActive = 0)
 

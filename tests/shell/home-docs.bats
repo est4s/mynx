@@ -393,7 +393,7 @@ setup() {
 }
 
 @test "the guide gives desktop mode's settings and their defaults" {
-    grep -qF '`view`: `terminal` (default), `touch` or `desktop`' "$CORE"
+    grep -qF '`view`: `terminal` (default) or `touch`' "$CORE"
     grep -qF '`desktop`: `xfce` (default) or `none`' "$CORE"
     grep -qF '`desktop-touch`: `touchpad` (default) or `direct`' "$CORE"
 }
@@ -407,16 +407,25 @@ setup() {
 }
 
 @test "the guide explains the desktop's Debian side: fonts, sound, Firefox" {
-    grep -qF 'mynx desktop` | desktop mode: `start`, `stop`, `status`, `install`' "$CORE"
+    grep -qF 'mynx desktop` | desktop mode: `open`, `start`, `stop`, `status`, `install`' "$CORE"
     for text in "--no-install-recommends" "xfonts-base" "xset fp rehash" "PULSE_SERVER" \
         "firefox-esr" "MOZ_FAKE_NO_SANDBOX=1" "/dev/shm"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done
 }
 
+@test "the guide explains the desktop: opening it from either view and going back" {
+    grep -qF 'Linux desktop opens from either view' "$CORE"
+    grep -qF '| `desktop` | the Linux desktop (`mynx desktop open`) |' "$CORE"
+    for text in "Linux desktop in the launcher menu" "touch view's ☰" "mynx desktop open" \
+        "Linux desktop = desktop" "← Terminal" "← Touch view" "as you left it" "Stop desktop"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}
+
 @test "the guide explains the desktop view: switching, touch, keys and its bar" {
     grep -qF 'Ctrl+Shift+D' "$CORE"
-    for text in "Ctrl+Shift+D" "Tabs" "two-finger tap is a right click" "long press is a right click" \
+    for text in "Ctrl+Shift+D" "two-finger tap is a right click" "long press is a right click" \
         "The clipboard** is shared, text only" "Up to 64 KB" "fonts-noto-cjk" \
         "setxkbmap" "mynx keybar edit desktop" "Super+Up" "Log"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }

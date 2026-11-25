@@ -17,6 +17,7 @@ import io.github.est4s.terminal.core.ChatHistoryRow
 import io.github.est4s.terminal.core.ChatHome
 import io.github.est4s.terminal.core.DrawerItem
 import io.github.est4s.terminal.core.HomeAction
+import io.github.est4s.terminal.core.HomeLogo
 
 /**
  * The chat home's drawer: New chat, the pinned chats, the latest ones (Recents), All chats, Home's main
@@ -158,6 +159,13 @@ class DrawerView(
         if (item.opensList) {
             addView(ImageView(context).apply {
                 setImageDrawable(Pixel.icon(context, PixelIcon.CHEVRON, Pixel.DIM, 16))
+            }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
+        }
+        // Linux desktop's screen, as the Terminal button has its prompt.
+        if (item.logo == HomeLogo.Desktop) {
+            addView(ImageView(context).apply {
+                setImageDrawable(Pixel.icon(context, PixelIcon.DESKTOP, Pixel.CYAN))
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT))
         }
         if (enabled) {
