@@ -27,8 +27,51 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   of the app is stopped at a start; another X server on :0 (say
   `Xvfb :0`) is left alone, and the start says so: use another
   display for it.
-- **The view:** `mynx set view desktop` makes the desktop what the
-  app shows (for now it shows the terminal there). `desktop-touch`
-  says what a finger does there: `touchpad` (default) moves a
-  pointer (tap to click, two fingers to scroll or right-click),
-  `direct` clicks where you tap.
+## The desktop on screen
+
+- **Getting there:** `mynx set view desktop` makes the desktop what
+  the app opens on: Back on the terminal goes to it, Back on it leaves
+  the app. From any view, Ctrl+Shift+D (a hardware keyboard) goes to
+  the desktop and back, and ▣ on the tab strip opens it (always in
+  desktop view, else while the X server runs). On the desktop,
+  ☰ Tabs (top left) shows the terminal and its tabs.
+- **Starting:** opening the desktop starts it (as `mynx desktop
+  start`) if nothing runs and nothing is missing. Otherwise it says
+  why there's no picture: what to install, a start that failed, the
+  server not answering yet, with Start to try again and the logs.
+  **Log** (top right) shows them at any time: the app's own lines,
+  then the ends of `x11.log` and `session.log`. The desktop keeps
+  running when you leave the app or switch to the terminal; it stops
+  with `mynx desktop stop`, or when the app exits.
+- **The screen** is the X server's, at about 0.75 dp a pixel (2 phone
+  pixels on most phones), between the app's bar and the key bar.
+  Turning the phone resizes it (RandR: programs see a new screen
+  size). The soft keyboard doesn't: the screen moves up instead, so
+  the pointer stays in sight.
+- **Touch, `desktop-touch = touchpad`** (default): the screen is a
+  touchpad. One finger moves the pointer (further when it moves
+  fast); a tap is a left click, two taps a double click; a
+  two-finger tap is a right click, a three-finger tap a middle click
+  (X's paste of the selection); two fingers moving scroll, the
+  content following them; to drag, hold a finger still for half a
+  second, or tap and then touch again and move.
+- **Touch, `desktop-touch = direct`**: the pointer is where you
+  touch. A tap clicks there, a finger that moves drags from where it
+  went down, a long press is a right click, and two fingers scroll
+  or, tapped, right-click. Changes apply when the desktop next shows.
+- **A mouse** (USB or Bluetooth) points and clicks as on a computer,
+  its wheel scrolls.
+- **Keys:** a hardware keyboard's keys go to the X server as they
+  are (by key, not by character, so its layout is the server's: US
+  unless you run `setxkbmap de` or another in Debian), Ctrl and Alt
+  chords too. Ctrl+Shift+D stays the app's; Back and the volume
+  keys stay the phone's, but a keyboard's Esc key is Esc. ⌨ (top
+  right) shows the soft keyboard, which types characters (any
+  language), Enter, Tab and Backspace. The pointer is the app's own
+  arrow: programs can't change its shape.
+- **The key bar** is `desktop`: Esc, Tab, Ctrl, Alt, Super and the
+  arrows. Ctrl, Alt and Super are sticky: tap one, then a key, a
+  character on the soft keyboard, a click (Ctrl+click) or a scroll
+  (Ctrl+scroll zooms in many programs). `mynx keybar edit desktop`
+  changes it; on this bar `Super` alone is sticky and `Super+Up` is
+  a chord, as `Ctrl+…` is (the format is the guide's "Key bars").

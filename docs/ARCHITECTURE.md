@@ -552,9 +552,54 @@ See `docs/ROADMAP.md` "How it works". The details:
   and `session.log`, written afresh each start. `mynx desktop start`
   returns once the socket takes connections. New tabs and services get
   `DISPLAY=:0` while the server runs (`prootLaunch(display =)`). The
-  server's start broadcast (its binder, for the view) is unanswered
-  until the view (step 4); `view = desktop` shows the terminal until
-  then. `desktop-touch` is read by the view too.
+  server's start broadcast is taken by **the view's link**, below.
+  **The view** (`app/.../DesktopLink.kt`, `DesktopView.kt`; core's
+  `X11Input.kt`, `DesktopScreen.kt`, `DesktopGestures.kt`,
+  `DesktopKeys.kt`; step 4): the service's `DesktopLink` registers
+  for the server's broadcast (`RECEIVER_NOT_EXPORTED`: the server runs
+  as our uid) from `onCreate`, so it connects whenever a server of
+  ours runs, one left from before the app went too; the server
+  rebroadcasts each second until a connection is taken, and again
+  after ours closes. Its binder is called by hand-written Parcels
+  (`X11_INTERFACE`, the calls numbered in `ICmdEntryInterface.aidl`'s
+  order: `getXConnection` 1, `windowChanged` 4); the socket
+  `getXConnection` gives takes 24-byte `lorieEvent`s
+  (`X11Input.encode()`: screen size, absolute pointer, buttons,
+  scroll at 120 a notch, keys as Linux code + 8, characters), and
+  what it sends back is drained unread (heartbeats; the shared-state
+  memfd, whose fd is dropped: we don't map it, so the renderer's own
+  keyboard pan, zoom and cursor surface aren't used, and the patch
+  stretches the screen over the whole surface). `DesktopView` (over
+  everything in `MainActivity`'s root, shown by `showDesktop()`)
+  lays the screen out between its own bar (☰ Tabs, ⌨, Log) and the
+  `desktop` key bar; an X pixel is `desktopScale()` phone pixels
+  (0.75 dp, whole), the width a multiple of 8 (libxcvt's step)
+  (`DesktopGeometry`). **A new surface is drawn whole:** the
+  renderer uploads only damaged rows, and a screen-size event with
+  only the frame rate changed makes the server build a new root
+  buffer (`lorieConfigureNotify` → `RRScreenSizeSet`), so
+  `DesktopSurface.handover()` sends rate+1 then the rate for a new
+  surface of the same size. **The soft keyboard pans:**
+  `ScreenFrame` keeps the screen's layer at its height without the
+  keyboard (`isVisible(ime())`, API 30+) and moves it up
+  (`keyboardPan()`) to keep the pointer in sight, so the X screen
+  isn't resized; rotation resizes it. Touch is core's
+  `DesktopGestures` (`desktop-touch`, read when the view shows):
+  `TouchpadGestures` keeps its own pointer and sends absolute
+  moves (so the view draws it, `PointerView`: the server's cursor
+  needs the shared state), `DirectGestures` the finger's. Keys are
+  `DesktopKeyboard`: scan codes for hardware keys (Linux codes, the
+  server's xkb layout applies), Android key codes for a soft
+  keyboard's keys, characters as unicode events, the bar's sticky
+  Ctrl/Alt/Super around the next key, character, click or scroll,
+  held keys released when the view hides. `MainActivity` keeps
+  Ctrl+Shift+D (`desktopShortcut()`), Back and the volume keys.
+  `desktopNotice()` says what shows while there's no picture,
+  `desktopStartsOnOpen()` when opening starts the desktop, and the
+  log shown is `desktopLogs()`. **Key bars** send through a
+  `KeyBarTarget`: `TerminalKeys` (the terminal's, sticky Ctrl and Alt
+  through the library's `readControlKey`/`readAltKey`) or the
+  desktop's.
   **The build** (`scripts/build-x11.sh`, run by both workflows and
   cached on the script, the patch and the licence notices): Termux:X11
   at a pinned commit with its submodules, built with the NDK version it
