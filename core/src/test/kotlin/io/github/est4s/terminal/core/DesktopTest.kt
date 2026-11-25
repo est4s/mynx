@@ -99,7 +99,7 @@ class DesktopTest {
         assertEquals(
             listOf(
                 "/system/bin/app_process", "-Xnoimage-dex2oat", "/", "--nice-name=mynx-x11",
-                "com.termux.x11.CmdEntryPoint", ":0", "-ac", "-nolisten", "local",
+                "com.termux.x11.CmdEntryPoint", ":0", "-ac", "-nolisten", "local", "-fp", "built-ins",
             ),
             launch.argv,
         )
@@ -114,6 +114,17 @@ class DesktopTest {
             launch.env,
         )
         assertEquals(listOf("LD_PRELOAD", "LD_LIBRARY_PATH"), launch.unset)
+    }
+
+    @Test
+    fun `the X server's font path is Debian's font folders that have a catalogue`() {
+        // Termux:X11 would take <rootfs>/etc/X11/fonts, which xfonts-base makes, holding only an alias file.
+        install("etc/X11/fonts/misc/xfonts-base.alias", "usr/share/fonts/X11/misc/fonts.dir", "usr/share/fonts/X11/75dpi/fonts.dir")
+        install("usr/share/fonts/X11/100dpi/", "usr/share/fonts/X11/Type1/fonts.scale")
+        val argv = x11Launch(server, rootfs.path).argv
+
+        val fonts = "$rootfs/usr/share/fonts/X11"
+        assertEquals(listOf("-fp", "$fonts/misc,$fonts/75dpi,built-ins"), argv.takeLast(2))
     }
 
     @Test

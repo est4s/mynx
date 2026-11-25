@@ -18,6 +18,8 @@ const val DESKTOP_SESSION_LOG = "$DESKTOP_DIR/session.log"
 const val X11_PROCESS_NAME = "mynx-x11"
 private const val X11_ENTRY = "com.termux.x11.CmdEntryPoint"
 private const val XKB = "/usr/share/X11/xkb"
+private const val X11_FONTS = "/usr/share/fonts/X11"
+private val X11_FONT_DIRS = listOf("misc", "TTF", "OTF", "Type1", "100dpi", "75dpi")
 private const val SIGKILL = 9
 private const val SIGTERM = 15
 private const val LEFTOVER_CHECK_MS = 100L
@@ -33,15 +35,17 @@ data class X11Server(val library: String, val jar: String, val packageName: Stri
 /**
  * The X server, run outside proot by app_process (the jar isn't in the
  * app's own classes). Its TMPDIR is Debian's /tmp, so its socket is
- * Debian's [X11_SOCKET]; it finds xkb and fonts from `dirname(TMPDIR)`.
- * `-ac` lets any client in, so it listens only on that socket, not on
- * the abstract one (`-nolisten local`), which every app could reach.
- * Android's linker must not see the app's LD_* variables.
+ * Debian's [X11_SOCKET]; it finds xkb from `dirname(TMPDIR)`. Its fonts
+ * are [x11FontPath]'s: by itself it would take Debian's `/etc/X11/fonts`
+ * first, which holds only xfonts-base's alias file. `-ac` lets any client
+ * in, so it listens only on that socket, not on the abstract one
+ * (`-nolisten local`), which every app could reach. Android's linker
+ * must not see the app's LD_* variables.
  */
 fun x11Launch(server: X11Server, rootfs: String): Launch = Launch(
     argv = listOf(
         "/system/bin/app_process", "-Xnoimage-dex2oat", "/", "--nice-name=$X11_PROCESS_NAME",
-        X11_ENTRY, DESKTOP_DISPLAY, "-ac", "-nolisten", "local",
+        X11_ENTRY, DESKTOP_DISPLAY, "-ac", "-nolisten", "local", "-fp", x11FontPath(rootfs),
     ),
     env = mapOf(
         "CLASSPATH" to server.jar,
@@ -52,6 +56,15 @@ fun x11Launch(server: X11Server, rootfs: String): Launch = Launch(
     ),
     unset = listOf("LD_PRELOAD", "LD_LIBRARY_PATH"),
 )
+
+/**
+ * The X server's font path (host paths): Debian's core font folders that
+ * have a catalogue (`fonts.dir`, which xfonts-utils writes), then the
+ * server's built-in fonts. Read at each start: fonts installed while it
+ * runs need `xset fp rehash`, or a restart.
+ */
+fun x11FontPath(rootfs: String): String =
+    (X11_FONT_DIRS.map { "$rootfs$X11_FONTS/$it" }.filter { File(it, "fonts.dir").isFile } + "built-ins").joinToString(",")
 
 /**
  * The command that runs [session] in Debian (a login bash, as a tab's),
