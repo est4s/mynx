@@ -97,6 +97,15 @@ class SerialNamesTest {
     }
 
     @Test
+    fun `has a shm folder for POSIX shared memory, kept when prepared again`() {
+        prepare()
+        File(dev, "shm/firefox").writeText("")
+        prepare()
+
+        assertTrue(File(dev, "shm/firefox").isFile)
+    }
+
+    @Test
     fun `preparing again keeps the ports' names`() {
         prepare()
         writeSerialNames(dev, sysTty, listOf(c3))
