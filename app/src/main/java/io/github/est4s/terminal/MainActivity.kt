@@ -67,7 +67,10 @@ import io.github.est4s.terminal.core.AppView
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
 import io.github.est4s.terminal.core.KeyPress
+import io.github.est4s.terminal.core.desktopBack
 import io.github.est4s.terminal.core.desktopShortcut
+import io.github.est4s.terminal.core.desktopShortcutTarget
+import io.github.est4s.terminal.core.viewShortcut
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeMenus
 import io.github.est4s.terminal.core.ServiceOp
@@ -169,8 +172,10 @@ class MainActivity : Activity(), FrontActivity {
     // `view = desktop`: the desktop is the app's start, as the chat home is touch view's.
     private var desktopMode = false
     private var desktopView: DesktopView? = null
-    // Ctrl+Shift+D was taken: its key up is too.
-    private var desktopShortcutHeld = false
+    // What the desktop was opened over: Back and Ctrl+Shift+D go back there.
+    private var desktopCameFrom: AppView? = null
+    // Ctrl+Shift+D (or 1, 2, 3 on the desktop) was taken: this key's up is too.
+    private var desktopShortcutHeld: Int? = null
     private var appliedFont: String? = null
     private var terminalTypeface: Typeface? = null
 
@@ -392,10 +397,10 @@ class MainActivity : Activity(), FrontActivity {
     // folders, the terminal unless a chat sent it there); the chat home closes its
     // drawer, then the app is left.
     // Desktop view: Back on the terminal goes to the desktop, on the desktop leaves the app;
-    // from another view the desktop backs out to the terminal.
+    // from another view the desktop backs out to the view it was opened from.
     private fun goBack() {
         when {
-            desktopShown -> if (desktopMode) moveTaskToBack(true) else hideDesktop()
+            desktopShown -> desktopBack(desktopMode, desktopCameFrom)?.let { leaveDesktopTo(it) } ?: moveTaskToBack(true)
             desktopMode -> showDesktop()
             filesShown && filesView?.back() == true -> Unit
             filesShown -> showChatHome()
@@ -952,7 +957,12 @@ class MainActivity : Activity(), FrontActivity {
         }
         override fun logs(): String = service?.desktopLogs() ?: ""
         override fun touch(): DesktopTouch = loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.desktopTouch
-        override fun showTabs() = hideDesktop()
+        override fun view(): AppView = when {
+            desktopMode -> AppView.DESKTOP
+            touchView -> AppView.TOUCH
+            else -> AppView.TERMINAL
+        }
+        override fun switchTo(view: AppView) = switchView(view)
         override fun install() {
             service?.newSession(DESKTOP_INSTALL_TAB_COMMAND) ?: return
             hideDesktop()
@@ -964,6 +974,10 @@ class MainActivity : Activity(), FrontActivity {
     /** The desktop, over the terminal and the touch screens; it starts the desktop if nothing runs. */
     private fun showDesktop() {
         val view = desktopView ?: return
+        if (!desktopShown) {
+            val touchScreen = homeShown || chatShown || chatHistoryShown || chatHomeShown || filesShown
+            desktopCameFrom = if (touchScreen) AppView.TOUCH else AppView.TERMINAL
+        }
         hideHome()
         hideChat()
         hideChatHistory()
@@ -973,6 +987,27 @@ class MainActivity : Activity(), FrontActivity {
         if (desktopShown) return
         view.visibility = View.VISIBLE
         view.shown()
+    }
+
+    /** From the desktop to [view]'s screen: the terminal and its tabs, or touch view's start. */
+    private fun leaveDesktopTo(view: AppView) {
+        when (view) {
+            AppView.TOUCH -> showChatHome()
+            AppView.TERMINAL -> hideDesktop()
+            AppView.DESKTOP -> Unit
+        }
+    }
+
+    /**
+     * The desktop's view switcher: [view] becomes the `view` setting, as
+     * the menu's Touch view and Settings' View make it (recorded for
+     * undo), and shows.
+     */
+    private fun switchView(view: AppView) {
+        val service = service ?: return
+        service.configRequest("set", listOf("view", view.word))?.let { return toastError(it) }
+        if (desktopShown) leaveDesktopTo(view)
+        desktopView?.markView()
     }
 
     /** Back to the terminal and its tabs. */
@@ -1471,18 +1506,25 @@ class MainActivity : Activity(), FrontActivity {
             super.dispatchKeyEvent(event)
     }
 
-    // Ctrl+Shift+D: to the desktop and back, from any view.
+    // Ctrl+Shift+D: to the desktop from any view, and back where it came from.
+    // On the desktop, Ctrl+Shift+1, 2, 3 are its switcher's Terminal, Touch, Desktop.
     private fun desktopShortcutTaken(event: KeyEvent): Boolean {
-        if (event.keyCode != KeyEvent.KEYCODE_D) return false
-        if (event.action == KeyEvent.ACTION_UP && desktopShortcutHeld) {
-            desktopShortcutHeld = false
+        if (event.action == KeyEvent.ACTION_UP && desktopShortcutHeld == event.keyCode) {
+            desktopShortcutHeld = null
             return true
         }
-        val press = KeyPress("D", ctrl = event.isCtrlPressed, shift = event.isShiftPressed, alt = event.isAltPressed)
-        if (event.action != KeyEvent.ACTION_DOWN || !desktopShortcut(press) || desktopView == null) return false
-        desktopShortcutHeld = true
+        if (event.action != KeyEvent.ACTION_DOWN || desktopView == null) return false
+        val key = KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")
+        val press = KeyPress(key, ctrl = event.isCtrlPressed, shift = event.isShiftPressed, alt = event.isAltPressed)
+        val switchTo = if (desktopShown) viewShortcut(press) else null
+        if (!desktopShortcut(press) && switchTo == null) return false
+        desktopShortcutHeld = event.keyCode
         if (event.repeatCount == 0) {
-            if (desktopShown) hideDesktop() else showDesktop()
+            when {
+                switchTo != null -> switchView(switchTo)
+                desktopShown -> leaveDesktopTo(desktopShortcutTarget(desktopCameFrom))
+                else -> showDesktop()
+            }
         }
         return true
     }

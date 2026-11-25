@@ -250,7 +250,8 @@ One `key = value` per line; `mynx settings` describes each.
   (permanent) or Share; Paste here; Chat here and Terminal here start
   Claude Code's chat or a shell in the folder shown.
   `desktop` is desktop mode (`/opt/mynx/docs/desktop.md`);
-  Ctrl+Shift+D goes to the desktop and back from any view.
+  Ctrl+Shift+D goes to the desktop and back from any view; the
+  desktop's bar switches the view.
 - `desktop`: `xfce` (default) or `none`: what `mynx desktop start`
   runs on the X server; `none` is the server alone.
 - `desktop-touch`: `touchpad` (default) or `direct`: a finger moves

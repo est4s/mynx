@@ -31,6 +31,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import io.github.est4s.terminal.core.AppView
 import io.github.est4s.terminal.core.DESKTOP_DISPLAY
 import io.github.est4s.terminal.core.DesktopGeometry
 import io.github.est4s.terminal.core.DesktopGestures
@@ -41,6 +42,7 @@ import io.github.est4s.terminal.core.Finger
 import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.StripColors
+import io.github.est4s.terminal.core.VIEW_SWITCHER
 import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.desktopGestures
 import io.github.est4s.terminal.core.desktopNotice
@@ -59,7 +61,7 @@ private const val DEFAULT_FRAMERATE = 60
 /**
  * Desktop mode's view (`view = desktop`, or Ctrl+Shift+D): the X
  * server's screen, which the server draws into our SurfaceView, below a
- * bar of our own (back to the tabs, the soft keyboard, the log) and above
+ * bar of our own (the view switcher, the soft keyboard, the log) and above
  * the desktop's key bar, so nothing of ours covers it. Touches go
  * through core's gestures (`desktop-touch`), keys through its keyboard.
  * While the soft keyboard is up the X screen keeps its size: the screen
@@ -86,8 +88,10 @@ class DesktopView(
         fun logs(): String
         /** The `desktop-touch` setting. */
         fun touch(): DesktopTouch
-        /** Back to the terminal and its tabs. */
-        fun showTabs()
+        /** The `view` setting: the switcher marks it. */
+        fun view(): AppView
+        /** The switcher's [view] was picked (a tap, or Ctrl+Shift+1, 2, 3). */
+        fun switchTo(view: AppView)
         /** A tab that installs what the desktop needs (`mynx desktop install`), shown. */
         fun install()
     }
@@ -118,13 +122,19 @@ class DesktopView(
         setSingleLine(true)
         ellipsize = TextUtils.TruncateAt.END
     }
-    private val tabsButton = barText("☰ Tabs").apply { setOnClickListener { host.showTabs() } }
+    // The view switcher: the `view` setting's view marked.
+    private val switcher = VIEW_SWITCHER.map { (view, label) ->
+        view to barText(label).apply {
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setOnClickListener { host.switchTo(view) }
+        }
+    }
     private val keyboardButton = barText("⌨").apply { setOnClickListener { toggleKeyboard() } }
     private val logButton = barText("Log").apply { setOnClickListener { toggleLog() } }
     private val topBar = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(tabsButton)
+        for ((_, button) in switcher) addView(button)
         addView(statusText, LayoutParams(0, WRAP_CONTENT, 1f))
         addView(keyboardButton)
         addView(logButton)
@@ -191,7 +201,8 @@ class DesktopView(
         set(value) {
             field = value ?: return
             topBar.setBackgroundColor(value.background)
-            for (b in listOf(tabsButton, keyboardButton, logButton)) b.setTextColor(value.accent)
+            for (b in listOf(keyboardButton, logButton)) b.setTextColor(value.accent)
+            markView()
             statusText.setTextColor(value.text)
             for (b in listOf(startButton, installButton)) {
                 b.setTextColor(value.accent)
@@ -294,8 +305,20 @@ class DesktopView(
         super.onDetachedFromWindow()
     }
 
+    /** Marks the `view` setting's view on the switcher. */
+    fun markView() {
+        val c = colors ?: return
+        val current = host.view()
+        for ((view, button) in switcher) {
+            val on = view == current
+            button.setTextColor(if (on) c.text else c.accent)
+            button.setBackgroundColor(if (on) c.selectedBackground else Color.TRANSPARENT)
+        }
+    }
+
     /** Shows what's going on: the screen, or a notice saying why there's none. */
     fun refresh() {
+        markView()
         val connected = host.link?.connected == true
         val status = host.status()
         val shown = desktopNotice(connected, status, starting, error)
