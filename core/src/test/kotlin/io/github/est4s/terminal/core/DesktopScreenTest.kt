@@ -161,3 +161,37 @@ class DesktopNoticeTest {
         assertFalse(desktopStartsOnOpen(connected = false, status = null))
     }
 }
+
+class DesktopLogsTest {
+    private val rootfs = kotlin.io.path.createTempDirectory("desktop-logs").toFile()
+
+    @kotlin.test.AfterTest
+    fun cleanup() {
+        rootfs.deleteRecursively()
+    }
+
+    private fun write(path: String, text: String) =
+        java.io.File(rootfs, path.removePrefix("/")).apply { parentFile.mkdirs() }.writeText(text)
+
+    @Test
+    fun `the view's log is the link's, then the server's and the session's logs`() {
+        write(X11_LOG, "server line\n")
+        write(DESKTOP_SESSION_LOG, "session line\n")
+        assertEquals(
+            "12:00:00 connected\n\n$X11_LOG:\nserver line\n\n\n$DESKTOP_SESSION_LOG:\nsession line\n",
+            desktopLogs(rootfs, "12:00:00 connected"),
+        )
+    }
+
+    @Test
+    fun `a missing log is left out`() {
+        write(X11_LOG, "server line\n")
+        assertEquals("\n\n$X11_LOG:\nserver line\n", desktopLogs(rootfs, ""))
+    }
+
+    @Test
+    fun `a long log shows its end, from a line's start`() {
+        write(X11_LOG, "first\n" + "x".repeat(10) + "\nlast\n")
+        assertEquals("\n\n$X11_LOG:\nlast\n", desktopLogs(rootfs, "", tail = 8))
+    }
+}

@@ -1,5 +1,6 @@
 package io.github.est4s.terminal.core
 
+import java.io.File
 import kotlin.math.roundToInt
 
 // The X server's modes come in widths of 8 (libxcvt's granularity).
@@ -98,3 +99,17 @@ fun desktopNotice(connected: Boolean, status: DesktopStatus?, starting: Boolean,
 /** Opening the desktop starts it when nothing runs and nothing it needs is missing. */
 fun desktopStartsOnOpen(connected: Boolean, status: DesktopStatus?): Boolean =
     !connected && status != null && !status.running && status.problem == null
+
+/**
+ * The log the desktop's view shows (we can't read logcat): the link's
+ * [linkLog], then the last [tail] bytes of the X server's and the
+ * session's logs in the Debian at [rootfs], each from a line's start.
+ */
+fun desktopLogs(rootfs: File, linkLog: String, tail: Int = 8192): String = buildString {
+    append(linkLog)
+    for (path in listOf(X11_LOG, DESKTOP_SESSION_LOG)) {
+        val bytes = runCatching { File(rootfs, path.removePrefix("/")).readBytes() }.getOrNull() ?: continue
+        val text = if (bytes.size <= tail) String(bytes) else String(bytes, bytes.size - tail, tail).substringAfter('\n')
+        append("\n\n").append(path).append(":\n").append(text)
+    }
+}
