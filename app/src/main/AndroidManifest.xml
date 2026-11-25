@@ -100,6 +100,21 @@
             android:autoRemoveFromRecents="true"
             android:exported="false" />
 
+        <!-- SPIKE (throwaway, never merged): stream a mynx screen to a second phone.
+             Opened from the launcher shortcuts "Screen spike: host" / "Screen spike: show". -->
+        <activity
+            android:name=".ScreenSpikeHostActivity"
+            android:label="Screen spike: host"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+        <activity
+            android:name=".ScreenSpikeShowActivity"
+            android:label="Screen spike: show"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="false" />
+
         <!-- Chat's pictures full screen. -->
         <activity
             android:name=".ImageViewActivity"

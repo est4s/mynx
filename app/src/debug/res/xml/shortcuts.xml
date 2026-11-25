@@ -12,4 +12,26 @@
             android:targetPackage="io.github.est4s.terminal.dev"
             android:targetClass="io.github.est4s.terminal.MainActivity" />
     </shortcut>
+    <!-- SPIKE (throwaway): the extended screen's streaming test. -->
+    <shortcut
+        android:shortcutId="spike_host"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_spike_host">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="io.github.est4s.terminal.dev"
+            android:targetClass="io.github.est4s.terminal.ScreenSpikeHostActivity" />
+    </shortcut>
+    <!-- SPIKE (throwaway): the extended screen's streaming test. -->
+    <shortcut
+        android:shortcutId="spike_show"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_spike_show">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="io.github.est4s.terminal.dev"
+            android:targetClass="io.github.est4s.terminal.ScreenSpikeShowActivity" />
+    </shortcut>
 </shortcuts>
