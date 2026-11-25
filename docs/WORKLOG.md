@@ -36,18 +36,10 @@ a PR into `desktop-dev`.
    the view (touchpad, keys, keyboard pan, rotation, no stale picture
    on reopening), Debian's side (XFCE install and start, fonts,
    sound, Firefox), the abstract socket refused, About.
-3. **Built, not tried on the phone: PR #114 `desktop-touch-clipboard`**
-   (entry 220, into `desktop-dev`): the clipboard both ways (text).
-   Direct touch as a touchscreen and the view switcher were built
-   too, then rolled back (maintainer's decision, 2026-11-25); they're
-   on branch `desktop-touch-clipboard-full` if wanted again. To check,
-   in mynx dev (XFCE installed): copy text in XFCE's terminal
-   (Ctrl+Shift+C) or Mousepad (Ctrl+C), leave the app, paste in
-   another app: it's there. Copy in another app, come back to the
-   desktop, Ctrl+V in Mousepad (or Ctrl+Shift+V in the terminal): it
-   pastes. Copy again in X: Android's clipboard follows each time,
-   with no repeat or loop. Non-ASCII text (`ä ✓ 日本`) both ways.
-   If anything's off: Log.
+3. **Clipboard: passed on the phone** (PR #114, entry 220). Direct
+   touch as a touchscreen and the view switcher were built and rolled
+   back (maintainer's decision, 2026-11-25); they're on branch
+   `desktop-touch-clipboard-full` if wanted again.
 4. **Then, what's left:** start the X server and session again if
    either dies (now the notice offers Start); a desktop entry on touch
    mode's Home (now Ctrl+Shift+D and ▣ only); an external display
@@ -102,8 +94,7 @@ a PR into `desktop-dev`.
 ### 2026-11-25 (220): Desktop mode: the clipboard
 
 - PR #114, branch `desktop-touch-clipboard` from `desktop-dev`. Core
-  tested here; the app's side only compiled in CI. Not tried on the
-  phone: "Next" 0.3 has the test.
+  tested here; the app's side only compiled in CI.
 - **Built, then rolled back** (maintainer's decision, 2026-11-25,
   before trying them): direct touch as a phone's touchscreen (drag
   scrolls with fling, long press right-clicks or drags, pinch zooms
@@ -122,7 +113,8 @@ a PR into `desktop-dev`.
   overwrites Android's clipboard). Limits: 64 KiB to X (the server
   reads it with one `read()`), 256 KiB from X (binder). Android's
   text goes to X when the desktop has the focus (Android 10+).
-- **On the phone** (maintainer, 2026-11-25): `ä` and `✓` pasted
+- **Passed on the phone** (maintainer, 2026-11-25): copying both
+  ways, no repeats. `ä` and `✓` pasted
   into XFCE's terminal, `日本` showed as boxes: no CJK font in a bare
   Debian, so the guide names `fonts-noto-cjk` (not in `mynx desktop
   install`: ~50 MB).
