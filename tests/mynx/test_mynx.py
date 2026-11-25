@@ -3236,7 +3236,8 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
     def desktop_status(self, **fields):
         """The app's desktop-* answer: nothing running, unless [fields] say."""
         answer = {"ok": True, "running": False, "display": None, "session": "xfce", "sessionRunning": False,
-                  "socket": os.path.join(self.tmp.name, "X0"), "log": "/tmp/.mynx/desktop/x11.log", "problem": None}
+                  "socket": os.path.join(self.tmp.name, "X0"), "log": "/tmp/.mynx/desktop/x11.log", "problem": None,
+                  "install": []}
         answer.update(fields)
         if answer["running"]:
             answer["display"] = ":0"
@@ -3335,7 +3336,43 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("desktop", "stop")
         self.assertEqual(run.stdout, "Desktop: not running\n")
 
+    def desktop_install(self, *args, missing, stdin="", apt="echo ran apt-get $*"):
+        self.start_app({"desktop-status": self.desktop_status(install=missing)})
+        path = self.fake_commands(**{"apt-get": apt})
+        return self.mynx("desktop", "install", *args, input=stdin, env={"PATH": path})
+
+    def test_desktop_install_shows_the_commands_and_asks_first(self):
+        run = self.desktop_install(missing=["xfce4", "dbus-x11"], stdin="n\n")
+        before, after = run.stdout.split("Run it?")
+        self.assertIn("Installing what the desktop (XFCE) needs runs:", before)
+        self.assertIn("  apt-get update\n  apt-get install -y --no-install-recommends xfce4 dbus-x11\n", before)
+        self.assertNotIn("ran apt-get", run.stdout)
+        self.assertIn("Not installed.", after)
+        self.assertEqual(run.returncode, 1)
+        self.assertEqual(self.app.seen, ["desktop-status"])
+
+    def test_desktop_install_installs_what_the_app_says_is_missing(self):
+        run = self.desktop_install("--yes", missing=["xkb-data", "xfce4"])
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        self.assertIn("ran apt-get update", run.stdout)
+        self.assertIn("ran apt-get install -y --no-install-recommends xkb-data xfce4", run.stdout)
+        self.assertIn("Desktop: installed. mynx desktop start starts it", run.stdout)
+
+    def test_desktop_install_with_nothing_missing_changes_nothing(self):
+        run = self.desktop_install(missing=[])
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Desktop: everything it needs (XFCE) is installed\n")
+
+    def test_desktop_install_stops_when_apt_fails(self):
+        run = self.desktop_install("--yes", missing=["xfce4"], apt="exit 100")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("'apt-get update' failed (exit 100)", run.stderr)
+
     def test_desktop_usage(self):
+        for args in (["install", "--now"], ["install", "--json"], ["start", "now"]):
+            run = self.mynx("desktop", *args)
+            self.assertEqual(run.returncode, 2, args)
+            self.assertIn("usage: mynx desktop [status] | start | stop | install [--yes]", run.stderr + run.stdout)
         run = self.mynx("desktop", "begin")
         self.assertEqual(run.returncode, 2)
         self.assertIn("usage: mynx desktop [status] | start | stop", run.stderr)

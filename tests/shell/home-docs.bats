@@ -401,7 +401,15 @@ setup() {
 @test "the guide explains desktop mode: the commands, DISPLAY, the logs, installing XFCE" {
     for text in "mynx desktop start" "mynx desktop stop" "DISPLAY=:0" "export DISPLAY=:0" \
         "/tmp/.X11-unix/X0" "/tmp/.mynx/desktop/x11.log" "/tmp/.mynx/desktop/session.log" \
-        "apt install xfce4" "xkb-data" "Xvfb :0"; do
+        "mynx desktop install" "xkb-data" "Xvfb :0"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}
+
+@test "the guide explains the desktop's Debian side: fonts, sound, Firefox" {
+    grep -qF 'mynx desktop` | desktop mode: `start`, `stop`, `status`, `install`' "$CORE"
+    for text in "--no-install-recommends" "xfonts-base" "xset fp rehash" "PULSE_SERVER" \
+        "firefox-esr" "MOZ_FAKE_NO_SANDBOX=1" "/dev/shm"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done
 }
