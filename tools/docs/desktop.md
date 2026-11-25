@@ -93,7 +93,9 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   on it (Android lets an app read the clipboard only while it's in
   front). Up to 64 KB goes to the desktop (longer text is cut), up to
   256 KB comes from it (longer isn't copied; Log says so). A
-  selection's middle-click paste stays X's own.
+  selection's middle-click paste stays X's own. Text in a script
+  Debian has no font for (Chinese, Japanese, Korean) shows as boxes:
+  `apt install fonts-noto-cjk` (about 50 MB), then reopen the program.
 - **A mouse** (USB or Bluetooth) points and clicks as on a computer,
   its wheel scrolls.
 - **Keys:** a hardware keyboard's keys go to the X server as they

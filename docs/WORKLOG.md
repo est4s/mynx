@@ -122,6 +122,10 @@ a PR into `desktop-dev`.
   overwrites Android's clipboard). Limits: 64 KiB to X (the server
   reads it with one `read()`), 256 KiB from X (binder). Android's
   text goes to X when the desktop has the focus (Android 10+).
+- **On the phone** (maintainer, 2026-11-25): `ä` and `✓` pasted
+  into XFCE's terminal, `日本` showed as boxes: no CJK font in a bare
+  Debian, so the guide names `fonts-noto-cjk` (not in `mynx desktop
+  install`: ~50 MB).
 - **Decisions to confirm (maintainer's):** the limits; CLIPBOARD
   only; Android's text sent to X at once on coming back (the server
   holds a copy), not only when X pastes.
