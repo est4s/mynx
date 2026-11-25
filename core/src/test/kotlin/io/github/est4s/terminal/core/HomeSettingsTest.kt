@@ -44,6 +44,7 @@ class HomeSettingsTest {
                 HomeItem("Default apps", HomeAction.Menu("settings:apps")),
                 HomeItem("Terminal", HomeAction.Menu("settings:terminal")),
                 HomeItem("Desktop", HomeAction.Menu("settings:desktop")),
+                HomeItem("Second screen", HomeAction.Menu("settings:screen")),
                 HomeItem("Phone access", HomeAction.Menu("settings:phone")),
                 HomeItem("Background", HomeAction.Menu("settings:background")),
                 HomeItem("Undo", HomeAction.Menu("undo")),
@@ -111,6 +112,16 @@ class HomeSettingsTest {
         assertEquals(listOf("View", "Theme"), look.map { it.label })
         assertEquals("Touch", look[0].detail)
         assertEquals(HomeItem("Theme", HomeAction.Menu("themes"), detail = "neon"), look[1])
+    }
+
+    @Test
+    fun `second screen has hosting, the port and where the screen sits`() {
+        settings("screen-place = left\n")
+        val screen = items("settings:screen")
+        assertEquals(listOf("Take paired screens", "Port", "Screen sits"), screen.map { it.label })
+        assertEquals(listOf("While paired", "7391", "Left"), screen.map { it.detail })
+        assertEquals(listOf("While paired", "Never"), items("setting:screen-host").drop(1).map { it.label })
+        assertEquals(listOf("Left", "Right", "Above", "Below"), items("setting:screen-place").drop(1).map { it.label })
     }
 
     @Test
