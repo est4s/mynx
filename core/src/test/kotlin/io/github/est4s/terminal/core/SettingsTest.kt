@@ -232,14 +232,26 @@ class SettingsTest {
     }
 
     @Test
-    fun `the view is the terminal by default and can be touch or desktop`() {
+    fun `the view is the terminal by default, or touch`() {
         assertEquals(AppView.TERMINAL, Settings().view)
         assertEquals("terminal", SETTINGS.single { it.key == "view" }.default)
-        assertEquals(listOf("terminal", "touch", "desktop"), SETTINGS.single { it.key == "view" }.choices)
+        assertEquals(listOf("terminal", "touch"), SETTINGS.single { it.key == "view" }.choices)
         assertEquals(AppView.TOUCH, parseSettings("view = touch\n").settings.view)
-        val parsed = parseSettings("view = desktop\nview = phone\n")
-        assertEquals(AppView.DESKTOP, parsed.settings.view)
-        assertEquals(listOf("line 2: view must be one of: terminal, touch, desktop"), parsed.problems)
+        val parsed = parseSettings("view = touch\nview = phone\n")
+        assertEquals(AppView.TOUCH, parsed.settings.view)
+        assertEquals(listOf("line 2: view must be one of: terminal, touch"), parsed.problems)
+    }
+
+    @Test
+    fun `a view of desktop, from before the desktop opened from either view, is the terminal, and says why`() {
+        val parsed = parseSettings("view = desktop\n")
+        assertEquals(AppView.TERMINAL, parsed.settings.view)
+        assertEquals(
+            listOf("line 1: view = desktop is gone: the desktop now opens from either view " +
+                "(Linux desktop in the menu, or mynx desktop open), so the terminal shows; set terminal or touch"),
+            parsed.problems,
+        )
+        assertTrue(setSetting(null, "view", "desktop").isFailure)
     }
 
     @Test

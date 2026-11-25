@@ -41,7 +41,7 @@ data class Settings(
     val serialPreload: Boolean = true,
     /** Whether USB serial ports also get the names Linux tools look for, in a `/dev` of Debian's own (new tabs and services). */
     val serialNames: Boolean = true,
-    /** What the app shows: the terminal, touch mode's Home, or the desktop. */
+    /** What the app shows: the terminal, or touch mode's Home. The desktop opens from either. */
     val view: AppView = AppView.TERMINAL,
     /** The session `mynx desktop start` starts on the X server. */
     val desktop: DesktopSession = DesktopSession.XFCE,
@@ -100,7 +100,7 @@ data class Settings(
 }
 
 /** The `view` setting: what the app shows. */
-enum class AppView(val word: String) { TERMINAL("terminal"), TOUCH("touch"), DESKTOP("desktop") }
+enum class AppView(val word: String) { TERMINAL("terminal"), TOUCH("touch") }
 
 /** The `desktop` setting: what runs on the X server (see Desktop.kt). */
 enum class DesktopSession(val word: String) {
@@ -139,6 +139,9 @@ const val MIN_FONT_SIZE = 6
 const val MAX_FONT_SIZE = 40
 const val MAX_AGENT_NOTIFY_AFTER = 3600
 const val MAX_UNDO_KEEP = 20
+
+internal const val VIEW_DESKTOP_GONE = "view = desktop is gone: the desktop now opens from either view " +
+    "(Linux desktop in the menu, or mynx desktop open), so the terminal shows; set terminal or touch"
 
 private fun oneOf(key: String, choices: List<String>): (String) -> String? =
     { if (it in choices) null else "$key must be one of: ${choices.joinToString(", ")}" }
@@ -274,9 +277,10 @@ val SETTINGS: List<SettingDef> = listOf(
         { copy(serialNames = it == "on") },
     ),
     SettingDef(
-        "view", "What the app shows when it starts: the terminal, touch mode's Home (lists to tap), or the desktop (mynx desktop).",
+        "view", "What the app shows when it starts: the terminal, or touch mode's Home (lists to tap). The desktop opens from either (mynx desktop open).",
         "terminal", AppView.entries.map { it.word },
-        oneOf("view", AppView.entries.map { it.word }),
+        // `desktop` was a view in desktop-dev's builds: the default instead, saying why.
+        { if (it == "desktop") VIEW_DESKTOP_GONE else oneOf("view", AppView.entries.map { it.word })(it) },
         { v -> copy(view = AppView.entries.first { it.word == v }) },
     ),
     SettingDef(
