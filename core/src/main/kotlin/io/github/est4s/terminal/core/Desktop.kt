@@ -96,12 +96,16 @@ interface DesktopHost {
     fun stopSession()
 }
 
-/** What `mynx desktop status` reports. [problem] is why it can't start, with how to fix it. */
+/**
+ * What `mynx desktop status` reports. [problem] is why it can't start,
+ * with how to fix it; [install] the [desktopPackages] not installed.
+ */
 data class DesktopStatus(
     val running: Boolean,
     val session: DesktopSession,
     val sessionRunning: Boolean,
     val problem: String?,
+    val install: List<String> = emptyList(),
 ) {
     val display: String? get() = DESKTOP_DISPLAY.takeIf { running }
 
@@ -113,8 +117,34 @@ data class DesktopStatus(
         "socket" to json(X11_SOCKET),
         "log" to json(X11_LOG),
         "problem" to (problem?.let(::json) ?: "null"),
+        "install" to array(install.map(::json)),
     )
 }
+
+/**
+ * The Debian packages [session] needs (`mynx desktop install` installs
+ * them without their recommends: xfce4's would bring Xorg's own server).
+ * xkb-data for the X server's keyboard, xfonts-base for programs that
+ * draw with the server's fonts (xterm); for XFCE a terminal, dbus-launch
+ * for its session bus, and the icons its default theme names.
+ */
+fun desktopPackages(session: DesktopSession): List<String> = listOf("xkb-data", "xfonts-base") + when (session) {
+    DesktopSession.NONE -> emptyList()
+    DesktopSession.XFCE -> listOf("xfce4", "xfce4-terminal", "dbus-x11", "tango-icon-theme")
+}
+
+/** The packages dpkg lists as installed in the Debian at [rootfs]. */
+fun installedPackages(rootfs: File): Set<String> {
+    val text = runCatching { File(rootfs, "var/lib/dpkg/status").readText() }.getOrNull() ?: return emptySet()
+    return text.split(Regex("\n\n+")).mapNotNull { block ->
+        val fields = block.lines()
+        val name = fields.firstOrNull { it.startsWith("Package: ") }?.removePrefix("Package: ")?.trim()
+        name.takeIf { fields.any { it.startsWith("Status: ") && it.trim().endsWith(" installed") } }
+    }.toSet()
+}
+
+/** The tab the desktop's Install opens: `mynx desktop install`, then a shell. */
+val DESKTOP_INSTALL_TAB_COMMAND: List<String> = runThenShell("mynx desktop install")
 
 /**
  * Desktop mode's X server and session, for the Debian at [rootfs]
@@ -142,16 +172,22 @@ class Desktop(
 
     fun status(): DesktopStatus {
         val session = session()
-        return DesktopStatus(host.serverRunning(), session, host.sessionRunning(), problem(session))
+        val installed = installedPackages(rootfs)
+        return DesktopStatus(
+            host.serverRunning(), session, host.sessionRunning(), problem(session),
+            desktopPackages(session).filter { it !in installed },
+        )
     }
 
     // What stops a start, and how to fix it.
     private fun problem(session: DesktopSession): String? = when {
         host.server == null -> "this build of mynx has no X server yet"
-        !File(rootfs, XKB.removePrefix("/")).isDirectory -> "the X server needs Debian's keyboard layouts: apt install xkb-data"
+        !File(rootfs, XKB.removePrefix("/")).isDirectory ->
+            "the X server needs Debian's keyboard layouts (xkb-data): mynx desktop install installs them"
         session == DesktopSession.XFCE && !present("/usr/bin/startxfce4") ->
-            "XFCE isn't installed: apt install xfce4 dbus-x11 installs it (or mynx set desktop none runs the X server alone)"
-        session == DesktopSession.XFCE && !present("/usr/bin/dbus-launch") -> "XFCE needs dbus-launch: apt install dbus-x11"
+            "XFCE isn't installed: mynx desktop install installs it (or mynx set desktop none runs the X server alone)"
+        session == DesktopSession.XFCE && !present("/usr/bin/dbus-launch") ->
+            "XFCE needs dbus-launch (dbus-x11): mynx desktop install installs it"
         else -> null
     }
 

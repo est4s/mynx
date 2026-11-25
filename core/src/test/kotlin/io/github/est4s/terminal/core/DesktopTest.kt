@@ -79,7 +79,19 @@ class DesktopTest {
         if (path.endsWith("/")) file.mkdirs() else file.writeText("")
     }
 
-    private fun installXfce() = install("usr/share/X11/xkb/", "usr/bin/startxfce4", "usr/bin/dbus-launch")
+    private fun installXfce() {
+        install("usr/share/X11/xkb/", "usr/bin/startxfce4", "usr/bin/dbus-launch")
+        dpkg(*desktopPackages(DesktopSession.XFCE).toTypedArray())
+    }
+
+    // dpkg's list of what's installed, as in /var/lib/dpkg/status.
+    private fun dpkg(vararg installed: String, removed: List<String> = emptyList()) {
+        install("var/lib/dpkg/status")
+        File(rootfs, "var/lib/dpkg/status").writeText(
+            (installed.map { it to "install ok installed" } + removed.map { it to "deinstall ok config-files" })
+                .joinToString("\n") { (name, status) -> "Package: $name\nStatus: $status\nVersion: 1\n" },
+        )
+    }
 
     private fun settings(text: String) {
         File(home, ".config/mynx").mkdirs()
@@ -147,7 +159,7 @@ class DesktopTest {
 
         assertEquals(
             """{"ok":true,"started":true,"running":true,"display":":0","session":"xfce","sessionRunning":true,""" +
-                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null}""",
+                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null,"install":[]}""",
             answer,
         )
         assertEquals(listOf("server", "session"), host.events)
@@ -189,25 +201,56 @@ class DesktopTest {
         host.server = null
 
         assertEquals("""{"ok":false,"error":"this build of mynx has no X server yet"}""", ask("desktop-start"))
-        assertTrue(ask("desktop-status").endsWith(""""problem":"this build of mynx has no X server yet"}"""))
+        assertTrue(ask("desktop-status").endsWith(""""problem":"this build of mynx has no X server yet","install":[]}"""))
         assertEquals(emptyList(), host.events)
     }
 
     @Test
     fun `says how to install what's missing`() {
         assertEquals(
-            """{"ok":false,"error":"the X server needs Debian's keyboard layouts: apt install xkb-data"}""",
+            """{"ok":false,"error":"the X server needs Debian's keyboard layouts (xkb-data): mynx desktop install installs them"}""",
             ask("desktop-start"),
         )
         install("usr/share/X11/xkb/")
         assertEquals(
-            """{"ok":false,"error":"XFCE isn't installed: apt install xfce4 dbus-x11 installs it (or mynx set desktop none runs the X server alone)"}""",
+            """{"ok":false,"error":"XFCE isn't installed: mynx desktop install installs it (or mynx set desktop none runs the X server alone)"}""",
             ask("desktop-start"),
         )
         install("usr/bin/startxfce4")
-        assertEquals("""{"ok":false,"error":"XFCE needs dbus-launch: apt install dbus-x11"}""", ask("desktop-start"))
+        assertEquals(
+            """{"ok":false,"error":"XFCE needs dbus-launch (dbus-x11): mynx desktop install installs it"}""",
+            ask("desktop-start"),
+        )
         settings("desktop = none\n")
         assertTrue(ask("desktop-start").startsWith("""{"ok":true"""))
+    }
+
+    @Test
+    fun `XFCE takes a small set of Debian's packages, without their recommends`() {
+        assertEquals(listOf("xkb-data", "xfonts-base"), desktopPackages(DesktopSession.NONE))
+        assertEquals(
+            listOf("xkb-data", "xfonts-base", "xfce4", "xfce4-terminal", "dbus-x11", "tango-icon-theme"),
+            desktopPackages(DesktopSession.XFCE),
+        )
+    }
+
+    @Test
+    fun `status lists the session's packages dpkg hasn't installed`() {
+        dpkg("xkb-data", "xfce4-terminal", removed = listOf("xfce4"))
+
+        val status = desktop.status()
+
+        assertEquals(listOf("xfonts-base", "xfce4", "dbus-x11", "tango-icon-theme"), status.install)
+        assertTrue(ask("desktop-status").endsWith(""""install":["xfonts-base","xfce4","dbus-x11","tango-icon-theme"]}"""))
+        settings("desktop = none\n")
+        assertEquals(listOf("xfonts-base"), desktop.status().install)
+        File(rootfs, "var/lib/dpkg/status").delete()
+        assertEquals(listOf("xkb-data", "xfonts-base"), desktop.status().install)
+    }
+
+    @Test
+    fun `the tab that installs the desktop runs mynx desktop install, then a shell`() {
+        assertEquals(runThenShell("mynx desktop install"), DESKTOP_INSTALL_TAB_COMMAND)
     }
 
     @Test
@@ -224,7 +267,7 @@ class DesktopTest {
         installXfce()
         assertEquals(
             """{"ok":true,"running":false,"display":null,"session":"xfce","sessionRunning":false,""" +
-                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null}""",
+                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null,"install":[]}""",
             ask("desktop-status"),
         )
         ask("desktop-start")

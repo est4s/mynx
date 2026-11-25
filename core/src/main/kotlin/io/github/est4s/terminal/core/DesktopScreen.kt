@@ -78,8 +78,8 @@ class DesktopSurface {
     }
 }
 
-/** What the desktop's view shows instead of its screen: [canStart] offers Start, [showLog] the logs under it. */
-data class DesktopNotice(val text: String, val canStart: Boolean, val showLog: Boolean)
+/** What the desktop's view shows instead of its screen: [canStart] offers Start, [showLog] the logs under it, [canInstall] Install (a tab with `mynx desktop install`). */
+data class DesktopNotice(val text: String, val canStart: Boolean, val showLog: Boolean, val canInstall: Boolean = false)
 
 /**
  * The notice over the desktop's screen, null when the X server is
@@ -92,6 +92,7 @@ fun desktopNotice(connected: Boolean, status: DesktopStatus?, starting: Boolean,
     error != null -> DesktopNotice("The desktop didn't start: $error", canStart = true, showLog = true)
     starting -> DesktopNotice("Starting the desktop…", canStart = false, showLog = false)
     status.running -> DesktopNotice("Connecting to the X server…", canStart = false, showLog = true)
+    status.problem != null && status.install.isNotEmpty() -> DesktopNotice(status.problem, canStart = false, showLog = false, canInstall = true)
     status.problem != null -> DesktopNotice(status.problem, canStart = true, showLog = false)
     else -> DesktopNotice("The desktop isn't running.", canStart = true, showLog = false)
 }
