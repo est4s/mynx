@@ -22,6 +22,9 @@ private const val EVENT_SCREEN_SIZE = 4
 private const val EVENT_MOUSE = 6
 private const val EVENT_KEY = 7
 private const val EVENT_UNICODE = 10
+private const val EVENT_CLIPBOARD_ENABLE = 11
+private const val EVENT_CLIPBOARD_ANNOUNCE = 12
+internal const val EVENT_CLIPBOARD_SEND = 14
 private const val EVENT_SIZE = 24
 private const val MOUSE_SCROLL = 4
 private const val SCROLL_UNITS = 120
@@ -67,6 +70,33 @@ sealed interface X11Input {
     data class Unicode(val codePoint: Int) : X11Input {
         override fun encode() = event(EVENT_UNICODE) { putInt(4, codePoint) }
     }
+
+    /** Clipboard sync on or off: off, the server neither tells us of X's clipboard nor takes ours. */
+    data class ClipboardEnable(val enable: Boolean) : X11Input {
+        override fun encode() = event(EVENT_CLIPBOARD_ENABLE) { put(1, if (enable) 1 else 0) }
+    }
+
+    /** Android's clipboard changed: the server takes X's CLIPBOARD for it. */
+    data object ClipboardAnnounce : X11Input {
+        override fun encode() = event(EVENT_CLIPBOARD_ANNOUNCE) {}
+    }
+
+    /** Android's clipboard [text] (UTF-8, at most [limit] bytes, cut at a character), after its event. */
+    data class ClipboardText(val text: String, val limit: Int = CLIPBOARD_TO_X_MAX) : X11Input {
+        override fun encode(): ByteArray {
+            val bytes = utf8Prefix(text, limit)
+            return event(EVENT_CLIPBOARD_SEND) { putInt(4, bytes.size) } + bytes
+        }
+    }
+}
+
+// The UTF-8 of [text], cut to at most [limit] bytes where a character starts.
+private fun utf8Prefix(text: String, limit: Int): ByteArray {
+    val bytes = text.toByteArray(Charsets.UTF_8)
+    if (bytes.size <= limit) return bytes
+    var end = limit
+    while (end > 0 && (bytes[end].toInt() and 0xC0) == 0x80) end--
+    return bytes.copyOf(end)
 }
 
 private fun event(type: Int, fill: ByteBuffer.() -> Unit): ByteArray {

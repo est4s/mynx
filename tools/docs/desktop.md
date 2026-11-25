@@ -86,6 +86,16 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   touch. A tap clicks there, a finger that moves drags from where it
   went down, a long press is a right click, and two fingers scroll
   or, tapped, right-click. Changes apply when the desktop next shows.
+- **The clipboard** is shared, text only: what a program on the
+  desktop copies (to X's clipboard, as Ctrl+C or a Copy menu does, not
+  a mere selection) is on the phone's clipboard, and what you copy in
+  another app pastes on the desktop (Ctrl+V or Paste) once you're back
+  on it (Android lets an app read the clipboard only while it's in
+  front). Up to 64 KB goes to the desktop (longer text is cut), up to
+  256 KB comes from it (longer isn't copied; Log says so). A
+  selection's middle-click paste stays X's own. Text in a script
+  Debian has no font for (Chinese, Japanese, Korean) shows as boxes:
+  `apt install fonts-noto-cjk` (about 50 MB), then reopen the program.
 - **A mouse** (USB or Bluetooth) points and clicks as on a computer,
   its wheel scrolls.
 - **Keys:** a hardware keyboard's keys go to the X server as they

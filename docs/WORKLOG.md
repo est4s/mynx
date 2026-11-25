@@ -30,85 +30,21 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 
 Plan (maintainer's, 2026-11-24; roadmap "Desktop mode"). Each step is
 a PR into `desktop-dev`.
-1. **Spike: done, it works** (entry 215; draft PR #108, never to be
-   merged, kept for reference). The rebuild must fix: a full redraw
-   on a new surface, the keyboard panning instead of resizing the X
-   screen, the screen starting below our own controls.
-2. **core: built** (entry 216, PR into `desktop-dev`): `view =
-   desktop`, `desktop = xfce | none`, `desktop-touch = touchpad |
-   direct`, `mynx desktop start | stop | status`, `DISPLAY=:0` in new
-   tabs. Not tried on the phone: it needs step 3's server in the APK
-   (until then `mynx desktop start` says "this build of mynx has no X
-   server yet"). To check once step 3 is in: `mynx desktop start`
-   with `xkb-data` (and `xfce4 dbus-x11`) installed, `xeyes &` in a new
-   tab, and that the server has no abstract socket: `python3 -c
-   "import socket; socket.socket(socket.AF_UNIX).connect('\0/tmp/.X11-unix/X0')"`
-   must fail with ConnectionRefusedError (if it connects, `-nolisten
-   local` is wrong for this server).
-3. **Build: built** (entry 217, PR `desktop-build` into
-   `desktop-dev`): `scripts/build-x11.sh` in both workflows (cached),
-   `COMPONENTS`, `X11-libraries.txt`, the source tarball on releases.
-   To check on the phone (with step 2's checks above): `mynx desktop
-   start` (with `mynx set desktop none` and `xkb-data`) says the
-   server runs; `echo $DISPLAY` in a new tab is `:0`; `xeyes &`
-   there keeps running (nothing shows until step 4); the abstract
-   socket check fails with ConnectionRefusedError; `mynx desktop
-   stop`; `mynx about` lists Termux:X11 and the X.Org libraries.
-   If the server doesn't start: `/tmp/.mynx/desktop/x11.log`.
-4. **View: built** (entry 218, PR #112 `desktop-view`, stacked on
-   #111 `desktop-build`; merge #111 first). Not tried on the phone.
-   To check (with step 3's checks), in mynx dev, `xkb-data` and
-   `mynx set desktop none` (or XFCE installed):
-   - `mynx set view desktop`: the desktop opens and starts itself; a
-     notice says why while there's no picture (missing package,
-     connecting, a failed start, with Start and the logs). With
-     `none`: `xeyes &` / `xterm &` in a tab (☰ Tabs, then ▣ or Back
-     to return) show on the desktop.
-   - Touchpad (default): one finger moves the arrow, tap clicks, two
-     quick taps double-click, two-finger tap right-clicks, three a
-     middle click, two fingers scroll (content follows), hold still
-     ½ s or tap-then-touch to drag. `mynx set desktop-touch direct`,
-     reopen the desktop: tap clicks where touched, move drags, long
-     press right-clicks.
-   - Keys: xterm types from the soft keyboard (⌨), Enter, Backspace;
-     the bar's Ctrl then `c` interrupts; a hardware keyboard types,
-     Ctrl+C works, Ctrl+Shift+D goes to the terminal and back.
-   - The soft keyboard doesn't resize the X screen (`xdpyinfo |
-     grep dimensions` before and after; the screen moves up so the
-     pointer stays visible); rotating does resize it.
-   - Home, then back; Back (leaves the app), then reopen: the
-     picture is current at once (no stale frame until a resize).
-   - The X screen never lies under the bar or the key bar.
-   - If anything's off: Log (top right) shows the link's lines and
-     the ends of `x11.log` and `session.log`.
-5. **Debian: built** (entry 219, PR `desktop-debian`, stacked on
-   #112 `desktop-view`; merge #111, then #112 first). Not tried on
-   the phone. To check (after step 4's), in mynx dev:
-   - With XFCE not installed and `desktop = xfce`: the desktop's
-     notice says "XFCE isn't installed: mynx desktop install …" with
-     **Install** (no Start); Install opens a tab running `mynx
-     desktop install`, which shows `apt-get install -y
-     --no-install-recommends …` and asks. Answer y; then ▣ (or
-     Ctrl+Shift+D): Start, and XFCE's panel and desktop show, with
-     Tango icons. `mynx desktop install` again: "everything it needs
-     (XFCE) is installed". `mynx desktop status --json` has
-     `"install":[]`.
-   - Fonts: `xterm &` from XFCE's terminal (or a tab with
-     `DISPLAY=:0`, after `apt install xterm`) opens without "cannot
-     load font"; `xset q | grep -A2 "Font Path"` (x11-xserver-utils)
-     shows `…/usr/share/fonts/X11/misc,…,built-ins`.
-   - Sound: in XFCE's terminal `echo $PULSE_SERVER` is
-     `unix:/tmp/.mynx/sound/native`; `paplay
-     /usr/share/sounds/alsa/Front_Center.wav` (alsa-utils' sounds)
-     plays on the phone; the panel's volume plugin shows the
-     device.
-   - Firefox (hypothesis): `apt install firefox-esr`, start it from
-     XFCE's menu: does it open and load a page? If not, run
-     `MOZ_CRASHREPORTER_DISABLE=1 firefox-esr` in XFCE's terminal
-     and report the last lines; then the tries in
-     `/opt/mynx/docs/desktop.md` ("Firefox").
-     `ls -ld /dev/shm` in a new tab is a folder.
-6. **Docs:** `tools/docs/desktop.md` (the view's part done in step 4, Debian's in step 5): a last pass once the phone has tried it.
+1. **Spike: done** (entry 215; draft PR #108, never to be merged).
+2. **Steps 2-5 passed on the phone** (Pixel 10, 2026-11-25, entries
+   216-219): settings and `mynx desktop`, the X server built in CI,
+   the view (touchpad, keys, keyboard pan, rotation, no stale picture
+   on reopening), Debian's side (XFCE install and start, fonts,
+   sound, Firefox), the abstract socket refused, About.
+3. **Clipboard: passed on the phone** (PR #114, entry 220). Direct
+   touch as a touchscreen and the view switcher were built and rolled
+   back (maintainer's decision, 2026-11-25); they're on branch
+   `desktop-touch-clipboard-full` if wanted again.
+4. **Then, what's left:** start the X server and session again if
+   either dies (now the notice offers Start); a desktop entry on touch
+   mode's Home (now Ctrl+Shift+D and ▣ only); an external display
+   (Android's desktop windowing) later; a last pass over
+   `tools/docs/desktop.md`; then merge `desktop-dev` into `main`.
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -155,8 +91,41 @@ a PR into `desktop-dev`.
 
 ## Log
 
+### 2026-11-25 (220): Desktop mode: the clipboard
+
+- PR #114, branch `desktop-touch-clipboard` from `desktop-dev`. Core
+  tested here; the app's side only compiled in CI.
+- **Built, then rolled back** (maintainer's decision, 2026-11-25,
+  before trying them): direct touch as a phone's touchscreen (drag
+  scrolls with fling, long press right-clicks or drags, pinch zooms
+  our view; and a fix for a touchpad drag that got a second finger
+  never releasing the button) and a view switcher on the desktop's
+  bar (Terminal, Touch, Desktop setting `view`; Back to the view the
+  desktop came from). Both are reverts on the PR; the full version
+  is branch `desktop-touch-clipboard-full`. Getting from the desktop
+  to touch view is still open.
+- **Clipboard** (Termux:X11 24ce207's protocol, `clipboard.c` and
+  `cmdentrypoint.cpp`): enable (11) per connection, which the server
+  needs (off by default, off again when a connection closes); X → us:
+  14 with a count and UTF-8 when a program takes CLIPBOARD; us → X:
+  announce (12), then 14 at once; requests (13) answered with the
+  same text. CLIPBOARD only (PRIMARY would mean every selection
+  overwrites Android's clipboard). Limits: 64 KiB to X (the server
+  reads it with one `read()`), 256 KiB from X (binder). Android's
+  text goes to X when the desktop has the focus (Android 10+).
+- **Passed on the phone** (maintainer, 2026-11-25): copying both
+  ways, no repeats. `ä` and `✓` pasted
+  into XFCE's terminal, `日本` showed as boxes: no CJK font in a bare
+  Debian, so the guide names `fonts-noto-cjk` (not in `mynx desktop
+  install`: ~50 MB).
+- **Decisions to confirm (maintainer's):** the limits; CLIPBOARD
+  only; Android's text sent to X at once on coming back (the server
+  holds a copy), not only when X pastes.
+
 ### 2026-11-25 (219): Desktop mode, step 5: Debian's side
 
+- **Passed on the phone** (Pixel 10, maintainer, 2026-11-25):
+  everything in its test, no issues.
 - Branch `desktop-debian` from `desktop-view` (PR into it). Core and
   `mynx` tested here; the app's Install button only compiled in CI.
 - **Installing:** `mynx desktop install [--yes]` (like `mynx sound
@@ -195,6 +164,9 @@ a PR into `desktop-dev`.
 
 ### 2026-11-25 (218): Desktop mode, step 4: the desktop view
 
+- **Passed on the phone** (Pixel 10, maintainer, 2026-11-25):
+  everything in its test, no issues; the maintainer liked that the
+  keyboard covers the bottom while the focused field stays above it.
 - Branch `desktop-view` from `desktop-build` (PR #112, base
   `desktop-build`). Rebuilt test-first from the spike: protocol,
   gestures, keys and layout logic in core (`X11Input.kt`,
@@ -236,6 +208,8 @@ a PR into `desktop-dev`.
 
 ### 2026-11-25 (217): Desktop mode, step 3: the X server built in CI
 
+- **Passed on the phone** (Pixel 10, maintainer, 2026-11-25):
+  everything in its test, no issues.
 - Branch `desktop-build` from `desktop-dev`, PR into it. The spike's
   build script and patch, reviewed: `scripts/build-x11.sh` now
   installs the NDK it pins itself and checks its version, fails if no

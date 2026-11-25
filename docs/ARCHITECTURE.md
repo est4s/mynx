@@ -567,7 +567,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   the `/usr/share/fonts/X11/*` folders with a `fonts.dir`, then
   `built-ins`; dix's `-fp` overrides the default it set). **Sound:**
   the session is a `debianLaunch`, so it has `PULSE_SERVER` as tabs do.
-  **Firefox** (not confirmed): every proot has `MOZ_FAKE_NO_SANDBOX=1`
+  **Firefox** (works, 2026-11-25): every proot has `MOZ_FAKE_NO_SANDBOX=1`
   and `MOZ_SHM_NO_SEALS=1`, and the own `/dev` a `shm` folder
   (`prepareOwnDev()`; glibc's `shm_open` failed with ENOENT), as
   proot-distro gives. No `--sysvipc`: SysV shm fails with ENOSYS, so
@@ -586,10 +586,30 @@ See `docs/ROADMAP.md` "How it works". The details:
   `getXConnection` gives takes 24-byte `lorieEvent`s
   (`X11Input.encode()`: screen size, absolute pointer, buttons,
   scroll at 120 a notch, keys as Linux code + 8, characters), and
-  what it sends back is drained unread (heartbeats; the shared-state
-  memfd, whose fd is dropped: we don't map it, so the renderer's own
-  keyboard pan, zoom and cursor surface aren't used, and the patch
-  stretches the screen over the whole surface). `DesktopView` (over
+  what it sends back is read by `X11Events` (the clipboard, below;
+  the rest unread: heartbeats, sync replies, the shared-state memfd,
+  whose event has one byte after it and whose fd is dropped: we don't
+  map it, so the renderer's own keyboard pan, zoom and cursor surface
+  aren't used, and the patch stretches the screen over the whole
+  surface). **The clipboard** (text, X's CLIPBOARD only, not PRIMARY;
+  core's `DesktopClipboard`): each connection first sends
+  `ClipboardEnable` (the server syncs nothing until asked, and turns
+  it off when a connection closes). When an X program takes CLIPBOARD
+  the server converts it (UTF8_STRING, else STRING) and sends event 14,
+  a byte count and the UTF-8; the link puts it on Android's clipboard
+  from the service (writing needs no focus), up to
+  `CLIPBOARD_FROM_X_MAX` (256 KiB: the binder call fails near 1 MB).
+  Android's text goes the other way when the view has the window's
+  focus (Android 10+ lets only the focused app read): on `shown()`,
+  `onWindowFocusChanged`, a new connection, and the
+  `OnPrimaryClipChangedListener` while shown. It's announced (event 12:
+  the server takes CLIPBOARD) and sent at once (event 14, which the
+  server caches for pastes); a request (event 13) still gets the same
+  text, or "" (an X program waits for an answer). The server reads our
+  text with one `read()`, so it's cut to `CLIPBOARD_TO_X_MAX` (64 KiB)
+  at a character's start and written with its event in one write.
+  No echo: each side gets only text the other doesn't have (`xHas`),
+  so X's text set on Android isn't announced back and vice versa. `DesktopView` (over
   everything in `MainActivity`'s root, shown by `showDesktop()`)
   lays the screen out between its own bar (☰ Tabs, ⌨, Log) and the
   `desktop` key bar; an X pixel is `desktopScale()` phone pixels
