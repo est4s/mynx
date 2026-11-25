@@ -481,6 +481,12 @@ on-device behaviour that can't be unit-tested gets an entry in the step's
   builds them and `desktop-dev` after a merge, like `main`. Merge
   `main` into it now and then; it goes into `main` in one PR when the
   maintainer says desktop mode is ready.
+- **`screen-dev`** (maintainer's decision, 2026-11-26): the extended
+  screen (a second phone running mynx as a screen of the first) is
+  built the same way on `screen-dev`, cut from `desktop-dev` (its
+  desktop part needs desktop mode): feature branches from it, PRs
+  into it (`--base screen-dev`). Merge `desktop-dev` into it now and
+  then.
 - **Docs before a merge** (maintainer's rule, 2026-10-20): never
   merge a branch without first updating the docs it makes stale (the
   work log's status and "Next", the roadmap, the README, this file),

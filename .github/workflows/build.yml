@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main, desktop-dev]
+    branches: [main, desktop-dev, screen-dev]
     paths-ignore: ["**.md"]
   pull_request:
     paths-ignore: ["**.md"]

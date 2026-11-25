@@ -84,25 +84,30 @@ IDE) on the phone, through **Termux:X11**, an X server for Android.
   in mynx's own classes.
 
 ### Extended screen
-Another Android phone (or tablet) next to the first one makes the
-screen bigger. Two ways, equally wanted; which comes first is decided
-later:
-- **One desktop across both** (desktop mode): the phones side by
-  side, the desktop's left half on one and its right half on the
-  other. Windows drag from one to the other and the pointer crosses
-  the edge, as with two monitors on a PC. The X server draws one wide
-  screen with two monitors (RandR), sized to the two displays, and
-  the second phone shows its half.
-- **A tab or a web app on the second phone**, while the first keeps
-  the rest. Terminal tabs travel as text (the terminal's output), not
-  pictures, so they stay sharp and light.
-- Both: the second phone runs mynx (or opens a page in its browser)
-  and pairs with the first over Wi-Fi (the same network or a
-  hotspot), by a code or QR code; perhaps USB later. Typing and touch
-  on either phone go to what it shows.
-- To check: how fast the second half of a desktop can be sent
-  (compressed frames of the changed areas over Wi-Fi), and lining the
-  halves up when the phones' screens differ in size or density.
+A second Android phone (or tablet) running mynx becomes a screen of
+the first (maintainer's plan, 2026-11-26). Phone A runs everything
+(Debian, agents, the desktop); phone B shows what A sends it and sends
+its touches back, using none of its own Debian.
+- **Pairing:** both phones run mynx; B pairs with A over Wi-Fi (the
+  same network or A's hotspot) with a code A shows, and the link is
+  encrypted with a key from that code. When pairing you choose where
+  B sits (left, right, above, below A), and can change it later.
+- **Touch mode:** B gets a Home of its own, where you open any chat,
+  app, game, viewer or terminal tab: it runs on A, shown on B, while
+  A shows something else. Any screen can be sent from one phone to
+  the other. Screens travel as video (A draws them on an off-screen
+  display of its own and streams it, H.264); terminal tabs travel as
+  text (the terminal's output), so they stay sharp (maintainer's
+  decision).
+- **Desktop mode:** B as an extended monitor first (the X server has
+  two monitors, RandR, sized and placed as the phones are, so XFCE
+  gives each its own panel), then optionally the second half of one
+  wide screen. The pointer crosses the edge; touch works on both.
+- **Keyboard:** only on A for now; typing goes to the screen touched
+  last, on either phone, which shows a mark (maintainer's decision).
+  Later maybe half a keyboard on each phone.
+- To check first, in spikes: the delay and bandwidth of streaming a
+  screen over Wi-Fi, and a second X output that can be streamed.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
