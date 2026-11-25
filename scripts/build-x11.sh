@@ -17,7 +17,7 @@
 #   scripts/build-x11.sh <out-dir>
 #
 # Needs ANDROID_HOME (android.jar, aidl, d8; sdkmanager installs the NDK
-# when ANDROID_NDK_HOME isn't set and it's missing), cmake, ninja, bison,
+# there when it's missing), cmake, ninja, bison,
 # python3, a host gcc, git, javac, xz.
 set -euo pipefail
 
@@ -29,7 +29,8 @@ out=$(realpath -m "${1:?usage: build-x11.sh <out-dir>}")
 repo=$(cd "$(dirname "$0")/.." && pwd)
 work=${X11_WORK:-$(mktemp -d)}
 sdk=${ANDROID_HOME:?set ANDROID_HOME}
-ndk=${ANDROID_NDK_HOME:-$sdk/ndk/$NDK_VERSION}
+# Not ANDROID_NDK_HOME: runners set it to their own NDK.
+ndk=$sdk/ndk/$NDK_VERSION
 if [[ ! -d $ndk ]]; then
     yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" >/dev/null
 fi
