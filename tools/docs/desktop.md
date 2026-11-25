@@ -59,12 +59,9 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 - **Getting there:** `mynx set view desktop` makes the desktop what
   the app opens on: Back on the terminal goes to it, Back on it leaves
   the app. From any view, Ctrl+Shift+D (a hardware keyboard) goes to
-  the desktop, and ▣ on the tab strip opens it (always in desktop
-  view, else while the X server runs); Back or Ctrl+Shift+D there go
-  back to where you came from (the terminal, or touch view's Home).
-- **The view switcher** (top left: Terminal, Touch, Desktop, the
-  `view` setting's marked) sets the `view` setting, as Settings' View
-  does, and shows that view; from a keyboard, Ctrl+Shift+1, 2 and 3.
+  the desktop and back, and ▣ on the tab strip opens it (always in
+  desktop view, else while the X server runs). On the desktop,
+  ☰ Tabs (top left) shows the terminal and its tabs.
 - **Starting:** opening the desktop starts it (as `mynx desktop
   start`) if nothing runs and nothing is missing. Otherwise it says
   why there's no picture: what to install, a start that failed, the
@@ -108,7 +105,7 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 - **Keys:** a hardware keyboard's keys go to the X server as they
   are (by key, not by character, so its layout is the server's: US
   unless you run `setxkbmap de` or another in Debian), Ctrl and Alt
-  chords too. Ctrl+Shift+D and Ctrl+Shift+1-3 stay the app's; Back and the volume
+  chords too. Ctrl+Shift+D stays the app's; Back and the volume
   keys stay the phone's, but a keyboard's Esc key is Esc. ⌨ (top
   right) shows the soft keyboard, which types characters (any
   language), Enter, Tab and Backspace. The pointer is the app's own

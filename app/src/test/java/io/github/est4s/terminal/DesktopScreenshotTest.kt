@@ -3,7 +3,6 @@ package io.github.est4s.terminal
 import android.app.Application
 import android.graphics.Typeface
 import android.view.Surface
-import io.github.est4s.terminal.core.AppView
 import io.github.est4s.terminal.core.DesktopSession
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
@@ -31,8 +30,7 @@ private class SampleHost(private val status: DesktopStatus, override val link: D
     override fun logs() = link.log() + "\n\n/tmp/.mynx/desktop/x11.log:\nXlorie: new surface applied\n" +
         "\n\n/tmp/.mynx/desktop/session.log:\nxfce4-session: Could not connect to the session bus\n"
     override fun touch() = DesktopTouch.TOUCHPAD
-    override fun view() = AppView.DESKTOP
-    override fun switchTo(view: AppView) = Unit
+    override fun showTabs() = Unit
     override fun install() = Unit
 }
 

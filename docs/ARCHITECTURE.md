@@ -611,7 +611,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   No echo: each side gets only text the other doesn't have (`xHas`),
   so X's text set on Android isn't announced back and vice versa. `DesktopView` (over
   everything in `MainActivity`'s root, shown by `showDesktop()`)
-  lays the screen out between its own bar (the view switcher, ⌨, Log) and the
+  lays the screen out between its own bar (☰ Tabs, ⌨, Log) and the
   `desktop` key bar; an X pixel is `desktopScale()` phone pixels
   (0.75 dp, whole), the width a multiple of 8 (libxcvt's step)
   (`DesktopGeometry`). **A new surface is drawn whole:** the
@@ -642,16 +642,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   keyboard's keys, characters as unicode events, the bar's sticky
   Ctrl/Alt/Super around the next key, character, click or scroll,
   held keys released when the view hides. `MainActivity` keeps
-  Ctrl+Shift+D (`desktopShortcut()`), Ctrl+Shift+1-3 on the desktop
-  (`viewShortcut()`), Back and the volume keys. **Switching:** the
-  bar's switcher (`VIEW_SWITCHER`) sets `view` through
-  `configRequest("set")`, as touch Settings' View does (the menu's
-  Touch view runs `mynx set view touch`), then shows that view even
-  when the setting didn't change. `showDesktop()` notes what it
-  covered (`desktopCameFrom`: touch's screens or the terminal); Back
-  goes there (`desktopBack()`: null, leaving the app, in desktop view,
-  whose terminal's Back comes to the desktop), Ctrl+Shift+D too but
-  never out (`desktopShortcutTarget()`).
+  Ctrl+Shift+D (`desktopShortcut()`), Back and the volume keys.
   `desktopNotice()` says what shows while there's no picture,
   `desktopStartsOnOpen()` when opening starts the desktop, and the
   log shown is `desktopLogs()`. **Key bars** send through a

@@ -203,32 +203,4 @@ class DesktopKeysTest {
         assertFalse(desktopShortcut(KeyPress("D", ctrl = true, shift = true, alt = true)))
         assertFalse(desktopShortcut(KeyPress("T", ctrl = true, shift = true)))
     }
-
-    @Test
-    fun `Ctrl+Shift+1, 2 and 3 pick the switcher's views, in its order`() {
-        assertEquals(listOf(AppView.TERMINAL, AppView.TOUCH, AppView.DESKTOP), VIEW_SWITCHER.map { it.first })
-        assertEquals(listOf("Terminal", "Touch", "Desktop"), VIEW_SWITCHER.map { it.second })
-        assertEquals(AppView.TERMINAL, viewShortcut(KeyPress("1", ctrl = true, shift = true)))
-        assertEquals(AppView.TOUCH, viewShortcut(KeyPress("2", ctrl = true, shift = true)))
-        assertEquals(AppView.DESKTOP, viewShortcut(KeyPress("3", ctrl = true, shift = true)))
-        assertNull(viewShortcut(KeyPress("4", ctrl = true, shift = true)))
-        assertNull(viewShortcut(KeyPress("1", ctrl = true)))
-        assertNull(viewShortcut(KeyPress("1", ctrl = true, shift = true, alt = true)))
-    }
-
-    @Test
-    fun `Back on the desktop goes to the view it came from, unless the desktop is the app's view`() {
-        assertEquals(AppView.TOUCH, desktopBack(desktopView = false, cameFrom = AppView.TOUCH))
-        assertEquals(AppView.TERMINAL, desktopBack(desktopView = false, cameFrom = AppView.TERMINAL))
-        assertEquals(AppView.TERMINAL, desktopBack(desktopView = false, cameFrom = null))
-        // The app's start: Back leaves (the terminal's Back comes to the desktop).
-        assertNull(desktopBack(desktopView = true, cameFrom = AppView.TERMINAL))
-        assertNull(desktopBack(desktopView = true, cameFrom = null))
-    }
-
-    @Test
-    fun `Ctrl+Shift+D on the desktop goes where it came from, the terminal at the start`() {
-        assertEquals(AppView.TOUCH, desktopShortcutTarget(AppView.TOUCH))
-        assertEquals(AppView.TERMINAL, desktopShortcutTarget(null))
-    }
 }

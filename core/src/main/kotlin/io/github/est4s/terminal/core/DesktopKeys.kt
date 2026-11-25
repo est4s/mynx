@@ -56,29 +56,8 @@ private val NAMED_KEYS: Map<String, Int> = mapOf(
     "Home" to 102, "End" to 107, "PgUp" to 104, "PgDn" to 109,
 ) + (1..10).associate { "F$it" to 58 + it } + mapOf("F11" to 87, "F12" to 88)
 
-/** Ctrl+Shift+D: to the desktop from any view, and back ([desktopShortcutTarget]). */
+/** Ctrl+Shift+D: from the desktop to the terminal, and back. */
 fun desktopShortcut(press: KeyPress): Boolean = press.key == "D" && press.ctrl && press.shift && !press.alt
-
-/** The desktop bar's view switcher, in order: each view and its label. */
-val VIEW_SWITCHER = listOf(AppView.TERMINAL to "Terminal", AppView.TOUCH to "Touch", AppView.DESKTOP to "Desktop")
-
-/** Ctrl+Shift+1, 2, 3 on the desktop: the switcher's views, from the keyboard. */
-fun viewShortcut(press: KeyPress): AppView? {
-    if (!press.ctrl || !press.shift || press.alt) return null
-    return VIEW_SWITCHER.getOrNull((press.key.toIntOrNull() ?: return null) - 1)?.first
-}
-
-/**
- * Where Back on the desktop goes: the view the desktop was opened from
- * ([cameFrom]: the terminal or touch's screens). Null leaves the app:
- * the desktop is the app's own view ([desktopView]), whose terminal's
- * Back comes to the desktop.
- */
-fun desktopBack(desktopView: Boolean, cameFrom: AppView?): AppView? =
-    if (desktopView) null else cameFrom ?: AppView.TERMINAL
-
-/** Ctrl+Shift+D on the desktop: back where it came from, never out of the app. */
-fun desktopShortcutTarget(cameFrom: AppView?): AppView = cameFrom ?: AppView.TERMINAL
 
 /**
  * The desktop's keyboard: Android's key events, the soft keyboard's
