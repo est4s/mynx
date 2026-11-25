@@ -1,6 +1,8 @@
 package io.github.est4s.terminal.core
 
+import io.github.est4s.terminal.core.KeyStroke.AltLatch
 import io.github.est4s.terminal.core.KeyStroke.CtrlLatch
+import io.github.est4s.terminal.core.KeyStroke.SuperLatch
 import io.github.est4s.terminal.core.KeyStroke.Key
 import io.github.est4s.terminal.core.KeyStroke.Text
 import java.io.File
@@ -89,6 +91,22 @@ class KeyBarTest {
     @Test
     fun `Ctrl alone is the sticky modifier`() {
         assertEquals(listOf(CtrlLatch), parseKeyBar("Ctrl = Ctrl").buttons.single().strokes)
+    }
+
+    @Test
+    fun `Alt and Super alone are sticky too`() {
+        assertEquals(listOf(AltLatch), parseKeyBar("Alt = Alt").buttons.single().strokes)
+        assertEquals(listOf(SuperLatch), parseKeyBar("Super = super").buttons.single().strokes)
+        assertEquals(
+            listOf("line 1: Alt on its own must be the only key", "line 2: Super on its own must be the only key"),
+            parseKeyBar("A = Alt l\nS = Super Enter").problems,
+        )
+    }
+
+    @Test
+    fun `Super is a modifier, for the desktop`() {
+        assertEquals(Key("Up", superKey = true), parseKeyBar("Max = Super+Up").buttons.single().strokes.single())
+        assertEquals(Key("e", superKey = true, ctrl = true), parseKeyBar("E = Ctrl+Super+e").buttons.single().strokes.single())
     }
 
     @Test
@@ -205,6 +223,7 @@ class KeyBarTest {
             labels("neon-rogue"),
         )
         assertEquals(listOf("←", "Brake", "Nitro", "→", "Pause", "Again", "Quit"), labels("neon-drive"))
+        assertEquals(listOf("Esc", "Tab", "Ctrl", "Alt", "Super", "←", "↓", "↑", "→"), labels("desktop"))
         assertEquals(listOf("Flap", "Quit"), labels("neon-flap"))
         assertEquals(listOf("←", "↓", "↑", "→", "Space", "Enter", "Esc", "y", "n", "q"), labels("game"))
         // ↑ sits above ↓ (maintainer's layout, 2026-10-10).
