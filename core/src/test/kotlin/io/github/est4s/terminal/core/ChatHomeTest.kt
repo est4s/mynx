@@ -14,6 +14,7 @@ class ChatHomeTest {
         HomeItem("Shell", HomeAction.Shell),
         HomeItem("Files", HomeAction.Files("/root")),
         HomeItem("Apps", HomeAction.Menu("apps")),
+        HomeItem("Linux desktop", HomeAction.Desktop, logo = HomeLogo.Desktop),
     )
 
     private fun home(
@@ -68,9 +69,10 @@ class ChatHomeTest {
     @Test
     fun linuxItemsAreHomesMainListInOrderWithListsMarked() {
         val linux = home().linux
-        assertEquals(listOf("AI agents", "Shell", "Files", "Apps"), linux.map { it.label })
-        assertEquals(listOf(true, false, false, true), linux.map { it.opensList })
+        assertEquals(listOf("AI agents", "Shell", "Files", "Apps", "Linux desktop"), linux.map { it.label })
+        assertEquals(listOf(true, false, false, true, false), linux.map { it.opensList })
         assertEquals(main.map { it.action }, linux.map { it.action })
+        assertEquals(listOf(null, null, null, null, HomeLogo.Desktop), linux.map { it.logo })
     }
 
     @Test

@@ -283,8 +283,24 @@ fun runningProcessName(pid: Int, proc: File = File("/proc")): String? {
     return command.ifEmpty { runCatching { File(proc, "$pid/comm").readText().trim() }.getOrNull() }
 }
 
-/** The `desktop-*` requests (`mynx desktop`). */
-fun desktopRequests(desktop: Desktop): Map<String, Later> = mapOf(
+/** `desktop-open`'s refusal: Android won't bring an app to the front from the background. */
+const val DESKTOP_OPEN_OFF_SCREEN = "the app must be on screen to open the desktop: bring mynx to the front and try again"
+
+/**
+ * The desktop's back button: it goes back to the screen the desktop was
+ * opened over, a touch view screen ([fromTouch]) or the terminal.
+ */
+fun desktopBackLabel(fromTouch: Boolean): String = if (fromTouch) "← Touch view" else "← Terminal"
+
+/**
+ * The `desktop-*` requests (`mynx desktop`). `desktop-open` calls [open],
+ * which shows the desktop (it starts it, as opening it does) and is
+ * false when the app isn't on screen. Main thread.
+ */
+fun desktopRequests(desktop: Desktop, open: () -> Boolean = { false }): Map<String, Later> = mapOf(
+    "desktop-open" to Later(5) { _, reply ->
+        if (open()) reply.ok("opened" to "true", *desktop.status().fields()) else reply.refuse(DESKTOP_OPEN_OFF_SCREEN)
+    },
     "desktop-status" to Later(5) { _, reply -> reply.ok(*desktop.status().fields()) },
     // A leftover server gets 2 s to stop.
     "desktop-start" to Later(15) { _, reply ->

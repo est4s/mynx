@@ -44,6 +44,7 @@ import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.X11Input
+import io.github.est4s.terminal.core.desktopBackLabel
 import io.github.est4s.terminal.core.desktopGestures
 import io.github.est4s.terminal.core.desktopNotice
 import io.github.est4s.terminal.core.desktopScale
@@ -88,8 +89,12 @@ class DesktopView(
         fun logs(): String
         /** The `desktop-touch` setting. */
         fun touch(): DesktopTouch
-        /** Back to the terminal and its tabs. */
-        fun showTabs()
+        /** Back to the screen the desktop was opened over; the desktop keeps running. */
+        fun back()
+        /** The back button's label: where [back] goes ([desktopBackLabel]). */
+        fun backLabel(): String
+        /** Stops the desktop and the X server (`mynx desktop stop`), then goes [back]. */
+        fun stop()
         /** A tab that installs what the desktop needs (`mynx desktop install`), shown. */
         fun install()
     }
@@ -124,13 +129,13 @@ class DesktopView(
         setSingleLine(true)
         ellipsize = TextUtils.TruncateAt.END
     }
-    private val tabsButton = barText("☰ Tabs").apply { setOnClickListener { host.showTabs() } }
+    private val backButton = barText(desktopBackLabel(fromTouch = false)).apply { setOnClickListener { host.back() } }
     private val keyboardButton = barText("⌨").apply { setOnClickListener { toggleKeyboard() } }
     private val logButton = barText("Log").apply { setOnClickListener { toggleLog() } }
     private val topBar = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(tabsButton)
+        addView(backButton)
         addView(statusText, LayoutParams(0, WRAP_CONTENT, 1f))
         addView(keyboardButton)
         addView(logButton)
@@ -176,9 +181,21 @@ class DesktopView(
         })
     }
     private val logText = logView()
+    // Stop sits with the logs, out of the way of a stray tap on the bar.
+    private val stopButton = barText("Stop desktop").apply {
+        gravity = Gravity.CENTER
+        setOnClickListener { host.stop() }
+    }
     private val logPanel = ScrollView(context).apply {
         visibility = GONE
-        addView(logText)
+        addView(LinearLayout(context).apply {
+            orientation = VERTICAL
+            addView(stopButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+                gravity = Gravity.END
+                setMargins(dp(8), dp(8), dp(8), 0)
+            })
+            addView(logText, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        })
     }
     private val frame = ScreenFrame(context).apply {
         addView(layer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -191,9 +208,9 @@ class DesktopView(
         set(value) {
             field = value ?: return
             topBar.setBackgroundColor(value.background)
-            for (b in listOf(tabsButton, keyboardButton, logButton)) b.setTextColor(value.accent)
+            for (b in listOf(backButton, keyboardButton, logButton)) b.setTextColor(value.accent)
             statusText.setTextColor(value.text)
-            for (b in listOf(startButton, installButton)) {
+            for (b in listOf(startButton, installButton, stopButton)) {
                 b.setTextColor(value.accent)
                 b.setBackgroundColor(value.selectedBackground)
             }
@@ -263,6 +280,7 @@ class DesktopView(
             gestures.moveTo(x, y)
         }
         keyBar.refresh(null, force = true, fallback = DESKTOP_KEY_BAR)
+        backButton.text = host.backLabel()
         requestFocus()
         clipboard.removePrimaryClipChangedListener(clipChanged)
         clipboard.addPrimaryClipChangedListener(clipChanged)
@@ -335,6 +353,7 @@ class DesktopView(
             if (shown.showLog) noticeLog.text = host.logs()
         }
         if (logPanel.visibility == VISIBLE) logText.text = host.logs()
+        stopButton.visibility = if (connected || status?.running == true) VISIBLE else GONE
     }
 
     private fun start() {

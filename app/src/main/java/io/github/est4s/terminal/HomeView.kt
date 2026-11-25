@@ -256,13 +256,14 @@ class HomeView(
         }
     }
 
-    // An app's or a game's logo, as a home screen shortcut draws it, or the Terminal apps folder's; a square in a 2 dp border.
+    // An app's or a game's logo, as a home screen shortcut draws it, or the Terminal apps folder's or Linux desktop's; a square in a 2 dp border.
     private fun logo(logo: HomeLogo) = ImageView(context).apply {
         val border = dp(2)
         when (logo) {
             is HomeLogo.Tile -> setImageBitmap(appIcon(logo.shortcut, dp(LOGO_DP) - 2 * border, LOGO_FILL))
-            HomeLogo.Terminal -> {
-                setImageDrawable(Pixel.icon(context, PixelIcon.TERMINAL, Pixel.CYAN))
+            HomeLogo.Terminal, HomeLogo.Desktop -> {
+                val icon = if (logo == HomeLogo.Desktop) PixelIcon.DESKTOP else PixelIcon.TERMINAL
+                setImageDrawable(Pixel.icon(context, icon, Pixel.CYAN))
                 scaleType = ImageView.ScaleType.CENTER
             }
         }

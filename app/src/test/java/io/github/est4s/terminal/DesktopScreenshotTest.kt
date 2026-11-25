@@ -7,6 +7,7 @@ import io.github.est4s.terminal.core.DesktopSession
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
 import io.github.est4s.terminal.core.X11Input
+import io.github.est4s.terminal.core.desktopBackLabel
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -24,13 +25,19 @@ private class NoServer(override val connected: Boolean = false) : DesktopScreenL
     override fun androidClipboard(text: String?) = Unit
 }
 
-private class SampleHost(private val status: DesktopStatus, override val link: DesktopScreenLink) : DesktopView.Host {
+private class SampleHost(
+    private val status: DesktopStatus,
+    override val link: DesktopScreenLink,
+    private val fromTouch: Boolean = false,
+) : DesktopView.Host {
     override fun status() = status
     override fun start(done: (String?) -> Unit) = Unit
     override fun logs() = link.log() + "\n\n/tmp/.mynx/desktop/x11.log:\nXlorie: new surface applied\n" +
         "\n\n/tmp/.mynx/desktop/session.log:\nxfce4-session: Could not connect to the session bus\n"
     override fun touch() = DesktopTouch.TOUCHPAD
-    override fun showTabs() = Unit
+    override fun back() = Unit
+    override fun backLabel() = desktopBackLabel(fromTouch)
+    override fun stop() = Unit
     override fun install() = Unit
 }
 
@@ -68,6 +75,10 @@ class DesktopScreenshotTest {
     // Connected: the screen is the server's (black here), with our pointer in the middle.
     @Test
     fun connected() = shoot(1080, 2400, "desktop-connected", SampleHost(RUNNING, NoServer(connected = true)))
+
+    // Opened from touch view: its back button says so. The log has Stop desktop.
+    @Test
+    fun fromTouch() = shoot(1080, 2400, "desktop-from-touch", SampleHost(RUNNING, NoServer(connected = true), fromTouch = true))
 
     @Test
     fun log() = shoot(1080, 2400, "desktop-log", SampleHost(RUNNING, NoServer(connected = true)), log = true)
