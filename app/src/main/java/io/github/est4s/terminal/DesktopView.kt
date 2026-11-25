@@ -131,9 +131,15 @@ class DesktopView(
     }
 
     private val surfaceView = SurfaceView(context)
+    // Scaled and moved for direct mode's zoom (the X server's screen stays as it is).
+    private val zoomed = FrameLayout(context).apply {
+        pivotX = 0f
+        pivotY = 0f
+        addView(surfaceView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+    }
     private val pointer = PointerView(context)
     private val layer = FrameLayout(context).apply {
-        addView(surfaceView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(zoomed, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(pointer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
 
@@ -208,9 +214,17 @@ class DesktopView(
 
     private val longPress = Runnable {
         val out = gestures.timeout(SystemClock.uptimeMillis())
-        if (out.isNotEmpty()) {
+        if (out.isNotEmpty() || gestures.holding) {
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             pointerEvents(out)
+        }
+    }
+
+    // Direct mode's fling: a step each frame until it stops.
+    private val flingFrame = object : Runnable {
+        override fun run() {
+            pointerEvents(gestures.fling(SystemClock.uptimeMillis()))
+            if (gestures.flinging) postOnAnimation(this)
         }
     }
 
@@ -255,6 +269,7 @@ class DesktopView(
             gestures = desktopGestures(touch, slop)
             geometry?.let { gestures.screen(it.width, it.height) }
             gestures.moveTo(x, y)
+            pointerMoved()
         }
         keyBar.refresh(null, force = true, fallback = DESKTOP_KEY_BAR)
         requestFocus()
@@ -267,6 +282,7 @@ class DesktopView(
     fun hidden() {
         removeCallbacks(poll)
         removeCallbacks(longPress)
+        removeCallbacks(flingFrame)
         send(keys.releaseAll() + gestures.cancel())
         hideKeyboard()
     }
@@ -274,6 +290,7 @@ class DesktopView(
     override fun onDetachedFromWindow() {
         removeCallbacks(poll)
         removeCallbacks(longPress)
+        removeCallbacks(flingFrame)
         super.onDetachedFromWindow()
     }
 
@@ -369,6 +386,8 @@ class DesktopView(
         pointerEvents(out)
         removeCallbacks(longPress)
         gestures.timeoutAt?.let { postDelayed(longPress, (it - SystemClock.uptimeMillis()).coerceAtLeast(0)) }
+        removeCallbacks(flingFrame)
+        if (gestures.flinging) postOnAnimation(flingFrame)
         return true
     }
 
@@ -379,7 +398,7 @@ class DesktopView(
         if (e.actionMasked == MotionEvent.ACTION_SCROLL) {
             out += X11Input.Scroll(e.getAxisValue(MotionEvent.AXIS_HSCROLL), -e.getAxisValue(MotionEvent.AXIS_VSCROLL))
         } else {
-            out += gestures.moveTo(g.toX(e.x), g.toY(e.y))
+            out += gestures.moveTo(gestures.zoom.screenX(g.toX(e.x)), gestures.zoom.screenY(g.toY(e.y)))
         }
         val buttons = e.buttonState
         for ((android, x) in MOUSE_BUTTONS) {
@@ -393,14 +412,19 @@ class DesktopView(
 
     private fun pointerMoved() {
         val g = geometry ?: return
-        pointer.at(g.fromX(gestures.pointerX), g.fromY(gestures.pointerY))
+        val zoom = gestures.zoom
+        zoomed.scaleX = zoom.scale
+        zoomed.scaleY = zoom.scale
+        zoomed.translationX = g.fromX(zoom.x)
+        zoomed.translationY = g.fromY(zoom.y)
+        pointer.at(g.fromX(zoom.viewX(gestures.pointerX)), g.fromY(zoom.viewY(gestures.pointerY)))
         // A finger on the screen is where the pointer is: moving the screen under it would chase it.
         if (touchMode == DesktopTouch.TOUCHPAD) updatePan()
     }
 
     private fun updatePan() {
         val g = geometry
-        val pointerY = if (g == null) 0f else g.fromY(gestures.pointerY)
+        val pointerY = if (g == null) 0f else g.fromY(gestures.zoom.viewY(gestures.pointerY))
         pan = keyboardPan(layer.height, frame.height, pointerY, pan, dp(PAN_MARGIN_DP))
         layer.translationY = -pan.toFloat()
     }

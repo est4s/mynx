@@ -120,7 +120,7 @@ class HomeSettingsTest {
         assertEquals(listOf("Desktop", "Touch"), desktop.map { it.label })
         assertEquals(listOf("X server only", "Touchpad"), desktop.map { it.detail })
         assertEquals(listOf("XFCE", "X server only"), items("setting:desktop").drop(1).map { it.label })
-        assertEquals(listOf("Touchpad", "Direct taps"), items("setting:desktop-touch").drop(1).map { it.label })
+        assertEquals(listOf("Touchpad", "Direct touch"), items("setting:desktop-touch").drop(1).map { it.label })
     }
 
     @Test

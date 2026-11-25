@@ -416,7 +416,9 @@ setup() {
 
 @test "the guide explains the desktop view: switching, touch, keys and its bar" {
     grep -qF 'Ctrl+Shift+D' "$CORE"
+    grep -qF 'works as on a phone (tap, scroll, pinch)' "$CORE"
     for text in "Ctrl+Shift+D" "Tabs" "two-finger tap is a right click" "long press is a right click" \
+        "a flick flings on" "pinch to" "drag or select text" \
         "setxkbmap" "mynx keybar edit desktop" "Super+Up" "Log"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done

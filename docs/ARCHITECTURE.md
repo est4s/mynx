@@ -607,7 +607,16 @@ See `docs/ROADMAP.md` "How it works". The details:
   `DesktopGestures` (`desktop-touch`, read when the view shows):
   `TouchpadGestures` keeps its own pointer and sends absolute
   moves (so the view draws it, `PointerView`: the server's cursor
-  needs the shared state), `DirectGestures` the finger's. Keys are
+  needs the shared state), `DirectGestures` the finger's, as a phone's
+  touchscreen: a finger scrolls (fractions of a notch as it moves:
+  the server turns scroll events into smooth-scroll valuators, 1.0 a
+  notch, and emulates buttons 4-7 for old clients; lorieEvent has no
+  other scroll), locked to an axis that leads 2:1, then flings (speed
+  over the last 100 ms, decaying as exp(-t/325 ms), stepped by the
+  view each frame); a long press arms a right click on lifting or a
+  left-button drag on moving. Pinching is ours alone (`DesktopZoom`,
+  1-4×, kept on the screen, reset by a new size): the view scales
+  the SurfaceView's parent, and touches map back through it. Keys are
   `DesktopKeyboard`: scan codes for hardware keys (Linux codes, the
   server's xkb layout applies), Android key codes for a soft
   keyboard's keys, characters as unicode events, the bar's sticky

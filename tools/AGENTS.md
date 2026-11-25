@@ -254,7 +254,7 @@ One `key = value` per line; `mynx settings` describes each.
 - `desktop`: `xfce` (default) or `none`: what `mynx desktop start`
   runs on the X server; `none` is the server alone.
 - `desktop-touch`: `touchpad` (default) or `direct`: a finger moves
-  a pointer, or clicks where it taps.
+  a pointer, or works as on a phone (tap, scroll, pinch).
 - `chat-mode`: `auto` (default), `default`, `plan` or `acceptEdits`:
   the permission mode new chats of touch view's Chat start in. `auto`
   lets Claude Code decide what's safe to run, asking less; `default`
