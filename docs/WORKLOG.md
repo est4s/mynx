@@ -40,9 +40,12 @@ a PR into `desktop-dev`.
    touch as a touchscreen and the view switcher were built and rolled
    back (maintainer's decision, 2026-11-25); they're on branch
    `desktop-touch-clipboard-full` if wanted again.
-4. **Then, what's left:** start the X server and session again if
-   either dies (now the notice offers Start); a desktop entry on touch
-   mode's Home (now Ctrl+Shift+D and ▣ only); an external display
+4. **The desktop opens from either view** (branch `desktop-app`, PR
+   into `desktop-dev`, entry 221): built, CI green, **not yet tried
+   on the phone**. Its phone test is in entry 221; then the maintainer
+   confirms its decisions and merges.
+5. **Then, what's left:** start the X server and session again if
+   either dies (now the notice offers Start); an external display
    (Android's desktop windowing) later; a last pass over
    `tools/docs/desktop.md`; then merge `desktop-dev` into `main`.
 
@@ -90,6 +93,66 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-25 (221): Desktop mode: the desktop opens from either view
+
+- Branch `desktop-app` from `desktop-touch-clipboard` (= what PR #114
+  merges), PR into `desktop-dev`. Core, `mynx` and the menu tested
+  here; the app's side only compiled in CI (screenshots looked at).
+- **Maintainer's decision (2026-11-25):** the desktop isn't a view,
+  it's opened from either view like a program. `view` is `terminal |
+  touch` again; an old `view = desktop` is the terminal, and the
+  settings problem (`mynx check`, the app's dialog) says why and what
+  to set (`VIEW_DESKTOP_GONE`). Gone: desktop as the app's start, Back
+  on it leaving the app, the terminal's Back going to it, ▣ always.
+- **Opening:** the menu action `desktop`, "Linux desktop" in
+  `tools/menu.conf` after Files (the terminal menu runs `mynx desktop
+  open`; touch view's ☰ lists it under Linux, with a pixel screen icon
+  where the Terminal button has its prompt; `HomeAction.Desktop`,
+  `HomeLogo.Desktop`), ▣ (while the X server runs), Ctrl+Shift+D,
+  and `mynx desktop open [--json]` (`desktop-open`: refused while the
+  app isn't on screen, as `app-open` is; answers with the status).
+  **A `menu.conf` of the user's own doesn't get the item** (menus
+  never merge new defaults); the guide says to add `Linux desktop =
+  desktop`.
+- **Leaving:** the desktop now lies over the screen it was opened
+  from without hiding it, so Back, the bar's first button (was
+  ☰ Tabs, now ← Terminal or ← Touch view: `desktopBackLabel()`) and
+  Ctrl+Shift+D show that screen again as it was (a chat, Files'
+  folder, a Home list). Nothing changes `view`. A chat under it
+  notifies as if left; a recreated activity (theme change) reopens it
+  (`TerminalService.desktopOpen`). Install opens its tab and shows the
+  terminal whatever was under it.
+- **Stop desktop:** a button at the top of the Log panel (only while
+  it runs): stops it as `mynx desktop stop` does and goes back. Not on
+  the bar, so a stray tap can't end the session.
+- **Decisions to confirm (maintainer's):** the label "Linux desktop"
+  and its place after Files; the back button naming where it goes
+  (← Terminal / ← Touch view) instead of "← Back"; Stop desktop in
+  Log, going back after; ▣ only while the X server runs (the menu
+  item opens it otherwise); user menus not migrated.
+- **Phone test** (mynx dev, XFCE installed):
+  1. Terminal view, launcher menu: Linux desktop is after Files; pick
+     it: the desktop opens (starts if stopped); its bar's first button
+     reads "← Terminal". Back: the menu's tab again; the desktop runs
+     (▣ on the strip). ▣: the desktop again; ← Terminal: the tab.
+     Ctrl+Shift+D (hardware keyboard): there and back.
+  2. In a tab, `mynx desktop open`: the desktop shows, the command
+     prints "Desktop: opened, running on DISPLAY=:0 (XFCE)". In XFCE's
+     terminal, `sleep 5; mynx desktop open` then leave mynx: refused
+     ("the app must be on screen…").
+  3. `mynx set view touch`; ☰: Linux desktop under Linux, with a
+     screen icon; tap it: the desktop, its button "← Touch view";
+     Back: the chat home. Open a chat, then Ctrl+Shift+D, then Back:
+     the same chat, scrolled as it was. In Files, open a subfolder,
+     Ctrl+Shift+D, then Back: Files at that folder.
+  4. Log on the desktop: Stop desktop at the top; tap it: back where
+     it was opened, ▣ gone, `mynx desktop` says not running.
+  5. `mynx set view desktop`: refused; edit settings.conf to `view =
+     desktop`, restart the app: the terminal, with a settings problem
+     saying `view = desktop is gone…`; `mynx check` lists it.
+  6. With the desktop open, `mynx theme set` from XFCE's terminal (a
+     theme change rebuilds the screen): the desktop is still open.
 
 ### 2026-11-25 (220): Desktop mode: the clipboard
 
