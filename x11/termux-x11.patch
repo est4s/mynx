@@ -9,7 +9,151 @@ mynx's MIT licence.
 - renderer.cpp: until a view says its size, the screen fills the surface.
 - CmdEntryPoint.java: libXlorie.so is loaded from MYNX_X11_LIB (the app's
   native library dir), as it isn't inside the jar.
+- Spike (screen-spike-x11, throwaway): a second monitor. InitOutput.c makes
+  a second RandR CRTC and output ("mynx-b"), connected while the view gives
+  its size (event 100, laid out as EVENT_SCREEN_SIZE), right of the first;
+  the screen is as wide as both. The renderer draws the first CRTC's part
+  into the surface and the second's into a second surface
+  (ICmdEntryInterface.mynxSecondWindowChanged, transaction 6).
 
+diff --git a/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl b/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl
+index c73edca..9434fed 100644
+--- a/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl
++++ b/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl
+@@ -7,4 +7,6 @@ interface ICmdEntryInterface {
+     void reportFatalError(String message);
+     void windowChanged(in Surface surface);
+     void cursorWindowChanged(in Surface surface);
++    // mynx: the second monitor's surface (transaction 6).
++    void mynxSecondWindowChanged(in Surface surface);
+ }
+\ No newline at end of file
+diff --git a/lorie/src/main/cpp/lorie/InitOutput.c b/lorie/src/main/cpp/lorie/InitOutput.c
+index cdae2e4..a77248a 100644
+--- a/lorie/src/main/cpp/lorie/InitOutput.c
++++ b/lorie/src/main/cpp/lorie/InitOutput.c
+@@ -734,9 +734,75 @@ static Bool lorieRRScreenSetSize(ScreenPtr pScreen, CARD16 width, CARD16 height,
+     return TRUE;
+ }
+ 
++// mynx: a second monitor (RandR output "mynx-b", its own CRTC) right of the first, the screen as wide as both.
++// The renderer draws each CRTC's part of the screen into its own surface (mynxMonitorRect).
++volatile int mynxMonitorRect[2][4];
++static RRCrtcPtr mynxCrtcs[2];
++static RROutputPtr mynxOutputs[2];
++static int mynxFirstW, mynxFirstH, mynxSecondW, mynxSecondH;
++
++static void mynxNoteCrtcs(void) {
++    for (int i = 0; i < 2; i++) {
++        RRCrtcPtr c = mynxCrtcs[i];
++        Bool on = c && c->mode;
++        mynxMonitorRect[i][0] = on ? c->x : 0;
++        mynxMonitorRect[i][1] = on ? c->y : 0;
++        mynxMonitorRect[i][2] = on ? c->mode->mode.width : 0;
++        mynxMonitorRect[i][3] = on ? c->mode->mode.height : 0;
++    }
++    dprintf(2, "mynx: monitors %dx%d+%d+%d and %dx%d+%d+%d\n",
++        mynxMonitorRect[0][2], mynxMonitorRect[0][3], mynxMonitorRect[0][0], mynxMonitorRect[0][1],
++        mynxMonitorRect[1][2], mynxMonitorRect[1][3], mynxMonitorRect[1][0], mynxMonitorRect[1][1]);
++    if (pvfb->state)
++        pvfb->state->drawRequested = TRUE;
++}
++
++static void mynxApplyMonitors(void) {
++    ScreenPtr pScreen = pScreenPtr;
++    RROutputPtr a = mynxOutputs[0], b = mynxOutputs[1];
++    RRModePtr modeA, modeB;
++    int width, height;
++
++    if (!pScreen || !a || !mynxFirstW || !mynxFirstH)
++        return;
++
++    modeA = lorieCvt(mynxFirstW, mynxFirstH, pvfb->root.framerate);
++    width = modeA->mode.width;
++    height = modeA->mode.height;
++    RROutputSetModes(a, &modeA, 1, 0);
++    RRCrtcNotify(mynxCrtcs[0], modeA, 0, 0, RR_Rotate_0, NULL, 1, &a);
++    if (b && mynxSecondW && mynxSecondH) {
++        modeB = lorieCvt(mynxSecondW, mynxSecondH, pvfb->root.framerate);
++        RROutputSetConnection(b, RR_Connected);
++        RROutputSetModes(b, &modeB, 1, 0);
++        RRCrtcNotify(mynxCrtcs[1], modeB, width, 0, RR_Rotate_0, NULL, 1, &b);
++        width += modeB->mode.width;
++        height = max(height, modeB->mode.height);
++    } else if (b) {
++        RRCrtcNotify(mynxCrtcs[1], NULL, 0, 0, RR_Rotate_0, NULL, 0, NULL);
++        RROutputSetModes(b, NULL, 0, 0);
++        RROutputSetConnection(b, RR_Disconnected);
++    }
++    mynxNoteCrtcs();
++    RRScreenSizeSet(pScreen, width, height, ((double) width) * 25.4 / monitorResolution, ((double) height) * 25.4 / monitorResolution);
++    RRTellChanged(pScreen);
++}
++
++void mynxSecondMonitor(int width, int height) {
++    dprintf(2, "mynx: second monitor %dx%d\n", width, height);
++    if (width == mynxSecondW && height == mynxSecondH)
++        return;
++    mynxSecondW = width;
++    mynxSecondH = height;
++    mynxApplyMonitors();
++}
++
+ static Bool lorieRRCrtcSet(unused ScreenPtr pScreen, RRCrtcPtr crtc, RRModePtr mode, int x, int y,
+                Rotation rotation, int numOutput, RROutputPtr *outputs) {
+-    return (crtc && mode) ? RRCrtcNotify(crtc, mode, x, y, rotation, NULL, numOutput, outputs) : FALSE;
++    // mynx: a client (xrandr, XFCE's display settings) may move or turn off a monitor.
++    Bool done = crtc ? RRCrtcNotify(crtc, mode, x, y, rotation, NULL, numOutput, outputs) : FALSE;
++    mynxNoteCrtcs();
++    return done;
+ }
+ 
+ static Bool lorieRRGetInfo(unused ScreenPtr pScreen, Rotation *rotations) {
+@@ -772,6 +838,20 @@ static Bool lorieRandRInit(ScreenPtr pScreen) {
+         || !RROutputSetConnection(output, RR_Connected)
+         || !RRCrtcNotify(crtc, mode, 0, 0, RR_Rotate_0, NULL, 1, &output))
+         return FALSE;
++
++    mynxCrtcs[0] = crtc;
++    mynxOutputs[0] = output;
++    // A new screen (the server reset) has one monitor again until the view says otherwise.
++    mynxFirstW = mynxFirstH = mynxSecondW = mynxSecondH = 0;
++    if (FALSE
++        || !(mynxCrtcs[1] = RRCrtcCreate(pScreen, NULL))
++        || !RRCrtcGammaSetSize(mynxCrtcs[1], 256)
++        || !(mynxOutputs[1] = RROutputCreate(pScreen, "mynx-b", 6, NULL))
++        || !RROutputSetClones(mynxOutputs[1], NULL, 0)
++        || !RROutputSetCrtcs(mynxOutputs[1], &mynxCrtcs[1], 1)
++        || !RROutputSetConnection(mynxOutputs[1], RR_Disconnected))
++        return FALSE;
++    mynxNoteCrtcs();
+     return TRUE;
+ }
+ 
+@@ -850,18 +930,14 @@ void lorieConfigureNotify(int width, int height, int framerate, size_t name_size
+         output->nameLength = strlen(output->name);
+     }
+ 
+-    if (output && width && height && (pScreen->width != width || pScreen->height != height || pvfb->root.framerate != framerate)) {
+-        CARD32 mmWidth, mmHeight;
+-        RRModePtr mode = lorieCvt(width, height, framerate);
+-        mmWidth = ((double) (mode->mode.width)) * 25.4 / monitorResolution;
+-        mmHeight = ((double) (mode->mode.width)) * 25.4 / monitorResolution;
+-        RROutputSetModes(output, &mode, 1, 0);
+-        RRCrtcNotify(RRFirstEnabledCrtc(pScreen), mode, 0, 0, RR_Rotate_0, NULL, 1, &output);
+-        RRScreenSizeSet(pScreen, mode->mode.width, mode->mode.height, mmWidth, mmHeight);
+-
++    // mynx: the size is the first monitor's; mynxApplyMonitors() adds the second's.
++    if (output && width && height && (mynxFirstW != width || mynxFirstH != height || pvfb->root.framerate != framerate)) {
+         log(VERBOSE, "New reported framerate is %d", framerate);
+         pvfb->root.framerate = framerate;
+         pvfb->vblank_interval = 1000000 / pvfb->root.framerate;
++        mynxFirstW = width;
++        mynxFirstH = height;
++        mynxApplyMonitors();
+     }
+ }
+ 
 diff --git a/lorie/src/main/cpp/lorie/activity.cpp b/lorie/src/main/cpp/lorie/activity.cpp
 index 1ec125c..2d9710a 100644
 --- a/lorie/src/main/cpp/lorie/activity.cpp
@@ -28,10 +172,49 @@ index 1ec125c..2d9710a 100644
      // Checks whether this runtime honors @CriticalNative at all: it does if probe() receives its argument first.
      constexpr jlong probeValue = 0x7e57;
 diff --git a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-index f48a24d..121d97c 100644
+index f48a24d..96219c1 100644
 --- a/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
 +++ b/lorie/src/main/cpp/lorie/cmdentrypoint.cpp
-@@ -619,7 +619,8 @@ static void reportFatalError(JNIEnv *env, __unused jobject cls, jstring message)
+@@ -274,6 +274,7 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+         }, nullptr, nullptr);
+         lorieWakeServer();
+         renderer.setWindow(nullptr, nullptr);
++        renderer.mynxSetSecondWindow(nullptr, nullptr);
+         return;
+     }
+ 
+@@ -297,6 +298,19 @@ void handleLorieEvents(int fd, __unused int ready, __unused void *ignored) {
+                 lorieWakeServer();
+                 break;
+             }
++            case MYNX_EVENT_SECOND_SIZE: {
++                // mynx: the second monitor's size, the same layout as EVENT_SCREEN_SIZE (no name).
++                auto *copy = (lorieEvent*) calloc(1, sizeof(lorieEvent));
++                memcpy(copy, &e, sizeof(e));
++                QueueWorkProc(+[](__unused ClientPtr pClient, void *closure) -> Bool {
++                    auto* e = (lorieEvent*) closure;
++                    mynxSecondMonitor(e->screenSize.width, e->screenSize.height);
++                    free(e);
++                    return TRUE;
++                }, nullptr, copy);
++                lorieWakeServer();
++                break;
++            }
+             case EVENT_TOUCH: {
+                 auto *copy = (lorieEvent*) calloc(1, sizeof(lorieEvent));
+                 memcpy(copy, &e, sizeof(e));
+@@ -552,6 +566,10 @@ static void windowChanged(JNIEnv *env, __unused jobject cls, jobject surface) {
+     renderer.setWindow(env, surface);
+ }
+ 
++static void mynxSecondWindowChanged(JNIEnv *env, __unused jobject cls, jobject surface) {
++    renderer.mynxSetSecondWindow(env, surface);
++}
++
+ static void cursorWindowChanged(JNIEnv *env, __unused jobject cls, jobject surface) {
+     renderer.setCursorSurface(env, surface);
+ }
+@@ -619,7 +637,8 @@ static void reportFatalError(JNIEnv *env, __unused jobject cls, jstring message)
  // Called from OsVendorInit() once the display number and "-tag" argument (if any) are resolved,
  // so the port to knock on and the tag to report back to Java are already known.
  void lorieListenForKnocks(int port, const char *tag) {
@@ -41,8 +224,47 @@ index f48a24d..121d97c 100644
      int fd, reuse = 1;
  
      serverEnv->CallVoidMethod(thiz, setDocumentTag, tag ? serverEnv->NewStringUTF(tag) : nullptr);
+@@ -685,6 +704,7 @@ void registerCmdEntryPointNatives(JNIEnv *env) {
+             {"getXConnection", "()Landroid/os/ParcelFileDescriptor;", (void *) &getXConnection},
+             {"windowChanged", "(Landroid/view/Surface;)V", (void *) &windowChanged},
+             {"cursorWindowChanged", "(Landroid/view/Surface;)V", (void *) &cursorWindowChanged},
++            {"mynxSecondWindowChanged", "(Landroid/view/Surface;)V", (void *) &mynxSecondWindowChanged},
+             {"getLogcatOutput", "()Landroid/os/ParcelFileDescriptor;", (void *) &getLogcatOutput},
+             {"reportFatalError", "(Ljava/lang/String;)V", (void *) &reportFatalError},
+             {"connected", "()Z", (void *) +[]() -> jboolean { return conn_fd != -1; }}, // @CriticalNative
+diff --git a/lorie/src/main/cpp/lorie/lorie.h b/lorie/src/main/cpp/lorie/lorie.h
+index 0477ab1..031c126 100644
+--- a/lorie/src/main/cpp/lorie/lorie.h
++++ b/lorie/src/main/cpp/lorie/lorie.h
+@@ -49,6 +49,10 @@ void lorieSendShownChanged(void);
+ void lorieSetCursorVisible(Bool visible);
+ void lorieSendSyncReply(uint32_t serial);
+ void lorieSendHeartbeat(void);
++// mynx: the second monitor's size (0: none), and where each monitor's CRTC is on the screen (x, y, width, height).
++void mynxSecondMonitor(int width, int height);
++extern volatile int mynxMonitorRect[2][4];
++#define MYNX_EVENT_SECOND_SIZE 100
+ 
+ typedef struct {
+     uint16_t code; // Linux key code that does not fit into X keycode range.
+@@ -348,6 +352,15 @@ struct Renderer {
+     void bindTexture(GLuint id) const;
+     void reportViewport(int dstX, int dstY, int dstW, int dstH, float left, float top, float width, float height);
+     void drawRegion(GLuint id, float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, uint8_t flip);
++
++    // mynx: the second monitor's surface, drawn after the first's each frame.
++    ANativeWindow *mynxWin2 = nullptr, *mynxPendingWin2 = nullptr;
++    jobject mynxSurface2 = nullptr, mynxPendingSurface2 = nullptr;
++    EGLSurface mynxSfc2 = EGL_NO_SURFACE;
++    volatile bool mynxWin2Changed = false;
++    void mynxSetSecondWindow(JNIEnv* env, jobject jsfc);
++    void mynxRefreshSecond();
++    void mynxDrawSecond(LorieBuffer* buffer, const LorieBuffer_Desc* desc, float xfactor);
+ };
+ #endif
+ 
 diff --git a/lorie/src/main/cpp/lorie/renderer.cpp b/lorie/src/main/cpp/lorie/renderer.cpp
-index b53c230..6ba255d 100644
+index b53c230..1c84fc5 100644
 --- a/lorie/src/main/cpp/lorie/renderer.cpp
 +++ b/lorie/src/main/cpp/lorie/renderer.cpp
 @@ -927,6 +927,15 @@ void Renderer::redrawLocked(bool* waitingForBuffers) {
@@ -61,11 +283,147 @@ index b53c230..6ba255d 100644
      int alignedExpectedW = expectedW - (expectedW % CVT_H_GRANULARITY);
  
      if (!expectedW || !expectedH || desc->height != expectedH ||
+@@ -1004,6 +1013,14 @@ void Renderer::redrawLocked(bool* waitingForBuffers) {
+     drawnScaleY = (float) renderViewportH / logicalSourceHeight;
+     float sourceLeft = panSourceLeft, sourceTop = panSourceTop;
+ 
++    // mynx: with a second monitor, this surface shows only the first monitor's part of the screen.
++    if (!state->view.expectedWidth && mynxMonitorRect[0][2] > 0 && mynxMonitorRect[1][2] > 0) {
++        sourceLeft = (float) mynxMonitorRect[0][0];
++        sourceTop = (float) mynxMonitorRect[0][1];
++        sourceWidth = (float) mynxMonitorRect[0][2];
++        sourceHeight = (float) mynxMonitorRect[0][3];
++    }
++
+     glDisable(GL_SCISSOR_TEST);
+     glViewport(0, 0, surfaceW, surfaceH);
+     glClearColor(0.f, 0.f, 0.f, 1.f);
+@@ -1054,6 +1071,93 @@ void Renderer::redrawLocked(bool* waitingForBuffers) {
+ 
+     updateCursor();
+     state->renderedFrames++;
++
++    if (mynxSfc2 != EGL_NO_SURFACE)
++        mynxDrawSecond(buffer, desc, xfactor);
++}
++
++// mynx: the second monitor's part of the screen, stretched over the second surface.
++void Renderer::mynxDrawSecond(LorieBuffer* buffer, const LorieBuffer_Desc* desc, float xfactor) {
++    EGLSync fence;
++    if (eglMakeCurrent(egl_display, mynxSfc2, mynxSfc2, ctx) != EGL_TRUE)
++        return vprintEglError("eglMakeCurrent failed (second monitor)", __LINE__);
++
++    glDisable(GL_SCISSOR_TEST);
++    glViewport(0, 0, ANativeWindow_getWidth(mynxWin2), ANativeWindow_getHeight(mynxWin2));
++    glClearColor(0.f, 0.f, 0.f, 1.f);
++    glClear(GL_COLOR_BUFFER_BIT);
++
++    auto x = (float) mynxMonitorRect[1][0], y = (float) mynxMonitorRect[1][1];
++    auto w = (float) mynxMonitorRect[1][2], h = (float) mynxMonitorRect[1][3];
++    if (w > 0 && h > 0) {
++        lockServerState(state);
++        LorieBuffer_bindTexture(buffer);
++        drawRegion(0, -1.f, -1.f, 1.f, 1.f,
++                   x / (float) desc->width * xfactor, y / (float) desc->height,
++                   (x + w) / (float) desc->width * xfactor, (y + h) / (float) desc->height,
++                   LorieBuffer_isRgba(buffer));
++        fence = desc->type == LORIEBUFFER_FD ? EGL_NO_SYNC_KHR : eglCreateSyncKHR(egl_display, EGL_SYNC_FENCE_KHR, nullptr);
++        glFlush();
++        if (fence != EGL_NO_SYNC_KHR)
++            waitForFence(egl_display, fence, 0);
++        pthread_mutex_unlock(&state->lock);
++    }
++
++    if (eglSwapBuffers(egl_display, mynxSfc2) != EGL_TRUE)
++        printEglError("Failed to swap buffers (second monitor)", __LINE__);
++    if (eglMakeCurrent(egl_display, sfc, sfc, ctx) != EGL_TRUE)
++        vprintEglError("eglMakeCurrent failed (back from the second monitor)", __LINE__);
++}
++
++void Renderer::mynxSetSecondWindow(JNIEnv* env, jobject jsfc) {
++    ANativeWindow* newWin = jsfc ? ANativeWindow_fromSurface(env, jsfc) : nullptr;
++
++    pthread_mutex_lock(&stateLock);
++    while (mynxWin2Changed)
++        pthread_cond_wait(&stateChangeFinishCond, &stateLock);
++    mynxPendingWin2 = newWin;
++    mynxPendingSurface2 = newWin ? env->NewGlobalRef(jsfc) : nullptr;
++    mynxWin2Changed = true;
++    pthread_cond_signal(&stateCond);
++    // As setWindow: the renderer lets go of the old surface before Android destroys it.
++    while (mynxWin2Changed)
++        pthread_cond_wait(&stateChangeFinishCond, &stateLock);
++    pthread_mutex_unlock(&stateLock);
++}
++
++// On the renderer's thread, holding stateLock.
++void Renderer::mynxRefreshSecond() {
++    if (mynxSfc2 != EGL_NO_SURFACE) {
++        eglDestroySurface(egl_display, mynxSfc2);
++        mynxSfc2 = EGL_NO_SURFACE;
++    }
++    if (mynxWin2) {
++        ANativeWindow_release(mynxWin2);
++        mynxWin2 = nullptr;
++    }
++    if (mynxSurface2) {
++        rendererEnv->CallVoidMethod(mynxSurface2, surfaceRelease);
++        rendererEnv->ExceptionClear();
++        rendererEnv->DeleteGlobalRef(mynxSurface2);
++        mynxSurface2 = nullptr;
++    }
++
++    mynxWin2 = mynxPendingWin2;
++    mynxSurface2 = mynxPendingSurface2;
++    mynxPendingWin2 = nullptr;
++    mynxPendingSurface2 = nullptr;
++    mynxWin2Changed = false;
++    if (!mynxWin2)
++        return;
++
++    dprintf(2, "mynx: second surface %p %d %d\n", mynxWin2, ANativeWindow_getWidth(mynxWin2), ANativeWindow_getHeight(mynxWin2));
++    mynxSfc2 = eglCreateWindowSurface(egl_display, cfg, mynxWin2, nullptr);
++    if (mynxSfc2 == EGL_NO_SURFACE)
++        return vprintEglError("eglCreateWindowSurface failed (second monitor)", __LINE__);
++    if (eglMakeCurrent(egl_display, mynxSfc2, mynxSfc2, ctx) == EGL_TRUE)
++        eglSwapInterval(egl_display, 0);
++    eglMakeCurrent(egl_display, sfc, sfc, ctx);
++    state->drawRequested = true;
+ }
+ 
+ void Renderer::uploadDamagedRows(LorieBuffer* buffer) {
+@@ -1090,7 +1194,7 @@ bool Renderer::shouldWait(bool *waitingForBuffers) {
+     pthread_spin_lock(&bufferLock);
+     buffersChanged = !xorg_list_is_empty(&addedBuffers) || !xorg_list_is_empty(&removedBuffers);
+     pthread_spin_unlock(&bufferLock);
+-    if (windowChanged || cursorSurfaceChanged || buffersChanged)
++    if (windowChanged || cursorSurfaceChanged || buffersChanged || mynxWin2Changed)
+         // If there are pending changes we should process them immediately.
+         return false;
+ 
+@@ -1124,6 +1228,9 @@ void Renderer::threadLoop() {
+         if (cursorSurfaceChanged)
+             refreshCursorOutput();
+ 
++        if (mynxWin2Changed)
++            mynxRefreshSecond();
++
+         // Attach all pending buffers to GL.
+         pthread_spin_lock(&bufferLock);
+         while((buf = LorieBufferList_first(&addedBuffers))) {
 diff --git a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
-index 6196631..1d6faa4 100644
+index 6196631..1c13a4c 100644
 --- a/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
 +++ b/lorie/src/main/java/com/termux/x11/CmdEntryPoint.java
-@@ -202,6 +202,9 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+@@ -180,6 +180,7 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
+     public native boolean start(String[] args);
+     public native void windowChanged(Surface surface);
+     public native void cursorWindowChanged(Surface surface);
++    public native void mynxSecondWindowChanged(Surface surface);
+     public native ParcelFileDescriptor getXConnection();
+     public native ParcelFileDescriptor getLogcatOutput();
+     public native void reportFatalError(String message);
+@@ -202,6 +203,9 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
          ClassLoader loader = CmdEntryPoint.class.getClassLoader();
          URL res = loader != null ? loader.getResource(path) : null;
          String libPath = res != null ? res.getFile().replace("file:", "") : null;
