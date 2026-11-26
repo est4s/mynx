@@ -612,12 +612,24 @@ fun localAddresses(): List<String> = runCatching {
 fun screenRequests(link: ScreenLink, share: ScreenShare? = null): Map<String, Later> = mapOf(
     "screen-status" to Later(5) { _, reply -> reply.ok(*link.status(), *(share?.status() ?: emptyArray())) },
     "screen-send" to Later(10) { args, reply ->
+        val kind = args.getOrNull(0)
         val name = args.getOrNull(1)?.trim().orEmpty()
-        if (args.getOrNull(0) != "app" || name.isEmpty()) return@Later reply.refuse("send what? mynx screen send app NAME")
+        if (kind !in setOf("app", "tab") || (kind == "app" && name.isEmpty())) {
+            return@Later reply.refuse("send what? mynx screen send app NAME, or tab [N|new]")
+        }
         if (share == null) return@Later reply.refuse("this phone can't send screens")
+        if (kind == "tab") {
+            return@Later share.sendTerm(ScreenTarget.Terminal(name.ifEmpty { "new" })).fold(
+                { sent ->
+                    val what = obj("id" to "${sent.id}", "kind" to json("terminal"), "title" to json(sent.title), "name" to json(sent.target.name))
+                    reply.ok("screen" to what, *link.status(), *share.status())
+                },
+                { reply.refuse(it.message ?: "couldn't send the tab") },
+            )
+        }
         share.send(ScreenTarget.App(name)).fold(
             { sent ->
-                val what = obj("id" to "${sent.id}", "title" to json(sent.title), "name" to json(name))
+                val what = obj("id" to "${sent.id}", "kind" to json("app"), "title" to json(sent.title), "name" to json(name))
                 reply.ok("screen" to what, *link.status(), *share.status())
             },
             { reply.refuse(it.message ?: "couldn't send $name") },

@@ -56,8 +56,9 @@ fun parseSavedTabs(text: String): SavedTabs? {
  * before it.
  */
 fun <S> Tabs<S>.snapshot(cwdOf: (S) -> String?): SavedTabs {
-    val shells = tabs.filter { it.service == null }
-    val selected = tabs.take(selectedIndex + 1).count { it.service == null } - 1
+    // Tabs from another phone stay there.
+    val shells = tabs.filter { it.service == null && it.from == null }
+    val selected = tabs.take(selectedIndex + 1).count { it.service == null && it.from == null } - 1
     return SavedTabs(shells.map { SavedTab(it.rename, cwdOf(it.session)) }, selected.coerceAtLeast(0))
 }
 

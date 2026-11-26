@@ -107,9 +107,10 @@ its touches back, using none of its own Debian.
   last, on either phone, which shows a mark (maintainer's decision).
   Later maybe half a keyboard on each phone.
 - Spiked (2026-11-26): a screen streamed over Wi-Fi shows on B 60-75 ms
-  after A draws it, at 6-14 Mbit/s; a second X monitor works. Pairing
-  and sending apps to B are built; chats, terminals and the desktop
-  are next.
+  after A draws it, at 6-14 Mbit/s; a second X monitor works. Pairing,
+  sending apps to B and terminal tabs to B (as text: B's own terminal
+  draws A's output, at B's size) are built; the desktop and chats are
+  next.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's

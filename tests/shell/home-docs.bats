@@ -431,3 +431,11 @@ setup() {
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done
 }
+
+@test "the guide explains terminal tabs sent to another phone: sending, typing, taking back" {
+    grep -qF -- '`mynx screen send tab [N\|new]`' "$DOCS/screen.md"
+    grep -qF -- "## Sending a terminal tab" "$DOCS/screen.md"
+    grep -qF -- "**New terminal**" "$DOCS/screen.md"
+    grep -qF -- "touch the tab on the screen and the host's typing goes" "$DOCS/screen.md"
+    grep -qF -- "**Give back**" "$DOCS/screen.md"
+}

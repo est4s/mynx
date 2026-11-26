@@ -47,7 +47,10 @@ class ScreenShareScreenshotTest {
         Screenshots.save(view, name)
     }
 
-    private val host = ScreenHome("Nord 2", ScreenRole.HOST, sent = listOf(ScreenRef(1, "Pixel Hero")), shown = emptyList())
+    private val host = ScreenHome(
+        "Nord 2", ScreenRole.HOST, sent = listOf(ScreenRef(1, "Pixel Hero"), ScreenRef(2, "htop")), shown = emptyList(),
+        tabs = listOf("bash", "~/mynx: vim notes.md"),
+    )
 
     @Test
     fun hostHome() = shoot(home(host), "screen-host-home")
@@ -61,7 +64,7 @@ class ScreenShareScreenshotTest {
 
     @Test
     fun screenHome() = shoot(
-        home(ScreenHome("Pixel 10", ScreenRole.SCREEN, sent = emptyList(), shown = listOf(ScreenRef(1, "Pixel Hero")))),
+        home(ScreenHome("Pixel 10", ScreenRole.SCREEN, sent = emptyList(), shown = listOf(ScreenRef(1, "Pixel Hero"), ScreenRef(2, "htop")))),
         "screen-screen-home",
     )
 
