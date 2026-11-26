@@ -15,10 +15,10 @@ mynx's MIT licence.
   app says; mode 2 one monitor as big as both phones; 0 neither), and
   InitOutput.c sends back what each surface shows (event 101). The
   renderer draws this phone's part into the view's surface and the other
-  phone's into a second surface, an encoder's
+  phone's into a second surface, which the app passes on to its encoder
   (ICmdEntryInterface.mynxSecondWindowChanged, transaction 6), also while
-  this phone's view has no surface, with a recordable EGL config where
-  there is one, and a fresh frame a few times a second when nothing
+  this phone's view has no surface, with the view's EGL config (else a
+  recordable one), and a fresh frame a few times a second when nothing
   changes. What happens to that surface goes to stderr ("mynx: ...").
 
 diff --git a/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl b/lorie/src/main/aidl/com/termux/x11/ICmdEntryInterface.aidl
@@ -380,7 +380,7 @@ index 0477ab1..55b222f 100644
  #endif
  
 diff --git a/lorie/src/main/cpp/lorie/renderer.cpp b/lorie/src/main/cpp/lorie/renderer.cpp
-index b53c230..edde9b0 100644
+index b53c230..709a85f 100644
 --- a/lorie/src/main/cpp/lorie/renderer.cpp
 +++ b/lorie/src/main/cpp/lorie/renderer.cpp
 @@ -927,6 +927,22 @@ void Renderer::redrawLocked(bool* waitingForBuffers) {
@@ -547,8 +547,8 @@ index b53c230..edde9b0 100644
 +
 +    mynxLog("the other phone's surface: %dx%d, format %d", ANativeWindow_getWidth(mynxWin2), ANativeWindow_getHeight(mynxWin2),
 +        ANativeWindow_getFormat(mynxWin2));
-+    // An encoder's surface wants a recordable config (EGL_RECORDABLE_ANDROID); this phone's view's may not be one.
-+    // The first that gives a surface this context draws into wins.
++    // The view's config first (the app gives an ordinary surface, a SurfaceTexture's, which it draws into its
++    // encoder itself: this context can't draw into an encoder's surface, EGL_BAD_MATCH); recordable ones after.
 +    EGLint recordable[] = {
 +        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
 +        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
@@ -559,14 +559,14 @@ index b53c230..edde9b0 100644
 +        EGL_RECORDABLE_ANDROID, EGL_TRUE,
 +        EGL_NONE
 +    };
-+    EGLConfig tries[3] = { nullptr, nullptr, cfg };
-+    const char* names[3] = { "recordable", "recordable with alpha", "the view's" };
++    EGLConfig tries[3] = { cfg, nullptr, nullptr };
++    const char* names[3] = { "the view's", "recordable", "recordable with alpha" };
 +    EGLint found = 0;
-+    if (eglChooseConfig(egl_display, recordable, &tries[0], 1, &found) != EGL_TRUE || found < 1)
-+        tries[0] = nullptr;
-+    recordable[11] = 8;
 +    if (eglChooseConfig(egl_display, recordable, &tries[1], 1, &found) != EGL_TRUE || found < 1)
 +        tries[1] = nullptr;
++    recordable[11] = 8;
++    if (eglChooseConfig(egl_display, recordable, &tries[2], 1, &found) != EGL_TRUE || found < 1)
++        tries[2] = nullptr;
 +    for (int i = 0; i < 3 && mynxSfc2 == EGL_NO_SURFACE; i++) {
 +        if (!tries[i])
 +            continue;

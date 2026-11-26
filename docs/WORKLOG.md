@@ -187,6 +187,18 @@ a PR into `desktop-dev`.
   instead of falling back to `right` (the try's layout went from above
   to right once; the Log line "the desktop's monitors: … (extend,
   SIDE)" now says which side was read).
+- **Second phone try** (run 45863972064): the logs said it. The encoder
+  started and its surface reached the X server (1080x2400, format 34),
+  but `eglMakeCurrent` on it failed with EGL_BAD_MATCH (0x3009) for
+  every config, the view's too; the encoder gave 0 frames. Now the X
+  server draws into an ordinary surface, a SurfaceTexture of the app's,
+  and `EncoderBridge` (the app's own EGL context, recordable config)
+  draws each frame into the encoder (grafika's pattern). XFCE's
+  "Unknown mode '264x943 @ 120.0' for output screen/mynx-b, aborting" is
+  the spike's saved layout (`~/.config/xfce4/xfconf/xfce-perchannel-xml/displays.xml`):
+  xfsettingsd gives up on applying it and leaves our layout alone, so
+  it's harmless, but deleting that file (with the desktop stopped) stops
+  the message.
 - **Two-phone test** (Pixel 10 as A, Nord 2 as B, both on this build as
   mynx dev, paired; `mynx screen connect` on B; on A the desktop running
   with XFCE, `mynx desktop open`):

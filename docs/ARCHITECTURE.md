@@ -848,8 +848,15 @@ See `docs/ROADMAP.md` "How it works". The details:
   `ScreenTarget.Desktop` is sent like an app (`mynx screen send desktop`,
   Home's Send list while the X server runs, the desktop's bar
   **→ NAME** / **Take back**), but nothing is drawn on a display of
-  ours: **the X server draws B's part straight into the encoder's input
-  surface.** **Layout** (`DesktopScreens`, owned by the `DesktopLink`):
+  ours: **the X server draws B's part into a SurfaceTexture of ours,
+  which `EncoderBridge` draws into the encoder** (its own thread and EGL
+  context, a recordable config, `eglPresentationTimeANDROID`; the last
+  frame again on a key-frame request). Straight into the encoder's
+  input surface failed on the Pixel 10: the server's context gets
+  EGL_BAD_MATCH from `eglMakeCurrent` with every config; an ordinary
+  surface works, as the spike's SurfaceView did. If the bridge doesn't
+  start, the encoder's surface is handed over as before (the Log says
+  which). **Layout** (`DesktopScreens`, owned by the `DesktopLink`):
   A's monitor is the size its view gives (before it ever did, the phone's
   whole screen); B's is its screen at its own 0.75 dp X pixel
   (`secondMonitorSize`, width a mode step: a Nord 2 is 536x1200), placed

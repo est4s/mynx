@@ -59,6 +59,8 @@ class DesktopCaster(
     private var screen: SentScreen? = null
     private var density = 0
     @Volatile private var encoder: ScreenEncoder? = null
+    // What the X server draws into: the bridge's surface, which draws into the encoder's (EncoderBridge).
+    @Volatile private var bridge: EncoderBridge? = null
     private var gestures: DesktopGestures? = null
     private var touchMode = DesktopTouch.TOUCHPAD
     private var typed = false
@@ -73,7 +75,9 @@ class DesktopCaster(
             if (encoder == null) return
             val n = frames.getAndSet(0)
             val b = bytes.getAndSet(0)
-            link.note("the other phone's encoder: $n frames, ${b / 1024} KiB in 5 s")
+            val drawn = bridge?.frames?.getAndSet(0)
+            val path = if (drawn != null) "the bridge got $drawn frames from the X server, " else "straight into the encoder: "
+            link.note("the other phone's part: ${path}the encoder gave $n frames, ${b / 1024} KiB in 5 s")
             handler.postDelayed(this, TALLY_MS)
         }
     }
@@ -154,7 +158,17 @@ class DesktopCaster(
             }
             encoder = started
             link.note("the other phone's encoder started: ${screen.width}x${screen.height}, $fps fps, $kbps kbit/s")
-            link.secondSurface(started.surface)
+            // The X server's EGL context can't draw into an encoder's surface (EGL_BAD_MATCH): a bridge does.
+            val through = try {
+                EncoderBridge.start(started.surface, screen.width, screen.height).also {
+                    bridge = it
+                    link.note("the other phone's part goes through the bridge (a SurfaceTexture of ours, into the encoder)")
+                }.input
+            } catch (e: Exception) {
+                link.note("the bridge didn't start (${e.message}): the X server draws straight into the encoder")
+                started.surface
+            }
+            link.secondSurface(through)
             follow()
             handler.removeCallbacks(tally)
             handler.postDelayed(tally, TALLY_MS)
@@ -169,13 +183,17 @@ class DesktopCaster(
         encoder = null
         handler.removeCallbacks(tally)
         link.note("the other phone's encoder stopped (it stopped watching, or the desktop went back)")
-        // The X server lets go of the surface before this returns, then the encoder can go.
+        // The X server lets go of the surface before this returns, then the bridge and the encoder can go.
         link.secondSurface(null)
+        bridge?.release()
+        bridge = null
         e.stop()
     }
 
     fun keyFrame() {
         encoder?.keyFrame()
+        // An idle desktop sends nothing new: the last frame again carries the key frame.
+        bridge?.repeat()
     }
 
     fun touch(screen: SentScreen, touch: ScreenMessage.Touch) {
