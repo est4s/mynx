@@ -193,6 +193,16 @@ class ScreenLinkTest {
     }
 
     @Test
+    fun `a host that stops says so before it goes, from the link's own thread`() {
+        pair()
+        waitFor("linked") { connected(screen) != null }
+        // Android's main thread mustn't touch the network: stop only queues the Bye.
+        host.stop()
+        waitFor("the screen heard") { connected(screen) == null }
+        assertEquals("Pixel 10 ended the link (the app stopped)", status(screen)["lastEnd"])
+    }
+
+    @Test
     fun `a restarted host still knows its screen`() {
         pair()
         host.stop()

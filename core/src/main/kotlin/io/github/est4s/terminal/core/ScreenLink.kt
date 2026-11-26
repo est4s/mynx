@@ -12,6 +12,8 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.security.SecureRandom
 import java.util.Timer
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.schedule
 import kotlin.concurrent.thread
 
@@ -34,6 +36,7 @@ interface ScreenPlatform {
 const val MAX_WRONG_CODES = 3
 private const val HANDSHAKE_MS = 10_000
 private const val CONNECT_MS = 4_000
+private const val LAST_WORD_MS = 2_000L
 
 /**
  * The extended screen's link (roadmap "Extended screen"; work log "Next"
@@ -139,7 +142,7 @@ class ScreenLink(
             pairing?.reply?.refuse("the app stopped")
             pairing = null
         }
-        connection?.close("the app stopped", tell = true)
+        connection?.close("the app stopped", last = ScreenMessage.Bye("the app stopped"))
         platform.advertise(null, 0)
     }
 
@@ -369,7 +372,7 @@ class ScreenLink(
     /** Ends the link; false if there was none. */
     fun disconnect(): Boolean {
         val c = connection ?: return false
-        c.close("disconnected here", tell = true)
+        c.close("disconnected here", last = ScreenMessage.Bye("disconnected"))
         return true
     }
 
@@ -379,8 +382,7 @@ class ScreenLink(
         if (gone.isEmpty()) return null
         for (peer in gone) {
             connection?.takeIf { it.peerId == peer.id }?.let {
-                it.send(ScreenMessage.Unpaired)
-                it.close("unpaired here")
+                it.close("unpaired here", last = ScreenMessage.Unpaired)
             }
             pairs.forget(peer.id)
         }
@@ -452,16 +454,15 @@ class ScreenLink(
 
         @Volatile private var closed = false
 
+        // What to send, written by a thread of its own: callers may be on Android's main thread,
+        // which mustn't touch the network. Idle, it sends a keep-alive.
+        private val outbox = LinkedBlockingQueue<ScreenMessage>()
+
         fun start() {
             send(platform.screen())
             if (myRole == ScreenRole.HOST) sendLayout()
             thread(name = "mynx-screen-read", isDaemon = true) { read() }
-            thread(name = "mynx-screen-keepalive", isDaemon = true) {
-                while (!closed) {
-                    Thread.sleep(keepAliveMs)
-                    send(ScreenMessage.KeepAlive)
-                }
-            }
+            thread(name = "mynx-screen-write", isDaemon = true) { write() }
         }
 
         fun sendLayout() {
@@ -470,25 +471,52 @@ class ScreenLink(
             send(l)
         }
 
-        fun send(message: ScreenMessage): Boolean {
-            if (closed) return false
-            return try {
-                synchronized(out) { channel.write(out, message) }
-                true
+        fun send(message: ScreenMessage) {
+            if (!closed) outbox.offer(message)
+        }
+
+        private fun write() {
+            var said = false
+            try {
+                while (true) {
+                    val m = outbox.poll(keepAliveMs, TimeUnit.MILLISECONDS) ?: ScreenMessage.KeepAlive
+                    if (m === CLOSE) break
+                    if (closed && m !is ScreenMessage.Bye && m !is ScreenMessage.Unpaired) continue
+                    channel.write(out, m)
+                    if (closed) {
+                        said = true
+                        break
+                    }
+                }
             } catch (e: IOException) {
                 close("the link to $peerName broke: ${e.message}")
-                false
+            } catch (e: InterruptedException) {
+                // Going.
+            }
+            if (said) {
+                // Closing at once could reset the connection before the other phone reads the last
+                // message: end our side and let it close, or close in a moment.
+                runCatching { socket.shutdownOutput() }
+                timer.schedule(LAST_WORD_MS) { runCatching { socket.close() } }
+            } else {
+                runCatching { socket.close() }
             }
         }
 
         private fun read() {
             try {
-                while (!closed) handle(channel.read(input))
+                // Once closed, read on until the other side closes: closing with its messages
+                // unread would reset the connection, losing our last one (a Bye) on its way.
+                while (true) {
+                    val m = channel.read(input)
+                    if (!closed) handle(m)
+                }
             } catch (e: SocketTimeoutException) {
                 close("$peerName didn't answer for ${idleMs / 1000} s")
             } catch (e: IOException) {
                 close(if (closed) "" else "$peerName left (${e.message ?: "the connection closed"})")
             }
+            if (closed) runCatching { socket.close() }
         }
 
         private fun handle(m: ScreenMessage) {
@@ -511,13 +539,14 @@ class ScreenLink(
             platform.changed()
         }
 
-        fun close(why: String, tell: Boolean = false) {
+        /** Ends the link; [last] (a Bye, Unpaired) is sent first, then the writer closes the socket. */
+        fun close(why: String, last: ScreenMessage? = null) {
             synchronized(this) {
                 if (closed) return
-                if (tell) send(ScreenMessage.Bye(why))
                 closed = true
             }
-            runCatching { socket.close() }
+            outbox.offer(last ?: CLOSE)
+            if (last == null) runCatching { socket.close() }
             synchronized(lock) {
                 if (connection === this) connection = null
                 if (why.isNotEmpty()) lastEnd = why
@@ -538,6 +567,9 @@ class ScreenLink(
         }
     }
 }
+
+// Tells a link's writer to stop.
+private val CLOSE: ScreenMessage = ScreenMessage.Unknown(0, ByteArray(0))
 
 private fun hostPort(host: String, port: Int) = if (':' in host) "[$host]:$port" else "$host:$port"
 
