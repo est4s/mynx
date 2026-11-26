@@ -36,12 +36,32 @@ PR into `screen-dev`, by subagents.
    with a `Presentation`, H.264 through `MediaCodec`, TCP over Wi-Fi;
    B decodes and sends touches back; measure the delay), and a second
    X output (RandR monitor) the X server draws and we stream.
-2. **Core, test-first:** pairing (a code shown on A, a key from it),
-   the messages between the phones, where B sits, settings and
-   `mynx screen pair | unpair | status | place`.
+2. **Core, test-first: built** (entry 223, PR into `screen-dev`):
+   pairing, the link, the messages, where B sits, `mynx screen`.
+   **To try on both phones** (mynx dev from the same build, same
+   Wi-Fi; A the Pixel 10, B the Nord 2):
+   - A: `mynx screen pair` shows `Pairing code: 123 456` and the
+     commands for B. B: `mynx screen pair 000000` (a wrong code):
+     B says `wrong code: …`, A shows a new code (`1 of 3`).
+   - B: `mynx screen pair` with A's new code: B says `Paired with
+     Pixel 10: this phone is its screen now.`, A `Paired with …`.
+   - `mynx screen status` on each: linked, the other's screen size
+     and dpi, `on its right` / `right of it`; A `Listening on port
+     7391`.
+   - A: `mynx screen place left`; B's status says `left of it`. B:
+     `mynx screen place above`; A's `screen-place` is `above`.
+   - B: `mynx screen disconnect`, then `mynx screen connect`: linked
+     again, no code. Swipe mynx dev away on A and open it again; B:
+     `mynx screen connect` links.
+   - A: `mynx screen unpair all`: both forget (`mynx screen status`
+     on B: `not paired`); B's `connect` says to pair. Pair again
+     with a new code.
+   - If B finds nothing: `mynx screen pair CODE 192.168.x.y` with the
+     address A shows (mDNS blocked?).
 3. After the spikes: B's Home and sending screens across, terminal
    tabs on B as text, typing going to the screen touched last, then
-   the desktop as an extended monitor, then the second half.
+   the desktop as an extended monitor, then the second half. B
+   linking again by itself (after a drop, at the app's start) too.
 
 ### 0. Desktop mode (on `desktop-dev`)
 
@@ -108,6 +128,45 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-26 (223): Extended screen: pairing and the link (step 2)
+
+- Branch `screen-core` from `screen-dev`, PR into `screen-dev`. Core,
+  `mynx` and the guide tested here; the app's side (`ScreenDevice`,
+  NsdManager; the service's wiring) only compiled in CI. Not tried on
+  two phones yet: the test is in "Next" 0a.
+- **What's there** (`docs/ARCHITECTURE.md`, "Extended screen:
+  pairing and the link"): SPAKE2 over P-256 (RFC 9382, its test
+  vectors pass), the handshake, AES-GCM frames, the version 1
+  messages (placeholders for video, touch, terminal text), the
+  pairs in the app's own files, mDNS `_mynx-screen._tcp`, the
+  layout of both phones as one screen, `mynx screen pair | connect
+  | disconnect | unpair | place | status`, settings `screen-host`,
+  `screen-port`, `screen-place`, touch view's Settings → Second
+  screen. `ScreenLink` runs on plain JDK sockets, so two links pair,
+  reconnect and unpair on loopback in core's tests.
+- **Agent's decisions, to confirm** (the maintainer was asleep;
+  conservative picks):
+  - Six-digit codes, one try each (a new code after a wrong one),
+    three wrong ones stop the pairing, five minutes at most. SPAKE2
+    means no offline guessing, so six digits give 1 in a million
+    per try.
+  - Commands: `mynx screen pair` on A shows the code; `mynx screen
+    pair CODE [ADDRESS]` on B joins (one verb, as Bluetooth). B comes
+    back with `mynx screen connect`; nothing links again by itself
+    yet (after a drop or a restart).
+  - A listens (all interfaces, port 7391) only while a screen is
+    paired or a pairing waits (`screen-host = auto`); `off` never.
+  - Where B sits is A's setting `screen-place` (plain text, in
+    Debian); B's `mynx screen place` asks A. Alignment exists in the
+    layout model (start, centre, end) but has no setting yet.
+  - The name shown is Android's device name (Settings → About), else
+    the model.
+  - One link at a time; a second screen is refused as busy.
+  - Not constant-time P-256 (BigInteger): each scalar is used once.
+- **Lesson** (AGENTS.md): several worktrees' Gradle daemons at once
+  ran the phone out of memory and Android killed the app;
+  `~/.gradle/gradle.properties` caps them now.
 
 ### 2026-11-26 (222): Extended screen planned, `screen-dev`
 
