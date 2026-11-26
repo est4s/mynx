@@ -69,7 +69,15 @@ import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.Desktop
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.desktopRequests
+import io.github.est4s.terminal.core.ScreenHome
 import io.github.est4s.terminal.core.ScreenLink
+import io.github.est4s.terminal.core.ScreenMessage
+import io.github.est4s.terminal.core.ScreenRef
+import io.github.est4s.terminal.core.ScreenRole
+import io.github.est4s.terminal.core.ScreenShare
+import io.github.est4s.terminal.core.ScreenShowing
+import io.github.est4s.terminal.core.SentScreen
+import io.github.est4s.terminal.core.ShownStream
 import io.github.est4s.terminal.core.screenRequests
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
@@ -438,12 +446,100 @@ class TerminalService : Service() {
                 webAppRequests(webApps) +
                 appPermissions.requests() +
                 desktopRequests(desktop) { activity?.openDesktop() == true } +
-                screenRequests(screenLink),
+                screenRequests(screenLink, screenShare),
         )
     }
     // The extended screen's link to another phone (mynx screen); core runs it, the pairs' keys in our own files.
     private val screenLink: ScreenLink by lazy {
-        ScreenLink(File(filesDir, "screen"), File(rootfs, "root/$CONFIG_DIR/settings.conf"), ::phoneName, ScreenDevice(this))
+        ScreenLink(File(filesDir, "screen"), File(rootfs, "root/$CONFIG_DIR/settings.conf"), ::phoneName, ScreenDevice(this) {
+            mainHandler.post { activity?.onScreenLinkChanged() }
+        }).also { it.media = screenShare }
+    }
+
+    /** The screens sent over the link (core decides): the host's drawn and encoded by [screenCaster], the screen's shown by the activity. */
+    val screenShare: ScreenShare by lazy {
+        ScreenShare(
+            send = { m -> screenLink.send(m) },
+            peer = { screenLink.peer() },
+            casting = screenCaster,
+            showing = screenShowing,
+            settingsFile = File(rootfs, "root/$CONFIG_DIR/settings.conf"),
+            post = { block -> mainHandler.post(block) },
+        )
+    }
+
+    private val screenCaster: ScreenCaster by lazy {
+        ScreenCaster(
+            this, mainHandler,
+            apps = { webAppFiles },
+            openApp = ::openApp,
+            backHere = { name ->
+                // Android may refuse a start from the background: then it's in Home's apps as before.
+                runCatching { startActivity(WebAppActivity.shortcutIntent(this, name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                activity?.onScreenLinkChanged()
+            },
+            gone = { name ->
+                runCatching { webApps.screenClosed(name) }
+                activity?.onScreenLinkChanged()
+            },
+            encoded = { id, flags, pts, data -> screenShare.encoded(id, flags, pts, data) },
+            typing = ::screenTyping,
+        )
+    }
+
+    // A sent screen's field has the focus and the other phone was touched last: this phone's keyboard types into it.
+    private fun screenTyping(screen: SentScreen?, editing: Boolean) {
+        if (screen == null || !editing) {
+            ScreenKeysActivity.target = null
+            ScreenKeysActivity.close()
+            return
+        }
+        val peer = screenLink.peer()?.name ?: "the screen"
+        ScreenKeysActivity.target = object : ScreenKeysActivity.Target {
+            override val label = "Typing on $peer: ${screen.title}"
+            override fun type(text: String) = screenCaster.type(text)
+            override fun press(code: Int) = screenCaster.press(code)
+            override fun key(event: android.view.KeyEvent) = screenCaster.key(event)
+            override fun closedHere() = screenShare.hostTouched()
+        }
+        if (ScreenKeysActivity.open) return
+        // Only over one of our screens: Android won't start it from the background anyway.
+        val shown = front()?.activity ?: return
+        runCatching { shown.startActivity(ScreenKeysActivity.intent(shown)) }
+    }
+
+    private val screenShowing = object : ScreenShowing {
+        override fun started(stream: ShownStream) {
+            activity?.onScreenStream(stream, started = true)
+        }
+
+        override fun ended(stream: Int) {
+            activity?.onScreenStreamEnded(stream)
+        }
+
+        override fun video(message: ScreenMessage.Video) {
+            activity?.screenVideo(message)
+        }
+
+        override fun focus(typing: Boolean) {
+            activity?.onScreenFocus(typing)
+        }
+    }
+
+    /** This phone was touched: typing is its own again (the extended screen). Main thread. */
+    fun screenHostTouched() {
+        if (screenShare.typingTo != null) screenShare.hostTouched()
+    }
+
+    /** The link, for Home: the other phone, and what's sent or shown; null while unlinked. */
+    fun screenHome(): ScreenHome? {
+        val peer = screenLink.peer() ?: return null
+        return ScreenHome(
+            peer.name,
+            peer.role,
+            screenShare.sent.map { ScreenRef(it.id, it.title) },
+            if (peer.role == ScreenRole.SCREEN) screenShare.shown.map { ScreenRef(it.id, it.title) } else emptyList(),
+        )
     }
 
     // The name people gave the phone (Settings, About phone), else its model.
@@ -562,7 +658,7 @@ class TerminalService : Service() {
             }
         }
 
-        override fun isOpen(name: String): Boolean = WebAppActivity.isOpen(name)
+        override fun isOpen(name: String): Boolean = WebAppActivity.isOpen(name) || screenCaster.isSent(name)
 
         override fun reload(name: String): Boolean = WebAppActivity.reload(name)
 
@@ -1019,6 +1115,7 @@ class TerminalService : Service() {
         sound.stop()
         runCatching { desktopLink.stop() }
         runCatching { screenLink.stop() }
+        runCatching { screenCaster.closeAll() }
         runCatching { desktop.stop() }
         runCatching { usb.stop() }
         runCatching { usbFds.stop() }

@@ -71,6 +71,8 @@ import io.github.est4s.terminal.core.desktopBackLabel
 import io.github.est4s.terminal.core.desktopShortcut
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeMenus
+import io.github.est4s.terminal.core.ScreenMessage
+import io.github.est4s.terminal.core.ShownStream
 import io.github.est4s.terminal.core.ServiceOp
 import io.github.est4s.terminal.core.ToolsInstaller
 import io.github.est4s.terminal.core.WebApps
@@ -170,6 +172,8 @@ class MainActivity : Activity(), FrontActivity {
     // The desktop lies over whatever screen it was opened from, which Back shows again.
     private var desktopView: DesktopView? = null
     private var desktopFromTouch = false
+    // On the screen (the other phone of the extended screen): what the host sent, over everything while shown.
+    @Volatile private var screenView: ScreenStreamView? = null
     // Ctrl+Shift+D was taken: its key up is too.
     private var desktopShortcutHeld = false
     private var appliedFont: String? = null
@@ -346,6 +350,8 @@ class MainActivity : Activity(), FrontActivity {
 
     override fun onStop() {
         root.removeCallbacks(keyBarPoll)
+        // Off screen, the host needn't send the video: Home lists it to show again.
+        hideScreenStream()
         if (desktopShown) desktopView?.hidden()
         dictation.finish()
         visible = false
@@ -397,6 +403,7 @@ class MainActivity : Activity(), FrontActivity {
     // drawer, then the app is left. The desktop backs out to the screen it was opened over.
     private fun goBack() {
         when {
+            screenShown -> hideScreenStream()
             desktopShown -> hideDesktop()
             filesShown && filesView?.back() == true -> Unit
             filesShown -> showChatHome()
@@ -757,7 +764,10 @@ class MainActivity : Activity(), FrontActivity {
     private fun homeMenus(): HomeMenus {
         // The list first: reading it can pick up a hand edit, which changes the count.
         val services = service?.homeServices ?: emptyList()
-        return HomeMenus(WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools), service?.servicesActive ?: 0, services)
+        return HomeMenus(
+            WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools),
+            service?.servicesActive ?: 0, services, screen = service?.screenHome(),
+        )
     }
 
     private fun onHomeAction(action: HomeAction) {
@@ -776,6 +786,10 @@ class MainActivity : Activity(), FrontActivity {
             }
             is HomeAction.Link -> return toastError(service.openLink(action.url))
             HomeAction.Desktop -> return showDesktop()
+            is HomeAction.ScreenShow -> {
+                val stream = service.screenShare.shown.firstOrNull { it.id == action.id } ?: return
+                return onScreenStream(stream, started = false)
+            }
             // HomeView runs these itself.
             is HomeAction.Menu, is HomeAction.Config, is HomeAction.Input, HomeAction.None -> return
         }
@@ -939,10 +953,82 @@ class MainActivity : Activity(), FrontActivity {
             root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         }
 
+        // A stream from the host, over even the desktop: it came from the other phone.
+        screenView?.hide()
+        screenView = ScreenStreamView(this, screenStreamHost).also {
+            root.addView(it, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+
         terminalView.attachSession(session)
         terminalView.requestFocus()
         renderStrip()
         refreshKeyBar(force = true)
+    }
+
+    private val screenStreamHost = object : ScreenStreamView.Host {
+        override fun touch(touch: ScreenMessage.Touch) {
+            service?.screenShare?.touch(touch)
+        }
+
+        override fun decoded(stream: Int, pts: Long) {
+            service?.screenShare?.decoded(stream, pts)
+        }
+
+        override fun askKeyFrame(stream: Int) {
+            service?.screenShare?.askKeyFrame(stream)
+        }
+    }
+
+    private val screenShown get() = screenView?.visibility == View.VISIBLE
+
+    /** The host sent [stream] ([started]) or Home asked for it: shown full screen, if the app is on screen. */
+    fun onScreenStream(stream: ShownStream, started: Boolean) {
+        onScreenLinkChanged()
+        val view = screenView ?: return
+        if (!onScreen) return
+        // A second one arriving doesn't take the place of the one being watched.
+        if (started && screenShown) return
+        val share = service?.screenShare ?: return
+        if (!share.watch(stream.id)) return
+        hideKeyboard()
+        view.show(stream)
+    }
+
+    /** The host has the stream back: it goes, and Home with it. */
+    fun onScreenStreamEnded(stream: Int) {
+        if (screenView?.shown?.id == stream) hideScreenStream(tell = false)
+        onScreenLinkChanged()
+    }
+
+    /** A part of a stream's video, on the link's thread. */
+    fun screenVideo(message: ScreenMessage.Video) {
+        screenView?.video(message)
+    }
+
+    /** Typing on the host comes to the stream shown here, or no longer. */
+    fun onScreenFocus(typing: Boolean) {
+        screenView?.focus(typing)
+    }
+
+    /** The link, or what's sent over it, changed: Home's lists follow. */
+    fun onScreenLinkChanged() {
+        if (homeShown) home?.refresh()
+        if (chatHomeShown) chatHomeView?.refresh()
+    }
+
+    private fun hideScreenStream(tell: Boolean = true) {
+        val view = screenView ?: return
+        if (!screenShown) return
+        view.hide()
+        if (tell) service?.screenShare?.stopWatching()
+        val under = touchScreens().lastOrNull()
+        if (under != null) under.requestFocus() else if (::terminalView.isInitialized) terminalView.requestFocus()
+    }
+
+    // Any finger down on this phone: typing is its own again (the extended screen's host).
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && !screenShown) service?.screenHostTouched()
+        return super.dispatchTouchEvent(event)
     }
 
     private val desktopHost = object : DesktopView.Host {

@@ -140,6 +140,15 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false" />
 
+        <!-- The extended screen's typing bar: this phone's keyboard, for a field on the other phone. -->
+        <activity
+            android:name=".ScreenKeysActivity"
+            android:theme="@android:style/Theme.Material.Dialog.NoActionBar"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"
+            android:exported="false" />
+
         <!-- Other apps share files and text into Debian's share folder. -->
         <activity
             android:name=".ShareActivity"
