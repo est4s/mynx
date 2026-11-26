@@ -21,7 +21,7 @@ val HOME_SETTING_GROUPS = listOf(
     ),
     HomeSettingGroup("settings:terminal", "Terminal", listOf("font-size", "font", "cursor-style", "cursor-blink", "tab-swipe")),
     HomeSettingGroup("settings:desktop", "Desktop", listOf("desktop", "desktop-touch")),
-    HomeSettingGroup("settings:screen", "Second screen", listOf("screen-host", "screen-port", "screen-place")),
+    HomeSettingGroup("settings:screen", "Second screen", listOf("screen-host", "screen-port", "screen-place", "screen-fps", "screen-bitrate")),
     HomeSettingGroup(
         "settings:phone", "Phone access",
         listOf(
@@ -42,6 +42,8 @@ private val SETTING_LABELS = mapOf(
     "screen-host" to "Take paired screens",
     "screen-port" to "Port",
     "screen-place" to "Screen sits",
+    "screen-fps" to "Frames per second",
+    "screen-bitrate" to "Video Mbit/s",
     "chat-mode" to "Permission mode",
     "chat-model" to "Model for new chats",
     "agent-notify" to "Notifications",
