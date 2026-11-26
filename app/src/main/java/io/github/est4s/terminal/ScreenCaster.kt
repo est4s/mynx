@@ -3,19 +3,14 @@ package io.github.est4s.terminal
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
-import android.os.Build
-import android.os.Bundle
 import android.os.Handler
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.Surface
 import io.github.est4s.terminal.core.ACTION_DOWN
 import io.github.est4s.terminal.core.ACTION_POINTER_DOWN
 import io.github.est4s.terminal.core.ACTION_POINTER_UP
@@ -24,23 +19,20 @@ import io.github.est4s.terminal.core.ScreenCasting
 import io.github.est4s.terminal.core.ScreenMessage
 import io.github.est4s.terminal.core.ScreenTarget
 import io.github.est4s.terminal.core.SentScreen
-import io.github.est4s.terminal.core.VIDEO_CONFIG
-import io.github.est4s.terminal.core.VIDEO_KEY
 import io.github.est4s.terminal.core.WebApp
 import io.github.est4s.terminal.core.WebAppOpened
 import io.github.est4s.terminal.core.WebApps
 import io.github.est4s.terminal.core.encoderSizes
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.concurrent.thread
 
 /**
  * The host's side of a sent screen on Android (core's [ScreenCasting];
  * spike #117 found what works): a private VirtualDisplay
  * (PRESENTATION | OWN_CONTENT_ONLY, no MediaProjection needed) with the
- * app's [SentAppScreen] on it, and an H.264 encoder (MediaCodec, the
- * low-latency keys where the encoder takes them) feeding on the display
- * while the other phone watches. Frames go to [encoded] from the
- * encoder's thread. Main thread, but [keyFrame].
+ * app's [SentAppScreen] on it, and a [ScreenEncoder] feeding on the
+ * display while the other phone watches. The desktop goes to [desktop]
+ * instead: the X server draws its part into the encoder itself. Frames
+ * go to [encoded] from the encoder's thread. Main thread, but [keyFrame].
  */
 class ScreenCaster(
     private val context: Context,
@@ -54,13 +46,12 @@ class ScreenCaster(
     private val encoded: (Int, Int, Long, ByteArray) -> Unit,
     /** Typing on this phone goes to a sent screen's field now ([ScreenKeysActivity]), or no longer (null). */
     private val typing: (SentScreen?, Boolean) -> Unit,
+    /** The desktop's part on the other phone. */
+    private val desktop: DesktopCaster,
 ) : ScreenCasting {
     private class Cast(val screen: SentScreen, val display: VirtualDisplay, val view: SentAppScreen) {
         var cancelOpen: (() -> Unit)? = null
-        @Volatile var encoder: MediaCodec? = null
-        var surface: Surface? = null
-        @Volatile var running = false
-        var drain: Thread? = null
+        @Volatile var encoder: ScreenEncoder? = null
         var downTime = 0L
     }
 
@@ -72,6 +63,7 @@ class ScreenCaster(
     fun isSent(name: String): Boolean = casts.values.any { it.screen.target.name == name }
 
     override fun describe(target: ScreenTarget): Result<String> {
+        if (target == ScreenTarget.Desktop) return desktop.describe()
         val app = runCatching { apps().find(target.name) }.getOrNull()
             ?: return Result.failure(Exception("no app named ${target.name} (mynx app list shows them)"))
         return Result.success(app.label)
@@ -89,6 +81,7 @@ class ScreenCaster(
     }
 
     override fun open(screen: SentScreen, density: Int): String? {
+        if (screen.target == ScreenTarget.Desktop) return desktop.open(screen, density)
         val dm = context.getSystemService(DisplayManager::class.java) ?: return "no display manager"
         // Off this phone's screen first, keeping the app's service (it opens there next).
         WebAppActivity.moveAway(screen.target.name)
@@ -121,6 +114,7 @@ class ScreenCaster(
     }
 
     override fun close(screen: SentScreen, back: Boolean) {
+        if (screen.target == ScreenTarget.Desktop) return desktop.close(screen)
         val cast = casts.remove(screen.id) ?: return
         stopEncoder(cast)
         runCatching { cast.cancelOpen?.invoke() }
@@ -134,115 +128,36 @@ class ScreenCaster(
     }
 
     override fun encode(screen: SentScreen, on: Boolean, fps: Int, kbps: Int) {
+        if (screen.target == ScreenTarget.Desktop) return desktop.encode(screen, on, fps, kbps)
         val cast = casts[screen.id] ?: return
         if (!on) return stopEncoder(cast)
         if (cast.encoder != null) return
         try {
-            startEncoder(cast, fps, kbps)
+            val encoder = ScreenEncoder.start(screen.width, screen.height, fps, kbps) { flags, pts, data ->
+                encoded(screen.id, flags, pts, data)
+            }
+            cast.encoder = encoder
+            cast.display.surface = encoder.surface
         } catch (e: Exception) {
             stopEncoder(cast)
             cast.view.showStatus("The encoder didn't start: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
-    private fun startEncoder(cast: Cast, fps: Int, kbps: Int) {
-        val screen = cast.screen
-        val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-        val cbr = runCatching {
-            encoder.codecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_VIDEO_AVC).encoderCapabilities
-                .isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
-        }.getOrDefault(false)
-        var configured = false
-        for (lowLatency in listOf(true, false)) {
-            try {
-                encoder.configure(encoderFormat(screen.width, screen.height, fps, kbps, lowLatency, cbr), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-                configured = true
-                break
-            } catch (e: Exception) {
-                encoder.reset()
-            }
-        }
-        if (!configured) {
-            encoder.release()
-            error("it took no format for ${screen.width}x${screen.height}")
-        }
-        val surface = encoder.createInputSurface()
-        encoder.start()
-        cast.encoder = encoder
-        cast.surface = surface
-        cast.running = true
-        cast.display.surface = surface
-        cast.drain = thread(name = "mynx-screen-encode", isDaemon = true) { drain(cast, encoder) }
-    }
-
-    private fun encoderFormat(w: Int, h: Int, fps: Int, kbps: Int, lowLatency: Boolean, cbr: Boolean): MediaFormat =
-        MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
-            setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, kbps * 1000)
-            setInteger(MediaFormat.KEY_FRAME_RATE, fps)
-            setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
-            // A still screen still sends 10 frames a second, so a lost one is soon made good.
-            setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000L)
-            if (Build.VERSION.SDK_INT >= 29) setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, fps.toFloat())
-            if (lowLatency) {
-                setInteger(MediaFormat.KEY_PRIORITY, 0)
-                setInteger(
-                    MediaFormat.KEY_BITRATE_MODE,
-                    if (cbr) MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR else MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR,
-                )
-                if (Build.VERSION.SDK_INT >= 29) {
-                    setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
-                    setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1)
-                }
-                if (Build.VERSION.SDK_INT >= 30) setInteger(MediaFormat.KEY_LATENCY, 1)
-            }
-        }
-
-    private fun drain(cast: Cast, encoder: MediaCodec) {
-        val info = MediaCodec.BufferInfo()
-        try {
-            while (cast.running) {
-                val index = encoder.dequeueOutputBuffer(info, 100_000)
-                if (index < 0) continue
-                val data = ByteArray(info.size)
-                encoder.getOutputBuffer(index)?.let { buffer ->
-                    buffer.position(info.offset)
-                    buffer.get(data, 0, info.size)
-                }
-                val flags = info.flags
-                val pts = info.presentationTimeUs
-                encoder.releaseOutputBuffer(index, false)
-                if (flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) break
-                var ours = 0
-                if (flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0) ours = ours or VIDEO_KEY
-                if (flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) ours = ours or VIDEO_CONFIG
-                if (data.isNotEmpty()) encoded(cast.screen.id, ours, pts, data)
-            }
-        } catch (e: IllegalStateException) {
-            // Stopped under us: the stream is going.
-        }
-    }
-
     private fun stopEncoder(cast: Cast) {
         val encoder = cast.encoder ?: return
-        cast.running = false
         cast.encoder = null
         runCatching { cast.display.surface = null }
-        // Its dequeue waits at most 100 ms: then the encoder can go.
-        runCatching { cast.drain?.join(300) }
-        cast.drain = null
-        runCatching { encoder.stop() }
-        runCatching { encoder.release() }
-        runCatching { cast.surface?.release() }
-        cast.surface = null
+        encoder.stop()
     }
 
     override fun keyFrame(screen: SentScreen) {
-        val encoder = casts[screen.id]?.encoder ?: return
-        runCatching { encoder.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) }) }
+        if (screen.target == ScreenTarget.Desktop) return desktop.keyFrame()
+        casts[screen.id]?.encoder?.keyFrame()
     }
 
     override fun touch(screen: SentScreen, touch: ScreenMessage.Touch) {
+        if (screen.target == ScreenTarget.Desktop) return desktop.touch(screen, touch)
         val cast = casts[screen.id] ?: return
         val count = touch.points.size
         if (count == 0) return
@@ -279,8 +194,11 @@ class ScreenCaster(
     }
 
     override fun typingTo(screen: SentScreen?) {
-        typedTo = screen?.id
-        if (screen == null) typing(null, false)
+        val toDesktop = screen != null && screen.target == ScreenTarget.Desktop
+        typedTo = if (screen != null && !toDesktop) screen.id else null
+        // The app's bar closes first: the desktop may open the same bar for itself.
+        if (typedTo == null) typing(null, false)
+        desktop.typingTo(if (toDesktop) screen else null)
     }
 
     /** Text typed on this phone for the sent screen typed to. */
@@ -312,5 +230,6 @@ class ScreenCaster(
     /** Everything goes (the app stops). */
     fun closeAll() {
         casts.values.toList().forEach { close(it.screen, back = false) }
+        desktop.closeAll()
     }
 }

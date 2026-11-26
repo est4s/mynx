@@ -456,8 +456,16 @@ class TerminalService : Service() {
     // The extended screen's link to another phone (mynx screen); core runs it, the pairs' keys in our own files.
     private val screenLink: ScreenLink by lazy {
         ScreenLink(File(filesDir, "screen"), File(rootfs, "root/$CONFIG_DIR/settings.conf"), ::phoneName, ScreenDevice(this) {
-            mainHandler.post { activity?.onScreenLinkChanged() }
-        }).also { it.media = screenShare }
+            mainHandler.post {
+                activity?.onScreenLinkChanged()
+                // `mynx screen place`, from either phone, lands here too.
+                screenSettingsChanged()
+            }
+        }).also { link ->
+            link.media = screenShare
+            // Every change of screen-place (here, asked from the screen, or by hand) moves the desktop's part there.
+            link.placeChanged = { mainHandler.post { if (desktopCaster.sent != null) desktopCaster.relayout() } }
+        }
     }
 
     /** The screens sent over the link (core decides): the host's drawn and encoded by [screenCaster], the screen's shown by the activity. */
@@ -488,7 +496,67 @@ class TerminalService : Service() {
             },
             encoded = { id, flags, pts, data -> screenShare.encoded(id, flags, pts, data) },
             typing = ::screenTyping,
+            desktop = desktopCaster,
         )
+    }
+
+    /** The desktop's part on the other phone (the extended screen): drawn by the X server into its encoder. */
+    private val desktopCaster: DesktopCaster by lazy {
+        DesktopCaster(
+            this, mainHandler, desktopLink,
+            settings = { currentSettings() },
+            encoded = { id, flags, pts, data -> screenShare.encoded(id, flags, pts, data) },
+            pointerTo = { id, x, y, shown -> screenShare.pointer(id, x, y, shown) },
+            typing = ::desktopTyping,
+            shownHere = { desktopOpen && activity?.onScreen == true },
+            changed = { activity?.onScreenLinkChanged() },
+        )
+    }
+
+    // The desktop on the other phone was clicked, typed to: this phone's keyboard types into X there.
+    private fun desktopTyping(on: Boolean) {
+        if (!on) {
+            if (ScreenKeysActivity.target === desktopKeys) {
+                ScreenKeysActivity.target = null
+                ScreenKeysActivity.close()
+            }
+            return
+        }
+        ScreenKeysActivity.target = desktopKeys
+        if (ScreenKeysActivity.open) return
+        val shown = front()?.activity ?: return
+        runCatching { shown.startActivity(ScreenKeysActivity.intent(shown)) }
+    }
+
+    private val desktopKeys = object : ScreenKeysActivity.Target {
+        override val label: String get() = "Typing on ${screenLink.peer()?.name ?: "the screen"}: $DESKTOP_TITLE"
+        override fun type(text: String) = desktopCaster.type(text)
+        override fun press(code: Int) = desktopCaster.press(code)
+        override fun key(event: android.view.KeyEvent) = desktopCaster.key(event)
+        override fun closedHere() = screenShare.hostTouched()
+    }
+
+    /** The desktop to or from the other phone (the desktop's bar): sent if it isn't, else taken back. Main thread. */
+    fun screenDesktopToggle(): String? {
+        if (desktopCaster.sent != null) {
+            screenShare.take(ScreenTarget.Desktop.name)
+            return null
+        }
+        return screenShare.send(ScreenTarget.Desktop).exceptionOrNull()?.message
+    }
+
+    /** The other phone, when the desktop can go there or is there: its name and whether it's there. */
+    fun screenDesktop(): Pair<String, Boolean>? {
+        val peer = screenLink.peer()?.takeIf { it.role == ScreenRole.HOST } ?: return null
+        val sent = desktopCaster.sent != null
+        if (!sent && !desktopLink.connected) return null
+        return Pair(peer.name, sent)
+    }
+
+    /** `screen-place` or `screen-desktop` may have changed (`mynx set`, `mynx screen place`): the desktop's part moves. */
+    fun screenSettingsChanged() {
+        runCatching { screenLink.settingsChanged() }
+        if (desktopCaster.sent != null) desktopCaster.relayout()
     }
 
     // Apps go as video (screenCaster), terminal tabs as text (termCaster).
@@ -634,6 +702,10 @@ class TerminalService : Service() {
             activity?.onScreenFocus(typing)
         }
 
+        override fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) {
+            activity?.onScreenPointer(stream, x, y, shown)
+        }
+
         override fun termStarted(id: Int, title: String, columns: Int, rows: Int) {
             remoteTerms.started(id, title, columns, rows)
             activity?.onRemoteTermStarted()
@@ -669,6 +741,7 @@ class TerminalService : Service() {
             },
             // This phone's own tabs, in strip order (Home's numbers are the strip's).
             tabs = if (host) tabs.tabs.map { it.title } else emptyList(),
+            desktop = host && desktopLink.connected && desktopCaster.sent == null,
         )
     }
 
@@ -1007,6 +1080,13 @@ class TerminalService : Service() {
         mainHandler.post(updateTick)
         // A server left running when the app went is found again by its broadcast.
         runCatching { desktopLink.start() }
+        // The desktop stopping takes its part on the other phone back; a server that comes back
+        // at once (restarted) gets the part again as it connects.
+        desktopLink.onGone = {
+            mainHandler.postDelayed({
+                if (!desktopLink.connected) desktopCaster.sent?.let { screenShare.closedHere(it.id) }
+            }, 5000L)
+        }
         // A paired screen can come back: listen while one is (screen-host).
         runCatching { screenLink.refresh() }
     }
@@ -1154,6 +1234,8 @@ class TerminalService : Service() {
         runCatching { serviceManager.reload() }
         applySoundSetting()
         applyWakelockSetting()
+        // screen-place or screen-desktop: the desktop's part on the other phone moves.
+        screenSettingsChanged()
         // android-bluetooth, or bluetooth.conf by hand (mynx check).
         runCatching { bluetooth.refresh() }
         runCatching { screenLink.refresh() }

@@ -16,9 +16,9 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * The version of the link between the phones; a Hello with another is
  * refused. 1 was the pairing alone; 2 sends screens (video, touches);
- * 3 sends terminal tabs as text.
+ * 3 sends terminal tabs as text; 4 the desktop's pointer ([ScreenMessage.Pointer]).
  */
-const val SCREEN_PROTOCOL = 3
+const val SCREEN_PROTOCOL = 4
 
 /** A [ScreenMessage.Video] part that's a key frame: it decodes alone. */
 const val VIDEO_KEY = 1
@@ -168,6 +168,13 @@ sealed class ScreenMessage(val type: Int) {
     /** Terminal [term] was touched on the screen: typing goes to it. */
     data class TermTouched(val term: Int) : ScreenMessage(TYPE_TERM_TOUCHED)
 
+    /**
+     * The desktop's pointer on stream [stream] (the X server draws no
+     * cursor there, so the screen draws one), at [x], [y] of its pixels;
+     * not [shown] while it's on the host's part of the desktop.
+     */
+    data class Pointer(val stream: Int, val x: Float, val y: Float, val shown: Boolean) : ScreenMessage(TYPE_POINTER)
+
     class Unknown(type: Int, val payload: ByteArray) : ScreenMessage(type)
 
     override fun equals(other: Any?): Boolean =
@@ -205,6 +212,8 @@ sealed class ScreenMessage(val type: Int) {
         const val TYPE_TERM_INPUT = 46
         const val TYPE_TERM_ACK = 47
         const val TYPE_TERM_TOUCHED = 48
+        // Version 4.
+        const val TYPE_POINTER = 49
     }
 }
 
@@ -256,6 +265,7 @@ fun encodeScreenMessage(m: ScreenMessage): ByteArray {
         is ScreenMessage.TermInput -> { out.writeInt(m.term); out.write(m.data) }
         is ScreenMessage.TermAck -> { out.writeInt(m.term); out.writeInt(m.epoch); out.writeLong(m.bytes) }
         is ScreenMessage.TermTouched -> out.writeInt(m.term)
+        is ScreenMessage.Pointer -> { out.writeInt(m.stream); out.writeFloat(m.x); out.writeFloat(m.y); out.writeByte(if (m.shown) 1 else 0) }
         is ScreenMessage.Unknown -> out.write(m.payload)
     }
     out.flush()
@@ -330,6 +340,8 @@ fun decodeScreenMessage(bytes: ByteArray): ScreenMessage {
             ScreenMessage.TYPE_TERM_INPUT -> ScreenMessage.TermInput(input.readInt(), rest())
             ScreenMessage.TYPE_TERM_ACK -> ScreenMessage.TermAck(input.readInt(), input.readInt(), input.readLong())
             ScreenMessage.TYPE_TERM_TOUCHED -> ScreenMessage.TermTouched(input.readInt())
+            ScreenMessage.TYPE_POINTER ->
+                ScreenMessage.Pointer(input.readInt(), input.readFloat(), input.readFloat(), input.readUnsignedByte() != 0)
             else -> ScreenMessage.Unknown(type, rest())
         }
     } catch (e: EOFException) {

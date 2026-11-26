@@ -244,3 +244,78 @@ class DirectGesturesTest {
         assertEquals(listOf(Move(499f, 0f)), direct.down(0, 800f, -5f, 0))
     }
 }
+
+/** The extended screen: each phone's gestures on its own monitor of one X screen, sharing X's one pointer. */
+class MonitorGesturesTest {
+    // This phone's monitor, 500 × 1000, and the other phone's right of it, 400 × 800.
+    private val here = PixelRect(0, 0, 500, 1000)
+    private val there = PixelRect(500, 0, 400, 800)
+    private val pointer = DesktopPointer().apply { areas = listOf(here, there) }
+    private val a = TouchpadGestures(slop = 10f, pointer = pointer).apply { monitor(here) }
+    private val b = TouchpadGestures(slop = 10f, pointer = pointer).apply { monitor(there) }
+
+    private fun drag(pad: DesktopGestures, dx: Float, dy: Float, ms: Long) {
+        pad.down(0, 100f, 100f, ms)
+        for (i in 1..20) pad.move(listOf(Finger(0, 100f + dx * i / 20, 100f + dy * i / 20)), ms + i * 50L)
+        pad.up(0, ms + 2000)
+    }
+
+    @Test
+    fun `the pointer starts in the middle of the first monitor`() {
+        assertEquals(250f, pointer.x)
+        assertEquals(500f, pointer.y)
+    }
+
+    @Test
+    fun `a touchpad moves the pointer across into the other monitor`() {
+        drag(a, 300f, 0f, 0)
+        assertTrue(pointer.x > 500f, "${pointer.x}")
+        assertEquals(pointer.x, b.pointerX)
+    }
+
+    @Test
+    fun `the other phone's touchpad moves the same pointer`() {
+        drag(b, -100f, 0f, 0)
+        assertTrue(pointer.x < 250f, "${pointer.x}")
+        assertEquals(pointer.x, a.pointerX)
+    }
+
+    @Test
+    fun `the pointer stays on the monitors, off the corner neither shows`() {
+        drag(a, 300f, 0f, 0)
+        drag(b, 0f, 900f, 3000)
+        // The other monitor ends at 800: below it is no screen.
+        assertEquals(799f, pointer.y)
+        drag(b, 600f, 0f, 6000)
+        assertEquals(899f, pointer.x)
+    }
+
+    @Test
+    fun `direct touch is where the finger is on its own monitor, and kept on it`() {
+        val direct = DirectGestures(slop = 10f, pointer = pointer).apply { monitor(there) }
+        assertEquals(listOf(Move(510f, 20f)), direct.down(0, 10f, 20f, 0))
+        direct.up(0, 50)
+        assertEquals(listOf(Move(899f, 799f)), direct.down(0, 900f, 900f, 1000))
+    }
+
+    @Test
+    fun `a mouse points on its own monitor`() {
+        assertEquals(Move(600f, 30f), b.moveTo(100f, 30f))
+        assertEquals(600f, a.pointerX)
+    }
+
+    @Test
+    fun `the pointer tells who listens that it moved`() {
+        var moves = 0
+        pointer.listener = { moves++ }
+        b.moveTo(100f, 30f)
+        assertEquals(1, moves)
+    }
+
+    @Test
+    fun `a monitor taken away brings the pointer back onto the one left`() {
+        drag(a, 300f, 0f, 0)
+        pointer.areas = listOf(here)
+        assertEquals(499f, pointer.x)
+    }
+}

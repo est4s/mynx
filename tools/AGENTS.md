@@ -22,7 +22,7 @@ comes up:
 | `/opt/mynx/docs/services.md` | background services: servers and daemons kept running by the app |
 | `/opt/mynx/docs/usb.md` | USB serial devices (Arduino, ESP32, adapters, board tools' recipes), raw USB devices (libusb, picotool, UF2, JTAG) |
 | `/opt/mynx/docs/desktop.md` | desktop mode: the X server, XFCE, `DISPLAY` |
-| `/opt/mynx/docs/screen.md` | another phone as a screen of this one: pairing, the link, sending apps and terminal tabs to it, settings |
+| `/opt/mynx/docs/screen.md` | another phone as a screen of this one: pairing, the link, sending apps, terminal tabs and the desktop to it, settings |
 | `/opt/mynx/docs/bluetooth.md` | Bluetooth serial devices (SPP) and Bluetooth LE devices (GATT, BLE UART ports) |
 
 ## How it runs

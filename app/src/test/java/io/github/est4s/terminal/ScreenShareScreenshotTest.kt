@@ -62,6 +62,30 @@ class ScreenShareScreenshotTest {
         shoot(home(host), "screen-send", SCREEN_SEND_MENU, "Send to Nord 2")
     }
 
+    // The desktop running: it can be sent too, first in the list.
+    @Test
+    fun sendListWithTheDesktop() {
+        write("apps/pixel-hero/index.html", "<title>Pixel Hero</title>")
+        shoot(home(host.copy(desktop = true)), "screen-send-desktop", SCREEN_SEND_MENU, "Send to Nord 2")
+    }
+
+    // The desktop on the screen: black in Robolectric, with the host's pointer drawn over it.
+    @Test
+    fun desktopStream() {
+        val view = Screenshots.open(1080, 2400) { activity ->
+            ScreenStreamView(activity, object : ScreenStreamView.Host {
+                override fun touch(touch: ScreenMessage.Touch) {}
+                override fun decoded(stream: Int, pts: Long) {}
+                override fun askKeyFrame(stream: Int) {}
+            })
+        }
+        view.show(ShownStream(2, "Linux desktop", 1080, 2400))
+        Screenshots.settle()
+        view.pointer(2, 540f, 1200f, true)
+        Screenshots.settle()
+        Screenshots.save(view, "screen-desktop-stream")
+    }
+
     @Test
     fun screenHome() = shoot(
         home(ScreenHome("Pixel 10", ScreenRole.SCREEN, sent = emptyList(), shown = listOf(ScreenRef(1, "Pixel Hero"), ScreenRef(2, "htop")))),

@@ -25,6 +25,11 @@ private const val EVENT_UNICODE = 10
 private const val EVENT_CLIPBOARD_ENABLE = 11
 private const val EVENT_CLIPBOARD_ANNOUNCE = 12
 internal const val EVENT_CLIPBOARD_SEND = 14
+// Our patch's (x11/termux-x11.patch): the app's layout of both phones, and what each surface shows.
+private const val MYNX_EVENT_MONITORS = 100
+internal const val MYNX_EVENT_MONITORS_SHOWN = 101
+/** Our patch's binder call: the other phone's surface (the extended screen). */
+const val X11_SECOND_WINDOW_CHANGED = 6
 private const val EVENT_SIZE = 24
 private const val MOUSE_SCROLL = 4
 private const val SCROLL_UNITS = 120
@@ -79,6 +84,28 @@ sealed interface X11Input {
     /** Android's clipboard changed: the server takes X's CLIPBOARD for it. */
     data object ClipboardAnnounce : X11Input {
         override fun encode() = event(EVENT_CLIPBOARD_ANNOUNCE) {}
+    }
+
+    /**
+     * Our patch's layout of the other phone's part of the screen (the
+     * extended screen): [mode] 0 none, 1 a second monitor (`mynx-b`), 2 one
+     * monitor over both phones; this phone's monitor ([host]) and the other
+     * phone's ([screen]), each as width, height, x, y.
+     */
+    data class Monitors(val mode: Int, val host: PixelRect, val screen: PixelRect) : X11Input {
+        constructor(layout: DesktopMonitors) : this(if (layout.mode == ScreenDesktopMode.SPAN) 2 else 1, layout.host, layout.screen)
+
+        override fun encode() = event(MYNX_EVENT_MONITORS) {
+            put(1, mode.toByte())
+            listOf(host, screen).forEachIndexed { i, r ->
+                listOf(r.width, r.height, r.x, r.y).forEachIndexed { j, v -> putShort(2 + 8 * i + 2 * j, v.toShort()) }
+            }
+        }
+
+        companion object {
+            /** This phone's monitor alone, [width] x [height]. */
+            fun alone(width: Int, height: Int) = Monitors(0, PixelRect(0, 0, width, height), PixelRect(0, 0, 0, 0))
+        }
     }
 
     /** Android's clipboard [text] (UTF-8, at most [limit] bytes, cut at a character), after its event. */

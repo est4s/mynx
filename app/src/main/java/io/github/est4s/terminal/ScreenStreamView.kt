@@ -28,7 +28,8 @@ import kotlin.concurrent.thread
  * whatever the app showed (Back returns to it). The video, decoded
  * (MediaCodec, low-latency where the decoder takes it) onto a
  * SurfaceView as big as fits; touches go back in the video's pixels
- * ([TouchTrack]). A line around it while the host's typing comes here.
+ * ([TouchTrack]). A line around it while the host's typing comes here;
+ * the host's desktop pointer over it while it's on this phone's part.
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(context) {
@@ -42,6 +43,9 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
 
     private val video = SurfaceView(context)
     private val mark = Mark(context)
+    private val arrow = PointerArrow(context)
+    // The desktop's pointer, in the video's pixels (null: not on this stream).
+    private var pointerAt: Pair<Float, Float>? = null
     private val track = TouchTrack()
 
     @Volatile private var stream: ShownStream? = null
@@ -54,6 +58,7 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
     init {
         setBackgroundColor(Color.BLACK)
         addView(video, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        addView(arrow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(mark, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         visibility = View.GONE
         isClickable = true
@@ -77,6 +82,8 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
     fun show(shown: ShownStream) {
         stream = shown
         mark.on = false
+        pointerAt = null
+        arrow.away()
         visibility = View.VISIBLE
         fitVideo()
         restart()
@@ -97,6 +104,20 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         decoder?.offer(message)
     }
 
+    /** The host's desktop pointer on [id] at [x], [y] of its video, or not on it ([shown] false). */
+    fun pointer(id: Int, x: Float, y: Float, shown: Boolean) {
+        if (stream?.id != id) return
+        pointerAt = if (shown) Pair(x, y) else null
+        drawPointer()
+    }
+
+    private fun drawPointer() {
+        val shown = stream ?: return
+        val at = pointerAt ?: return arrow.away()
+        val fit = streamFit(width, height, shown.width, shown.height) ?: return arrow.away()
+        arrow.at(fit.left + at.first * fit.scale, fit.top + at.second * fit.scale)
+    }
+
     /** Whether the host's typing comes to this screen. */
     fun focus(typing: Boolean) {
         mark.on = typing
@@ -112,7 +133,10 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        post { fitVideo() }
+        post {
+            fitVideo()
+            drawPointer()
+        }
     }
 
     private fun fitVideo() {

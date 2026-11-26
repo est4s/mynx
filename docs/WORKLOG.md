@@ -53,10 +53,14 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    resizing, scrollback and copy on B, a flood, every way of taking
    back, the link dropping, a shell's exit. The agent's decisions
    stand (entry 227).
-5. **Then (left for later):** the desktop on B as an extended monitor
-   (spike #118; check the monitor size it reported; the next agent),
-   then the second half; B linking again by itself (after a drop, at
-   the app's start); the bridge (`mynx.js`) on a sent app; chats (the
+5. **3c, the desktop on B: passed on both phones** (entry 228, PR
+   #124, protocol version 4; Pixel 10 as A, Nord 2 as B, 2026-11-27):
+   a monitor of its own and the second half (`screen-desktop = extend
+   | span`), through the SurfaceTexture bridge; every step of entry
+   228's test, the place moving live included (run 45896394265). The
+   agent's decisions stand (entry 228).
+6. **Then (left for later):** B linking again by itself (after a drop,
+   at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
    Files and viewers sent to B; typing with B's own keyboard (into
    apps; into terminals it works already through B's key bar and a
@@ -130,6 +134,117 @@ a PR into `desktop-dev`.
 
 ## Log
 
+### 2026-11-26 (228): Extended screen, step 3c: the desktop on B
+
+- Branch `screen-desktop` from `screen-dev`, PR #124 into `screen-dev`.
+  Core and `mynx` tested here; the app's side and the X server patch
+  only built in CI (screenshots looked at). Not tried on two phones by
+  the agent. Rebuilt from spike #118 (`docs/ARCHITECTURE.md`, "Extended
+  screen: the desktop on B").
+- **The spike's 264x943:** both monitors were halves of *A's own*
+  desktop view, not B's screen: +B split A's view in two, each half
+  rounded down to the 16 px step (8 X px at 2 phone px an X pixel). On
+  the Pixel 10 in portrait the view is 1080 x ~1886 phone px: 540 → 528
+  px → 264 X px wide, 943 high. The numbers are portrait's (in
+  landscape they'd be about 600 x 420), so it was taken in portrait or
+  before the surfaces resized. Now B's monitor is B's screen at its own
+  0.75 dp X pixel: a Nord 2 (1080 x 2400 at 480 dpi) is 536 x 1200.
+- **Built:** `screen-desktop` (`extend` default, `span`), `mynx screen
+  send desktop`, Home's Send list (Linux desktop first while the X
+  server runs, its own section), the desktop bar's **→ NAME** / **Take
+  back**; protocol version 4 (a Pointer message; merged after #123's 3); our patch's `mynx-b` placed by
+  `screen-place`, moved live, B drawn whenever it watches (A's view
+  shown or not), re-laid out after a server restart; the shared pointer
+  (touchpad crosses at the shared edge); B's touches with `desktop-touch`
+  and the same gestures; the typing bar for X on a click on B.
+- **Agent's decisions, to confirm:**
+  - B's part is B's whole screen at its own density's X pixel (the
+    same physical size as A's within the 0.75 dp rounding), not scaled
+    to A's density.
+  - The pointer is our arrow on both phones (B draws it from Pointer
+    messages: the X server draws no cursor into the second surface).
+  - Typing: a click on B (not any touch) opens A's typing bar, unless
+    A shows its own desktop view (then A's ⌨ types into the same X).
+  - Span scales B's part to A's edge (keeping B's shape), so the wide
+    monitor is a rectangle; a window can be cut by the phones' frames.
+  - A desktop that's gone for 5 s takes B's part away; a quicker
+    restart keeps it.
+  - When a program moves `mynx-b` (XFCE's display settings), the
+    server's word wins until the layout next changes.
+- **First phone try** (run 45856698516): B showed only the pointer on
+  black. The layout was right (`xrandr`), but nothing said whether the
+  encoder started or the X server drew into its surface: those errors
+  went to logcat, or nowhere. Now: the X server logs to `x11.log` what
+  it does with B's surface (`mynx: the other phone's surface: …`, which
+  EGL config draws into it, any EGL error, the first frame, and "N
+  frames drawn into the other phone's surface in 5 s"), and the
+  desktop's Log says the encoder started (or why not), its first part,
+  and every 5 s how many frames and KiB it gave. Likely causes, fixed
+  blind: the encoder's surface wants a recordable EGL config (tried
+  first now, falling back to the view's), and an idle desktop drew
+  nothing more after one frame (now a fresh frame about 10 times a
+  second while B has a surface). Also: `mynx set screen-place`
+  (by hand) now reaches the screen and the status (it only did through
+  `mynx screen place`), and unreadable settings keep the last place
+  instead of falling back to `right` (the try's layout went from above
+  to right once; the Log line "the desktop's monitors: … (extend,
+  SIDE)" now says which side was read).
+- **Second phone try** (run 45863972064): the logs said it. The encoder
+  started and its surface reached the X server (1080x2400, format 34),
+  but `eglMakeCurrent` on it failed with EGL_BAD_MATCH (0x3009) for
+  every config, the view's too; the encoder gave 0 frames. Now the X
+  server draws into an ordinary surface, a SurfaceTexture of the app's,
+  and `EncoderBridge` (the app's own EGL context, recordable config)
+  draws each frame into the encoder (grafika's pattern). XFCE's
+  "Unknown mode '264x943 @ 120.0' for output screen/mynx-b, aborting" is
+  the spike's saved layout (`~/.config/xfce4/xfconf/xfce-perchannel-xml/displays.xml`):
+  xfsettingsd gives up on applying it and leaves our layout alone, so
+  it's harmless, but deleting that file (with the desktop stopped) stops
+  the message.
+- **Third phone try** (run 45889959933, 2026-11-26/27): the bridge
+  works; **every step of the two-phone test passed but the place**:
+  `mynx screen place` didn't move `mynx-b` while the desktop was on B
+  (a `screen-desktop` change then applied it). `ScreenLink.placeChanged`
+  now fires on every change of place (`mynx screen place` on either
+  phone, `mynx set screen-place`), and the desktop's part follows. Once
+  step 6 passes, the PR is ready to merge.
+- **Two-phone test** (Pixel 10 as A, Nord 2 as B, both on this build as
+  mynx dev, paired; `mynx screen connect` on B; on A the desktop running
+  with XFCE, `mynx desktop open`):
+  1. A's desktop bar shows **→ Nord 2**; tap it. B shows the desktop
+     full screen: an empty XFCE area (its own background), no panel yet.
+     A's bar says **Take back**. `mynx screen status` on A lists
+     "Linux desktop (showing)".
+  2. In XFCE's terminal on A: `xrandr --listmonitors` shows 2 monitors,
+     the second `mynx-b` 536/…x1200/…+W+0 (W = A's width in X px);
+     `xrandr` lists mynx-b connected.
+  3. Drag a window right across A's edge: it appears on B. Maximise it
+     there: it fills B only; on A, maximise fills A only. XFCE Panel
+     Preferences → Output: mynx-b moves a panel to B.
+  4. On B (touchpad): one finger moves the pointer (B draws the arrow),
+     a tap clicks, a two-finger tap right-clicks, two fingers scroll,
+     hold then drag moves a window. Move the pointer past B's left
+     edge: it shows on A, and back. `mynx set desktop-touch direct`:
+     on B a tap clicks where the finger is, a long press right-clicks.
+  5. Tap a text field (the XFCE terminal) on B: A opens a bar
+     "Typing on Nord 2: Linux desktop"; type: it appears on B. Touch A:
+     the bar goes. With A's own desktop view on screen, tapping on B
+     opens no bar, and A's ⌨ types into the window focused (on B).
+  6. `mynx screen place left` on A (or B): `mynx-b` moves to the left
+     at once (`xrandr --listmonitors`: +0+0, A's at +536+0); the
+     pointer now crosses at A's left edge. Then `above`, `below`.
+  7. `mynx set screen-desktop span`: one monitor (`xrandr
+     --listmonitors` shows 1, as wide as both); maximise a window: it
+     spans both phones. `mynx set screen-desktop extend`: two again.
+  8. Back on B: B's Home lists "Linux desktop · from Pixel 10"; tap it:
+     the desktop shows again. Hide A's desktop view (← Terminal) and
+     move windows on B: B keeps drawing.
+  9. Take back (A's bar, or `mynx screen take desktop`): B goes back to
+     its Home, `xrandr --listmonitors` shows 1; windows that were on B
+     are on A.
+  10. Send again, then `mynx screen disconnect` on B: same as 9 on A.
+      Send again, then `mynx desktop stop` on A: within 5 s B's stream
+      ends.
 ### 2026-11-26 (227): Extended screen, step 3b: terminal tabs on B as text
 
 - Branch `screen-terms` from `screen-dev`, PR into `screen-dev`. Core,

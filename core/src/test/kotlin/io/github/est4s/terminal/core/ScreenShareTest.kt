@@ -20,6 +20,7 @@ internal class FakeCasting : ScreenCasting {
     val titles = mutableMapOf("pixel-hero" to "Pixel Hero", "notes" to "Notes")
 
     override fun describe(target: ScreenTarget): Result<String> {
+        if (target == ScreenTarget.Desktop) return Result.success("Linux desktop")
         val name = (target as ScreenTarget.App).name
         return titles[name]?.let { Result.success(it) } ?: Result.failure(Exception("no app named $name"))
     }
@@ -66,6 +67,7 @@ internal class FakeShowing : ScreenShowing {
     override fun ended(stream: Int) { did += "ended $stream" }
     override fun video(message: ScreenMessage.Video) { did += "video ${message.stream} ${message.pts}" }
     override fun focus(typing: Boolean) { did += "focus $typing" }
+    override fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) { did += "pointer $stream $x $y $shown" }
     override fun termStarted(id: Int, title: String, columns: Int, rows: Int) { did += "term $id $title ${columns}x$rows" }
     override fun termState(id: Int, columns: Int, rows: Int, data: ByteArray) { did += "state $id ${columns}x$rows" }
     override fun termOutput(id: Int, data: ByteArray) { did += "output $id ${String(data)}" }
@@ -360,6 +362,37 @@ class ScreenShareTest {
         val s = sendHero()
         assertTrue(s.title.length <= 80)
         assertIs<ScreenMessage.StreamStart>(sent.single())
+    }
+
+    @Test
+    fun `the desktop is sent like a screen, at the other phone's size`() {
+        val s = share.send(ScreenTarget.Desktop).getOrThrow()
+        assertEquals(ScreenTarget.Desktop, s.target)
+        assertEquals("desktop", s.target.kind)
+        assertEquals(listOf("open ${s.id} Linux desktop 1080x2400 @440"), casting.did)
+        assertEquals(ScreenMessage.StreamStart(s.id, "Linux desktop", 1080, 2400), sent.single())
+    }
+
+    @Test
+    fun `the desktop's pointer goes to the screen while it watches`() {
+        val s = share.send(ScreenTarget.Desktop).getOrThrow()
+        sent.clear()
+        share.pointer(s.id, 10f, 20f, true)
+        assertTrue(sent.isEmpty())
+        share.received(ScreenMessage.Watch(s.id, true))
+        share.pointer(s.id, 10f, 20f, true)
+        share.pointer(s.id, 10f, 20f, true)
+        share.pointer(s.id, 0f, 0f, false)
+        share.pointer(99, 1f, 1f, true)
+        // The same place twice is told once.
+        assertEquals(listOf<ScreenMessage>(ScreenMessage.Pointer(s.id, 10f, 20f, true), ScreenMessage.Pointer(s.id, 0f, 0f, false)), sent)
+    }
+
+    @Test
+    fun `the screen shows the host's pointer on the stream`() {
+        share.received(ScreenMessage.StreamStart(3, "Linux desktop", 1080, 2400))
+        share.received(ScreenMessage.Pointer(3, 5f, 6f, true))
+        assertEquals("pointer 3 5.0 6.0 true", showing.did.last())
     }
 }
 

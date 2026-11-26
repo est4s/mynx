@@ -13,14 +13,23 @@ import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import android.view.Surface
 import io.github.est4s.terminal.core.DesktopClipboard
+import io.github.est4s.terminal.core.DesktopGeometry
+import io.github.est4s.terminal.core.DesktopOther
+import io.github.est4s.terminal.core.DesktopPointer
+import io.github.est4s.terminal.core.DesktopScreens
 import io.github.est4s.terminal.core.DesktopSurface
+import io.github.est4s.terminal.core.PixelRect
+import io.github.est4s.terminal.core.ScreenDesktopMode
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.X11Events
 import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.X11ServerEvent
 import io.github.est4s.terminal.core.X11_GET_X_CONNECTION
 import io.github.est4s.terminal.core.X11_INTERFACE
+import io.github.est4s.terminal.core.X11_SECOND_WINDOW_CHANGED
 import io.github.est4s.terminal.core.X11_START_ACTION
 import io.github.est4s.terminal.core.X11_WINDOW_CHANGED
+import io.github.est4s.terminal.core.desktopScale
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -51,6 +60,15 @@ interface DesktopScreenLink {
 
     /** Android's clipboard as text (null: none, or not readable), read while the desktop shows. */
     fun androidClipboard(text: String?)
+
+    /** The X server's one pointer, shared with the other phone's gestures (the extended screen); null: the view's own. */
+    val pointer: DesktopPointer? get() = null
+
+    /** This phone's part of the X screen, once the view gave its size; null: all of it. */
+    val hostMonitor: PixelRect? get() = null
+
+    /** [watcher] hears the pointer move from elsewhere (the other phone), and the monitors change; null stops. */
+    fun watch(watcher: (() -> Unit)?) {}
 }
 
 /**
@@ -78,12 +96,38 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     private var framerate = 0
     private val screen = DesktopSurface()
     private val clipboard = DesktopClipboard()
+    // The other phone's surface (an encoder's input), while the desktop is sent there.
+    private var second: Surface? = null
+    private var hostKnown = false
+    private var watcher: (() -> Unit)? = null
+
+    /** Where the desktop is on each phone (the extended screen); [other] changes it. */
+    val screens = DesktopScreens()
+
+    override val pointer = DesktopPointer().apply { listener = { pointerMoved() } }
+
+    /** The other phone's side hears the pointer and the monitors change: [DesktopCaster]. */
+    var otherWatcher: (() -> Unit)? = null
+
+    /** Called when a connection to the X server ends (it stopped). */
+    var onGone: (() -> Unit)? = null
+
+    override val hostMonitor: PixelRect? get() = if (hostKnown) screens.hostRect else null
+
+    override fun watch(watcher: (() -> Unit)?) {
+        this.watcher = watcher
+    }
+
+    private fun pointerMoved() {
+        watcher?.invoke()
+        otherWatcher?.invoke()
+    }
 
     override val connected: Boolean get() = events != null
 
     override fun log(): String = lines.joinToString("\n")
 
-    private fun note(line: String) {
+    fun note(line: String) {
         val time = SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(Date())
         lines.addLast("$time $line")
         while (lines.size > LOG_LINES) lines.removeFirst()
@@ -140,6 +184,9 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
             send(clipboard.connected())
             note("connected to the X server")
             surface?.let { handOver(it, fresh = true) }
+            // A server from before (or restarted) knows nothing of the other phone's part, or still has it.
+            if (hostKnown) sendLayout()
+            second?.let { windowChanged(it, X11_SECOND_WINDOW_CHANGED) }
         } catch (e: Exception) {
             disconnect()
             note("connecting to the X server failed: ${e.stackTraceToString()}")
@@ -172,6 +219,10 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
             }
             is X11ServerEvent.ClipboardTooBig -> note("X's clipboard (${event.bytes} bytes) is too big for Android's")
             X11ServerEvent.ClipboardRequest -> send(clipboard.request())
+            is X11ServerEvent.MonitorsShown -> {
+                screens.shown(event)
+                monitorsChanged()
+            }
             is X11ServerEvent.Other -> Unit
         }
     }
@@ -191,7 +242,10 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
         connection = null
         events = null
         server = null
-        if (wasConnected) listener?.invoke()
+        if (wasConnected) {
+            listener?.invoke()
+            onGone?.invoke()
+        }
     }
 
     private fun <T> call(binder: IBinder, code: Int, write: (Parcel) -> Unit, read: (Parcel) -> T): T {
@@ -210,10 +264,10 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     }
 
     // The server waits until its renderer has let go of the old surface, so this returns after.
-    private fun windowChanged(s: Surface?) {
+    private fun windowChanged(s: Surface?, code: Int = X11_WINDOW_CHANGED) {
         val binder = server ?: return
         try {
-            call(binder, X11_WINDOW_CHANGED, { data ->
+            call(binder, code, { data ->
                 if (s != null) {
                     data.writeInt(1)
                     s.writeToParcel(data, 0)
@@ -231,12 +285,56 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
         this.width = width
         this.height = height
         this.framerate = framerate
+        hostKnown = true
+        val moved = screens.host(width, height)
         if (connected) handOver(surface, fresh)
+        if (moved) {
+            if (screens.monitors != null) sendLayout()
+            monitorsChanged()
+        }
     }
 
     private fun handOver(s: Surface, fresh: Boolean) {
         windowChanged(s)
         send(screen.handover(width, height, framerate, fresh))
+    }
+
+    /**
+     * The other phone's part of the desktop ([to], null: none), on its
+     * [side], as [mode] says; laid out at once. Before this phone's view
+     * ever gave its size, its monitor is the phone's whole screen.
+     */
+    fun other(to: DesktopOther?, side: ScreenSide, mode: ScreenDesktopMode) {
+        if (!hostKnown && to != null) {
+            val metrics = context.resources.displayMetrics
+            val g = DesktopGeometry(metrics.widthPixels, metrics.heightPixels, desktopScale(metrics.density))
+            screens.host(g.width, g.height)
+            hostKnown = true
+        }
+        if (!screens.other(to, side, mode)) return
+        note(screens.monitors?.let { "the desktop's monitors: this phone ${it.host}, the other ${it.screen} (${it.mode.word}, ${side.word})" } ?: "the desktop is this phone's alone")
+        sendLayout()
+        monitorsChanged()
+    }
+
+    private fun sendLayout() {
+        if (connected) send(listOf(screens.event()))
+    }
+
+    // The monitors moved: the pointer is kept on them, and both phones' gestures follow.
+    private fun monitorsChanged() {
+        pointer.areas = screens.areas
+        watcher?.invoke()
+        otherWatcher?.invoke()
+    }
+
+    /** The other phone's [surface] (its encoder's input), for the X server to draw its part into; null takes it away. */
+    fun secondSurface(surface: Surface?) {
+        if (surface === second) return
+        second = surface
+        if (!connected) return note("the other phone's surface waits for the X server")
+        windowChanged(surface, X11_SECOND_WINDOW_CHANGED)
+        note(if (surface != null) "the other phone's surface handed to the X server" else "the other phone's surface taken from the X server")
     }
 
     override fun surfaceGone() {

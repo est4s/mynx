@@ -261,6 +261,40 @@ class ScreenLinkTest {
     }
 
     @Test
+    fun `the host hears every change of place, whichever way it came`() {
+        val heard = java.util.concurrent.CopyOnWriteArrayList<ScreenSide>()
+        host.placeChanged = { heard += it }
+        pair()
+        waitFor("linked") { connected(screen)?.get("place") == "right" }
+        // mynx screen place on the host.
+        host.place(ScreenSide.LEFT)
+        assertEquals(listOf(ScreenSide.LEFT), heard.toList())
+        // mynx screen place on the screen: it asks the host.
+        screen.place(ScreenSide.ABOVE)
+        waitFor("the host took it") { heard.lastOrNull() == ScreenSide.ABOVE }
+        // mynx set screen-place on the host.
+        hostSettings.writeText(setSetting(hostSettings.readText(), "screen-place", "below").getOrThrow())
+        host.settingsChanged()
+        assertEquals(listOf(ScreenSide.LEFT, ScreenSide.ABOVE, ScreenSide.BELOW), heard.toList())
+        waitFor("the screen knows") { connected(screen)?.get("place") == "below" }
+        assertEquals("below", connected(host)!!["place"])
+        assertEquals("below", status(host)["place"])
+    }
+
+    @Test
+    fun `screen-place changed by hand on the host reaches the screen, and the status says it`() {
+        pair()
+        waitFor("linked") { connected(screen)?.get("place") == "right" }
+        hostSettings.writeText(setSetting(hostSettings.readText(), "screen-place", "above").getOrThrow())
+        host.settingsChanged()
+        waitFor("the screen knows") { connected(screen)?.get("place") == "above" }
+        assertEquals("above", connected(host)!!["place"])
+        // Nothing changed: nothing sent, nothing wrong.
+        host.settingsChanged()
+        assertEquals("above", connected(host)!!["place"])
+    }
+
+    @Test
     fun `screen-host off refuses pairing and doesn't listen`() {
         hostSettings.appendText("screen-host = off\n")
         val shown = Answers()
@@ -341,7 +375,7 @@ class ScreenLinkTest {
         assertEquals("Pixel Hero", ((status.answer!!["sent"] as List<*>).single() as Map<*, *>)["title"])
         val bad = Answers()
         requests.getValue("screen-send").start(listOf("window", "1"), reply(bad))
-        assertEquals("send what? mynx screen send app NAME, or tab [N|new]", bad.answer!!["error"])
+        assertEquals("send what? mynx screen send app NAME, tab [N|new] or desktop", bad.answer!!["error"])
         val tab = Answers()
         requests.getValue("screen-send").start(listOf("tab", "1"), reply(tab))
         assertEquals(true, tab.answer!!["ok"], tab.answer.toString())
@@ -353,6 +387,13 @@ class ScreenLinkTest {
         requests.getValue("screen-take").start(listOf("all"), reply(took))
         assertEquals(listOf("Pixel Hero", "bash"), (took.answer!!["taken"] as List<*>).map { (it as Map<*, *>)["title"] })
         waitFor("the screen let them go") { "ended 1" in showing.did && "term ended 2" in showing.did }
+        val desktop = Answers()
+        requests.getValue("screen-send").start(listOf("desktop"), reply(desktop))
+        assertEquals("Linux desktop", (desktop.answer!!["screen"] as Map<*, *>)["title"], desktop.answer.toString())
+        assertEquals("desktop", (desktop.answer!!["screen"] as Map<*, *>)["kind"])
+        val back = Answers()
+        requests.getValue("screen-take").start(listOf("desktop"), reply(back))
+        assertEquals(listOf("Linux desktop"), (back.answer!!["taken"] as List<*>).map { (it as Map<*, *>)["title"] })
         val none = Answers()
         requests.getValue("screen-take").start(listOf("all"), reply(none))
         assertEquals("nothing sent to take back", none.answer!!["error"])

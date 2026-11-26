@@ -421,7 +421,26 @@ class ScreenLink(
         }
         writePlace(side)
         c?.sendLayout()
+        placeChanged?.invoke(side)
         return false
+    }
+
+    /**
+     * Called with the host's new `screen-place` whenever it changes:
+     * `mynx screen place` here or asked from the screen, or the setting
+     * changed by hand ([settingsChanged]). On the link's thread or the
+     * caller's. The desktop's part on the screen moves with it.
+     */
+    @Volatile var placeChanged: ((ScreenSide) -> Unit)? = null
+
+    /** The settings may have changed (`mynx set screen-place`): a linked screen hears where it sits now. */
+    fun settingsChanged() {
+        val c = connection ?: return
+        if (c.myRole != ScreenRole.HOST) return
+        val side = settings().screenPlace
+        if (c.layout?.side == side) return
+        c.sendLayout()
+        placeChanged?.invoke(side)
     }
 
     private fun writePlace(side: ScreenSide) {
@@ -469,7 +488,8 @@ class ScreenLink(
         @Volatile var peerScreen: ScreenMessage.ScreenInfo? = null
             private set
 
-        @Volatile private var layout: ScreenMessage.Layout? = null
+        @Volatile var layout: ScreenMessage.Layout? = null
+            private set
 
         @Volatile private var closed = false
 
@@ -546,6 +566,7 @@ class ScreenLink(
                 is ScreenMessage.Layout -> if (myRole == ScreenRole.HOST) {
                     writePlace(m.side)
                     sendLayout()
+                    placeChanged?.invoke(m.side)
                 } else {
                     layout = m
                 }
@@ -614,10 +635,19 @@ fun screenRequests(link: ScreenLink, share: ScreenShare? = null): Map<String, La
     "screen-send" to Later(10) { args, reply ->
         val kind = args.getOrNull(0)
         val name = args.getOrNull(1)?.trim().orEmpty()
-        if (kind !in setOf("app", "tab") || (kind == "app" && name.isEmpty())) {
-            return@Later reply.refuse("send what? mynx screen send app NAME, or tab [N|new]")
+        if (kind !in setOf("app", "tab", "desktop") || (kind == "app" && name.isEmpty())) {
+            return@Later reply.refuse("send what? mynx screen send app NAME, tab [N|new] or desktop")
         }
         if (share == null) return@Later reply.refuse("this phone can't send screens")
+        if (kind == "desktop") {
+            return@Later share.send(ScreenTarget.Desktop).fold(
+                { sent ->
+                    val what = obj("id" to "${sent.id}", "kind" to json("desktop"), "title" to json(sent.title), "name" to json("desktop"))
+                    reply.ok("screen" to what, *link.status(), *share.status())
+                },
+                { reply.refuse(it.message ?: "couldn't send the desktop") },
+            )
+        }
         if (kind == "tab") {
             return@Later share.sendTerm(ScreenTarget.Terminal(name.ifEmpty { "new" })).fold(
                 { sent ->

@@ -1025,6 +1025,11 @@ class MainActivity : Activity(), FrontActivity {
         }
     }
 
+    /** The host's desktop pointer on [stream], in its pixels, or not on it. */
+    fun onScreenPointer(stream: Int, x: Float, y: Float, shown: Boolean) {
+        screenView?.pointer(stream, x, y, shown)
+    }
+
     /** The link, or what's sent over it, changed: Home's lists follow. */
     fun onScreenLinkChanged() {
         if (homeShown) home?.refresh()
@@ -1079,6 +1084,8 @@ class MainActivity : Activity(), FrontActivity {
         override fun touch(): DesktopTouch = loadSettings(File(installer.rootfs, SETTINGS_FILE)).settings.desktopTouch
         override fun back() = hideDesktop()
         override fun backLabel() = desktopBackLabel(desktopFromTouch)
+        override fun screen(): Pair<String, Boolean>? = service?.screenDesktop()
+        override fun screenToggle(): String? = service?.screenDesktopToggle()
         override fun stop() {
             service?.stopDesktop()
             hideDesktop()

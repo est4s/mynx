@@ -29,7 +29,9 @@ private class SampleHost(
     private val status: DesktopStatus,
     override val link: DesktopScreenLink,
     private val fromTouch: Boolean = false,
+    private val other: Pair<String, Boolean>? = null,
 ) : DesktopView.Host {
+    override fun screen() = other
     override fun status() = status
     override fun start(done: (String?) -> Unit) = Unit
     override fun logs() = link.log() + "\n\n/tmp/.mynx/desktop/x11.log:\nXlorie: new surface applied\n" +
@@ -79,6 +81,10 @@ class DesktopScreenshotTest {
     // Opened from touch view: its back button says so. The log has Stop desktop.
     @Test
     fun fromTouch() = shoot(1080, 2400, "desktop-from-touch", SampleHost(RUNNING, NoServer(connected = true), fromTouch = true))
+
+    // A second phone linked: the bar offers to send the desktop there (the extended screen).
+    @Test
+    fun withScreen() = shoot(1080, 2400, "desktop-send", SampleHost(RUNNING, NoServer(connected = true), other = Pair("Nord 2", false)))
 
     @Test
     fun log() = shoot(1080, 2400, "desktop-log", SampleHost(RUNNING, NoServer(connected = true)), log = true)

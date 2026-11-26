@@ -3353,6 +3353,17 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.mynx("screen", "send", "pixel-hero")
         self.assertEqual(self.app.requests, [["screen-send", "app", "pixel-hero"], ["screen-send", "app", "pixel-hero"]])
 
+    def test_screen_send_the_desktop(self):
+        desktop = dict(self.HERO, kind="desktop", name="desktop", title="Linux desktop")
+        answer = self.screen_status(connected=self.LINKED, screen={"id": 1, "title": "Linux desktop", "name": "desktop"},
+                                    sent=[desktop], shown=[], typing=False)
+        self.start_app({"screen-send": answer})
+        run = self.mynx("screen", "send", "desktop")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Sent Linux desktop to Nord 2 (mynx screen take 1 takes it back).\n")
+        # An app called desktop is still an app.
+        self.mynx("screen", "send", "app", "desktop")
+        self.assertEqual(self.app.requests, [["screen-send", "desktop"], ["screen-send", "app", "desktop"]])
     BASH = {"id": 3, "kind": "terminal", "name": "2", "title": "bash", "columns": 48, "rows": 30}
 
     def test_screen_send_a_tab_by_number_new_or_this_one(self):

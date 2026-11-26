@@ -44,6 +44,8 @@ class ScreenMessagesTest {
             ScreenMessage.TermInput(7, "q".toByteArray()),
             ScreenMessage.TermAck(7, 3, 123_456L),
             ScreenMessage.TermTouched(7),
+            ScreenMessage.Pointer(2, 540.5f, 1200f, true),
+            ScreenMessage.Pointer(2, 0f, 0f, false),
         )
         for (m in messages) assertEquals(m, roundTrip(m), m.toString())
     }
@@ -85,8 +87,8 @@ class ScreenMessagesTest {
 
     @Test
     fun `this is version 3 of the link`() {
-        // Version 1 was the pairing alone, 2 added screens as video, 3 terminals as text.
-        assertEquals(3, SCREEN_PROTOCOL)
+        // Version 1 was the pairing alone, 2 added screens as video, 3 terminals as text, 4 the desktop's pointer.
+        assertEquals(4, SCREEN_PROTOCOL)
     }
 
     @Test

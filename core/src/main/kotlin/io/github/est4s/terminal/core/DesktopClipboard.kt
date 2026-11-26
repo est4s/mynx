@@ -36,6 +36,9 @@ sealed interface X11ServerEvent {
     /** An X program pastes what we announced: answer with the text. */
     data object ClipboardRequest : X11ServerEvent
 
+    /** Our patch: what each surface shows, this phone's ([host]) and the other phone's ([screen], null: none). */
+    data class MonitorsShown(val host: PixelRect, val screen: PixelRect?) : X11ServerEvent
+
     /** Anything else (heartbeats, the shared state, sync replies), unread. */
     data class Other(val type: Int) : X11ServerEvent
 }
@@ -67,6 +70,11 @@ class X11Events(input: InputStream, private val limit: Int = CLIPBOARD_FROM_X_MA
                 }
             }
             EVENT_CLIPBOARD_REQUEST -> X11ServerEvent.ClipboardRequest
+            MYNX_EVENT_MONITORS_SHOWN -> {
+                val b = ByteBuffer.wrap(event).order(ByteOrder.LITTLE_ENDIAN)
+                fun rect(at: Int) = PixelRect(b.getShort(at).toInt(), b.getShort(at + 2).toInt(), b.getShort(at + 4).toInt(), b.getShort(at + 6).toInt())
+                X11ServerEvent.MonitorsShown(rect(2), rect(10).takeIf { it.width > 0 && it.height > 0 })
+            }
             EVENT_SHARED_SERVER_STATE -> {
                 input.readFully(ByteArray(1))
                 X11ServerEvent.Other(type)

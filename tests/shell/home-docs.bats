@@ -423,6 +423,15 @@ setup() {
     done
 }
 
+@test "the guide explains the desktop on another phone: sending it, its monitor or the second half" {
+    for text in "mynx screen send desktop" "mynx-b" "screen-desktop" "span" "Take back" "opens the bar"; do
+        grep -qF -- "$text" "$DOCS/screen.md" || { echo "not in screen.md: $text"; false; }
+    done
+    for text in "mynx screen send desktop" "screen-desktop" "**Take back**"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}
+
 @test "the guide explains the desktop view: switching, touch, keys and its bar" {
     grep -qF 'Ctrl+Shift+D' "$CORE"
     for text in "Ctrl+Shift+D" "two-finger tap is a right click" "long press is a right click" \

@@ -103,6 +103,10 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   selection's middle-click paste stays X's own. Text in a script
   Debian has no font for (Chinese, Japanese, Korean) shows as boxes:
   `apt install fonts-noto-cjk` (about 50 MB), then reopen the program.
+- **Another phone as more screen:** with a phone linked as this one's
+  screen (`/opt/mynx/docs/screen.md`), **→ NAME** on the bar, or
+  `mynx screen send desktop`, makes it a second monitor of the desktop,
+  or the second half of one (`screen-desktop`); **Take back** ends it.
 - **A mouse** (USB or Bluetooth) points and clicks as on a computer,
   its wheel scrolls.
 - **Keys:** a hardware keyboard's keys go to the X server as they

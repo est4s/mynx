@@ -6,8 +6,8 @@ A second phone (or tablet) running mynx can become a screen of this
 one: this phone, the **host**, runs everything; the other, the
 **screen**, shows what the host sends and sends its touches back.
 Both need mynx and the same Wi-Fi (or one phone's hotspot). Apps
-(web apps and games, `mynx app`) and terminal tabs can be sent to the
-screen; chats and the desktop can't be yet.
+(web apps and games, `mynx app`), terminal tabs and the Linux desktop
+can be sent to the screen; chats can't be yet.
 
 | Command | Does |
 |---|---|
@@ -19,6 +19,7 @@ screen; chats and the desktop can't be yet.
 | `mynx screen place left\|right\|above\|below` | where the screen sits next to the host (the `screen-place` setting); run on the screen, it asks the host |
 | `mynx screen send [app] NAME` | on the host: show app NAME on the screen (it leaves this phone's screen; `mynx app list` names them) |
 | `mynx screen send tab [N\|new]` | on the host: move terminal tab N (1 is the first in the strip; none: the tab this runs in) to the screen, or start a new one there |
+| `mynx screen send desktop` | on the host: make the screen part of the Linux desktop (a monitor of its own, or the second half: `screen-desktop`); it must be running |
 | `mynx screen take [ID\|NAME\|all]` | bring sent screens back to this phone (all by default); on the screen, it asks the host to |
 | `mynx screen [status]` | the link (which phone, its screen size, where it sits), what's sent there and where typing goes, why the last one ended, the pairs, whether this phone listens |
 
@@ -100,6 +101,39 @@ Each takes `--json`.
   of output) gets the terminal as it is now, not the backlog.
 - A service's tab stays on the host.
 
+## The desktop on the screen
+
+- **Sending it:** with the desktop running (`/opt/mynx/docs/desktop.md`),
+  `mynx screen send desktop`, Home's **Send to NAME** → Linux desktop,
+  or the desktop's bar: **→ NAME** (top, beside ⌨). This phone keeps its
+  own part; the screen shows its part full screen. **Take back** (the
+  same button), `mynx screen take desktop`, the link ending or the
+  desktop stopping take the screen's part away again.
+- **A monitor of its own** (`screen-desktop = extend`, default): the X
+  server gets a second monitor, `mynx-b` (RandR, `xrandr
+  --listmonitors` lists it), the screen's size at its own density, on
+  the side `screen-place` says. XFCE gives it its own workspace area:
+  a window maximised there fills that phone, windows move across, and
+  a panel can go on it (Panel Preferences → Output: mynx-b). Windows
+  left on it come back to this phone's monitor when it goes.
+  `mynx screen place` (or `mynx set screen-place`) moves it at once.
+- **The second half** (`screen-desktop = span`): both phones are one
+  wide monitor, for programs that should stretch across; the screen's
+  part is scaled to this phone's edge, so the two make a rectangle.
+  `mynx set screen-desktop span` (or `extend`) switches while it's sent.
+- **Touch on the screen** works as on this phone's desktop
+  (`desktop-touch`: touchpad by default, or direct), with the same
+  gestures. There is one pointer: on a touchpad it moves across from
+  either phone where the monitors meet, and the screen draws it while
+  it's on its part.
+- **Typing** goes to the screen touched last: a click on the desktop
+  there opens the bar with this phone's keyboard, typing into the
+  desktop (a hardware keyboard on this phone types there too). While
+  this phone shows the desktop as well, its own ⌨ types into the same
+  desktop (X has one keyboard focus), so no bar opens.
+- Back on the screen stops its video (the part stays on the desktop,
+  undrawn); Home there shows it again.
+
 Settings (`mynx set KEY VALUE`, in `~/.config/mynx/settings.conf`):
 
 - `screen-host`: `auto` (default) or `off`: whether this phone takes
@@ -116,3 +150,6 @@ Settings (`mynx set KEY VALUE`, in `~/.config/mynx/settings.conf`):
   screen's decoder.
 - `screen-bitrate`: a sent screen's video in Mbit/s, `8` by default
   (1-40); more is sharper when much moves.
+- `screen-desktop`: `extend` (default) or `span`: whether the desktop
+  sent there is a monitor of its own or the second half of one wide
+  one.
