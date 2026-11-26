@@ -3353,6 +3353,28 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         self.mynx("screen", "send", "pixel-hero")
         self.assertEqual(self.app.requests, [["screen-send", "app", "pixel-hero"], ["screen-send", "app", "pixel-hero"]])
 
+    BASH = {"id": 3, "kind": "terminal", "name": "2", "title": "bash", "columns": 48, "rows": 30}
+
+    def test_screen_send_a_tab_by_number_new_or_this_one(self):
+        answer = self.screen_status(connected=self.LINKED, screen={"id": 3, "kind": "terminal", "title": "bash", "name": "2"},
+                                    sent=[self.BASH], shown=[], typing=False)
+        self.start_app({"screen-send": answer})
+        run = self.mynx("screen", "send", "tab", "2")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Sent bash to Nord 2 (mynx screen take 3 takes it back).\n")
+        self.mynx("screen", "send", "tab", "new")
+        # No number: the tab mynx runs in.
+        self.mynx("screen", "send", "tab", env={"MYNX_SHELL": "7"})
+        self.assertEqual(self.app.requests,
+                         [["screen-send", "tab", "2"], ["screen-send", "tab", "new"], ["screen-send", "tab", "shell:7"]])
+
+    def test_screen_send_tab_outside_a_tab_needs_its_number(self):
+        self.start_app({})
+        run = self.mynx("screen", "send", "tab")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("mynx screen send tab N", run.stderr)
+        self.assertEqual(self.app.requests, [])
+
     def test_screen_send_refused(self):
         self.start_app({"screen-send": {"ok": False, "error": "no screen is linked (mynx screen connect on the other phone links it)"}})
         run = self.mynx("screen", "send", "app", "nope")
@@ -3375,11 +3397,11 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
     def test_screen_status_lists_what_is_sent_and_shown(self):
         notes = dict(self.HERO, id=2, name="notes", title="Notes", watched=False)
         self.start_app({"screen-status": self.screen_status(listening=7391, connected=self.LINKED, paired=[self.NORD],
-                                                            sent=[self.HERO, notes], shown=[], typing=True)})
+                                                            sent=[self.HERO, notes, self.BASH], shown=[], typing=True)})
         run = self.mynx("screen")
         self.assertEqual(run.stdout,
                          "Screen: linked with Nord 2, a screen of this phone (1080x2400, 440 dpi), on its right\n"
-                         "Sent there: 1 Pixel Hero (showing), 2 Notes\n"
+                         "Sent there: 1 Pixel Hero (showing), 2 Notes, 3 bash (terminal)\n"
                          "Typing goes there (it was touched last)\n"
                          "Paired: Nord 2 (screen)\n"
                          "Listening on port 7391\n")
@@ -3387,18 +3409,19 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
     def test_screen_status_on_the_screen_lists_what_the_host_sent(self):
         host = dict(self.LINKED, name="Pixel 10", role="host", place=None)
         self.start_app({"screen-status": self.screen_status(name="Nord 2", connected=host, paired=[dict(self.NORD, name="Pixel 10", role="host")],
-                                                            sent=[], shown=[{"id": 1, "title": "Pixel Hero", "watching": True}],
+                                                            sent=[], shown=[{"id": 1, "kind": "app", "title": "Pixel Hero", "watching": True},
+                                                                                 {"id": 2, "kind": "terminal", "title": "bash"}],
                                                             typing=False)})
         run = self.mynx("screen")
         self.assertEqual(run.stdout,
                          "Screen: linked with Pixel 10, this phone is its screen (1080x2400, 440 dpi)\n"
-                         "From Pixel 10: 1 Pixel Hero (showing)\n"
+                         "From Pixel 10: 1 Pixel Hero (showing), 2 bash (terminal)\n"
                          "Paired: Pixel 10 (host)\n")
 
     def test_screen_usage(self):
         self.start_app({})
         for args in (["place"], ["place", "behind"], ["unpair"], ["frobnicate"], ["disconnect", "x"],
-                     ["send"], ["send", "tab", "1"], ["take", "1", "2"]):
+                     ["send"], ["send", "tab", "1", "2"], ["send", "window", "x"], ["take", "1", "2"]):
             run = self.mynx("screen", *args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx screen", run.stderr)

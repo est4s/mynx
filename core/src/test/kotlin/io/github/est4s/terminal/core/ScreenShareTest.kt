@@ -3,6 +3,7 @@ package io.github.est4s.terminal.core
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
+import kotlin.test.assertContentEquals
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -35,6 +36,28 @@ internal class FakeCasting : ScreenCasting {
     override fun keyFrame(screen: SentScreen) { did += "key ${screen.id}" }
     override fun touch(screen: SentScreen, touch: ScreenMessage.Touch) { did += "touch ${screen.id} ${touch.action}" }
     override fun typingTo(screen: SentScreen?) { did += "typing ${screen?.id}" }
+
+    // Terminals: the tabs this phone has, by what `mynx screen send tab` names.
+    val tabs = mutableMapOf("1" to "bash", "2" to "htop", "new" to "Tab 3")
+    val screens = mutableMapOf<Int, TermScreen>()
+    var termSize = Pair(56, 40)
+    override fun openTerm(id: Int, target: ScreenTarget.Terminal): Result<TermOpened> {
+        val title = tabs.remove(target.name) ?: return Result.failure(Exception("no tab ${target.name}"))
+        did += "open term $id $title"
+        screens[id] = TermScreen(termSize.first, termSize.second, listOf(TermLine(listOf(TermCell("$", 1, TERM_NORMAL)))))
+        return Result.success(TermOpened(title, termSize.first, termSize.second))
+    }
+    override fun termScreen(id: Int): TermScreen? = screens[id]
+    override fun resizeTerm(id: Int, columns: Int, rows: Int, cellWidth: Int, cellHeight: Int) {
+        did += "resize $id ${columns}x$rows ${cellWidth}x$cellHeight"
+        screens[id] = screens.getValue(id).copy(columns = columns, rows = rows)
+    }
+    override fun writeTerm(id: Int, data: ByteArray) { did += "write $id ${String(data)}" }
+    override fun closeTerm(id: Int, back: Boolean) {
+        did += "close term $id back=$back"
+        screens.remove(id)
+    }
+    override fun typingToTerm(term: SentTerm?) { did += "typing term ${term?.id}" }
 }
 
 internal class FakeShowing : ScreenShowing {
@@ -43,6 +66,11 @@ internal class FakeShowing : ScreenShowing {
     override fun ended(stream: Int) { did += "ended $stream" }
     override fun video(message: ScreenMessage.Video) { did += "video ${message.stream} ${message.pts}" }
     override fun focus(typing: Boolean) { did += "focus $typing" }
+    override fun termStarted(id: Int, title: String, columns: Int, rows: Int) { did += "term $id $title ${columns}x$rows" }
+    override fun termState(id: Int, columns: Int, rows: Int, data: ByteArray) { did += "state $id ${columns}x$rows" }
+    override fun termOutput(id: Int, data: ByteArray) { did += "output $id ${String(data)}" }
+    override fun termTitle(id: Int, title: String) { did += "title $id $title" }
+    override fun termEnded(id: Int) { did += "term ended $id" }
 }
 
 class ScreenShareTest {
@@ -332,5 +360,248 @@ class ScreenShareTest {
         val s = sendHero()
         assertTrue(s.title.length <= 80)
         assertIs<ScreenMessage.StreamStart>(sent.single())
+    }
+}
+
+class ScreenShareTermsTest {
+    private val root = Files.createTempDirectory("share").toFile()
+    private val settings = File(root, "settings.conf").also { it.writeText("") }
+    private val sent = mutableListOf<ScreenMessage>()
+    private var peer: LinkedPeer? = LinkedPeer("Nord 2", ScreenRole.HOST, NORD)
+    private val casting = FakeCasting()
+    private val showing = FakeShowing()
+    private val share = ScreenShare(
+        send = { m -> if (peer == null) false else { sent += m; true } },
+        peer = { peer },
+        casting = casting,
+        showing = showing,
+        settingsFile = settings,
+        post = { it() },
+    )
+
+    @AfterTest
+    fun cleanUp() {
+        root.deleteRecursively()
+    }
+
+    private fun sendTab(which: String = "1"): SentTerm = share.sendTerm(ScreenTarget.Terminal(which)).getOrThrow()
+
+    private fun states() = sent.filterIsInstance<ScreenMessage.TermState>()
+
+    @Test
+    fun `sending a tab takes it off this phone and starts it there with everything on it`() {
+        val t = sendTab()
+        assertEquals("bash", t.title)
+        assertEquals(listOf("open term ${t.id} bash"), casting.did)
+        assertEquals(ScreenMessage.TermStart(t.id, "bash", 56, 40), sent[0])
+        val state = sent[1] as ScreenMessage.TermState
+        assertEquals(Triple(t.id, 56, 40), Triple(state.term, state.columns, state.rows))
+        assertContentEquals(termSnapshot(casting.screens.getValue(t.id)), state.data)
+        assertEquals(listOf(t), share.terms)
+    }
+
+    @Test
+    fun `sending needs a linked screen and a tab that is there`() {
+        assertEquals("no tab 9", share.sendTerm(ScreenTarget.Terminal("9")).exceptionOrNull()?.message)
+        peer = LinkedPeer("Pixel 10", ScreenRole.SCREEN, NORD)
+        assertTrue(share.sendTerm(ScreenTarget.Terminal("1")).exceptionOrNull()!!.message!!.contains("this phone is Pixel 10's screen"))
+        peer = null
+        assertTrue(share.sendTerm(ScreenTarget.Terminal("1")).exceptionOrNull()!!.message!!.startsWith("no screen is linked"))
+        assertTrue(sent.isEmpty())
+        assertTrue(share.terms.isEmpty())
+    }
+
+    @Test
+    fun `apps and terminals have ids of one series`() {
+        val app = share.send(ScreenTarget.App("pixel-hero")).getOrThrow()
+        val t = sendTab()
+        assertTrue(t.id != app.id)
+    }
+
+    @Test
+    fun `its programs' output goes there in the state's epoch`() {
+        val t = sendTab()
+        val epoch = states().single().epoch
+        sent.clear()
+        share.termOutput(t.id, "hi".toByteArray())
+        val out = sent.single() as ScreenMessage.TermOutput
+        assertEquals(Pair(t.id, epoch), Pair(out.term, out.epoch))
+        assertEquals("hi", String(out.data))
+        // Output of a terminal that isn't sent goes nowhere.
+        share.termOutput(99, "x".toByteArray())
+        assertEquals(1, sent.size)
+    }
+
+    @Test
+    fun `the screen's size becomes the terminal's, and a new state follows at it`() {
+        val t = sendTab()
+        sent.clear()
+        share.received(ScreenMessage.TermSize(t.id, 48, 30, 22, 51))
+        assertEquals("resize ${t.id} 48x30 22x51", casting.did.last())
+        val state = states().single()
+        assertEquals(Pair(48, 30), Pair(state.columns, state.rows))
+        assertTrue(state.epoch > 1)
+        assertEquals(Pair(48, 30), share.terms.single().let { Pair(it.columns, it.rows) })
+    }
+
+    @Test
+    fun `a screen that falls behind gets the whole state again once it has caught up`() {
+        val t = sendTab()
+        val epoch = states().single().epoch
+        sent.clear()
+        val big = ByteArray(TERM_UNACKED_MAX)
+        share.termOutput(t.id, big)
+        share.termOutput(t.id, "lost".toByteArray())
+        share.termOutput(t.id, "lost too".toByteArray())
+        assertEquals(1, sent.size)
+        share.received(ScreenMessage.TermAck(t.id, epoch, big.size.toLong()))
+        val again = sent.last() as ScreenMessage.TermState
+        assertTrue(again.epoch > epoch)
+        share.termOutput(t.id, "on".toByteArray())
+        assertEquals(again.epoch, (sent.last() as ScreenMessage.TermOutput).epoch)
+    }
+
+    @Test
+    fun `what's typed there goes to the terminal's programs`() {
+        val t = sendTab()
+        share.received(ScreenMessage.TermInput(t.id, "ls\r".toByteArray()))
+        assertEquals("write ${t.id} ls\r", casting.did.last())
+        share.received(ScreenMessage.TermInput(99, "x".toByteArray()))
+        assertEquals("write ${t.id} ls\r", casting.did.last())
+    }
+
+    @Test
+    fun `touching it there makes this phone's typing go to it, touching here takes it back`() {
+        val app = share.send(ScreenTarget.App("pixel-hero")).getOrThrow()
+        val t = sendTab()
+        share.received(ScreenMessage.Touch(app.id, ACTION_DOWN, 0, listOf(TouchPoint(0, 1f, 2f))))
+        casting.did.clear()
+        sent.clear()
+        share.received(ScreenMessage.TermTouched(t.id))
+        assertEquals(listOf("typing null", "typing term ${t.id}"), casting.did)
+        assertEquals(t, share.typingToTerm)
+        assertNull(share.typingTo)
+        // Typing went there already (to the app): the screen keeps its mark, and is told again.
+        assertEquals(listOf<ScreenMessage>(ScreenMessage.Focus(ScreenRole.SCREEN)), sent)
+        share.received(ScreenMessage.TermTouched(t.id))
+        assertEquals(1, sent.size)
+        share.hostTouched()
+        assertNull(share.typingToTerm)
+        assertEquals("typing term null", casting.did.last())
+        assertEquals(ScreenMessage.Focus(ScreenRole.HOST), sent.last())
+    }
+
+    @Test
+    fun `its title follows the tab's`() {
+        val t = sendTab()
+        share.termTitle(t.id, "vim notes.md")
+        assertEquals(ScreenMessage.TermTitle(t.id, "vim notes.md"), sent.last())
+        assertEquals("vim notes.md", share.terms.single().title)
+        sent.clear()
+        share.termTitle(t.id, "vim notes.md")
+        assertTrue(sent.isEmpty())
+    }
+
+    @Test
+    fun `taking it back puts the tab back here and ends it there`() {
+        val t = sendTab()
+        share.received(ScreenMessage.TermTouched(t.id))
+        casting.did.clear()
+        sent.clear()
+        assertEquals(listOf(ScreenRef(t.id, "bash")), share.take("bash"))
+        assertEquals(listOf("typing term null", "close term ${t.id} back=true"), casting.did)
+        assertEquals(listOf(ScreenMessage.Focus(ScreenRole.HOST), ScreenMessage.TermEnd(t.id)), sent)
+        assertTrue(share.terms.isEmpty())
+    }
+
+    @Test
+    fun `take finds terminals by id or title, and all takes apps and terminals`() {
+        val app = share.send(ScreenTarget.App("pixel-hero")).getOrThrow()
+        val t = sendTab("1")
+        val u = sendTab("2")
+        assertEquals(listOf(u.id), share.take("${u.id}").map { it.id })
+        assertEquals(listOf(app.id, t.id), share.take("all").map { it.id })
+    }
+
+    @Test
+    fun `the screen giving it back, the shell ending and the link ending`() {
+        val t = sendTab("1")
+        share.received(ScreenMessage.TakeBack(t.id))
+        assertEquals("close term ${t.id} back=true", casting.did.last())
+        val u = sendTab("2")
+        sent.clear()
+        share.closedHere(u.id)
+        assertEquals("close term ${u.id} back=false", casting.did.last())
+        assertEquals(listOf<ScreenMessage>(ScreenMessage.TermEnd(u.id)), sent)
+        val v = sendTab("new")
+        peer = null
+        share.unlinked()
+        assertEquals("close term ${v.id} back=true", casting.did.last())
+        assertTrue(share.terms.isEmpty())
+    }
+
+    @Test
+    fun `the status lists terminals sent`() {
+        val t = sendTab()
+        val status = parseJson(ok(*share.status())) as Map<*, *>
+        val one = (status["sent"] as List<*>).single() as Map<*, *>
+        assertEquals("terminal", one["kind"])
+        assertEquals("bash", one["title"])
+        assertEquals(t.id.toLong(), (one["id"] as Number).toLong())
+        assertEquals(56L, (one["columns"] as Number).toLong())
+    }
+
+    // --- The screen's side --------------------------------------------------
+
+    private fun asScreen() {
+        peer = LinkedPeer("Pixel 10", ScreenRole.SCREEN, ScreenMessage.ScreenInfo(1080, 2424, 420, 0))
+    }
+
+    @Test
+    fun `the screen shows a terminal, its state and output, and acks it`() {
+        asScreen()
+        share.received(ScreenMessage.TermStart(5, "bash", 56, 40))
+        assertEquals("term 5 bash 56x40", showing.did.last())
+        assertEquals(listOf(ScreenRef(5, "bash")), share.shownTerms.map { ScreenRef(it.id, it.title) })
+        share.received(ScreenMessage.TermState(5, 1, 56, 40, "x".toByteArray()))
+        assertEquals("state 5 56x40", showing.did.last())
+        share.received(ScreenMessage.TermOutput(5, 1, "hi".toByteArray()))
+        assertEquals("output 5 hi", showing.did.last())
+        assertEquals(ScreenMessage.TermAck(5, 1, 2), sent.last())
+        share.received(ScreenMessage.TermTitle(5, "vim"))
+        assertEquals("title 5 vim", showing.did.last())
+        assertEquals("vim", share.shownTerms.single().title)
+    }
+
+    @Test
+    fun `the screen asks for the size it fits, and sends typing and touches`() {
+        asScreen()
+        share.received(ScreenMessage.TermStart(5, "bash", 56, 40))
+        share.received(ScreenMessage.TermState(5, 1, 56, 40, ByteArray(0)))
+        share.fitTerm(5, 48, 30, 22, 51)
+        assertEquals(ScreenMessage.TermSize(5, 48, 30, 22, 51), sent.last())
+        // Output at the old size waits for the state at the new one.
+        share.received(ScreenMessage.TermOutput(5, 1, "old".toByteArray()))
+        assertFalse(showing.did.last().startsWith("output"))
+        share.termInput(5, "q".toByteArray())
+        assertEquals("q", String((sent.last() as ScreenMessage.TermInput).data))
+        share.termTouched(5)
+        assertEquals(ScreenMessage.TermTouched(5), sent.last())
+        share.fitTerm(9, 1, 1, 1, 1)
+        assertEquals(ScreenMessage.TermTouched(5), sent.last())
+    }
+
+    @Test
+    fun `the terminal ending there, take, and the link ending`() {
+        asScreen()
+        share.received(ScreenMessage.TermStart(5, "bash", 56, 40))
+        share.received(ScreenMessage.TermStart(6, "htop", 56, 40))
+        assertEquals(listOf(6), share.take("htop").map { it.id })
+        assertEquals(ScreenMessage.TakeBack(6), sent.last())
+        share.received(ScreenMessage.TermEnd(6))
+        assertEquals("term ended 6", showing.did.last())
+        share.unlinked()
+        assertEquals("term ended 5", showing.did.last())
+        assertTrue(share.shownTerms.isEmpty())
     }
 }

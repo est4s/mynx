@@ -727,8 +727,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   dpi, rotation), Layout (side, alignment: the host's word is final;
   B's `place` asks), KeepAlive (after 5 s idle; a link silent for
   15 s ends), Bye, Unpaired (the other forgets the pair too), Focus,
-  the screens' messages (next entry) and a placeholder,
-  TerminalText. **The link** (`ScreenLink`, plain JDK sockets, so
+  and the screens' and terminals' messages (next entries). **The link** (`ScreenLink`, plain JDK sockets, so
   tested on loopback): A listens on `screen-port` (all interfaces)
   only while `screen-host = auto` and a screen is paired or a pairing
   waits, and advertises `_mynx-screen._tcp` with TXT `v`, `id`,
@@ -781,6 +780,66 @@ See `docs/ROADMAP.md` "How it works". The details:
   a key frame. Back, or leaving the app, stops watching (the host
   stops encoding); Home's first rows list the streams to show again.
   Not yet: chats, Files and viewers sent; B's own keyboard.
+- **Extended screen: terminals on B** (`core/.../ScreenTerms.kt`,
+  `ScreenShare.kt`'s terminal half, `Tabs.openFrom`;
+  `app/.../ScreenTerminals.kt`, `TermScreens.kt`,
+  `app/src/main/java/com/termux/terminal/MynxTerminals.java`; work
+  log entry 227, "Next" 0a; agent's design, to confirm): protocol
+  version 3. A terminal tab goes to B **as text, not video**
+  (maintainer's decision), and its session stays on A. **Choice:**
+  A streams the PTY's output bytes, and B runs its own Termux
+  emulator fed the same bytes at the same size, rather than A sending
+  screen diffs: B then draws natively (its font, colours, scrollback,
+  selection, copy), and every mode programs set (cursor keys, mouse,
+  bracketed paste, the alternate screen) reaches B by itself, so
+  B's key bar encodes keys as A's would. A's emulator stays the one
+  that answers programs (B's answers to queries are dropped,
+  `screenEmulatorSends`; its mouse reports and pastes go). What bytes
+  can't give is where B starts: a **TermState** (`termSnapshot` of a
+  `TermScreen` read off A's emulator, `termScreenOf`): a reset (RIS),
+  the main buffer's lines from the oldest scrollback kept (up to
+  1 MiB) with SGR styles and wrapped lines run on, the alternate
+  screen if a program has it, then margins, DECSET modes, cursor and
+  the current style (not carried: tab stops, charsets, the saved
+  cursor, palette changes, the title, which goes as TermTitle).
+  `MynxTerminalsTest` (Robolectric, CI) checks B's emulator ends up
+  cell for cell like A's, and stays so as the same bytes follow.
+  **Size:** B's terminal view sizes its emulator (attach, rotation,
+  zoom) and asks (TermSize, with the cell's pixels); A resizes the
+  PTY (`updateSize`) and its emulator, and sends a new TermState at
+  that size. Each state starts an **epoch**; TermOutput carries it
+  and B drops output of another epoch, and output while it waits for
+  the state at a size it asked for (`ShownTerm`), since its emulator
+  is resized already. **Flow:** B acks output (TermAck, bytes of the
+  epoch); past 256 KiB unacked A drops output and, once B has caught
+  up, sends a fresh state (`TermPacer`): a flood shows as it is now,
+  not as a backlog, and A's memory stays bounded. **The tap:**
+  Termux's `TerminalSession` is final and hands its bytes only to its
+  emulator, so `MynxTerminals.tee` puts a copy of the library's main
+  thread handler (v0.118.3) into each session as `startShell` makes
+  it (reflection on the final `mMainThreadHandler`, before its
+  threads start), which gives each part to a tap first; a session it
+  failed on can't be sent. Java in `com.termux.terminal` for the
+  package-private fields. **On A** (`TermCaster`): sending takes the
+  tab off the strip (`tabs.close`, not `closeTab`: the session runs
+  on; sending the last opens a fresh one), "new" starts a shell that
+  waits for B's size; take back (or the link ending) reopens it with
+  its rename; its shell exiting ends it on B, back on A only with an
+  error code. Services' tabs aren't sent. **On B** (`RemoteTerms`): a
+  `TerminalSession` with no process (`MynxTerminals.remote`: its
+  emulator made by hand, pid `Integer.MAX_VALUE` so `write()` takes
+  input, read off its queue by a thread into TermInput; no pty fd), a
+  tab `Tabs.openFrom` ("Pixel 10: title", not numbered, not saved);
+  its × gives it back. **Typing:** a finger down on B over a tab from
+  A sends TermTouched: A's typing goes to that session (ScreenShare's
+  typing, `typingToTerm`), from the terminal view's keys
+  (`ViewClient.onKeyDown`/`onCodePoint`, `TermKeys`: Termux's
+  KeyHandler and the view's Ctrl mapping, `terminalCodePoint`) and
+  the key bar (`TerminalKeys`' `routed`), whose touches don't take
+  typing back; A's strip starts with "⌨ B: title"; A not showing
+  the terminal view, the typing bar (`ScreenKeysActivity`) does it.
+  B draws a cyan line around the tab; B's own key bar types into it,
+  and a tap doesn't open B's keyboard.
 - **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
   the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
   `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):
@@ -1184,6 +1243,13 @@ See `docs/ROADMAP.md` "How it works". The details:
   session that's never attached never starts (restored background tabs
   start when first shown). `pid` is 0 before that and -1 after exit.
 - One `TerminalView` for all tabs: switch with `attachSession(other)`.
+- `TerminalSession`, `TerminalEmulator` and `TerminalView` are final,
+  and a session's output reaches only its emulator: what we need
+  beyond their API is in `com.termux.terminal.MynxTerminals` (our
+  Java, in their package for the package-private fields; a copy of
+  the session's main thread handler). Upgrading the library means
+  checking it against the new `TerminalSession` (entry "Extended
+  screen: terminals on B").
 - `ViewClient.onKeyDown()` sees each key before the terminal; return
   `true` to consume it.
 - The library prints `[Process completed (code N) - press Enter]` itself.

@@ -69,10 +69,17 @@ const val SCREEN_SEND_MENU = "screen-send"
 
 /**
  * The extended screen's link, for Home: the other phone's [peer] name,
- * this phone's [role], the screens it [sent] (on the host) and those
- * [shown] from the host (on the screen).
+ * this phone's [role], the screens and terminals it [sent] (on the host)
+ * and those [shown] from the host (on the screen), and the host's own
+ * terminal [tabs]' titles, in order, to send.
  */
-data class ScreenHome(val peer: String, val role: ScreenRole, val sent: List<ScreenRef>, val shown: List<ScreenRef>)
+data class ScreenHome(
+    val peer: String,
+    val role: ScreenRole,
+    val sent: List<ScreenRef>,
+    val shown: List<ScreenRef>,
+    val tabs: List<String> = emptyList(),
+)
 
 /** How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, or a label with its value. */
 enum class HomeRow { BUTTON, SECTION, TEXT, INFO }
@@ -212,10 +219,16 @@ class HomeMenus(
         val apps = webApps().filter { it.action is HomeAction.App }.map { item ->
             item.copy(action = HomeAction.Config("screen-send", listOf("app", (item.action as HomeAction.App).name), back = true))
         }.ifEmpty { listOf(HomeItem("(no apps yet)", HomeAction.None)) }
-        if (link.sent.isEmpty()) return apps
-        return listOf(HomeItem("On ${link.peer}", HomeAction.None, kind = HomeRow.SECTION)) +
-            link.sent.map { HomeItem("Take back ${it.title}", HomeAction.Config("screen-take", listOf("${it.id}"), back = true)) } +
-            HomeItem("Send an app", HomeAction.None, kind = HomeRow.SECTION) + apps
+        fun sendTab(which: String) = HomeAction.Config("screen-send", listOf("tab", which), back = true)
+        val terminals = listOf(
+            HomeItem("Send a terminal", HomeAction.None, kind = HomeRow.SECTION),
+            HomeItem("New terminal", sendTab("new"), logo = HomeLogo.Terminal),
+        ) + link.tabs.mapIndexed { i, title -> HomeItem(title, sendTab("${i + 1}"), detail = "tab ${i + 1}", logo = HomeLogo.Terminal) }
+        val sent = if (link.sent.isEmpty()) emptyList() else {
+            listOf(HomeItem("On ${link.peer}", HomeAction.None, kind = HomeRow.SECTION)) +
+                link.sent.map { HomeItem("Take back ${it.title}", HomeAction.Config("screen-take", listOf("${it.id}"), back = true)) }
+        }
+        return sent + terminals + HomeItem("Send an app", HomeAction.None, kind = HomeRow.SECTION) + apps
     }
 
     private fun item(label: String, action: String): HomeItem? = when (action) {
