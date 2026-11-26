@@ -22,20 +22,74 @@ private const val RIGHT = 3
 data class Finger(val id: Int, val x: Float, val y: Float)
 
 /**
+ * Where the X server's one pointer is, in X screen pixels, shared by the
+ * gestures of every monitor (the extended screen: this phone's and the
+ * other phone's), so a touchpad on either moves it across both. It's kept
+ * on [areas], the monitors; while there are none, on the monitor of the
+ * gestures moving it. [listener] hears every move. Main thread.
+ */
+class DesktopPointer {
+    var x = 0f
+        private set
+    var y = 0f
+        private set
+    /** Whether it's been put anywhere yet (it starts in the middle of the first monitor it's kept on). */
+    var placed = false
+        private set
+    var listener: (() -> Unit)? = null
+
+    /** The monitors it's kept on; changing them brings it onto them. */
+    var areas: List<PixelRect> = emptyList()
+        set(value) {
+            field = value
+            if (value.isEmpty()) return
+            if (!placed) centre(value.first()) else place(x, y, value)
+        }
+
+    internal fun centre(on: PixelRect) {
+        place((on.x + on.width / 2).toFloat(), (on.y + on.height / 2).toFloat(), listOf(on))
+    }
+
+    /**
+     * Moves it to [px], [py] when that's on a monitor (of the [areas] while
+     * there are any, else of [on]); else as far as the monitor it's on
+     * goes (crossing only where monitors meet, as X's own pointer does),
+     * or onto the nearest one when it's on none.
+     */
+    fun place(px: Float, py: Float, on: List<PixelRect>) {
+        val bounds = areas.ifEmpty { on }
+        fun PixelRect.has(px: Float, py: Float) = px >= x && py >= y && px <= x + width - 1 && py <= y + height - 1
+        fun PixelRect.clampX(v: Float) = v.coerceIn(x.toFloat(), (x + width - 1).coerceAtLeast(x).toFloat())
+        fun PixelRect.clampY(v: Float) = v.coerceIn(y.toFloat(), (y + height - 1).coerceAtLeast(y).toFloat())
+        val target = bounds.firstOrNull { it.has(px, py) }
+            ?: bounds.firstOrNull { placed && it.has(x, y) }
+            ?: bounds.minByOrNull { hypot(it.clampX(px) - px, it.clampY(py) - py) }
+        placed = true
+        val nx = target?.clampX(px) ?: px
+        val ny = target?.clampY(py) ?: py
+        val moved = nx != x || ny != y
+        x = nx
+        y = ny
+        if (moved) listener?.invoke()
+    }
+}
+
+/**
  * Turns touches on the desktop into the X server's pointer events. Feed
  * it every finger down and up, and moves with all the fingers down, in
- * X pixels; [slop] (X pixels) tells a move from a tap. A long press
- * needs [timeout] called at [timeoutAt]. Main thread.
+ * X pixels of its [monitor] (its own surface's part of the X screen);
+ * [slop] (X pixels) tells a move from a tap. A long press needs
+ * [timeout] called at [timeoutAt]. The [pointer] may be shared with
+ * another monitor's gestures. Main thread.
  */
-sealed class DesktopGestures(private val slop: Float) {
-    /** Where the pointer is, in X pixels: our own, so the view can draw it. */
-    var pointerX = 0f
-        protected set
-    var pointerY = 0f
-        protected set
-    private var screenWidth = 1
-    private var screenHeight = 1
-    private var started = false
+sealed class DesktopGestures(private val slop: Float, val pointer: DesktopPointer = DesktopPointer()) {
+    /** Where the pointer is, in X screen pixels: our own, so the view can draw it. */
+    val pointerX: Float get() = pointer.x
+    val pointerY: Float get() = pointer.y
+
+    /** This surface's part of the X screen: its fingers' 0, 0 is the monitor's corner. */
+    var monitor = PixelRect(0, 0, 1, 1)
+        private set
 
     private val fingers = LinkedHashMap<Int, Finger>()
     private val starts = HashMap<Int, Finger>()
@@ -53,28 +107,26 @@ sealed class DesktopGestures(private val slop: Float) {
     private var lastCentreX = 0f
     private var lastCentreY = 0f
 
-    /** The X screen's size; the pointer is kept on it. */
-    fun screen(width: Int, height: Int) {
-        screenWidth = width.coerceAtLeast(1)
-        screenHeight = height.coerceAtLeast(1)
-        if (!started) {
-            started = true
-            pointerX = (screenWidth / 2).toFloat()
-            pointerY = (screenHeight / 2).toFloat()
-        }
-        pointerX = clampX(pointerX)
-        pointerY = clampY(pointerY)
+    /** The X screen's size, when it's this surface's alone; the pointer is kept on it. */
+    fun screen(width: Int, height: Int) = monitor(PixelRect(0, 0, width, height))
+
+    /** This surface's monitor on the X screen; the pointer is kept on the monitors. */
+    fun monitor(rect: PixelRect) {
+        monitor = rect.copy(width = rect.width.coerceAtLeast(1), height = rect.height.coerceAtLeast(1))
+        if (!pointer.placed) pointer.centre(monitor) else pointer.place(pointer.x, pointer.y, listOf(monitor))
     }
 
-    /** A mouse pointing at [x], [y]: the pointer goes there (kept on the screen). */
+    /** A mouse pointing at [x], [y] of the monitor: the pointer goes there (kept on it). */
     fun moveTo(x: Float, y: Float): X11Input.Move {
-        pointerX = clampX(x)
-        pointerY = clampY(y)
+        val m = monitor
+        val px = (m.x + x).coerceIn(m.x.toFloat(), (m.x + m.width - 1).toFloat())
+        val py = (m.y + y).coerceIn(m.y.toFloat(), (m.y + m.height - 1).toFloat())
+        pointer.place(px, py, listOf(m))
         return X11Input.Move(pointerX, pointerY)
     }
 
-    protected fun clampX(x: Float) = x.coerceIn(0f, (screenWidth - 1).toFloat())
-    protected fun clampY(y: Float) = y.coerceIn(0f, (screenHeight - 1).toFloat())
+    /** Moves the pointer by [dx], [dy], across monitors (kept on them). */
+    protected fun moveBy(dx: Float, dy: Float) = pointer.place(pointerX + dx, pointerY + dy, listOf(monitor))
 
     fun down(id: Int, x: Float, y: Float, ms: Long): List<X11Input> {
         val finger = Finger(id, x, y)
@@ -170,7 +222,7 @@ sealed class DesktopGestures(private val slop: Float) {
  * middle click; two fingers moving scroll; a long press, or a tap and a
  * touch that moves, holds the left button while the finger drags.
  */
-class TouchpadGestures(slop: Float) : DesktopGestures(slop) {
+class TouchpadGestures(slop: Float, pointer: DesktopPointer = DesktopPointer()) : DesktopGestures(slop, pointer) {
     private var dragging = false
     private var lastTapMs: Long? = null
     private var tapThenTouch = false
@@ -191,8 +243,7 @@ class TouchpadGestures(slop: Float) : DesktopGestures(slop) {
         val elapsed = (ms - lastMoveMs).coerceAtLeast(1)
         lastMoveMs = ms
         val gain = gain(hypot(dx, dy) / elapsed)
-        pointerX = clampX(pointerX + dx * gain)
-        pointerY = clampY(pointerY + dy * gain)
+        moveBy(dx * gain, dy * gain)
         out += X11Input.Move(pointerX, pointerY)
         return out
     }
@@ -230,7 +281,7 @@ class TouchpadGestures(slop: Float) : DesktopGestures(slop) {
  * clicks there, a finger that moves drags from where it went down, a long
  * press is a right click; two fingers scroll or, tapped, right click.
  */
-class DirectGestures(slop: Float) : DesktopGestures(slop) {
+class DirectGestures(slop: Float, pointer: DesktopPointer = DesktopPointer()) : DesktopGestures(slop, pointer) {
     private var pressed = false
     private var longPressed = false
     private var startX = 0f
@@ -273,7 +324,7 @@ class DirectGestures(slop: Float) : DesktopGestures(slop) {
 }
 
 /** The gestures `desktop-touch` names. */
-fun desktopGestures(touch: DesktopTouch, slop: Float): DesktopGestures = when (touch) {
-    DesktopTouch.TOUCHPAD -> TouchpadGestures(slop)
-    DesktopTouch.DIRECT -> DirectGestures(slop)
+fun desktopGestures(touch: DesktopTouch, slop: Float, pointer: DesktopPointer = DesktopPointer()): DesktopGestures = when (touch) {
+    DesktopTouch.TOUCHPAD -> TouchpadGestures(slop, pointer)
+    DesktopTouch.DIRECT -> DirectGestures(slop, pointer)
 }

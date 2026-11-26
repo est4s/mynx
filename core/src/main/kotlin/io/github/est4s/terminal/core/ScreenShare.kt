@@ -2,13 +2,19 @@ package io.github.est4s.terminal.core
 
 import java.io.File
 
-/** What the host can send to the other phone: for now an app (a web app or a game: `mynx app`). */
+/** What the host can send to the other phone: an app (a web app or a game: `mynx app`) or the desktop. */
 sealed interface ScreenTarget {
     val kind: String
     val name: String
 
     data class App(override val name: String) : ScreenTarget {
         override val kind get() = "app"
+    }
+
+    /** The Linux desktop: the other phone becomes its second monitor, or the second half of one (`screen-desktop`). */
+    data object Desktop : ScreenTarget {
+        override val kind get() = "desktop"
+        override val name get() = "desktop"
     }
 }
 
@@ -70,6 +76,9 @@ interface ScreenShowing {
 
     /** Whether typing on the host comes here (the screen touched last), to show a mark. */
     fun focus(typing: Boolean)
+
+    /** The desktop's pointer on [stream], at [x], [y] of its pixels, or not [shown] there. */
+    fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) {}
 }
 
 private const val MAX_TITLE = 80
@@ -176,6 +185,7 @@ class ScreenShare(
         synchronized(lock) {
             if (sentScreens.remove(screen.id) == null) return
             pacers.remove(screen.id)
+            pointers.remove(screen.id)
         }
         if (screen.watched) casting.encode(screen, false, 0, 0)
         if (synchronized(lock) { typing == screen.id }) typeHere(tell)
@@ -194,6 +204,18 @@ class ScreenShare(
 
     /** This phone's own screen was touched: typing goes to it again. Main thread. */
     fun hostTouched() = typeHere(tell = true)
+
+    private val pointers = HashMap<Int, ScreenMessage.Pointer>()
+
+    /** The desktop's pointer on screen [id] moved: told while it's watched, once for each change. Main thread. */
+    fun pointer(id: Int, x: Float, y: Float, shown: Boolean) {
+        val m = ScreenMessage.Pointer(id, x, y, shown)
+        synchronized(lock) {
+            if (sentScreens[id]?.watched != true || pointers[id] == m) return
+            pointers[id] = m
+        }
+        send(m)
+    }
 
     /** An encoded frame of [id] (encoder thread): sent if the pacer says so. */
     fun encoded(id: Int, flags: Int, pts: Long, data: ByteArray) {
@@ -217,7 +239,11 @@ class ScreenShare(
             return
         }
         val now = screen.copy(watched = on)
-        synchronized(lock) { sentScreens[id] = now }
+        synchronized(lock) {
+            sentScreens[id] = now
+            // A screen watching anew has no pointer drawn yet.
+            pointers.remove(id)
+        }
         pacer.watch(on)
         casting.encode(now, on, settings.screenFps, settings.screenBitrate * 1000)
     }
@@ -304,6 +330,7 @@ class ScreenShare(
                 typedTo = m.to == ScreenRole.SCREEN
                 showing.focus(typedTo)
             }
+            is ScreenMessage.Pointer -> if (synchronized(lock) { m.stream in shownStreams }) showing.pointer(m.stream, m.x, m.y, m.shown)
             else -> {}
         }
     }

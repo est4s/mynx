@@ -15,9 +15,10 @@ import javax.crypto.spec.SecretKeySpec
 
 /**
  * The version of the link between the phones; a Hello with another is
- * refused. 1 was the pairing alone; 2 sends screens (video, touches).
+ * refused. 1 was the pairing alone; 2 sends screens (video, touches);
+ * 3 sends the desktop's pointer ([ScreenMessage.Pointer]).
  */
-const val SCREEN_PROTOCOL = 2
+const val SCREEN_PROTOCOL = 3
 
 /** A [ScreenMessage.Video] part that's a key frame: it decodes alone. */
 const val VIDEO_KEY = 1
@@ -134,6 +135,13 @@ sealed class ScreenMessage(val type: Int) {
     /** Placeholder: a terminal tab's output (host to screen) or typing (screen to host). */
     class TerminalText(val tab: Int, val data: ByteArray) : ScreenMessage(TYPE_TERMINAL_TEXT)
 
+    /**
+     * The desktop's pointer on stream [stream] (the X server draws no
+     * cursor there, so the screen draws one), at [x], [y] of its pixels;
+     * not [shown] while it's on the host's part of the desktop.
+     */
+    data class Pointer(val stream: Int, val x: Float, val y: Float, val shown: Boolean) : ScreenMessage(TYPE_POINTER)
+
     class Unknown(type: Int, val payload: ByteArray) : ScreenMessage(type)
 
     override fun equals(other: Any?): Boolean =
@@ -163,6 +171,8 @@ sealed class ScreenMessage(val type: Int) {
         const val TYPE_VIDEO_ACK = 38
         const val TYPE_KEY_FRAME = 39
         const val TYPE_TAKE_BACK = 40
+        // Past the terminals' (41-48, the screen-terms branch), so the two can meet.
+        const val TYPE_POINTER = 49
     }
 }
 
@@ -202,6 +212,7 @@ fun encodeScreenMessage(m: ScreenMessage): ByteArray {
         is ScreenMessage.KeyFrame -> out.writeInt(m.stream)
         is ScreenMessage.TakeBack -> out.writeInt(m.stream)
         is ScreenMessage.TerminalText -> { out.writeInt(m.tab); out.write(m.data) }
+        is ScreenMessage.Pointer -> { out.writeInt(m.stream); out.writeFloat(m.x); out.writeFloat(m.y); out.writeByte(if (m.shown) 1 else 0) }
         is ScreenMessage.Unknown -> out.write(m.payload)
     }
     out.flush()
@@ -263,6 +274,8 @@ fun decodeScreenMessage(bytes: ByteArray): ScreenMessage {
             ScreenMessage.TYPE_KEY_FRAME -> ScreenMessage.KeyFrame(input.readInt())
             ScreenMessage.TYPE_TAKE_BACK -> ScreenMessage.TakeBack(input.readInt())
             ScreenMessage.TYPE_TERMINAL_TEXT -> ScreenMessage.TerminalText(input.readInt(), rest())
+            ScreenMessage.TYPE_POINTER ->
+                ScreenMessage.Pointer(input.readInt(), input.readFloat(), input.readFloat(), input.readUnsignedByte() != 0)
             else -> ScreenMessage.Unknown(type, rest())
         }
     } catch (e: EOFException) {

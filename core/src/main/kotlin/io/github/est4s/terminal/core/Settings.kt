@@ -57,6 +57,8 @@ data class Settings(
     val screenFps: Int = 60,
     /** A sent screen's video, in Mbit/s (`screen-bitrate`). */
     val screenBitrate: Int = 8,
+    /** How the desktop uses the screen (`screen-desktop`): a monitor of its own, or the second half of one. */
+    val screenDesktop: ScreenDesktopMode = ScreenDesktopMode.EXTEND,
     /** The permission mode new chats of touch mode's Chat start in: one of [CHAT_MODES]. */
     val chatMode: String = "auto",
     /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
@@ -101,6 +103,7 @@ data class Settings(
         "screen-place" to screenPlace.word,
         "screen-fps" to screenFps.toString(),
         "screen-bitrate" to screenBitrate.toString(),
+        "screen-desktop" to screenDesktop.word,
         "chat-mode" to chatMode,
         "chat-model" to chatModel,
         "open-pictures" to openPictures.word,
@@ -342,6 +345,13 @@ val SETTINGS: List<SettingDef> = listOf(
         "8", null,
         { if (it.toIntOrNull() in 1..40) null else "screen-bitrate must be a whole number of Mbit/s from 1 to 40" },
         { copy(screenBitrate = it.toInt()) },
+    ),
+    SettingDef(
+        "screen-desktop", "How the desktop uses the screen (the other phone) when it's sent there: extend gives it a monitor of its own " +
+            "beside this phone's (screen-place says where), span makes both phones the halves of one wide monitor.",
+        "extend", ScreenDesktopMode.entries.map { it.word },
+        oneOf("screen-desktop", ScreenDesktopMode.entries.map { it.word }),
+        { v -> copy(screenDesktop = ScreenDesktopMode.entries.first { it.word == v }) },
     ),
     SettingDef(
         "chat-mode", "The permission mode new chats in touch view's Chat start in: auto (Claude decides what to allow, asking less), default (asks first), plan or acceptEdits. A chat's own pick wins for that chat.",

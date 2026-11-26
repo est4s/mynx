@@ -64,7 +64,7 @@ class SettingsTest {
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
                 "update-check", "serial-preload", "serial-names", "view", "desktop", "desktop-touch", "screen-host", "screen-port", "screen-place",
-                "screen-fps", "screen-bitrate", "chat-mode", "chat-model", "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
+                "screen-fps", "screen-bitrate", "screen-desktop", "chat-mode", "chat-model", "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -85,7 +85,7 @@ class SettingsTest {
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off", "view" to "touch",
                 "desktop" to "none", "desktop-touch" to "direct",
                 "screen-host" to "off", "screen-port" to "8000", "screen-place" to "above",
-                "screen-fps" to "30", "screen-bitrate" to "12",
+                "screen-fps" to "30", "screen-bitrate" to "12", "screen-desktop" to "span",
                 "chat-mode" to "plan", "chat-model" to "opus",
                 "open-pictures" to "android", "open-markdown" to "mynx", "open-code" to "android",
                 "open-text" to "mynx", "open-audio" to "android", "open-video" to "android",
@@ -97,7 +97,7 @@ class SettingsTest {
                 wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH,
                 desktop = DesktopSession.NONE, desktopTouch = DesktopTouch.DIRECT,
                 screenHost = ScreenHosting.OFF, screenPort = 8000, screenPlace = ScreenSide.ABOVE,
-                screenFps = 30, screenBitrate = 12, chatMode = "plan", chatModel = "opus",
+                screenFps = 30, screenBitrate = 12, screenDesktop = ScreenDesktopMode.SPAN, chatMode = "plan", chatModel = "opus",
                 openPictures = OpenWith.ANDROID, openCode = OpenWith.ANDROID, openAudio = OpenWith.ANDROID,
                 openVideo = OpenWith.ANDROID, openPdf = OpenWith.ANDROID).values(),
         )
@@ -294,6 +294,14 @@ class SettingsTest {
                 "line 3: screen-place must be one of: left, right, above, below"),
             parsed.problems,
         )
+    }
+
+    @Test
+    fun `the desktop on the other phone is a monitor of its own unless set to span`() {
+        assertEquals(ScreenDesktopMode.EXTEND, Settings().screenDesktop)
+        val parsed = parseSettings("screen-desktop = wide\nscreen-desktop = span\n")
+        assertEquals(ScreenDesktopMode.SPAN, parsed.settings.screenDesktop)
+        assertEquals(listOf("line 1: screen-desktop must be one of: extend, span"), parsed.problems)
     }
 
     @Test

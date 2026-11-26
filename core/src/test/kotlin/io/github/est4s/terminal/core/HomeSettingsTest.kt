@@ -118,10 +118,11 @@ class HomeSettingsTest {
     fun `second screen has hosting, the port and where the screen sits`() {
         settings("screen-place = left\n")
         val screen = items("settings:screen")
-        assertEquals(listOf("Take paired screens", "Port", "Screen sits", "Frames per second", "Video Mbit/s"), screen.map { it.label })
-        assertEquals(listOf("While paired", "7391", "Left", "60", "8"), screen.map { it.detail })
+        assertEquals(listOf("Take paired screens", "Port", "Screen sits", "Frames per second", "Video Mbit/s", "Desktop there"), screen.map { it.label })
+        assertEquals(listOf("While paired", "7391", "Left", "60", "8", "A monitor of its own"), screen.map { it.detail })
         assertEquals(listOf("While paired", "Never"), items("setting:screen-host").drop(1).map { it.label })
         assertEquals(listOf("Left", "Right", "Above", "Below"), items("setting:screen-place").drop(1).map { it.label })
+        assertEquals(listOf("A monitor of its own", "Half of one wide screen"), items("setting:screen-desktop").drop(1).map { it.label })
     }
 
     @Test

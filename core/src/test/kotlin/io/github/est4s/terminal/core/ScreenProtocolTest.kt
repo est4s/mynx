@@ -36,6 +36,8 @@ class ScreenMessagesTest {
             ScreenMessage.KeyFrame(2),
             ScreenMessage.TakeBack(2),
             ScreenMessage.TerminalText(7, "ls\r\n".toByteArray()),
+            ScreenMessage.Pointer(2, 540.5f, 1200f, true),
+            ScreenMessage.Pointer(2, 0f, 0f, false),
         )
         for (m in messages) assertEquals(m, roundTrip(m), m.toString())
     }
@@ -76,9 +78,9 @@ class ScreenMessagesTest {
     }
 
     @Test
-    fun `this is version 2 of the link`() {
-        // Version 1 (the pairing alone) had placeholders where video and touches are now.
-        assertEquals(2, SCREEN_PROTOCOL)
+    fun `this is version 3 of the link`() {
+        // Version 1 (the pairing alone) had placeholders where video and touches are now; 2 had no desktop's pointer.
+        assertEquals(3, SCREEN_PROTOCOL)
     }
 }
 

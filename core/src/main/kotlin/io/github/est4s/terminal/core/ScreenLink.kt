@@ -612,10 +612,14 @@ fun localAddresses(): List<String> = runCatching {
 fun screenRequests(link: ScreenLink, share: ScreenShare? = null): Map<String, Later> = mapOf(
     "screen-status" to Later(5) { _, reply -> reply.ok(*link.status(), *(share?.status() ?: emptyArray())) },
     "screen-send" to Later(10) { args, reply ->
-        val name = args.getOrNull(1)?.trim().orEmpty()
-        if (args.getOrNull(0) != "app" || name.isEmpty()) return@Later reply.refuse("send what? mynx screen send app NAME")
+        val target = when {
+            args.getOrNull(0) == "desktop" -> ScreenTarget.Desktop
+            args.getOrNull(0) == "app" && !args.getOrNull(1)?.trim().isNullOrEmpty() -> ScreenTarget.App(args[1].trim())
+            else -> return@Later reply.refuse("send what? mynx screen send app NAME, or desktop")
+        }
+        val name = target.name
         if (share == null) return@Later reply.refuse("this phone can't send screens")
-        share.send(ScreenTarget.App(name)).fold(
+        share.send(target).fold(
             { sent ->
                 val what = obj("id" to "${sent.id}", "title" to json(sent.title), "name" to json(name))
                 reply.ok("screen" to what, *link.status(), *share.status())
