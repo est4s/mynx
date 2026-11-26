@@ -36,28 +36,11 @@ PR into `screen-dev`, by subagents.
    with a `Presentation`, H.264 through `MediaCodec`, TCP over Wi-Fi;
    B decodes and sends touches back; measure the delay), and a second
    X output (RandR monitor) the X server draws and we stream.
-2. **Core, test-first: built** (entry 223, PR into `screen-dev`):
-   pairing, the link, the messages, where B sits, `mynx screen`.
-   **To try on both phones** (mynx dev from the same build, same
-   Wi-Fi; A the Pixel 10, B the Nord 2):
-   - A: `mynx screen pair` shows `Pairing code: 123 456` and the
-     commands for B. B: `mynx screen pair 000000` (a wrong code):
-     B says `wrong code: …`, A shows a new code (`1 of 3`).
-   - B: `mynx screen pair` with A's new code: B says `Paired with
-     Pixel 10: this phone is its screen now.`, A `Paired with …`.
-   - `mynx screen status` on each: linked, the other's screen size
-     and dpi, `on its right` / `right of it`; A `Listening on port
-     7391`.
-   - A: `mynx screen place left`; B's status says `left of it`. B:
-     `mynx screen place above`; A's `screen-place` is `above`.
-   - B: `mynx screen disconnect`, then `mynx screen connect`: linked
-     again, no code. Swipe mynx dev away on A and open it again; B:
-     `mynx screen connect` links.
-   - A: `mynx screen unpair all`: both forget (`mynx screen status`
-     on B: `not paired`); B's `connect` says to pair. Pair again
-     with a new code.
-   - If B finds nothing: `mynx screen pair CODE 192.168.x.y` with the
-     address A shows (mDNS blocked?).
+2. **Core: passed on both phones** (entry 223, PR #119; Pixel 10
+   as A, Nord 2 as B, 2026-11-26): pairing (a wrong code, then the
+   right one), status, `place` from either phone, reconnecting
+   without a code (after A's restart too), unpairing both,
+   `screen-host off`. The defaults the agent picked stand (entry 223).
 3. After the spikes: B's Home and sending screens across, terminal
    tabs on B as text, typing going to the screen touched last, then
    the desktop as an extended monitor, then the second half. B
@@ -134,7 +117,8 @@ a PR into `desktop-dev`.
 - Branch `screen-core` from `screen-dev`, PR into `screen-dev`. Core,
   `mynx` and the guide tested here; the app's side (`ScreenDevice`,
   NsdManager; the service's wiring) only compiled in CI. Not tried on
-  two phones yet: the test is in "Next" 0a.
+  two phones by the agent; the maintainer's two-phone test passed
+  (2026-11-26, Pixel 10 and Nord 2: every step of "Next" 0a's list).
 - **What's there** (`docs/ARCHITECTURE.md`, "Extended screen:
   pairing and the link"): SPAKE2 over P-256 (RFC 9382, its test
   vectors pass), the handshake, AES-GCM frames, the version 1
