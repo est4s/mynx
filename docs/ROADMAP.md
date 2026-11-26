@@ -106,8 +106,10 @@ its touches back, using none of its own Debian.
 - **Keyboard:** only on A for now; typing goes to the screen touched
   last, on either phone, which shows a mark (maintainer's decision).
   Later maybe half a keyboard on each phone.
-- To check first, in spikes: the delay and bandwidth of streaming a
-  screen over Wi-Fi, and a second X output that can be streamed.
+- Spiked (2026-11-26): a screen streamed over Wi-Fi shows on B 60-75 ms
+  after A draws it, at 6-14 Mbit/s; a second X monitor works. Pairing
+  and sending apps to B are built; chats, terminals and the desktop
+  are next.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's

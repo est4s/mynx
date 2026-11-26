@@ -58,7 +58,7 @@ without a trace in the code; git history has them.
 ## Development environment
 
 The maintainer develops on a **phone**: Claude Code runs in the app's own
-Debian, on a Pixel 10 (arm64, Android 16). The terminal is about 56
+Debian, on a Pixel 10 (arm64, Android 17). The terminal is about 56
 columns wide in portrait.
 
 Consequences:
@@ -206,7 +206,7 @@ USB serial bridge, serial preload, serial port names, proot's
 mynx_serial and mynx_links extensions, raw USB, UF2, Android SDK, Bluetooth serial,
 Bluetooth LE, BLE UART ports, rotation lock, vibration, sharing,
 updates, release notes, time zone, wakelock, background services, desktop mode,
-extended screen (pairing and the link), web
+extended screen (pairing and the link; sending screens), web
 apps (part 1, and part 2: the bridge), touch mode's Home, touch
 mode's Files, viewers, more viewers, chat protocol, launcher shortcut, blocked `/proc` files, battery stand-in;
 then Termux library notes and proot notes.
@@ -295,6 +295,13 @@ Bugs that took a phone round to find; keep them from coming back.
   program) left the board in download mode. Linux changes both
   lines in one request; usb-serial-for-android sets them one at a
   time, so the order matters. Raising (the helper): DTR first.
+- **On Android 13, `window.insetsController` before `setContentView`
+  throws an NPE inside PhoneWindow** (the Nord 2, spike #117): use
+  `window.decorView.windowInsetsController`.
+- **A window on a display of our own never gets the window focus**
+  (nobody touches that display), so a WebView there thinks it has none
+  and its fields take no typing: `SentAppScreen`'s WebView says it has
+  it (untested on the phone yet).
 - **`LocalSocket` creates its socket in `connect()`**: setting
   `soTimeout` first throws "socket not created" (`UeventSender`
   failed on every send that way).

@@ -727,7 +727,7 @@ See `docs/ROADMAP.md` "How it works". The details:
   dpi, rotation), Layout (side, alignment: the host's word is final;
   B's `place` asks), KeepAlive (after 5 s idle; a link silent for
   15 s ends), Bye, Unpaired (the other forgets the pair too), Focus,
-  and placeholders for step 3: Video (H.264 parts), Touch,
+  the screens' messages (next entry) and a placeholder,
   TerminalText. **The link** (`ScreenLink`, plain JDK sockets, so
   tested on loopback): A listens on `screen-port` (all interfaces)
   only while `screen-host = auto` and a screen is paired or a pairing
@@ -745,8 +745,42 @@ See `docs/ROADMAP.md` "How it works". The details:
   `screen-place` (right). **Layout** (`arrangeScreens()`): B scaled
   to A's density, on A's side, aligned start/centre/end, both
   starting at 0, 0: the extended X screen's two monitors (step 3).
-  Not yet: B linking again by itself after a drop or the app's start;
-  anything shown on B.
+  Not yet: B linking again by itself after a drop or the app's start.
+- **Extended screen: sending screens** (`core/.../ScreenShare.kt`,
+  `ScreenVideo.kt`; `app/.../ScreenCaster.kt`, `SentAppScreen.kt`,
+  `ScreenStreamView.kt`, `ScreenKeysActivity.kt`; work log entries
+  224-225, "Next" 0a step 3a; agent's design, to confirm): protocol
+  version 2. **On A** (`ScreenShare.send`, `mynx screen send app
+  NAME` or Home's **Send to NAME**, `HomeMenus`'s `screen`): the app's
+  own screen closes (`WebAppActivity.moveAway`, keeping its service)
+  and a new page of it opens in a `SentAppScreen`, a Presentation on
+  a private VirtualDisplay (PRESENTATION | OWN_CONTENT_ONLY: no
+  MediaProjection, spike #117) of B's size (rounded down to what the
+  encoder takes, `encoderSizes`) at B's density; StreamStart tells B.
+  The display has no surface until B **Watch**es: then an H.264
+  encoder (MediaCodec, low-latency keys where taken, `screen-fps`,
+  `screen-bitrate`, I-frames every 2 s, a still screen repeated at
+  10 fps) feeds on it, and stops when B stops watching. Each frame
+  goes through a `VideoPacer`: at most 6 unacked (B's VideoAck as it
+  queues each to the decoder); past that, frames are dropped until a
+  key frame, asked for (PARAMETER_KEY_REQUEST_SYNC_FRAME) once the
+  pipe drains; B's KeyFrame asks too. Touches (B's pixels mapped to
+  the video's, `TouchTrack`) become MotionEvents dispatched to the
+  Presentation's window. A finger down makes that stream the one
+  typed to (Focus to B, which draws a line); a tap that leaves a text
+  field focused there opens `ScreenKeysActivity`, a bar with A's
+  keyboard sending key events; touching A (MainActivity's
+  `dispatchTouchEvent`, or outside the bar) gives typing back. Take
+  back (`mynx screen take`, Home, B's TakeBack, the link ending)
+  closes the display and opens the app on A again. The window on our
+  own display never gets the focus, so the WebView there is told it
+  has it. No bridge (`mynx.js`) on a sent app yet. **On B**: a
+  StreamStart shows the stream at once (`ScreenStreamView` over
+  everything in MainActivity, if on screen); the decoder (its own
+  thread, MediaCodec onto a SurfaceView fitted to the view) starts at
+  a key frame. Back, or leaving the app, stops watching (the host
+  stops encoding); Home's first rows list the streams to show again.
+  Not yet: chats, Files and viewers sent; B's own keyboard.
 - **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
   the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
   `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):

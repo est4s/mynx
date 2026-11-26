@@ -29,21 +29,47 @@ phone test, is `git show 22c111c:docs/WORKLOG.md` (up to 92:
 ### 0a. Extended screen (on `screen-dev`)
 
 Plan (maintainer's, 2026-11-26; roadmap "Extended screen"). Phone A
-is the Pixel 10, phone B the OnePlus Nord 2 (Android 13). Each step a
-PR into `screen-dev`, by subagents.
-1. **Spikes** (throwaway branches, both phones needed to test):
-   streaming one of mynx's own screens (a `VirtualDisplay` of our own
-   with a `Presentation`, H.264 through `MediaCodec`, TCP over Wi-Fi;
-   B decodes and sends touches back; measure the delay), and a second
-   X output (RandR monitor) the X server draws and we stream.
+is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
+13). Each step a PR into `screen-dev`, by subagents.
+1. **Spikes: done** (entry 224; PRs #117 and #118, never to be
+   merged): a screen streamed as video, and a second X monitor.
 2. **Core: passed on both phones** (entry 223, PR #119; Pixel 10
    as A, Nord 2 as B, 2026-11-26): pairing (a wrong code, then the
    right one), status, `place` from either phone, reconnecting
    without a code (after A's restart too), unpairing both,
    `screen-host off`. The defaults the agent picked stand (entry 223).
-3. After the spikes: B's Home and sending screens across, terminal
-   tabs on B as text, typing going to the screen touched last, then
-   the desktop as an extended monitor, then the second half. B
+3. **3a, apps sent to B as video: built, to test on both phones**
+   (entry 225, PR into `screen-dev`, branch `screen-send`). The test,
+   both phones on that PR's build as mynx dev, already paired (else
+   `mynx screen pair` on A, `mynx screen pair CODE` on B), linked
+   (`mynx screen connect` on B), both in touch view:
+   1. A: ☰ → Linux → **Send to Nord 2** (first row) → Pixel Hero (or
+      any app). A goes back a list and shows nothing of it; B shows
+      the app full screen within a second or two.
+   2. B: play / tap / scroll: the app answers, the picture follows.
+      `mynx screen` on A: "Sent there: 1 Pixel Hero (showing)".
+   3. B: tap a text field of an app that has one (Sketch's or an
+      app of your own): A shows a bar "Typing on Nord 2: …" with its
+      keyboard; type, Delete, Enter: the text lands in B's field. B
+      shows a cyan line around the screen. Tap A's screen above the
+      bar: the bar closes, the line goes.
+   4. Meanwhile A works as usual (a chat, the terminal).
+   5. B: Back: B's own Home (touch view's start); ☰ → Linux: the
+      first row is "Pixel Hero · from Pixel 10"; tap: it shows again.
+   6. A: ☰ → Linux → Send to Nord 2 → **Take back Pixel Hero**: B
+      goes back to its Home; A opens the app again (its page reloads).
+      Also try `mynx screen send pixel-hero` and `mynx screen take`
+      on A, `mynx screen take` on B, and the link dropping (Wi-Fi off
+      on B): the app comes back to A.
+   7. Settings → Second screen: Frames per second 30, Video Mbit/s 4:
+      send again, it still works (smoother/blurrier as expected).
+   Report what each step showed, and anything slow (the spike's
+   delays were 60-75 ms).
+4. **Then:** chats (and Files, viewers) sent to B (the chat hub
+   shows one chat at a time: it needs a second one shown), the bridge
+   (`mynx.js`) on a sent app, typing with B's own keyboard, terminal
+   tabs on B as text, the desktop as an extended monitor (spike #118;
+   check the monitor size it reported), then the second half. B
    linking again by itself (after a drop, at the app's start) too.
 
 ### 0. Desktop mode (on `desktop-dev`)
@@ -121,6 +147,81 @@ a PR into `desktop-dev`.
   the panel keeps its place unless it was at the bottom, and Copy
   copies it all (`DesktopView.showLogs`, `DesktopLogTest`). Passed on
   the Pixel 10 (2026-11-26). Numbered 226: screen-dev has 222-225.
+
+### 2026-11-26 (225): Extended screen, step 3a: apps sent to B as video
+
+- Branch `screen-send` from `screen-dev`, PR into `screen-dev`. Core,
+  `mynx` and the guide tested here; the app's side only compiled in
+  CI (screenshots looked at). Not tried on two phones by the agent:
+  "Next" 0a step 3 has the test.
+- **What's there** (`docs/ARCHITECTURE.md`, "Extended screen: sending
+  screens"): protocol version 2 (Video with flags and time, Touch with
+  every finger, StreamStart/End, Watch, VideoAck, KeyFrame, TakeBack;
+  a version 1 phone is told to update); `ScreenShare` in core (what's
+  sent where, typing focus, the screen's streams), `VideoPacer` (flow
+  control), `streamFit`/`TouchTrack` (B's view ↔ the video's pixels),
+  `encoderSizes`; settings `screen-fps` (60) and `screen-bitrate` (8);
+  `mynx screen send [app] NAME`, `mynx screen take [ID|NAME|all]`,
+  status lists them; Home's **Send to NAME** list (Take back too) on
+  A, "… · from NAME" rows on B. App: `ScreenCaster`, `SentAppScreen`
+  (Presentation), `ScreenStreamView`, `ScreenKeysActivity`.
+- **Agent's decisions, to confirm:**
+  - Only apps (web apps and games) are sent in this step; chats need
+    the chat hub to show two chats at once, so they're next.
+  - A sent app is a **new page** on its own display, not the one that
+    was on A: A's screen for it closes (its service kept), and Take
+    back opens it again on A. Its localStorage stays (same WebView
+    profile), anything only in memory doesn't. No bridge (`mynx.js`)
+    there yet. Moving the live WebView or the activity itself to the
+    display wasn't tried in the spike.
+  - B shows a stream full screen as it arrives (when mynx is on screen
+    there). **Back on B pauses it**: the host stops the encoder (the
+    app keeps running, undrawn); B's Home lists it to show again, which
+    restarts at a key frame. Leaving the app on B pauses it too.
+  - Flow control: at most 6 frames unacked (B acks as it queues each
+    to the decoder); more, and A drops frames until the next key
+    frame, asked for once the acks drain the pipe (again after 1 s).
+  - The video is B's screen size (rounded down to what A's encoder
+    takes), at B's density; I-frames every 2 s, a still screen
+    repeats at 10 fps.
+  - Typing: a finger down on B makes that stream the one typed to (B
+    draws a cyan line); when the tap left a text field focused there,
+    A opens a typing bar (`ScreenKeysActivity`, A's keyboard), whose
+    text goes as key events. Touching A outside it, Done or Back gives
+    typing back to A. A's keyboard can't type into B's field without
+    that bar (Android's keyboard types into A's focused window).
+  - The link ending brings every sent app back to A (if Android lets
+    the app start an activity then; else it's in Home as usual).
+- **Tests:** the screen link's tests allow 10 s of silence, not 2:
+  under the full suite on the phone a link sometimes went 2 s without
+  a keep-alive and ended before the test's step (flaky "ended the
+  link" asserts, seen before this work too).
+
+### 2026-11-26 (224): Extended screen spikes: video and a second X monitor
+
+- **Video, spike #117** (`screen-spike-video`, throwaway), both
+  phones (A = Pixel 10, Android 17 / API 37; B = Nord 2, Android 13):
+  - A VirtualDisplay without MediaProjection: PRESENTATION |
+    OWN_CONTENT_ONLY, OWN_CONTENT_ONLY, PRESENTATION and 0 work;
+    PUBLIC | OWN_CONTENT_ONLY fails (InvalidDisplayException), PUBLIC |
+    PRESENTATION needs MediaProjection (SecurityException). So: a
+    private PRESENTATION | OWN_CONTENT_ONLY display.
+  - 1080x2400 at 120 fps, H.264; A's encoder took the low-latency
+    keys; 6-14 Mbit/s. A's encode 20.6 ms, the network 8-11 ms (ping
+    5.7-6.4 ms); B's decoder (c2.mtk.avc.decoder) took the
+    low-latency keys but has no FEATURE_LowLatency: decode 29-34 ms.
+    A drew → B showed: 60-75 ms (38-130); a touch on B → A drew → B
+    showed: 67 ms (51-96). Touch dots followed, text was sharp, typing
+    from A's keyboard into B's focused field worked.
+  - Default 60 fps (B's screens are ≤120 Hz; fewer frames should cut
+    the decoder's queue), fps and bitrate as settings.
+  - Bug: on Android 13, `window.insetsController` before setContentView
+    throws an NPE inside PhoneWindow (AGENTS.md "Lessons").
+- **Second X monitor, spike #118** (Pixel only): xrandr showed two
+  monitors, maximising stays in its half, an XFCE panel moved to
+  `mynx-b` by output name, −B went back to one. **To check** when the
+  desktop monitor step is built: each monitor said 264x943 px in
+  landscape, which looks too small.
 
 ### 2026-11-26 (223): Extended screen: pairing and the link (step 2)
 
