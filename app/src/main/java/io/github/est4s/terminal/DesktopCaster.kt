@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.ViewConfiguration
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import io.github.est4s.terminal.core.ACTION_DOWN
 import io.github.est4s.terminal.core.DesktopGestures
 import io.github.est4s.terminal.core.DesktopKeyboard
@@ -17,6 +19,9 @@ import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.desktopGestures
 import io.github.est4s.terminal.core.desktopScale
 import io.github.est4s.terminal.core.desktopTouch
+
+// How often the desktop's Log says what the other phone's encoder gave.
+private const val TALLY_MS = 5000L
 
 /** What the desktop is called on the other phone and in Home's lists. */
 const val DESKTOP_TITLE = "Linux desktop"
@@ -40,7 +45,8 @@ class DesktopCaster(
     context: Context,
     private val handler: Handler,
     private val link: DesktopLink,
-    private val settings: () -> Settings,
+    /** The settings, or null when they can't be read now (then the last ones stay). */
+    private val settings: () -> Settings?,
     private val encoded: (Int, Int, Long, ByteArray) -> Unit,
     private val pointerTo: (Int, Float, Float, Boolean) -> Unit,
     /** This phone's keyboard types into X for the other phone now (the typing bar), or no longer. */
@@ -56,7 +62,21 @@ class DesktopCaster(
     private var gestures: DesktopGestures? = null
     private var touchMode = DesktopTouch.TOUCHPAD
     private var typed = false
+    private var last: Settings? = null
     private val keys = DesktopKeyboard()
+    // What the encoder gave, for the desktop's Log (the encoder's thread counts, the main thread tells).
+    private val frames = AtomicInteger()
+    private val bytes = AtomicLong()
+    @Volatile private var firstTold = false
+    private val tally = object : Runnable {
+        override fun run() {
+            if (encoder == null) return
+            val n = frames.getAndSet(0)
+            val b = bytes.getAndSet(0)
+            link.note("the other phone's encoder: $n frames, ${b / 1024} KiB in 5 s")
+            handler.postDelayed(this, TALLY_MS)
+        }
+    }
     private val slop = ViewConfiguration.get(context).scaledTouchSlop.toFloat() / desktopScale(context.resources.displayMetrics.density)
 
     private val longPress = Runnable {
@@ -86,7 +106,8 @@ class DesktopCaster(
 
     /** `screen-place` or `screen-desktop` may have changed: the other phone's part moves. */
     fun relayout() {
-        val s = settings()
+        val s = settings() ?: last ?: return link.note("the settings can't be read: the other phone's part stays where it is")
+        last = s
         val sent = screen
         link.other(sent?.let { DesktopOther(it.width, it.height, density, it.width, it.height) }, s.screenPlace, s.screenDesktop)
         follow()
@@ -119,11 +140,26 @@ class DesktopCaster(
         if (!on) return stopEncoder()
         if (encoder != null) return
         try {
-            val started = ScreenEncoder.start(screen.width, screen.height, fps, kbps) { flags, pts, data -> encoded(screen.id, flags, pts, data) }
+            firstTold = false
+            frames.set(0)
+            bytes.set(0)
+            val started = ScreenEncoder.start(screen.width, screen.height, fps, kbps) { flags, pts, data ->
+                frames.incrementAndGet()
+                bytes.addAndGet(data.size.toLong())
+                if (!firstTold) {
+                    firstTold = true
+                    handler.post { link.note("the other phone's encoder gave its first part (${data.size} bytes, flags $flags)") }
+                }
+                encoded(screen.id, flags, pts, data)
+            }
             encoder = started
+            link.note("the other phone's encoder started: ${screen.width}x${screen.height}, $fps fps, $kbps kbit/s")
             link.secondSurface(started.surface)
             follow()
+            handler.removeCallbacks(tally)
+            handler.postDelayed(tally, TALLY_MS)
         } catch (e: Exception) {
+            link.note("the other phone's encoder didn't start: ${e.stackTraceToString().lines().take(4).joinToString(" / ")}")
             stopEncoder()
         }
     }
@@ -131,6 +167,8 @@ class DesktopCaster(
     private fun stopEncoder() {
         val e = encoder ?: return
         encoder = null
+        handler.removeCallbacks(tally)
+        link.note("the other phone's encoder stopped (it stopped watching, or the desktop went back)")
         // The X server lets go of the surface before this returns, then the encoder can go.
         link.secondSurface(null)
         e.stop()
@@ -152,7 +190,7 @@ class DesktopCaster(
     private fun gesturesFor(touch: ScreenMessage.Touch): DesktopGestures {
         val now = gestures
         if (now != null && touch.action != ACTION_DOWN) return now
-        val mode = settings().desktopTouch
+        val mode = (settings() ?: last)?.desktopTouch ?: touchMode
         if (now != null && mode == touchMode) return now
         now?.let { link.send(keys.pointer(it.cancel())) }
         touchMode = mode

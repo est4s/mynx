@@ -169,6 +169,24 @@ a PR into `desktop-dev`.
     restart keeps it.
   - When a program moves `mynx-b` (XFCE's display settings), the
     server's word wins until the layout next changes.
+- **First phone try** (run 45856698516): B showed only the pointer on
+  black. The layout was right (`xrandr`), but nothing said whether the
+  encoder started or the X server drew into its surface: those errors
+  went to logcat, or nowhere. Now: the X server logs to `x11.log` what
+  it does with B's surface (`mynx: the other phone's surface: …`, which
+  EGL config draws into it, any EGL error, the first frame, and "N
+  frames drawn into the other phone's surface in 5 s"), and the
+  desktop's Log says the encoder started (or why not), its first part,
+  and every 5 s how many frames and KiB it gave. Likely causes, fixed
+  blind: the encoder's surface wants a recordable EGL config (tried
+  first now, falling back to the view's), and an idle desktop drew
+  nothing more after one frame (now a fresh frame about 10 times a
+  second while B has a surface). Also: `mynx set screen-place`
+  (by hand) now reaches the screen and the status (it only did through
+  `mynx screen place`), and unreadable settings keep the last place
+  instead of falling back to `right` (the try's layout went from above
+  to right once; the Log line "the desktop's monitors: … (extend,
+  SIDE)" now says which side was read).
 - **Two-phone test** (Pixel 10 as A, Nord 2 as B, both on this build as
   mynx dev, paired; `mynx screen connect` on B; on A the desktop running
   with XFCE, `mynx desktop open`):

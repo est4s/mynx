@@ -500,7 +500,7 @@ class TerminalService : Service() {
     private val desktopCaster: DesktopCaster by lazy {
         DesktopCaster(
             this, mainHandler, desktopLink,
-            settings = { currentSettings() ?: io.github.est4s.terminal.core.Settings() },
+            settings = { currentSettings() },
             encoded = { id, flags, pts, data -> screenShare.encoded(id, flags, pts, data) },
             pointerTo = { id, x, y, shown -> screenShare.pointer(id, x, y, shown) },
             typing = ::desktopTyping,
@@ -551,6 +551,7 @@ class TerminalService : Service() {
 
     /** `screen-place` or `screen-desktop` may have changed (`mynx set`, `mynx screen place`): the desktop's part moves. */
     fun screenSettingsChanged() {
+        runCatching { screenLink.settingsChanged() }
         if (desktopCaster.sent != null) desktopCaster.relayout()
     }
 

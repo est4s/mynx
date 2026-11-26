@@ -424,6 +424,13 @@ class ScreenLink(
         return false
     }
 
+    /** The settings may have changed (`mynx set screen-place`): a linked screen hears where it sits now. */
+    fun settingsChanged() {
+        val c = connection ?: return
+        if (c.myRole != ScreenRole.HOST) return
+        if (c.layout?.side != settings().screenPlace) c.sendLayout()
+    }
+
     private fun writePlace(side: ScreenSide) {
         val text = setSetting(settingsFile.takeIf { it.isFile }?.readText(), "screen-place", side.word).getOrThrow()
         settingsFile.parentFile.mkdirs()
@@ -469,7 +476,8 @@ class ScreenLink(
         @Volatile var peerScreen: ScreenMessage.ScreenInfo? = null
             private set
 
-        @Volatile private var layout: ScreenMessage.Layout? = null
+        @Volatile var layout: ScreenMessage.Layout? = null
+            private set
 
         @Volatile private var closed = false
 

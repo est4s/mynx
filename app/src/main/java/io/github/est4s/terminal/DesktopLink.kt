@@ -127,7 +127,7 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
 
     override fun log(): String = lines.joinToString("\n")
 
-    private fun note(line: String) {
+    fun note(line: String) {
         val time = SimpleDateFormat("HH:mm:ss", Locale.ROOT).format(Date())
         lines.addLast("$time $line")
         while (lines.size > LOG_LINES) lines.removeFirst()
@@ -312,7 +312,7 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
             hostKnown = true
         }
         if (!screens.other(to, side, mode)) return
-        note(screens.monitors?.let { "the desktop's monitors: this phone ${it.host}, the other ${it.screen} (${it.mode.word})" } ?: "the desktop is this phone's alone")
+        note(screens.monitors?.let { "the desktop's monitors: this phone ${it.host}, the other ${it.screen} (${it.mode.word}, ${side.word})" } ?: "the desktop is this phone's alone")
         sendLayout()
         monitorsChanged()
     }
@@ -332,7 +332,9 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     fun secondSurface(surface: Surface?) {
         if (surface === second) return
         second = surface
-        if (connected) windowChanged(surface, X11_SECOND_WINDOW_CHANGED)
+        if (!connected) return note("the other phone's surface waits for the X server")
+        windowChanged(surface, X11_SECOND_WINDOW_CHANGED)
+        note(if (surface != null) "the other phone's surface handed to the X server" else "the other phone's surface taken from the X server")
     }
 
     override fun surfaceGone() {

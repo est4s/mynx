@@ -261,6 +261,19 @@ class ScreenLinkTest {
     }
 
     @Test
+    fun `screen-place changed by hand on the host reaches the screen, and the status says it`() {
+        pair()
+        waitFor("linked") { connected(screen)?.get("place") == "right" }
+        hostSettings.writeText(setSetting(hostSettings.readText(), "screen-place", "above").getOrThrow())
+        host.settingsChanged()
+        waitFor("the screen knows") { connected(screen)?.get("place") == "above" }
+        assertEquals("above", connected(host)!!["place"])
+        // Nothing changed: nothing sent, nothing wrong.
+        host.settingsChanged()
+        assertEquals("above", connected(host)!!["place"])
+    }
+
+    @Test
     fun `screen-host off refuses pairing and doesn't listen`() {
         hostSettings.appendText("screen-host = off\n")
         val shown = Answers()
