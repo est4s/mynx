@@ -58,9 +58,9 @@ class ScreenLinkTest {
     private val hostSettings = File(root, "a/settings.conf").also { it.parentFile.mkdirs(); it.writeText("screen-port = $port\n") }
     private val screenSettings = File(root, "b/settings.conf").also { it.parentFile.mkdirs(); it.writeText("screen-port = $port\n") }
 
-    private fun newHost() = ScreenLink(File(root, "a/private"), hostSettings, { "Pixel 10" }, hostPlatform, keepAliveMs = 100, idleMs = 2000)
+    private fun newHost() = ScreenLink(File(root, "a/private"), hostSettings, { "Pixel 10" }, hostPlatform, keepAliveMs = 100, idleMs = 10_000)
     private val host = newHost()
-    private val screen = ScreenLink(File(root, "b/private"), screenSettings, { "Nord 2" }, screenPlatform, keepAliveMs = 100, idleMs = 2000)
+    private val screen = ScreenLink(File(root, "b/private"), screenSettings, { "Nord 2" }, screenPlatform, keepAliveMs = 100, idleMs = 10_000)
 
     init {
         // The screen finds the host as Android's NSD would, from what it advertises.
