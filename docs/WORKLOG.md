@@ -38,33 +38,15 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    right one), status, `place` from either phone, reconnecting
    without a code (after A's restart too), unpairing both,
    `screen-host off`. The defaults the agent picked stand (entry 223).
-3. **3a, apps sent to B as video: built, to test on both phones**
-   (entry 225, PR into `screen-dev`, branch `screen-send`). The test,
-   both phones on that PR's build as mynx dev, already paired (else
-   `mynx screen pair` on A, `mynx screen pair CODE` on B), linked
-   (`mynx screen connect` on B), both in touch view:
-   1. A: ☰ → Linux → **Send to Nord 2** (first row) → Pixel Hero (or
-      any app). A goes back a list and shows nothing of it; B shows
-      the app full screen within a second or two.
-   2. B: play / tap / scroll: the app answers, the picture follows.
-      `mynx screen` on A: "Sent there: 1 Pixel Hero (showing)".
-   3. B: tap a text field of an app that has one (Sketch's or an
-      app of your own): A shows a bar "Typing on Nord 2: …" with its
-      keyboard; type, Delete, Enter: the text lands in B's field. B
-      shows a cyan line around the screen. Tap A's screen above the
-      bar: the bar closes, the line goes.
-   4. Meanwhile A works as usual (a chat, the terminal).
-   5. B: Back: B's own Home (touch view's start); ☰ → Linux: the
-      first row is "Pixel Hero · from Pixel 10"; tap: it shows again.
-   6. A: ☰ → Linux → Send to Nord 2 → **Take back Pixel Hero**: B
-      goes back to its Home; A opens the app again (its page reloads).
-      Also try `mynx screen send pixel-hero` and `mynx screen take`
-      on A, `mynx screen take` on B, and the link dropping (Wi-Fi off
-      on B): the app comes back to A.
-   7. Settings → Second screen: Frames per second 30, Video Mbit/s 4:
-      send again, it still works (smoother/blurrier as expected).
-   Report what each step showed, and anything slow (the spike's
-   delays were 60-75 ms).
+3. **3a, apps sent to B as video: passed on both phones** (entry
+   225, PR #122; Pixel 10 as A, Nord 2 as B, 2026-11-26, with a test
+   app of touch pad, buttons, text fields, a list and a load
+   counter): send, touch (several fingers; "close enough, a bit
+   laggy"), scrolling, typing from A's keyboard, A usable meanwhile,
+   Back and show again, take back (storage survived), `mynx screen
+   send`/`take` on both, the link dropping, 30 fps / 4 Mbit/s. The
+   bridge doesn't answer on a sent app, as expected. The agent's
+   decisions stand (entry 225).
 4. **Then:** chats (and Files, viewers) sent to B (the chat hub
    shows one chat at a time: it needs a second one shown), the bridge
    (`mynx.js`) on a sent app, typing with B's own keyboard, terminal
