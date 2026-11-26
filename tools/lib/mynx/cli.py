@@ -47,7 +47,7 @@ Commands:
   audio        audio play FILE | record FILE [--seconds N]: sound
   sound        sound [status] | start | install: the sound device
   desktop      desktop [status] | open | start | stop: desktop mode's X server and desktop (XFCE)
-  screen       screen [status] | pair [CODE [ADDRESS]] | connect | disconnect | unpair NAME | place SIDE: another phone as a screen
+  screen       screen [status] | pair [CODE [ADDRESS]] | connect | disconnect | unpair NAME | place SIDE | send app NAME | take [ID]: another phone as a screen
   usb          usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   bt           bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
   ble          ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
@@ -1478,7 +1478,7 @@ def run_steps(steps):
 
 
 SCREEN_USAGE = ("usage: mynx screen [status] | pair [CODE [ADDRESS]] | connect [NAME] | disconnect"
-                " | unpair NAME|all | place left|right|above|below")
+                " | unpair NAME|all | place left|right|above|below | send [app] NAME | take [ID|NAME|all]")
 SCREEN_SIDES = ("left", "right", "above", "below")
 
 
@@ -1507,6 +1507,19 @@ def cmd_screen(args, as_json):
         side = rest[0] if rest[0] in ("above", "below") else f"{rest[0]} of"
         out(as_json, answer, f"Asked the host to put this phone {side} it." if answer["asked"]
             else f"The screen sits {side} this phone.")
+    elif sub == "send" and (len(rest) == 1 or (len(rest) == 2 and rest[0] == "app")):
+        answer = request("screen-send", "app", rest[-1])
+        sent = answer["screen"]
+        peer = (answer.get("connected") or {}).get("name", "the screen")
+        out(as_json, answer, f"Sent {sent['title']} to {peer} (mynx screen take {sent['id']} takes it back).")
+    elif sub == "take" and len(rest) <= 1:
+        answer = request("screen-take", rest[0] if rest else "all")
+        titles = ", ".join(t["title"] for t in answer["taken"])
+        linked = answer.get("connected") or {}
+        if linked.get("role") == "host":
+            out(as_json, answer, f"Asked {linked['name']} to take back {titles}.")
+        else:
+            out(as_json, answer, f"Took back {titles}.")
     else:
         raise Usage(SCREEN_USAGE)
     return 0
@@ -1529,6 +1542,16 @@ def screen_status_text(answer):
         elif place:
             where = f", on its {place}" if linked["role"] == "screen" else f", {place} of it"
         lines = [f"Screen: linked with {linked['name']}, {what}{size}{where}"]
+
+        def listed(streams, flag):
+            return ", ".join(f"{s['id']} {s['title']}" + (" (showing)" if s.get(flag) else "") for s in streams)
+        if answer.get("sent"):
+            lines.append("Sent there: " + listed(answer["sent"], "watched"))
+        if answer.get("shown"):
+            lines.append(f"From {linked['name']}: " + listed(answer["shown"], "watching"))
+        if answer.get("typing"):
+            lines.append("Typing goes there (it was touched last)" if linked["role"] == "screen"
+                         else f"Typing on {linked['name']} comes here")
     elif not paired:
         lines = ["Screen: not paired (mynx screen pair pairs another phone)"]
     elif answer["lastEnd"]:
