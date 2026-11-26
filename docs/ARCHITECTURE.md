@@ -781,6 +781,55 @@ See `docs/ROADMAP.md` "How it works". The details:
   a key frame. Back, or leaving the app, stops watching (the host
   stops encoding); Home's first rows list the streams to show again.
   Not yet: chats, Files and viewers sent; B's own keyboard.
+- **Extended screen: the desktop on B** (`core/.../ScreenDesktop.kt`,
+  `DesktopGestures.kt`'s `DesktopPointer`; `app/.../DesktopCaster.kt`,
+  `ScreenEncoder.kt`, `PointerArrow.kt`, `DesktopLink.kt`; our patch;
+  work log entry 228, "Next" 0a; agent's design, to confirm). Protocol
+  version 3 (Pointer, type 49, past #123's terminal messages).
+  `ScreenTarget.Desktop` is sent like an app (`mynx screen send desktop`,
+  Home's Send list while the X server runs, the desktop's bar
+  **→ NAME** / **Take back**), but nothing is drawn on a display of
+  ours: **the X server draws B's part straight into the encoder's input
+  surface.** **Layout** (`DesktopScreens`, owned by the `DesktopLink`):
+  A's monitor is the size its view gives (before it ever did, the phone's
+  whole screen); B's is its screen at its own 0.75 dp X pixel
+  (`secondMonitorSize`, width a mode step: a Nord 2 is 536x1200), placed
+  by `screen-place` from 0, 0 (`desktopMonitors`, `arrangeScreens` at
+  scale 1); `screen-desktop = span` scales B's part to A's shared edge so
+  both make one rectangle. The link sends it as `X11Input.Monitors`
+  (our event 100: mode 0 alone / 1 `mynx-b` / 2 one monitor over both,
+  then both rects as width, height, x, y) after every ScreenSize and on
+  every (re)connection, so a restarted server gets it again; the server
+  answers event 101 (`MonitorsShown`) with what each surface shows,
+  which wins until the layout changes (a client like XFCE's display
+  settings may move `mynx-b`). Changes to `screen-place` (`mynx screen
+  place`, through the link's change callback) and `screen-desktop` (any
+  config reload) move it live (`DesktopCaster.relayout`). **The patch**
+  (InitOutput.c): a second CRTC and output `mynx-b`, disconnected until
+  mode 1 connects it at the app's place; mode 2 makes the first output's
+  mode as big as both; `lorieConfigureNotify` keeps the layout when A's
+  view resizes; a server reset queues the layout again; `mynxMonitorRect`
+  (what each surface shows) follows the CRTCs in mode 1. The renderer
+  (renderer.cpp) draws A's rect into A's surface and B's into the second
+  surface (`mynxSecondWindowChanged`, transaction 6), and draws B's
+  **alone while A's view has no surface** (it syncs and uploads the root
+  itself then; the vblank and the render loop treat either surface as
+  one to draw). **Touch:** one `DesktopPointer` (the link's) is shared by
+  A's view's gestures and B's (`DesktopCaster`, `desktop-touch` read as a
+  gesture starts), each on its own monitor (`DesktopGestures.monitor`:
+  fingers in the monitor's X pixels); a touchpad crosses where monitors
+  meet (outside every monitor the pointer stays on the one it's on),
+  direct touch and a mouse stay on their own. B's touches go through
+  `desktopTouch()` (the video's pixels to B's part, `fromStream`). X
+  draws no cursor there, so A sends where the pointer is on B's video
+  (`ScreenShare.pointer`, once per change, while watched) and B's
+  `ScreenStreamView` draws a `PointerArrow`; A's view hides its arrow
+  while the pointer is on B. **Typing:** a finger down on B makes the
+  desktop the one typed to; a click there, while A doesn't show its own
+  desktop view, opens `ScreenKeysActivity` with a target that types into
+  X (`DesktopCaster.type/press/key`, its own `DesktopKeyboard`). **Ends:**
+  Take back, the link ending, or the X server gone for 5 s (a restart
+  sooner keeps it) remove B's part (mode 0); XFCE moves its windows back.
 - **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
   the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
   `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):

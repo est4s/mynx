@@ -108,8 +108,9 @@ its touches back, using none of its own Debian.
   Later maybe half a keyboard on each phone.
 - Spiked (2026-11-26): a screen streamed over Wi-Fi shows on B 60-75 ms
   after A draws it, at 6-14 Mbit/s; a second X monitor works. Pairing
-  and sending apps to B are built; chats, terminals and the desktop
-  are next.
+  and sending apps to B are built, and the desktop on B (a monitor of
+  its own or the second half, `screen-desktop`; waiting for the
+  two-phone test); chats and terminals are next.
 
 ### More of the phone
 Further `mynx` commands for the phone's hardware, through Android's
