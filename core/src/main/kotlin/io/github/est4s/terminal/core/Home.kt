@@ -60,7 +60,19 @@ sealed interface HomeAction {
     data class Files(val folder: String) : HomeAction
     /** The Linux desktop (desktop mode), over the screen it's opened from, which Back returns to. */
     data object Desktop : HomeAction
+    /** On the screen (the other phone): shows stream [id], a screen the host sent. */
+    data class ScreenShow(val id: Int) : HomeAction
 }
+
+/** The list of what the host can send to its screen, and what's there to take back. */
+const val SCREEN_SEND_MENU = "screen-send"
+
+/**
+ * The extended screen's link, for Home: the other phone's [peer] name,
+ * this phone's [role], the screens it [sent] (on the host) and those
+ * [shown] from the host (on the screen).
+ */
+data class ScreenHome(val peer: String, val role: ScreenRole, val sent: List<ScreenRef>, val shown: List<ScreenRef>)
 
 /** How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, or a label with its value. */
 enum class HomeRow { BUTTON, SECTION, TEXT, INFO }
@@ -114,6 +126,8 @@ class HomeMenus(
     private val services: List<HomeService> = emptyList(),
     facts: () -> SystemFacts = { readSystemFacts(File(apps.rootfs)) },
     now: () -> Long = System::currentTimeMillis,
+    /** The link to another phone, while there is one. */
+    private val screen: ScreenHome? = null,
 ) {
     private val guestHome get() = apps.guestHome
     private val settings = HomeSettings(apps, facts, now)
@@ -135,6 +149,7 @@ class HomeMenus(
         "system" -> listOf(HomeItem("Update all", act("update")), HomeItem("System info", HomeAction.Menu("info"))) +
             if (gitHubReady()) listOf(HomeItem("GitHub setup", act("github"))) else emptyList()
         "services" -> serviceRows()
+        SCREEN_SEND_MENU -> screenSend()
         else -> settings.items(menu)
             ?: if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
     }
@@ -180,7 +195,27 @@ class HomeMenus(
         }
         val notice = File(apps.rootfs, UPDATE_NOTICE)
         if (notice.isFile && notice.length() > 0) items.add(0, HomeItem("Update available", act("appupdate")))
-        return items
+        return screenTop() + items
+    }
+
+    // First on Home while linked: sending (on the host), or what the host sent (on the screen).
+    private fun screenTop(): List<HomeItem> {
+        val link = screen ?: return emptyList()
+        return when (link.role) {
+            ScreenRole.HOST -> listOf(HomeItem("Send to ${link.peer}", HomeAction.Menu(SCREEN_SEND_MENU)))
+            ScreenRole.SCREEN -> link.shown.map { HomeItem(it.title, HomeAction.ScreenShow(it.id), detail = "from ${link.peer}") }
+        }
+    }
+
+    private fun screenSend(): List<HomeItem> {
+        val link = screen ?: return listOf(HomeItem("(no screen is linked)", HomeAction.None))
+        val apps = webApps().filter { it.action is HomeAction.App }.map { item ->
+            item.copy(action = HomeAction.Config("screen-send", listOf("app", (item.action as HomeAction.App).name), back = true))
+        }.ifEmpty { listOf(HomeItem("(no apps yet)", HomeAction.None)) }
+        if (link.sent.isEmpty()) return apps
+        return listOf(HomeItem("On ${link.peer}", HomeAction.None, kind = HomeRow.SECTION)) +
+            link.sent.map { HomeItem("Take back ${it.title}", HomeAction.Config("screen-take", listOf("${it.id}"), back = true)) } +
+            HomeItem("Send an app", HomeAction.None, kind = HomeRow.SECTION) + apps
     }
 
     private fun item(label: String, action: String): HomeItem? = when (action) {
