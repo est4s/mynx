@@ -73,7 +73,8 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   why there's no picture: what to install, a start that failed, the
   server not answering yet, with Start to try again and the logs.
   **Log** (top right) shows them at any time: the app's own lines,
-  then the ends of `x11.log` and `session.log`. The desktop keeps
+  then the ends of `x11.log` and `session.log`; **Copy** copies
+  them all, and you can select part of them. The desktop keeps
   running when you leave the app or go back from it; it stops
   with Stop desktop, `mynx desktop stop`, or when the app exits.
 - **The screen** is the X server's, at about 0.75 dp a pixel (2 phone

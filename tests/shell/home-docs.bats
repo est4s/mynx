@@ -427,7 +427,7 @@ setup() {
     grep -qF 'Ctrl+Shift+D' "$CORE"
     for text in "Ctrl+Shift+D" "two-finger tap is a right click" "long press is a right click" \
         "The clipboard** is shared, text only" "Up to 64 KB" "fonts-noto-cjk" \
-        "setxkbmap" "mynx keybar edit desktop" "Super+Up" "Log"; do
+        "setxkbmap" "mynx keybar edit desktop" "Super+Up" "Log" "**Copy** copies"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done
 }

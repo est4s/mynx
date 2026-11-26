@@ -1,6 +1,7 @@
 package io.github.est4s.terminal
 
 import android.annotation.SuppressLint
+import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
@@ -186,11 +187,22 @@ class DesktopView(
         gravity = Gravity.CENTER
         setOnClickListener { host.stop() }
     }
+    private val copyButton = barText("Copy").apply {
+        gravity = Gravity.CENTER
+        setOnClickListener {
+            context.getSystemService(ClipboardManager::class.java)
+                .setPrimaryClip(ClipData.newPlainText("mynx desktop log", logText.text.toString()))
+        }
+    }
     private val logPanel = ScrollView(context).apply {
         visibility = GONE
         addView(LinearLayout(context).apply {
             orientation = VERTICAL
-            addView(stopButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+            addView(LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                addView(copyButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { setMargins(0, 0, dp(8), 0) })
+                addView(stopButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            }, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                 gravity = Gravity.END
                 setMargins(dp(8), dp(8), dp(8), 0)
             })
@@ -210,7 +222,7 @@ class DesktopView(
             topBar.setBackgroundColor(value.background)
             for (b in listOf(backButton, keyboardButton, logButton)) b.setTextColor(value.accent)
             statusText.setTextColor(value.text)
-            for (b in listOf(startButton, installButton, stopButton)) {
+            for (b in listOf(startButton, installButton, stopButton, copyButton)) {
                 b.setTextColor(value.accent)
                 b.setBackgroundColor(value.selectedBackground)
             }
@@ -350,9 +362,9 @@ class DesktopView(
             startButton.visibility = if (shown.canStart) VISIBLE else GONE
             installButton.visibility = if (shown.canInstall) VISIBLE else GONE
             noticeLog.visibility = if (shown.showLog) VISIBLE else GONE
-            if (shown.showLog) noticeLog.text = host.logs()
+            if (shown.showLog) host.logs().let { if (noticeLog.text.toString() != it) noticeLog.text = it }
         }
-        if (logPanel.visibility == VISIBLE) logText.text = host.logs()
+        if (logPanel.visibility == VISIBLE) showLogs(host.logs())
         stopButton.visibility = if (connected || status?.running == true) VISIBLE else GONE
     }
 
@@ -366,6 +378,20 @@ class DesktopView(
             error = failure
             refresh()
         }
+    }
+
+    /**
+     * The logs, refreshed every second: setting the same text again would undo
+     * a selection and scroll to the top, so only new text is set, and the panel
+     * keeps its place unless it was at the bottom (then it follows new lines).
+     */
+    private fun showLogs(logs: String) {
+        if (logText.text.toString() == logs) return
+        val child = logPanel.getChildAt(0)
+        val atBottom = child == null || logPanel.scrollY + logPanel.height >= child.height - dp(8)
+        val y = logPanel.scrollY
+        logText.text = logs
+        logPanel.post { if (atBottom) logPanel.fullScroll(FOCUS_DOWN) else logPanel.scrollTo(0, y) }
     }
 
     /** The Log button: the logs over the screen, or not. */
