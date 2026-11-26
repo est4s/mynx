@@ -47,42 +47,12 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    send`/`take` on both, the link dropping, 30 fps / 4 Mbit/s. The
    bridge doesn't answer on a sent app, as expected. The agent's
    decisions stand (entry 225).
-4. **3b, terminal tabs on B as text: built, to try on both phones**
-   (entry 227, PR into `screen-dev`, branch `screen-terms`). The test,
-   both phones on that build as mynx dev, paired, `mynx screen
-   connect` on B:
-   - **Send a tab:** on A, a tab running `ls -la /` (some
-     scrollback); long-press it → **Send to Nord 2**. A's strip loses
-     it (a fresh tab if it was the only one); B shows "Pixel 10: …"
-     selected, with the same text and the scrollback (swipe down on
-     it). `mynx screen status` on both lists it (terminal).
-   - **New tab for B:** A's Home → Send to Nord 2 → **New terminal**
-     (or `mynx screen send tab new`): B gets a fresh shell, its prompt
-     at B's width (`tput cols; tput lines` there shows B's size).
-   - **Typing from A:** tap the tab on B (a cyan line around it; A's
-     strip starts "⌨ Nord 2: …", A's keyboard comes up); type `echo
-     hi` Enter on A's keyboard, and with A's key bar (Tab, arrows,
-     Ctrl+C). Tap A's terminal: typing is A's again (the label goes).
-     B's key bar types into the tab too; tapping the tab on B doesn't
-     open B's keyboard.
-   - **Full-screen programs on B:** `htop` (bars update, F10 or q from
-     A quits), `vim` (insert text, `:q`; Esc from B's key bar), `less
-     /etc/services` (PgDn), a mouse click in htop on B.
-   - **Resizing:** rotate B (and pinch-zoom there): htop and vim redraw
-     at the new size; back to portrait.
-   - **Scrollback and copy on B:** `seq 1000` from A, scroll up on B,
-     long-press to select, Copy; paste it on B somewhere.
-   - **A flood:** `yes | head -c 50000000` or `cat` of a big file: B
-     keeps up or skips to the current screen; Ctrl+C from A stops it.
-   - **Take back:** B's tab × (or long-press → Give back), Home's Take
-     back on A, `mynx screen take` on either: the tab is on A again
-     with its text, still running (htop still going).
-   - **Link drop:** with a tab on B, Wi-Fi off on B (or `mynx screen
-     disconnect`): within 15 s the tab is back on A, its shell alive;
-     B's tab goes.
-   - **A shell exiting:** `exit` in a tab on B: it closes there; `exit
-     3`: it comes back to A, "[Process completed (code 3)]", Enter
-     restarts it.
+4. **3b, terminal tabs on B as text: passed on both phones** (entry
+   227, PR #123; Pixel 10 as A, Nord 2 as B, 2026-11-26): sending a
+   tab and a new one, typing from A, htop / vim / less on B,
+   resizing, scrollback and copy on B, a flood, every way of taking
+   back, the link dropping, a shell's exit. The agent's decisions
+   stand (entry 227).
 5. **Then (left for later):** the desktop on B as an extended monitor
    (spike #118; check the monitor size it reported; the next agent),
    then the second half; B linking again by itself (after a drop, at
