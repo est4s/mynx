@@ -59,7 +59,10 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    | span`), through the SurfaceTexture bridge; every step of entry
    228's test, the place moving live included (run 45896394265). The
    agent's decisions stand (entry 228).
-6. **Then (left for later):** B linking again by itself (after a drop,
+6. **Flaky `ScreenLinkTest` on CI: fixed** (entry 229, PR into
+   `screen-dev`): two races in `ScreenLink`, each reproduced by a
+   test. Nothing to try on the phones; watch CI for more.
+7. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
    Files and viewers sent to B; typing with B's own keyboard (into
@@ -133,6 +136,35 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-27 (229): The flaky `ScreenLinkTest` failures
+
+- Branch `screen-flaky` from `screen-dev`, PR into `screen-dev`. The
+  maintainer asked for it (asleep); core only, nothing for the phone.
+- **Cause 1, a lost Bye** (CI runs 45902441189, 45821641692: "after a
+  disconnect the screen comes back", the host's `lastEnd` wasn't
+  "Nord 2 ended the link"): the link's writer stopped after *any*
+  message written once the link was closed. A `close()` landing while
+  it wrote a keep-alive half-closed the socket with the Bye still
+  queued, so the host read only an end ("Nord 2 left (the connection
+  closed)"). Now it stops after writing the Bye or Unpaired. Test: a
+  seam (`beforeWrite`, tests only) disconnects just as a keep-alive
+  goes out; it failed every time with exactly that reason.
+- **Cause 2, the port still taken** (run 45810224479: "a restarted
+  host still knows its screen", "couldn't find Pixel 10"): the JDK
+  only really closes a `ServerSocket` blocked in `accept()` once that
+  thread wakes, so the restarted host's bind failed with "Address
+  already in use" (a plain Java loop on the phone: 12 times in 300),
+  it neither listened nor advertised, and the screen found
+  nothing. `closeServer()` now joins the accept thread (at most 1 s).
+  Test: 200 hosts on one port, each stopped; failed at try 129 before.
+  Also real on the phones: pairing again right after unpairing all.
+- Not changed: the 2 s timer that closes a socket after its last word
+  (`LAST_WORD_MS`) could still reset the link if the other phone took
+  longer than that to read the Bye; nothing showed it, and the reader
+  closes the socket at the other side's end anyway.
+- Evidence: the whole `ScreenLinkTest` class (21 tests) passed 30
+  runs of 30 on the phone with two cores busy (`yes`), and CI passed.
 
 ### 2026-11-26 (228): Extended screen, step 3c: the desktop on B
 
