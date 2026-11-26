@@ -69,6 +69,8 @@ import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.Desktop
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.desktopRequests
+import io.github.est4s.terminal.core.ScreenLink
+import io.github.est4s.terminal.core.screenRequests
 import io.github.est4s.terminal.core.agentProotCommand
 import io.github.est4s.terminal.core.claudeAccessCheck
 import io.github.est4s.terminal.core.claudeAuthStatusCommand
@@ -435,9 +437,19 @@ class TerminalService : Service() {
                 bleRequests(File(rootfs, "root"), ble, bluetooth) +
                 webAppRequests(webApps) +
                 appPermissions.requests() +
-                desktopRequests(desktop) { activity?.openDesktop() == true },
+                desktopRequests(desktop) { activity?.openDesktop() == true } +
+                screenRequests(screenLink),
         )
     }
+    // The extended screen's link to another phone (mynx screen); core runs it, the pairs' keys in our own files.
+    private val screenLink: ScreenLink by lazy {
+        ScreenLink(File(filesDir, "screen"), File(rootfs, "root/$CONFIG_DIR/settings.conf"), ::phoneName, ScreenDevice(this))
+    }
+
+    // The name people gave the phone (Settings, About phone), else its model.
+    private fun phoneName(): String =
+        runCatching { android.provider.Settings.Global.getString(contentResolver, android.provider.Settings.Global.DEVICE_NAME) }
+            .getOrNull()?.takeIf { it.isNotBlank() } ?: Build.MODEL
     // Desktop mode's X server and session (mynx desktop); core decides what runs.
     private val desktop: Desktop by lazy {
         Desktop(
@@ -769,6 +781,8 @@ class TerminalService : Service() {
         mainHandler.post(updateTick)
         // A server left running when the app went is found again by its broadcast.
         runCatching { desktopLink.start() }
+        // A paired screen can come back: listen while one is (screen-host).
+        runCatching { screenLink.refresh() }
     }
 
     // Rewrites the stand-in on every change, and often enough for the current; until onDestroy.
@@ -916,6 +930,7 @@ class TerminalService : Service() {
         applyWakelockSetting()
         // android-bluetooth, or bluetooth.conf by hand (mynx check).
         runCatching { bluetooth.refresh() }
+        runCatching { screenLink.refresh() }
     }
 
     /**
@@ -1003,6 +1018,7 @@ class TerminalService : Service() {
         mic.stop()
         sound.stop()
         runCatching { desktopLink.stop() }
+        runCatching { screenLink.stop() }
         runCatching { desktop.stop() }
         runCatching { usb.stop() }
         runCatching { usbFds.stop() }

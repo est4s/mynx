@@ -47,6 +47,12 @@ data class Settings(
     val desktop: DesktopSession = DesktopSession.XFCE,
     /** What a finger on the desktop does. */
     val desktopTouch: DesktopTouch = DesktopTouch.TOUCHPAD,
+    /** Whether this phone takes the screens it paired with (the extended screen's host, phone A). */
+    val screenHost: ScreenHosting = ScreenHosting.AUTO,
+    /** The TCP port the host listens on for its screens. */
+    val screenPort: Int = SCREEN_PORT,
+    /** Where the screen (phone B) sits next to this phone, when it hosts. */
+    val screenPlace: ScreenSide = ScreenSide.RIGHT,
     /** The permission mode new chats of touch mode's Chat start in: one of [CHAT_MODES]. */
     val chatMode: String = "auto",
     /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
@@ -86,6 +92,9 @@ data class Settings(
         "view" to view.word,
         "desktop" to desktop.word,
         "desktop-touch" to desktopTouch.word,
+        "screen-host" to screenHost.word,
+        "screen-port" to screenPort.toString(),
+        "screen-place" to screenPlace.word,
         "chat-mode" to chatMode,
         "chat-model" to chatModel,
         "open-pictures" to openPictures.word,
@@ -111,6 +120,9 @@ enum class DesktopSession(val word: String) {
 
 /** The `desktop-touch` setting: a touchpad moves a pointer; direct taps click where the finger is. */
 enum class DesktopTouch(val word: String) { TOUCHPAD("touchpad"), DIRECT("direct") }
+
+/** The `screen-host` setting: listen for paired screens while there are any (or a pairing waits), or never. */
+enum class ScreenHosting(val word: String) { AUTO("auto"), OFF("off") }
 
 /** The `wakelock` setting: when the app keeps the phone's CPU awake. */
 enum class Wakelock(val word: String) {
@@ -294,6 +306,24 @@ val SETTINGS: List<SettingDef> = listOf(
         "touchpad", DesktopTouch.entries.map { it.word },
         oneOf("desktop-touch", DesktopTouch.entries.map { it.word }),
         { v -> copy(desktopTouch = DesktopTouch.entries.first { it.word == v }) },
+    ),
+    SettingDef(
+        "screen-host", "Whether this phone takes the phones it paired with as screens (mynx screen): auto listens on the Wi-Fi (screen-port) while one is paired or a pairing waits; off never does.",
+        "auto", ScreenHosting.entries.map { it.word },
+        oneOf("screen-host", ScreenHosting.entries.map { it.word }),
+        { v -> copy(screenHost = ScreenHosting.entries.first { it.word == v }) },
+    ),
+    SettingDef(
+        "screen-port", "The TCP port this phone listens on for its screens (1024-65535; on the same Wi-Fi the screen finds it by itself).",
+        "$SCREEN_PORT", null,
+        { if (it.toIntOrNull() in 1024..65535) null else "screen-port must be a whole number from 1024 to 65535" },
+        { copy(screenPort = it.toInt()) },
+    ),
+    SettingDef(
+        "screen-place", "Where the screen (the other phone) sits next to this one: left, right, above or below (mynx screen place changes it).",
+        "right", ScreenSide.entries.map { it.word },
+        oneOf("screen-place", ScreenSide.entries.map { it.word }),
+        { v -> copy(screenPlace = ScreenSide.entries.first { it.word == v }) },
     ),
     SettingDef(
         "chat-mode", "The permission mode new chats in touch view's Chat start in: auto (Claude decides what to allow, asking less), default (asks first), plan or acceptEdits. A chat's own pick wins for that chat.",

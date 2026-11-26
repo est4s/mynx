@@ -688,6 +688,65 @@ See `docs/ROADMAP.md` "How it works". The details:
   (d): the source offered from the same place as the binary; no
   written offer needed). PR builds' APKs, only artifacts, don't carry
   it: their source is the repo at that commit plus the pinned upstream.
+- **Extended screen: pairing and the link** (`core/.../Spake2.kt`,
+  `ScreenProtocol.kt`, `ScreenHandshake.kt`, `ScreenPairs.kt`,
+  `ScreenLink.kt`, `ScreenLayout.kt`; `app/.../ScreenDevice.kt`;
+  `tools/docs/screen.md`; roadmap "Extended screen", work log "Next"
+  0a, step 2; agent's design, 2026-11-26, to confirm): phone A, the
+  **host**, and phone B, the **screen**, over TCP on the LAN.
+  **Pairing:** `mynx screen pair` on A shows six digits
+  (`newPairingCode()`); `mynx screen pair CODE [ADDRESS]` on B joins.
+  The code goes through **SPAKE2** (RFC 9382, P256-SHA256-HKDF-HMAC,
+  its M and N; `Spake2`, checked against the RFC's vectors): someone
+  on the Wi-Fi learns nothing from a run to guess the code offline,
+  and gets one online guess per run. P-256's point arithmetic is ours
+  on `BigInteger` (the JDK's ECDH gives only a shared x), not
+  constant-time: each secret scalar is used once. w is HKDF of the
+  code to 320 bits, mod n. The handshake (`joinHost`/`acceptScreen`,
+  plain frames): B's Hello (version, id, name, mode, its share), A's
+  Welcome (the same, and its confirmation), B's Confirm; a Refusal
+  says why not (version, not pairing, not paired, wrong code, busy,
+  off). Ids and names are SPAKE2's identities and the version and
+  mode its AAD, so a relay changing them fails the confirmation.
+  **Each code takes one try** (any handshake that got the code and
+  didn't link): A shows a new one, and stops after
+  `MAX_WRONG_CODES` (3) or 5 minutes. **After pairing** both keep a
+  32-byte pair key (HKDF of Ke over the transcript) in
+  `filesDir/screen/peers/ID.conf` (`ScreenPairs`; never in Debian:
+  programs there mustn't read it), with the other's name, role and
+  B's last address of A; `self` is this phone's id (128 random bits).
+  Coming back (`mynx screen connect`) runs the same SPAKE2 with the
+  pair key as the password (mode `resume`), so each link gets fresh
+  keys and forward secrecy. **Frames** (`ScreenChannel`): a 4-byte
+  length, then AES-128-GCM of type + fields with the length as AAD; a
+  key per direction (HKDF of Ke, salted with the transcript's hash)
+  and the frame count as the nonce, never sent, so a replayed,
+  reordered, dropped, reflected or changed frame fails and ends the
+  link. Up to 4 MiB a frame. **Messages** (version 1,
+  `ScreenMessage`; an unknown type is skipped): ScreenInfo (px,
+  dpi, rotation), Layout (side, alignment: the host's word is final;
+  B's `place` asks), KeepAlive (after 5 s idle; a link silent for
+  15 s ends), Bye, Unpaired (the other forgets the pair too), Focus,
+  and placeholders for step 3: Video (H.264 parts), Touch,
+  TerminalText. **The link** (`ScreenLink`, plain JDK sockets, so
+  tested on loopback): A listens on `screen-port` (all interfaces)
+  only while `screen-host = auto` and a screen is paired or a pairing
+  waits, and advertises `_mynx-screen._tcp` with TXT `v`, `id`,
+  `pairing` (`screenAd()`); B finds the pairing host over mDNS
+  (`ScreenDevice.discover`, NsdManager, resolving one at a time)
+  unless given an address, and on `connect` tries the saved address
+  first, then mDNS. One link at a time. A writer thread per link
+  sends (Android's main thread mustn't touch the network; requests
+  run there); a last Bye or Unpaired is followed by a half-close, so
+  closing doesn't reset the connection before the other reads it.
+  Requests: `screen-status|pair` (a stream: a line per code)
+  `|join|connect|disconnect|unpair|place` (`screenRequests()`).
+  **Settings:** `screen-host` (`auto`/`off`), `screen-port` (7391),
+  `screen-place` (right). **Layout** (`arrangeScreens()`): B scaled
+  to A's density, on A's side, aligned start/centre/end, both
+  starting at 0, 0: the extended X screen's two monitors (step 3).
+  Not yet: B linking again by itself after a drop or the app's start;
+  anything shown on B.
 - **Apps (web apps, part 1)** (`core/.../WebApps.kt`, whose KDoc is
   the contract; `app/.../WebAppActivity.kt`; `tools/lib/mynx/`'s
   `mynx app`; maintainer's decisions, 2026-11-08, work log entry 162):

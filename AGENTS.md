@@ -205,7 +205,8 @@ location, sensors, camera and flashlight, sound files, sound device,
 USB serial bridge, serial preload, serial port names, proot's
 mynx_serial and mynx_links extensions, raw USB, UF2, Android SDK, Bluetooth serial,
 Bluetooth LE, BLE UART ports, rotation lock, vibration, sharing,
-updates, release notes, time zone, wakelock, background services, desktop mode, web
+updates, release notes, time zone, wakelock, background services, desktop mode,
+extended screen (pairing and the link), web
 apps (part 1, and part 2: the bridge), touch mode's Home, touch
 mode's Files, viewers, more viewers, chat protocol, launcher shortcut, blocked `/proc` files, battery stand-in;
 then Termux library notes and proot notes.
@@ -323,6 +324,11 @@ Bugs that took a phone round to find; keep them from coming back.
   run in the maintainer's own Debian, so a test linking to
   `/root/pixel-hero/assets` emptied it on every run. Use
   `deleteTree()` (`WebAppsTest.kt`), which deletes links themselves.
+- **Several Gradle daemons at once run the phone out of memory**
+  (4 GB each, one per worktree), and Android kills the app, with the
+  agents in it. `~/.gradle/gradle.properties` caps them locally (1 GB,
+  Kotlin's 512 MB, 10 minutes idle); run one Gradle at a time, and not
+  beside the Python suite.
 - **The first `assembleRelease` is the first time lint-vital runs**:
   debug builds skip it, so a release can fail on something debug
   builds never showed.

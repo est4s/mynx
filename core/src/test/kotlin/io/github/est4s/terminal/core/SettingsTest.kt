@@ -63,8 +63,8 @@ class SettingsTest {
             listOf("font-size", "font", "cursor-style", "cursor-blink", "agent-notify", "agent-notify-after", "undo-keep",
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
-                "update-check", "serial-preload", "serial-names", "view", "desktop", "desktop-touch", "chat-mode", "chat-model",
-                "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
+                "update-check", "serial-preload", "serial-names", "view", "desktop", "desktop-touch", "screen-host", "screen-port", "screen-place",
+                "chat-mode", "chat-model", "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -84,6 +84,7 @@ class SettingsTest {
                 "sound-device" to "off", "share-folder" to "/srv/in", "tab-swipe" to "off",
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off", "view" to "touch",
                 "desktop" to "none", "desktop-touch" to "direct",
+                "screen-host" to "off", "screen-port" to "8000", "screen-place" to "above",
                 "chat-mode" to "plan", "chat-model" to "opus",
                 "open-pictures" to "android", "open-markdown" to "mynx", "open-code" to "android",
                 "open-text" to "mynx", "open-audio" to "android", "open-video" to "android",
@@ -93,7 +94,8 @@ class SettingsTest {
                 androidClipboard = false, androidShare = false, androidLocation = false, androidSensors = false,
                 androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
                 wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH,
-                desktop = DesktopSession.NONE, desktopTouch = DesktopTouch.DIRECT, chatMode = "plan", chatModel = "opus",
+                desktop = DesktopSession.NONE, desktopTouch = DesktopTouch.DIRECT,
+                screenHost = ScreenHosting.OFF, screenPort = 8000, screenPlace = ScreenSide.ABOVE, chatMode = "plan", chatModel = "opus",
                 openPictures = OpenWith.ANDROID, openCode = OpenWith.ANDROID, openAudio = OpenWith.ANDROID,
                 openVideo = OpenWith.ANDROID, openPdf = OpenWith.ANDROID).values(),
         )
@@ -272,6 +274,24 @@ class SettingsTest {
         val parsed = parseSettings("desktop-touch = direct\ndesktop-touch = mouse\n")
         assertEquals(DesktopTouch.DIRECT, parsed.settings.desktopTouch)
         assertEquals(listOf("line 2: desktop-touch must be one of: touchpad, direct"), parsed.problems)
+    }
+
+    @Test
+    fun `the extended screen's host listens while paired, on 7391, the screen on its right`() {
+        val defaults = Settings()
+        assertEquals(ScreenHosting.AUTO, defaults.screenHost)
+        assertEquals(7391, defaults.screenPort)
+        assertEquals(ScreenSide.RIGHT, defaults.screenPlace)
+        assertEquals(listOf("auto", "off"), SETTINGS.single { it.key == "screen-host" }.choices)
+        assertEquals(listOf("left", "right", "above", "below"), SETTINGS.single { it.key == "screen-place" }.choices)
+        val parsed = parseSettings("screen-port = 80\nscreen-port = 9000\nscreen-place = behind\nscreen-host = off\n")
+        assertEquals(9000, parsed.settings.screenPort)
+        assertEquals(ScreenHosting.OFF, parsed.settings.screenHost)
+        assertEquals(
+            listOf("line 1: screen-port must be a whole number from 1024 to 65535",
+                "line 3: screen-place must be one of: left, right, above, below"),
+            parsed.problems,
+        )
     }
 
     @Test

@@ -21,6 +21,7 @@ val HOME_SETTING_GROUPS = listOf(
     ),
     HomeSettingGroup("settings:terminal", "Terminal", listOf("font-size", "font", "cursor-style", "cursor-blink", "tab-swipe")),
     HomeSettingGroup("settings:desktop", "Desktop", listOf("desktop", "desktop-touch")),
+    HomeSettingGroup("settings:screen", "Second screen", listOf("screen-host", "screen-port", "screen-place")),
     HomeSettingGroup(
         "settings:phone", "Phone access",
         listOf(
@@ -38,6 +39,9 @@ private val SETTING_LABELS = mapOf(
     "view" to "View",
     "desktop" to "Desktop",
     "desktop-touch" to "Touch",
+    "screen-host" to "Take paired screens",
+    "screen-port" to "Port",
+    "screen-place" to "Screen sits",
     "chat-mode" to "Permission mode",
     "chat-model" to "Model for new chats",
     "agent-notify" to "Notifications",
@@ -192,6 +196,8 @@ internal class HomeSettings(
         "view" -> value.replaceFirstChar { it.uppercase() }
         "desktop" -> if (value == DesktopSession.XFCE.word) "XFCE" else "X server only"
         "desktop-touch" -> if (value == DesktopTouch.DIRECT.word) "Direct taps" else "Touchpad"
+        "screen-host" -> if (value == ScreenHosting.OFF.word) "Never" else "While paired"
+        "screen-place" -> value.replaceFirstChar { it.uppercase() }
         else -> if (key.startsWith("open-") && value == OpenWith.ANDROID.word) "Another app" else value
     }
 

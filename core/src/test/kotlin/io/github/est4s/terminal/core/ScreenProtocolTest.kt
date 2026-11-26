@@ -1,0 +1,134 @@
+package io.github.est4s.terminal.core
+
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.EOFException
+import kotlin.test.Test
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
+import kotlin.test.assertTrue
+
+class ScreenMessagesTest {
+    private fun roundTrip(message: ScreenMessage): ScreenMessage = decodeScreenMessage(encodeScreenMessage(message))
+
+    @Test
+    fun `every message comes back as it went`() {
+        val messages = listOf(
+            ScreenMessage.Hello(1, "b1", "Nord 2", HelloMode.PAIR, byteArrayOf(4, 5, 6)),
+            ScreenMessage.Welcome(1, "a1", "Pixel 10", byteArrayOf(1), byteArrayOf(2, 3)),
+            ScreenMessage.Confirm(byteArrayOf(9, 8)),
+            ScreenMessage.Refusal(RefusalReason.WRONG_CODE, "wrong code"),
+            ScreenMessage.ScreenInfo(1080, 2400, 420, 1),
+            ScreenMessage.Layout(ScreenSide.LEFT, ScreenAlign.CENTER),
+            ScreenMessage.KeepAlive,
+            ScreenMessage.Bye("unpaired"),
+            ScreenMessage.Unpaired,
+            ScreenMessage.Focus(ScreenRole.SCREEN),
+            ScreenMessage.Video(2, 1, byteArrayOf(0, 0, 0, 1, 0x67)),
+            ScreenMessage.Touch(3, 0, 12.5f, 800f),
+            ScreenMessage.TerminalText(7, "ls\r\n".toByteArray()),
+        )
+        for (m in messages) assertEquals(m, roundTrip(m), m.toString())
+    }
+
+    @Test
+    fun `a type this version doesn't know comes back as unknown, to be skipped`() {
+        val m = decodeScreenMessage(byteArrayOf(99.toByte(), 1, 2, 3))
+        assertIs<ScreenMessage.Unknown>(m)
+        assertEquals(99, m.type)
+    }
+
+    @Test
+    fun `short or bad payloads are refused`() {
+        assertFailsWith<ScreenProtocolException> { decodeScreenMessage(ByteArray(0)) }
+        assertFailsWith<ScreenProtocolException> { decodeScreenMessage(byteArrayOf(ScreenMessage.TYPE_SCREEN_INFO.toByte(), 1)) }
+        // A layout side this version doesn't know.
+        assertFailsWith<ScreenProtocolException> { decodeScreenMessage(byteArrayOf(ScreenMessage.TYPE_LAYOUT.toByte(), 9, 0)) }
+    }
+}
+
+class ScreenFramesTest {
+    @Test
+    fun `plain frames are a length, then the message`() {
+        val out = ByteArrayOutputStream()
+        writePlainFrame(out, ScreenMessage.Confirm(byteArrayOf(1, 2)))
+        val bytes = out.toByteArray()
+        assertEquals(bytes.size - 4, (bytes[0].toInt() shl 24) or (bytes[1].toInt() shl 16) or (bytes[2].toInt() shl 8) or bytes[3].toInt())
+        assertEquals(ScreenMessage.Confirm(byteArrayOf(1, 2)), readPlainFrame(ByteArrayInputStream(bytes)))
+    }
+
+    @Test
+    fun `a frame longer than the limit is refused before it's read`() {
+        val header = byteArrayOf(0x7f, 0, 0, 0)
+        assertFailsWith<ScreenProtocolException> { readPlainFrame(ByteArrayInputStream(header)) }
+    }
+
+    @Test
+    fun `a stream that ends mid-frame is an EOF`() {
+        assertFailsWith<EOFException> { readPlainFrame(ByteArrayInputStream(byteArrayOf(0, 0, 0, 5, 1))) }
+    }
+}
+
+class ScreenChannelTest {
+    private val keys = sessionKeys(ByteArray(16) { it.toByte() }, ByteArray(10) { 7 })
+    private val host = ScreenChannel(keys, ScreenRole.HOST)
+    private val screen = ScreenChannel(keys, ScreenRole.SCREEN)
+
+    private fun send(from: ScreenChannel, message: ScreenMessage) =
+        ByteArrayOutputStream().also { from.write(it, message) }.toByteArray()
+
+    @Test
+    fun `messages go both ways, encrypted`() {
+        val frame = send(host, ScreenMessage.TerminalText(1, "secret text".toByteArray()))
+        assertTrue("secret text" !in String(frame, Charsets.ISO_8859_1))
+        assertEquals(ScreenMessage.TerminalText(1, "secret text".toByteArray()), screen.read(ByteArrayInputStream(frame)))
+        val back = send(screen, ScreenMessage.KeepAlive)
+        assertEquals(ScreenMessage.KeepAlive, host.read(ByteArrayInputStream(back)))
+    }
+
+    @Test
+    fun `the same message sent twice is two different frames`() {
+        val one = send(host, ScreenMessage.KeepAlive)
+        val two = send(host, ScreenMessage.KeepAlive)
+        assertTrue(!one.contentEquals(two))
+    }
+
+    @Test
+    fun `a changed byte anywhere fails the frame`() {
+        val frame = send(host, ScreenMessage.Layout(ScreenSide.RIGHT, ScreenAlign.START))
+        for (i in 4 until frame.size) {
+            val tampered = frame.copyOf().also { it[i] = (it[i].toInt() xor 1).toByte() }
+            val fresh = ScreenChannel(keys, ScreenRole.SCREEN)
+            assertFailsWith<ScreenProtocolException>("byte $i") { fresh.read(ByteArrayInputStream(tampered)) }
+        }
+    }
+
+    @Test
+    fun `a replayed frame fails, each direction counts its frames`() {
+        val frame = send(host, ScreenMessage.Layout(ScreenSide.RIGHT, ScreenAlign.START))
+        screen.read(ByteArrayInputStream(frame))
+        assertFailsWith<ScreenProtocolException> { screen.read(ByteArrayInputStream(frame)) }
+    }
+
+    @Test
+    fun `frames in the wrong order or dropped fail`() {
+        val first = send(host, ScreenMessage.KeepAlive)
+        val second = send(host, ScreenMessage.KeepAlive)
+        assertFailsWith<ScreenProtocolException> { screen.read(ByteArrayInputStream(second)) }
+        assertContentEquals(first, first)
+    }
+
+    @Test
+    fun `a frame reflected back to its sender fails`() {
+        val frame = send(host, ScreenMessage.KeepAlive)
+        assertFailsWith<ScreenProtocolException> { host.read(ByteArrayInputStream(frame)) }
+    }
+
+    @Test
+    fun `keys from another session can't read the frames`() {
+        val other = ScreenChannel(sessionKeys(ByteArray(16) { 1 }, ByteArray(10) { 7 }), ScreenRole.SCREEN)
+        assertFailsWith<ScreenProtocolException> { other.read(ByteArrayInputStream(send(host, ScreenMessage.KeepAlive))) }
+    }
+}
