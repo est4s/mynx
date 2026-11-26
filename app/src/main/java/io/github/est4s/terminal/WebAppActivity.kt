@@ -120,6 +120,8 @@ class WebAppActivity : Activity(), FrontActivity {
     private var bound = false
     private var opening: (() -> Unit)? = null
     private var openStarted = false
+    // Sent to the other phone ([moveAway]): finishing mustn't stop the app's service.
+    private var movedAway = false
 
     private val poll = object : Runnable {
         override fun run() {
@@ -253,7 +255,7 @@ class WebAppActivity : Activity(), FrontActivity {
         bound = false
         if (::name.isInitialized) {
             if (screens[name] === this) screens.remove(name)
-            if (isFinishing && !isChangingConfigurations && screens[name] == null) {
+            if (isFinishing && !isChangingConfigurations && screens[name] == null && !movedAway) {
                 runCatching { closed?.invoke(name) }
             }
         }
@@ -716,6 +718,17 @@ class WebAppActivity : Activity(), FrontActivity {
         val anyOnScreen: Boolean get() = shown > 0
 
         fun isOpen(name: String): Boolean = name in screens
+
+        /**
+         * [name]'s screen moves to the other phone (the extended screen):
+         * this one closes without stopping the service its opening started,
+         * which the screen there uses.
+         */
+        fun moveAway(name: String) {
+            val screen = screens[name] ?: return
+            screen.movedAway = true
+            screen.finishAndRemoveTask()
+        }
 
         /** [name]'s screen, if it exists. */
         fun screen(name: String): WebAppActivity? = screens[name]

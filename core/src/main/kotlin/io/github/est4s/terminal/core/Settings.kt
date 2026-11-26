@@ -53,6 +53,10 @@ data class Settings(
     val screenPort: Int = SCREEN_PORT,
     /** Where the screen (phone B) sits next to this phone, when it hosts. */
     val screenPlace: ScreenSide = ScreenSide.RIGHT,
+    /** How many frames a second a sent screen's video has at most (`screen-fps`). */
+    val screenFps: Int = 60,
+    /** A sent screen's video, in Mbit/s (`screen-bitrate`). */
+    val screenBitrate: Int = 8,
     /** The permission mode new chats of touch mode's Chat start in: one of [CHAT_MODES]. */
     val chatMode: String = "auto",
     /** The model new chats start with, as `--model` takes it; `default` passes none (Claude's own default). */
@@ -95,6 +99,8 @@ data class Settings(
         "screen-host" to screenHost.word,
         "screen-port" to screenPort.toString(),
         "screen-place" to screenPlace.word,
+        "screen-fps" to screenFps.toString(),
+        "screen-bitrate" to screenBitrate.toString(),
         "chat-mode" to chatMode,
         "chat-model" to chatModel,
         "open-pictures" to openPictures.word,
@@ -324,6 +330,18 @@ val SETTINGS: List<SettingDef> = listOf(
         "right", ScreenSide.entries.map { it.word },
         oneOf("screen-place", ScreenSide.entries.map { it.word }),
         { v -> copy(screenPlace = ScreenSide.entries.first { it.word == v }) },
+    ),
+    SettingDef(
+        "screen-fps", "How many frames a second a screen sent to the other phone has at most (10-120): fewer are lighter on the Wi-Fi and the other phone's decoder.",
+        "60", null,
+        { if (it.toIntOrNull() in 10..120) null else "screen-fps must be a whole number from 10 to 120" },
+        { copy(screenFps = it.toInt()) },
+    ),
+    SettingDef(
+        "screen-bitrate", "A sent screen's video in Mbit/s (1-40): more is sharper when much moves, and needs a faster Wi-Fi.",
+        "8", null,
+        { if (it.toIntOrNull() in 1..40) null else "screen-bitrate must be a whole number of Mbit/s from 1 to 40" },
+        { copy(screenBitrate = it.toInt()) },
     ),
     SettingDef(
         "chat-mode", "The permission mode new chats in touch view's Chat start in: auto (Claude decides what to allow, asking less), default (asks first), plan or acceptEdits. A chat's own pick wins for that chat.",

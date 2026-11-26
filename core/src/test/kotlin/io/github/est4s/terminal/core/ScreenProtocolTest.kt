@@ -26,8 +26,15 @@ class ScreenMessagesTest {
             ScreenMessage.Bye("unpaired"),
             ScreenMessage.Unpaired,
             ScreenMessage.Focus(ScreenRole.SCREEN),
-            ScreenMessage.Video(2, 1, byteArrayOf(0, 0, 0, 1, 0x67)),
-            ScreenMessage.Touch(3, 0, 12.5f, 800f),
+            ScreenMessage.Video(2, VIDEO_KEY or VIDEO_CONFIG, 123_456_789_012L, byteArrayOf(0, 0, 0, 1, 0x67)),
+            ScreenMessage.Touch(3, 5, 1, listOf(TouchPoint(0, 12.5f, 800f), TouchPoint(4, 300f, 0.25f))),
+            ScreenMessage.StreamStart(2, "Pixel Hero", 1080, 2400),
+            ScreenMessage.StreamEnd(2),
+            ScreenMessage.Watch(2, true),
+            ScreenMessage.Watch(2, false),
+            ScreenMessage.VideoAck(2, 123_456_789_012L),
+            ScreenMessage.KeyFrame(2),
+            ScreenMessage.TakeBack(2),
             ScreenMessage.TerminalText(7, "ls\r\n".toByteArray()),
         )
         for (m in messages) assertEquals(m, roundTrip(m), m.toString())
@@ -46,6 +53,32 @@ class ScreenMessagesTest {
         assertFailsWith<ScreenProtocolException> { decodeScreenMessage(byteArrayOf(ScreenMessage.TYPE_SCREEN_INFO.toByte(), 1)) }
         // A layout side this version doesn't know.
         assertFailsWith<ScreenProtocolException> { decodeScreenMessage(byteArrayOf(ScreenMessage.TYPE_LAYOUT.toByte(), 9, 0)) }
+        // A touch saying it has more fingers than it carries.
+        assertFailsWith<ScreenProtocolException> {
+            decodeScreenMessage(byteArrayOf(ScreenMessage.TYPE_TOUCH.toByte(), 0, 0, 0, 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        }
+    }
+
+    @Test
+    fun `a touch carries at most ten fingers`() {
+        val many = (0 until 11).map { TouchPoint(it, 1f, 1f) }
+        assertFailsWith<IllegalArgumentException> { encodeScreenMessage(ScreenMessage.Touch(1, 2, 0, many)) }
+    }
+
+    @Test
+    fun `a video part keeps its bytes and its flags`() {
+        val m = decodeScreenMessage(encodeScreenMessage(ScreenMessage.Video(7, VIDEO_KEY, 42L, byteArrayOf(1, 2, 3))))
+        assertIs<ScreenMessage.Video>(m)
+        assertTrue(m.key)
+        assertTrue(!m.config)
+        assertEquals(42L, m.pts)
+        assertContentEquals(byteArrayOf(1, 2, 3), m.data)
+    }
+
+    @Test
+    fun `this is version 2 of the link`() {
+        // Version 1 (the pairing alone) had placeholders where video and touches are now.
+        assertEquals(2, SCREEN_PROTOCOL)
     }
 }
 

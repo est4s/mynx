@@ -64,7 +64,7 @@ class SettingsTest {
                 "android-clipboard", "android-share", "android-location", "android-sensors", "android-camera",
                 "android-microphone", "android-bluetooth", "sound-device", "share-folder", "tab-swipe", "wakelock",
                 "update-check", "serial-preload", "serial-names", "view", "desktop", "desktop-touch", "screen-host", "screen-port", "screen-place",
-                "chat-mode", "chat-model", "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
+                "screen-fps", "screen-bitrate", "chat-mode", "chat-model", "open-pictures", "open-markdown", "open-code", "open-text", "open-audio", "open-video", "open-pdf", "open-html"),
             SETTINGS.map { it.key },
         )
         SETTINGS.forEach { assertTrue(it.description.isNotBlank(), it.key) }
@@ -85,6 +85,7 @@ class SettingsTest {
                 "wakelock" to "on", "update-check" to "off", "serial-preload" to "off", "serial-names" to "off", "view" to "touch",
                 "desktop" to "none", "desktop-touch" to "direct",
                 "screen-host" to "off", "screen-port" to "8000", "screen-place" to "above",
+                "screen-fps" to "30", "screen-bitrate" to "12",
                 "chat-mode" to "plan", "chat-model" to "opus",
                 "open-pictures" to "android", "open-markdown" to "mynx", "open-code" to "android",
                 "open-text" to "mynx", "open-audio" to "android", "open-video" to "android",
@@ -95,7 +96,8 @@ class SettingsTest {
                 androidCamera = false, androidMicrophone = false, androidBluetooth = false, soundDevice = false, shareFolder = "/srv/in", tabSwipe = false,
                 wakelock = Wakelock.ON, updateCheck = false, serialPreload = false, serialNames = false, view = AppView.TOUCH,
                 desktop = DesktopSession.NONE, desktopTouch = DesktopTouch.DIRECT,
-                screenHost = ScreenHosting.OFF, screenPort = 8000, screenPlace = ScreenSide.ABOVE, chatMode = "plan", chatModel = "opus",
+                screenHost = ScreenHosting.OFF, screenPort = 8000, screenPlace = ScreenSide.ABOVE,
+                screenFps = 30, screenBitrate = 12, chatMode = "plan", chatModel = "opus",
                 openPictures = OpenWith.ANDROID, openCode = OpenWith.ANDROID, openAudio = OpenWith.ANDROID,
                 openVideo = OpenWith.ANDROID, openPdf = OpenWith.ANDROID).values(),
         )
@@ -290,6 +292,23 @@ class SettingsTest {
         assertEquals(
             listOf("line 1: screen-port must be a whole number from 1024 to 65535",
                 "line 3: screen-place must be one of: left, right, above, below"),
+            parsed.problems,
+        )
+    }
+
+    @Test
+    fun `a sent screen goes at 60 frames a second and 8 Mbit-s, unless set`() {
+        val defaults = Settings()
+        assertEquals(60, defaults.screenFps)
+        assertEquals(8, defaults.screenBitrate)
+        val parsed = parseSettings("screen-fps = 0\nscreen-fps = 121\nscreen-fps = 90\nscreen-bitrate = 0\nscreen-bitrate = 41\nscreen-bitrate = 20\n")
+        assertEquals(90, parsed.settings.screenFps)
+        assertEquals(20, parsed.settings.screenBitrate)
+        assertEquals(
+            listOf("line 1: screen-fps must be a whole number from 10 to 120",
+                "line 2: screen-fps must be a whole number from 10 to 120",
+                "line 4: screen-bitrate must be a whole number of Mbit/s from 1 to 40",
+                "line 5: screen-bitrate must be a whole number of Mbit/s from 1 to 40"),
             parsed.problems,
         )
     }

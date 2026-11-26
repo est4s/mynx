@@ -58,9 +58,9 @@ class ScreenLinkTest {
     private val hostSettings = File(root, "a/settings.conf").also { it.parentFile.mkdirs(); it.writeText("screen-port = $port\n") }
     private val screenSettings = File(root, "b/settings.conf").also { it.parentFile.mkdirs(); it.writeText("screen-port = $port\n") }
 
-    private fun newHost() = ScreenLink(File(root, "a/private"), hostSettings, { "Pixel 10" }, hostPlatform, keepAliveMs = 100, idleMs = 2000)
+    private fun newHost() = ScreenLink(File(root, "a/private"), hostSettings, { "Pixel 10" }, hostPlatform, keepAliveMs = 100, idleMs = 10_000)
     private val host = newHost()
-    private val screen = ScreenLink(File(root, "b/private"), screenSettings, { "Nord 2" }, screenPlatform, keepAliveMs = 100, idleMs = 2000)
+    private val screen = ScreenLink(File(root, "b/private"), screenSettings, { "Nord 2" }, screenPlatform, keepAliveMs = 100, idleMs = 10_000)
 
     init {
         // The screen finds the host as Android's NSD would, from what it advertises.
@@ -282,5 +282,72 @@ class ScreenLinkTest {
         requests.getValue("screen-unpair").start(listOf("Galaxy"), reply(none))
         assertNotNull(none.answer!!["error"])
         assertNull(requests.getValue("screen-pair").seconds)
+    }
+
+    /** What a link hands to screens: every message and the link's end, by name. */
+    private class Media : ScreenMedia {
+        val heard = java.util.Collections.synchronizedList(mutableListOf<String>())
+        override fun received(message: ScreenMessage) { heard += message.javaClass.simpleName }
+        override fun unlinked() { heard += "unlinked" }
+    }
+
+    @Test
+    fun `screens' messages go over the link both ways, and the peer is known`() {
+        val hostMedia = Media()
+        val screenMedia = Media()
+        host.media = hostMedia
+        screen.media = screenMedia
+        assertNull(host.peer())
+        assertEquals(false, host.send(ScreenMessage.StreamEnd(1)))
+        pair()
+        waitFor("both linked, the screen's size known") { host.peer()?.screen != null && screen.peer() != null }
+        assertEquals(LinkedPeer("Nord 2", ScreenRole.HOST, ScreenMessage.ScreenInfo(1080, 2400, 480, 0)), host.peer())
+        assertEquals(ScreenRole.SCREEN, screen.peer()!!.role)
+        assertEquals(true, host.send(ScreenMessage.StreamStart(1, "Pixel Hero", 1080, 2400)))
+        assertEquals(true, host.send(ScreenMessage.Video(1, VIDEO_KEY, 5, ByteArray(100_000))))
+        assertEquals(true, screen.send(ScreenMessage.Watch(1, true)))
+        assertEquals(true, screen.send(ScreenMessage.Touch(1, ACTION_DOWN, 0, listOf(TouchPoint(0, 1f, 2f)))))
+        waitFor("the screen heard") { screenMedia.heard.containsAll(listOf("StreamStart", "Video")) }
+        waitFor("the host heard") { hostMedia.heard.containsAll(listOf("Watch", "Touch")) }
+        // The link's own messages stay the link's.
+        assertTrue("KeepAlive" !in screenMedia.heard && "ScreenInfo" !in screenMedia.heard)
+        screen.disconnect()
+        waitFor("both told") { "unlinked" in hostMedia.heard && "unlinked" in screenMedia.heard }
+        assertNull(host.peer())
+    }
+
+    @Test
+    fun `a screen sent by request reaches the other phone, and the status lists it`() {
+        val casting = FakeCasting()
+        val showing = FakeShowing()
+        val hostShare = ScreenShare(host::send, host::peer, casting, FakeShowing(), hostSettings, post = { it() })
+        val screenShare = ScreenShare(screen::send, screen::peer, FakeCasting(), showing, screenSettings, post = { it() })
+        host.media = hostShare
+        screen.media = screenShare
+        val requests = screenRequests(host, hostShare)
+        val early = Answers()
+        requests.getValue("screen-send").start(listOf("app", "pixel-hero"), reply(early))
+        assertTrue((early.answer!!["error"] as String).startsWith("no screen is linked"))
+        pair()
+        waitFor("the screen's size") { host.peer()?.screen != null }
+        val sink = Answers()
+        requests.getValue("screen-send").start(listOf("app", "pixel-hero"), reply(sink))
+        assertEquals(true, sink.answer!!["ok"], sink.answer.toString())
+        assertEquals("Pixel Hero", (sink.answer!!["screen"] as Map<*, *>)["title"])
+        waitFor("the screen heard") { showing.did.isNotEmpty() }
+        assertEquals("started 1 Pixel Hero 1080x2400", showing.did.single())
+        val status = Answers()
+        requests.getValue("screen-status").start(emptyList(), reply(status))
+        assertEquals("Pixel Hero", ((status.answer!!["sent"] as List<*>).single() as Map<*, *>)["title"])
+        val bad = Answers()
+        requests.getValue("screen-send").start(listOf("tab", "1"), reply(bad))
+        assertEquals("send what? mynx screen send app NAME", bad.answer!!["error"])
+        val took = Answers()
+        requests.getValue("screen-take").start(listOf("all"), reply(took))
+        assertEquals("Pixel Hero", ((took.answer!!["taken"] as List<*>).single() as Map<*, *>)["title"])
+        waitFor("the screen let it go") { "ended 1" in showing.did }
+        val none = Answers()
+        requests.getValue("screen-take").start(listOf("all"), reply(none))
+        assertEquals("nothing sent to take back", none.answer!!["error"])
     }
 }

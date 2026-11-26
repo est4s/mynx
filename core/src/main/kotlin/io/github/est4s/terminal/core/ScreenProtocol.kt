@@ -13,8 +13,23 @@ import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
 
-/** The version of the link between the phones; a Hello with another is refused. */
-const val SCREEN_PROTOCOL = 1
+/**
+ * The version of the link between the phones; a Hello with another is
+ * refused. 1 was the pairing alone; 2 sends screens (video, touches).
+ */
+const val SCREEN_PROTOCOL = 2
+
+/** A [ScreenMessage.Video] part that's a key frame: it decodes alone. */
+const val VIDEO_KEY = 1
+
+/** A [ScreenMessage.Video] part that's the codec's config (H.264's SPS and PPS), before the frames. */
+const val VIDEO_CONFIG = 2
+
+/** The most fingers a [ScreenMessage.Touch] carries. */
+const val MAX_TOUCH_POINTS = 10
+
+/** One finger of a [ScreenMessage.Touch]: its [id] (Android's pointer id), where it is in the stream's pixels. */
+data class TouchPoint(val id: Int, val x: Float, val y: Float)
 
 /** The longest frame either side reads (a video frame must fit). */
 const val MAX_SCREEN_FRAME = 4 * 1024 * 1024
@@ -42,9 +57,13 @@ enum class RefusalReason { VERSION, NOT_PAIRING, NOT_PAIRED, WRONG_CODE, BUSY, O
  * [Hello], [Welcome], [Confirm] and [Refusal] are the handshake, in
  * plain frames ([writePlainFrame]); everything after goes through a
  * [ScreenChannel]. A type a phone doesn't know is [Unknown], skipped,
- * so later versions can add messages. [Video], [Touch] and
- * [TerminalText] are placeholders for what's coming (work log "Next"
- * 0a step 3): their fields may still change.
+ * so later versions can add messages. A screen the host sends is a
+ * stream: [StreamStart] and [StreamEnd] from the host; while the screen
+ * [Watch]es it, [Video] parts, which it acks ([VideoAck]) and asks a
+ * [KeyFrame] of when it must start over; its [Touch]es go back, and
+ * [TakeBack] asks the host to have it back. [TerminalText] is a
+ * placeholder for what's coming (work log "Next" 0a): its fields may
+ * still change.
  */
 sealed class ScreenMessage(val type: Int) {
     /** The screen's first message: its version, id and name, and its SPAKE2 share. */
@@ -77,11 +96,40 @@ sealed class ScreenMessage(val type: Int) {
     /** Typing goes to the screen touched last, on [to]. */
     data class Focus(val to: ScreenRole) : ScreenMessage(TYPE_FOCUS)
 
-    /** Placeholder: part of an H.264 stream [stream] ([flags]: 1 a key frame, 2 its codec config). */
-    class Video(val stream: Int, val flags: Int, val data: ByteArray) : ScreenMessage(TYPE_VIDEO)
+    /**
+     * Part of stream [stream]'s H.264: one encoded frame (or the codec's
+     * config) as MediaCodec gave it, [flags] [VIDEO_KEY] and [VIDEO_CONFIG],
+     * [pts] its time on the host (µs), which the screen acks.
+     */
+    class Video(val stream: Int, val flags: Int, val pts: Long, val data: ByteArray) : ScreenMessage(TYPE_VIDEO) {
+        val key: Boolean get() = flags and VIDEO_KEY != 0
+        val config: Boolean get() = flags and VIDEO_CONFIG != 0
+    }
 
-    /** Placeholder: a touch on the screen, in its pixels ([action] as Android's MotionEvent). */
-    data class Touch(val action: Int, val pointer: Int, val x: Float, val y: Float) : ScreenMessage(TYPE_TOUCH)
+    /**
+     * A touch on stream [stream], in its pixels: [action] as Android's
+     * MotionEvent's masked action, [index] the finger it's about (for a
+     * second finger's down and up), and every finger down.
+     */
+    data class Touch(val stream: Int, val action: Int, val index: Int, val points: List<TouchPoint>) : ScreenMessage(TYPE_TOUCH)
+
+    /** The host sends a screen, [title], drawn at [width] x [height] pixels. */
+    data class StreamStart(val stream: Int, val title: String, val width: Int, val height: Int) : ScreenMessage(TYPE_STREAM_START)
+
+    /** The host has the screen back (or it closed): the screen stops showing it. */
+    data class StreamEnd(val stream: Int) : ScreenMessage(TYPE_STREAM_END)
+
+    /** The screen shows stream [stream] ([on]) or stopped showing it: the host sends video only while it does. */
+    data class Watch(val stream: Int, val on: Boolean) : ScreenMessage(TYPE_WATCH)
+
+    /** The screen got stream [stream]'s part [pts] (and those before): how far behind it is. */
+    data class VideoAck(val stream: Int, val pts: Long) : ScreenMessage(TYPE_VIDEO_ACK)
+
+    /** The screen asks for a key frame of [stream] (its decoder starts over). */
+    data class KeyFrame(val stream: Int) : ScreenMessage(TYPE_KEY_FRAME)
+
+    /** The screen asks the host to take [stream] back. */
+    data class TakeBack(val stream: Int) : ScreenMessage(TYPE_TAKE_BACK)
 
     /** Placeholder: a terminal tab's output (host to screen) or typing (screen to host). */
     class TerminalText(val tab: Int, val data: ByteArray) : ScreenMessage(TYPE_TERMINAL_TEXT)
@@ -109,6 +157,12 @@ sealed class ScreenMessage(val type: Int) {
         const val TYPE_VIDEO = 32
         const val TYPE_TOUCH = 33
         const val TYPE_TERMINAL_TEXT = 34
+        const val TYPE_STREAM_START = 35
+        const val TYPE_STREAM_END = 36
+        const val TYPE_WATCH = 37
+        const val TYPE_VIDEO_ACK = 38
+        const val TYPE_KEY_FRAME = 39
+        const val TYPE_TAKE_BACK = 40
     }
 }
 
@@ -135,8 +189,18 @@ fun encodeScreenMessage(m: ScreenMessage): ByteArray {
         ScreenMessage.KeepAlive, ScreenMessage.Unpaired -> {}
         is ScreenMessage.Bye -> text(m.reason)
         is ScreenMessage.Focus -> out.writeByte(m.to.ordinal)
-        is ScreenMessage.Video -> { out.writeInt(m.stream); out.writeByte(m.flags); out.write(m.data) }
-        is ScreenMessage.Touch -> { out.writeByte(m.action); out.writeByte(m.pointer); out.writeFloat(m.x); out.writeFloat(m.y) }
+        is ScreenMessage.Video -> { out.writeInt(m.stream); out.writeByte(m.flags); out.writeLong(m.pts); out.write(m.data) }
+        is ScreenMessage.Touch -> {
+            require(m.points.size <= MAX_TOUCH_POINTS) { "a touch of ${m.points.size} fingers" }
+            out.writeInt(m.stream); out.writeByte(m.action); out.writeByte(m.index); out.writeByte(m.points.size)
+            for (p in m.points) { out.writeByte(p.id); out.writeFloat(p.x); out.writeFloat(p.y) }
+        }
+        is ScreenMessage.StreamStart -> { out.writeInt(m.stream); text(m.title); out.writeInt(m.width); out.writeInt(m.height) }
+        is ScreenMessage.StreamEnd -> out.writeInt(m.stream)
+        is ScreenMessage.Watch -> { out.writeInt(m.stream); out.writeByte(if (m.on) 1 else 0) }
+        is ScreenMessage.VideoAck -> { out.writeInt(m.stream); out.writeLong(m.pts) }
+        is ScreenMessage.KeyFrame -> out.writeInt(m.stream)
+        is ScreenMessage.TakeBack -> out.writeInt(m.stream)
         is ScreenMessage.TerminalText -> { out.writeInt(m.tab); out.write(m.data) }
         is ScreenMessage.Unknown -> out.write(m.payload)
     }
@@ -183,9 +247,21 @@ fun decodeScreenMessage(bytes: ByteArray): ScreenMessage {
             ScreenMessage.TYPE_BYE -> ScreenMessage.Bye(text())
             ScreenMessage.TYPE_UNPAIRED -> ScreenMessage.Unpaired
             ScreenMessage.TYPE_FOCUS -> ScreenMessage.Focus(pick(ScreenRole.entries.toTypedArray(), "screen"))
-            ScreenMessage.TYPE_VIDEO -> ScreenMessage.Video(input.readInt(), input.readUnsignedByte(), rest())
-            ScreenMessage.TYPE_TOUCH ->
-                ScreenMessage.Touch(input.readUnsignedByte(), input.readUnsignedByte(), input.readFloat(), input.readFloat())
+            ScreenMessage.TYPE_VIDEO -> ScreenMessage.Video(input.readInt(), input.readUnsignedByte(), input.readLong(), rest())
+            ScreenMessage.TYPE_TOUCH -> {
+                val stream = input.readInt()
+                val action = input.readUnsignedByte()
+                val index = input.readUnsignedByte()
+                val count = input.readUnsignedByte()
+                if (count > MAX_TOUCH_POINTS) throw ScreenProtocolException("a touch of $count fingers")
+                ScreenMessage.Touch(stream, action, index, List(count) { TouchPoint(input.readUnsignedByte(), input.readFloat(), input.readFloat()) })
+            }
+            ScreenMessage.TYPE_STREAM_START -> ScreenMessage.StreamStart(input.readInt(), text(), input.readInt(), input.readInt())
+            ScreenMessage.TYPE_STREAM_END -> ScreenMessage.StreamEnd(input.readInt())
+            ScreenMessage.TYPE_WATCH -> ScreenMessage.Watch(input.readInt(), input.readUnsignedByte() != 0)
+            ScreenMessage.TYPE_VIDEO_ACK -> ScreenMessage.VideoAck(input.readInt(), input.readLong())
+            ScreenMessage.TYPE_KEY_FRAME -> ScreenMessage.KeyFrame(input.readInt())
+            ScreenMessage.TYPE_TAKE_BACK -> ScreenMessage.TakeBack(input.readInt())
             ScreenMessage.TYPE_TERMINAL_TEXT -> ScreenMessage.TerminalText(input.readInt(), rest())
             else -> ScreenMessage.Unknown(type, rest())
         }

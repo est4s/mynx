@@ -161,6 +161,49 @@ class HomeTest {
 
     private fun webApp(name: String, title: String) = write(File(home, "apps/$name/index.html"), "<title>$title</title>")
 
+    private fun screenMenus(screen: ScreenHome) = HomeMenus(WebApps(home, rootfs.path, tools), screen = screen)
+
+    @Test
+    fun `a linked host offers to send an app to its screen, and to take back what's there`() {
+        userMenu("Shell = shell\n")
+        webApp("zed", "alpha")
+        webApp("abc", "Zulu")
+        val screen = ScreenHome("Nord 2", ScreenRole.HOST, sent = listOf(ScreenRef(3, "Zulu")), shown = emptyList())
+        val main = screenMenus(screen).items(HOME_MAIN)
+        assertEquals(HomeItem("Send to Nord 2", HomeAction.Menu(SCREEN_SEND_MENU)), main.first())
+        assertEquals(HomeItem("Shell", HomeAction.Shell), main[1])
+        val send = screenMenus(screen).items(SCREEN_SEND_MENU)
+        assertEquals(listOf("On Nord 2", "Take back Zulu", "Send an app", "alpha", "Zulu"), send.map { it.label })
+        assertEquals(HomeRow.SECTION, send[0].kind)
+        assertEquals(HomeAction.Config("screen-take", listOf("3"), back = true), send[1].action)
+        assertEquals(HomeAction.Config("screen-send", listOf("app", "zed"), back = true), send[3].action)
+        assertTrue(send[3].logo is HomeLogo.Tile)
+    }
+
+    @Test
+    fun `nothing sent, the send list is just the apps`() {
+        webApp("zed", "alpha")
+        val send = screenMenus(ScreenHome("Nord 2", ScreenRole.HOST, emptyList(), emptyList())).items(SCREEN_SEND_MENU)
+        assertEquals(listOf("alpha"), send.map { it.label })
+    }
+
+    @Test
+    fun `the screen's Home starts with what the host sent`() {
+        gitHubReady()
+        userMenu("Shell = shell\n")
+        val screen = ScreenHome("Pixel 10", ScreenRole.SCREEN, sent = emptyList(), shown = listOf(ScreenRef(3, "Zulu"), ScreenRef(4, "Notes")))
+        assertEquals(
+            listOf(
+                HomeItem("Zulu", HomeAction.ScreenShow(3), detail = "from Pixel 10"),
+                HomeItem("Notes", HomeAction.ScreenShow(4), detail = "from Pixel 10"),
+                HomeItem("Shell", HomeAction.Shell),
+            ),
+            screenMenus(screen).items(HOME_MAIN),
+        )
+        // Linked, nothing sent: Home as it was.
+        assertEquals(listOf(HomeItem("Shell", HomeAction.Shell)), screenMenus(screen.copy(shown = emptyList())).items(HOME_MAIN))
+    }
+
     @Test
     fun `apps are sorted by label and open natively`() {
         userMenu("Terminal apps = terminal-apps\n")

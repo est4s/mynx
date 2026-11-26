@@ -3337,9 +3337,68 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("screen", "place", "above")
         self.assertEqual(run.stdout, "Asked the host to put this phone above it.\n")
 
+    LINKED = {"id": "bb" * 16, "name": "Nord 2", "role": "screen", "since": 0,
+              "screen": {"width": 1080, "height": 2400, "density": 440, "rotation": 0}, "place": "right"}
+    HERO = {"id": 1, "kind": "app", "name": "pixel-hero", "title": "Pixel Hero", "width": 1080, "height": 2400,
+            "watched": True}
+
+    def test_screen_send_an_app(self):
+        answer = self.screen_status(connected=self.LINKED, screen={"id": 1, "title": "Pixel Hero", "name": "pixel-hero"},
+                                    sent=[self.HERO], shown=[], typing=False)
+        self.start_app({"screen-send": answer})
+        run = self.mynx("screen", "send", "app", "pixel-hero")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Sent Pixel Hero to Nord 2 (mynx screen take 1 takes it back).\n")
+        # An app is what's sent when nothing says what.
+        self.mynx("screen", "send", "pixel-hero")
+        self.assertEqual(self.app.requests, [["screen-send", "app", "pixel-hero"], ["screen-send", "app", "pixel-hero"]])
+
+    def test_screen_send_refused(self):
+        self.start_app({"screen-send": {"ok": False, "error": "no screen is linked (mynx screen connect on the other phone links it)"}})
+        run = self.mynx("screen", "send", "app", "nope")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("no screen is linked", run.stderr)
+
+    def test_screen_take_on_the_host_and_on_the_screen(self):
+        self.start_app({"screen-take": self.screen_status(connected=self.LINKED, taken=[{"id": 1, "title": "Pixel Hero"}],
+                                                          sent=[], shown=[], typing=False)})
+        self.assertEqual(self.mynx("screen", "take").stdout, "Took back Pixel Hero.\n")
+        self.assertEqual(self.mynx("screen", "take", "1").stdout, "Took back Pixel Hero.\n")
+        self.assertEqual(self.app.requests, [["screen-take", "all"], ["screen-take", "1"]])
+
+    def test_screen_take_on_the_screen_asks_the_host(self):
+        host = dict(self.LINKED, name="Pixel 10", role="host")
+        self.start_app({"screen-take": self.screen_status(name="Nord 2", connected=host, taken=[{"id": 1, "title": "Pixel Hero"}],
+                                                          sent=[], shown=[], typing=False)})
+        self.assertEqual(self.mynx("screen", "take", "all").stdout, "Asked Pixel 10 to take back Pixel Hero.\n")
+
+    def test_screen_status_lists_what_is_sent_and_shown(self):
+        notes = dict(self.HERO, id=2, name="notes", title="Notes", watched=False)
+        self.start_app({"screen-status": self.screen_status(listening=7391, connected=self.LINKED, paired=[self.NORD],
+                                                            sent=[self.HERO, notes], shown=[], typing=True)})
+        run = self.mynx("screen")
+        self.assertEqual(run.stdout,
+                         "Screen: linked with Nord 2, a screen of this phone (1080x2400, 440 dpi), on its right\n"
+                         "Sent there: 1 Pixel Hero (showing), 2 Notes\n"
+                         "Typing goes there (it was touched last)\n"
+                         "Paired: Nord 2 (screen)\n"
+                         "Listening on port 7391\n")
+
+    def test_screen_status_on_the_screen_lists_what_the_host_sent(self):
+        host = dict(self.LINKED, name="Pixel 10", role="host", place=None)
+        self.start_app({"screen-status": self.screen_status(name="Nord 2", connected=host, paired=[dict(self.NORD, name="Pixel 10", role="host")],
+                                                            sent=[], shown=[{"id": 1, "title": "Pixel Hero", "watching": True}],
+                                                            typing=False)})
+        run = self.mynx("screen")
+        self.assertEqual(run.stdout,
+                         "Screen: linked with Pixel 10, this phone is its screen (1080x2400, 440 dpi)\n"
+                         "From Pixel 10: 1 Pixel Hero (showing)\n"
+                         "Paired: Pixel 10 (host)\n")
+
     def test_screen_usage(self):
         self.start_app({})
-        for args in (["place"], ["place", "behind"], ["unpair"], ["frobnicate"], ["disconnect", "x"]):
+        for args in (["place"], ["place", "behind"], ["unpair"], ["frobnicate"], ["disconnect", "x"],
+                     ["send"], ["send", "tab", "1"], ["take", "1", "2"]):
             run = self.mynx("screen", *args)
             self.assertEqual(run.returncode, 2, args)
             self.assertIn("usage: mynx screen", run.stderr)
