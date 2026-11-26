@@ -32,6 +32,15 @@ interface ScreenPlatform {
     fun changed() {}
 }
 
+/** What the link hands on for screens sent over it ([ScreenShare]): on the link's own threads. */
+interface ScreenMedia {
+    /** A message that isn't the link's own (video, touches, streams, focus). */
+    fun received(message: ScreenMessage)
+
+    /** The link ended. */
+    fun unlinked()
+}
+
 /** How many wrong codes stop a pairing: each code takes one try, then the host shows a new one. */
 const val MAX_WRONG_CODES = 3
 private const val HANDSHAKE_MS = 10_000
@@ -80,6 +89,9 @@ class ScreenLink(
     private var connection: Connection? = null
     private var lastEnd: String? = null
     private var stopped = false
+
+    /** Gets the screens' messages ([ScreenMedia]); set once, by the app. */
+    @Volatile var media: ScreenMedia? = null
 
     private fun settings() = loadSettings(settingsFile).settings
 
@@ -369,6 +381,12 @@ class ScreenLink(
 
     // --- Either -----------------------------------------------------------
 
+    /** Sends [message] on the link (its writer's queue); false if there's none. Any thread. */
+    fun send(message: ScreenMessage): Boolean = connection?.send(message) ?: false
+
+    /** The other phone while linked: its name, this phone's role, its screen once it said. */
+    fun peer(): LinkedPeer? = connection?.let { LinkedPeer(it.peerName, it.myRole, it.peerScreen) }
+
     /** Ends the link; false if there was none. */
     fun disconnect(): Boolean {
         val c = connection ?: return false
@@ -448,7 +466,8 @@ class ScreenLink(
         private val out = BufferedOutputStream(socket.getOutputStream())
         private val since = now()
 
-        @Volatile private var peerScreen: ScreenMessage.ScreenInfo? = null
+        @Volatile var peerScreen: ScreenMessage.ScreenInfo? = null
+            private set
 
         @Volatile private var layout: ScreenMessage.Layout? = null
 
@@ -471,8 +490,10 @@ class ScreenLink(
             send(l)
         }
 
-        fun send(message: ScreenMessage) {
-            if (!closed) outbox.offer(message)
+        fun send(message: ScreenMessage): Boolean {
+            if (closed) return false
+            outbox.offer(message)
+            return true
         }
 
         private fun write() {
@@ -534,7 +555,9 @@ class ScreenLink(
                     close("$peerName unpaired")
                     refresh()
                 }
-                else -> {}
+                ScreenMessage.KeepAlive, is ScreenMessage.Unknown -> {}
+                // Video, touches, streams: the screens', many a second, and the link's state is the same.
+                else -> return media?.received(m) ?: Unit
             }
             platform.changed()
         }
@@ -547,10 +570,13 @@ class ScreenLink(
             }
             outbox.offer(last ?: CLOSE)
             if (last == null) runCatching { socket.close() }
-            synchronized(lock) {
-                if (connection === this) connection = null
+            val wasCurrent = synchronized(lock) {
+                val current = connection === this
+                if (current) connection = null
                 if (why.isNotEmpty()) lastEnd = why
+                current
             }
+            if (wasCurrent) media?.unlinked()
             platform.changed()
         }
 
@@ -582,9 +608,31 @@ fun localAddresses(): List<String> = runCatching {
         .map { it.hostAddress }
 }.getOrDefault(emptyList())
 
-/** The `screen-*` requests (`mynx screen`), answered by [link]. */
-fun screenRequests(link: ScreenLink): Map<String, Later> = mapOf(
-    "screen-status" to Later(5) { _, reply -> reply.ok(*link.status()) },
+/** The `screen-*` requests (`mynx screen`), answered by [link] and, for the screens sent, [share]. */
+fun screenRequests(link: ScreenLink, share: ScreenShare? = null): Map<String, Later> = mapOf(
+    "screen-status" to Later(5) { _, reply -> reply.ok(*link.status(), *(share?.status() ?: emptyArray())) },
+    "screen-send" to Later(10) { args, reply ->
+        val name = args.getOrNull(1)?.trim().orEmpty()
+        if (args.getOrNull(0) != "app" || name.isEmpty()) return@Later reply.refuse("send what? mynx screen send app NAME")
+        if (share == null) return@Later reply.refuse("this phone can't send screens")
+        share.send(ScreenTarget.App(name)).fold(
+            { sent ->
+                val what = obj("id" to "${sent.id}", "title" to json(sent.title), "name" to json(name))
+                reply.ok("screen" to what, *link.status(), *share.status())
+            },
+            { reply.refuse(it.message ?: "couldn't send $name") },
+        )
+    },
+    "screen-take" to Later(10) { args, reply ->
+        val which = args.getOrNull(0)?.trim()?.takeIf { it.isNotEmpty() } ?: "all"
+        val taken = share?.take(which).orEmpty()
+        if (taken.isEmpty()) {
+            return@Later reply.refuse(
+                if (which == "all") "nothing sent to take back" else "nothing sent called $which (mynx screen status lists them)",
+            )
+        }
+        reply.ok("taken" to array(taken.map { obj("id" to "${it.id}", "title" to json(it.title)) }), *link.status(), *share!!.status())
+    },
     // The host's pairing: the code (and each new one after a wrong try) as stream lines.
     "screen-pair" to Later(null) { _, reply -> link.pair(reply) },
     "screen-join" to Later(30) { args, reply ->
