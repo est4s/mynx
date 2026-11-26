@@ -220,6 +220,33 @@ class ScreenLinkTest {
     }
 
     @Test
+    fun `a host listens again on its port as soon as the last one stopped`() {
+        // The JDK closes a server socket blocked in accept() only once that thread wakes, so a
+        // bind straight after could find the port still taken (on a loaded machine, often).
+        host.pairs.save(ScreenPeer("ab".repeat(16), "Nord 2", ScreenRole.SCREEN, ByteArray(32), null, 0))
+        repeat(200) { i ->
+            val h = newHost()
+            try {
+                h.refresh()
+                assertEquals(port.toString(), status(h)["listening"].toString(), "try $i: ${status(h)["problem"]}")
+            } finally {
+                h.stop()
+            }
+        }
+    }
+
+    @Test
+    fun `a Bye isn't lost when the link closes while a keep-alive goes out`() {
+        pair()
+        waitFor("linked") { connected(screen) != null && connected(host) != null }
+        // Closed just as the writer took a keep-alive from its queue: the Bye still follows.
+        val armed = java.util.concurrent.atomic.AtomicBoolean(true)
+        screen.beforeWrite = { m -> if (m == ScreenMessage.KeepAlive && armed.getAndSet(false)) screen.disconnect() }
+        waitFor("both down") { connected(host) == null && connected(screen) == null }
+        assertEquals("Nord 2 ended the link (disconnected)", status(host)["lastEnd"])
+    }
+
+    @Test
     fun `unpairing on one phone forgets the pair on both`() {
         pair()
         waitFor("linked") { connected(screen) != null }

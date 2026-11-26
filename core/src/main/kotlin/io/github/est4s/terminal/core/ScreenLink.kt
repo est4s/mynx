@@ -84,11 +84,15 @@ class ScreenLink(
 
     private var pairing: Pairing? = null
     private var server: ServerSocket? = null
+    private var serverThread: Thread? = null
     private var serverPort = 0
     private var listenProblem: String? = null
     private var connection: Connection? = null
     private var lastEnd: String? = null
     private var stopped = false
+
+    /** Tests only: called on a link's writer thread just before it writes each message. */
+    @Volatile internal var beforeWrite: ((ScreenMessage) -> Unit)? = null
 
     /** Gets the screens' messages ([ScreenMedia]); set once, by the app. */
     @Volatile var media: ScreenMedia? = null
@@ -116,7 +120,12 @@ class ScreenLink(
 
     private fun closeServer() {
         runCatching { server?.close() }
+        // The JDK only really closes a server socket blocked in accept() once that thread
+        // wakes: until then the port is taken, and listening on it again (a restart, a new
+        // pairing) failed with "Address already in use".
+        serverThread?.takeIf { it !== Thread.currentThread() }?.join(1_000)
         server = null
+        serverThread = null
         serverPort = 0
     }
 
@@ -134,7 +143,7 @@ class ScreenLink(
         listenProblem = null
         server = socket
         serverPort = port
-        thread(name = "mynx-screen-server", isDaemon = true) {
+        serverThread = thread(name = "mynx-screen-server", isDaemon = true) {
             while (!socket.isClosed) {
                 val client = try {
                     socket.accept()
@@ -523,8 +532,11 @@ class ScreenLink(
                     val m = outbox.poll(keepAliveMs, TimeUnit.MILLISECONDS) ?: ScreenMessage.KeepAlive
                     if (m === CLOSE) break
                     if (closed && m !is ScreenMessage.Bye && m !is ScreenMessage.Unpaired) continue
+                    beforeWrite?.invoke(m)
                     channel.write(out, m)
-                    if (closed) {
+                    // The last word, not just any message written once closed: a close() while a
+                    // keep-alive went out left the Bye behind, and the other phone read only an end.
+                    if (m is ScreenMessage.Bye || m is ScreenMessage.Unpaired) {
                         said = true
                         break
                     }
