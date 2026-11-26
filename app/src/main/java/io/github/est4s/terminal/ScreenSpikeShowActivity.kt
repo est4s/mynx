@@ -239,7 +239,7 @@ class ScreenSpikeShowActivity : Activity() {
         }
         if (Build.VERSION.SDK_INT >= 30) {
             window.setDecorFitsSystemWindows(false)
-            window.insetsController?.let {
+            window.decorView.windowInsetsController?.let {
                 it.hide(WindowInsets.Type.systemBars())
                 it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             }
@@ -253,7 +253,7 @@ class ScreenSpikeShowActivity : Activity() {
     @Suppress("DEPRECATION")
     private fun showBars() {
         if (Build.VERSION.SDK_INT >= 30) {
-            window.insetsController?.show(WindowInsets.Type.systemBars())
+            window.decorView.windowInsetsController?.show(WindowInsets.Type.systemBars())
         } else {
             window.decorView.systemUiVisibility = 0
         }
