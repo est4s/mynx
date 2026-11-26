@@ -5,10 +5,7 @@ import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.Typeface
 import android.os.Build
 import android.os.SystemClock
@@ -38,11 +35,13 @@ import io.github.est4s.terminal.core.DESKTOP_DISPLAY
 import io.github.est4s.terminal.core.DesktopGeometry
 import io.github.est4s.terminal.core.DesktopGestures
 import io.github.est4s.terminal.core.DesktopKeyboard
+import io.github.est4s.terminal.core.DesktopPointer
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
 import io.github.est4s.terminal.core.Finger
 import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
+import io.github.est4s.terminal.core.PixelRect
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.desktopBackLabel
@@ -98,12 +97,16 @@ class DesktopView(
         fun stop()
         /** A tab that installs what the desktop needs (`mynx desktop install`), shown. */
         fun install()
+        /** The other phone (the extended screen) when the desktop can go there or is there: its name, and whether it's there. */
+        fun screen(): Pair<String, Boolean>? = null
+        /** Sends the desktop to the other phone, or takes it back; null, or why not. */
+        fun screenToggle(): String? = null
     }
 
     private val scale = desktopScale(resources.displayMetrics.density)
     private val slop = ViewConfiguration.get(context).scaledTouchSlop.toFloat() / scale
     private var touchMode = DesktopTouch.TOUCHPAD
-    private var gestures: DesktopGestures = desktopGestures(touchMode, slop)
+    private var gestures: DesktopGestures = desktopGestures(touchMode, slop, host.link?.pointer ?: DesktopPointer())
     private val keys = DesktopKeyboard()
     private var shownLatches: Set<KeyStroke> = emptySet()
     private var geometry: DesktopGeometry? = null
@@ -132,18 +135,27 @@ class DesktopView(
     }
     private val backButton = barText(desktopBackLabel(fromTouch = false)).apply { setOnClickListener { host.back() } }
     private val keyboardButton = barText("⌨").apply { setOnClickListener { toggleKeyboard() } }
+    // The extended screen: the desktop to the other phone (its part of the X screen) and back.
+    private val screenButton = barText("").apply {
+        visibility = GONE
+        setOnClickListener {
+            host.screenToggle()?.let { why -> statusText.text = why }
+            refresh()
+        }
+    }
     private val logButton = barText("Log").apply { setOnClickListener { toggleLog() } }
     private val topBar = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(backButton)
         addView(statusText, LayoutParams(0, WRAP_CONTENT, 1f))
+        addView(screenButton)
         addView(keyboardButton)
         addView(logButton)
     }
 
     private val surfaceView = SurfaceView(context)
-    private val pointer = PointerView(context)
+    private val pointer = PointerArrow(context)
     private val layer = FrameLayout(context).apply {
         addView(surfaceView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(pointer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
@@ -220,7 +232,7 @@ class DesktopView(
         set(value) {
             field = value ?: return
             topBar.setBackgroundColor(value.background)
-            for (b in listOf(backButton, keyboardButton, logButton)) b.setTextColor(value.accent)
+            for (b in listOf(backButton, screenButton, keyboardButton, logButton)) b.setTextColor(value.accent)
             statusText.setTextColor(value.text)
             for (b in listOf(startButton, installButton, stopButton, copyButton)) {
                 b.setTextColor(value.accent)
@@ -265,8 +277,8 @@ class DesktopView(
             override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
                 val g = DesktopGeometry(width, height, scale)
                 geometry = g
-                gestures.screen(g.width, g.height)
                 host.link?.surface(holder.surface, g.width, g.height, framerate(), fresh)
+                followMonitor(g)
                 fresh = false
                 pointerMoved()
             }
@@ -282,15 +294,19 @@ class DesktopView(
     /** The view came on screen: picks up setting and bar changes, and starts the desktop if nothing runs. */
     fun shown() {
         val touch = host.touch()
-        if (touch != touchMode) {
+        // The link's pointer is shared with the other phone's gestures; a view made before the service has its own.
+        val shared = host.link?.pointer
+        if (touch != touchMode || (shared != null && shared !== gestures.pointer)) {
             send(gestures.cancel())
             val x = gestures.pointerX
             val y = gestures.pointerY
+            val old = gestures.pointer
             touchMode = touch
-            gestures = desktopGestures(touch, slop)
-            geometry?.let { gestures.screen(it.width, it.height) }
-            gestures.moveTo(x, y)
+            gestures = desktopGestures(touch, slop, shared ?: old)
+            geometry?.let(::followMonitor)
+            if (shared == null || shared === old) gestures.pointer.place(x, y, listOf(gestures.monitor))
         }
+        host.link?.watch { post { followMonitor(geometry); pointerMoved() } }
         keyBar.refresh(null, force = true, fallback = DESKTOP_KEY_BAR)
         backButton.text = host.backLabel()
         requestFocus()
@@ -304,6 +320,7 @@ class DesktopView(
 
     /** The view is going: let go of every key and button the X server still has down. */
     fun hidden() {
+        host.link?.watch(null)
         removeCallbacks(poll)
         removeCallbacks(longPress)
         clipboard.removePrimaryClipChangedListener(clipChanged)
@@ -354,6 +371,10 @@ class DesktopView(
             else -> "$DESKTOP_DISPLAY · $session · ${touchMode.word}"
         }
         pointer.visibility = if (connected) VISIBLE else GONE
+        val other = host.screen()
+        screenButton.visibility = if (other == null) GONE else VISIBLE
+        if (other != null) screenButton.text = if (other.second) "Take back" else "→ ${other.first}"
+        followMonitor(geometry)
         if (shown == null) {
             notice.visibility = GONE
         } else {
@@ -471,16 +492,31 @@ class DesktopView(
         return true
     }
 
+    // This phone's part of the X screen (all of it, unless the other phone has a part): the gestures' monitor.
+    private fun followMonitor(g: DesktopGeometry?) {
+        g ?: return
+        val rect = host.link?.hostMonitor ?: PixelRect(0, 0, g.width, g.height)
+        if (rect != gestures.monitor) gestures.monitor(rect)
+    }
+
+    // The pointer is drawn where it is on this phone's part, or not at all while it's on the other phone's.
     private fun pointerMoved() {
         val g = geometry ?: return
-        pointer.at(g.fromX(gestures.pointerX), g.fromY(gestures.pointerY))
+        val m = gestures.monitor
+        val x = gestures.pointerX - m.x
+        val y = gestures.pointerY - m.y
+        if (x < 0 || y < 0 || x >= m.width || y >= m.height) {
+            pointer.away()
+            return
+        }
+        pointer.at(g.fromX(x), g.fromY(y))
         // A finger on the screen is where the pointer is: moving the screen under it would chase it.
         if (touchMode == DesktopTouch.TOUCHPAD) updatePan()
     }
 
     private fun updatePan() {
         val g = geometry
-        val pointerY = if (g == null) 0f else g.fromY(gestures.pointerY)
+        val pointerY = if (g == null) 0f else g.fromY(gestures.pointerY - gestures.monitor.y)
         pan = keyboardPan(layer.height, frame.height, pointerY, pan, dp(PAN_MARGIN_DP))
         layer.translationY = -pan.toFloat()
     }
@@ -567,50 +603,9 @@ class DesktopView(
             if (geometry == null && layer.width > 0 && layer.height > 0) {
                 val g = DesktopGeometry(layer.width, layer.height, scale)
                 gestures.screen(g.width, g.height)
-                pointer.at(g.fromX(gestures.pointerX), g.fromY(gestures.pointerY))
+                pointer.at(g.fromX(gestures.pointerX - gestures.monitor.x), g.fromY(gestures.pointerY - gestures.monitor.y))
             }
             updatePan()
-        }
-    }
-
-    /** Our own pointer: the X server's cursor needs its shared state, which this side doesn't map. */
-    private class PointerView(context: Context) : View(context) {
-        private var px = -1f
-        private var py = -1f
-        private val density = context.resources.displayMetrics.density
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-        // Drawn in dp (the canvas is scaled), so the outline is 1.2 dp.
-        private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.BLACK
-            style = Paint.Style.STROKE
-            strokeWidth = 1.2f
-            strokeJoin = Paint.Join.ROUND
-        }
-        // The usual arrow, its tip at 0, 0, in dp.
-        private val arrow = Path().apply {
-            moveTo(0f, 0f); lineTo(0f, 17f); lineTo(4.5f, 13f); lineTo(7.5f, 20f)
-            lineTo(10.5f, 18.8f); lineTo(7.5f, 12f); lineTo(13f, 12f); close()
-        }
-
-        init {
-            isClickable = false
-            isFocusable = false
-        }
-
-        fun at(x: Float, y: Float) {
-            px = x
-            py = y
-            invalidate()
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            if (px < 0) return
-            canvas.save()
-            canvas.translate(px, py)
-            canvas.scale(density, density)
-            canvas.drawPath(arrow, fill)
-            canvas.drawPath(arrow, edge)
-            canvas.restore()
         }
     }
 
