@@ -62,7 +62,9 @@ a PR into `desktop-dev`.
    `desktop-touch-clipboard-full` if wanted again.
 4. **The desktop opens from either view: passed on the phone** (PR
    #115, entry 221).
-5. **Then, what's left:** start the X server and session again if
+5. **The Log panel keeps a selection and has Copy: passed on the
+   phone** (PR #120, entry 226).
+6. **Then, what's left:** start the X server and session again if
    either dies (now the notice offers Start); an external display
    (Android's desktop windowing) later; a last pass over
    `tools/docs/desktop.md`; then merge `desktop-dev` into `main`.
@@ -111,6 +113,14 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-26 (226): Desktop mode: the Log panel can be copied
+
+- Found testing spike #118: Log set its text every second, undoing
+  any selection and scrolling to the top. Now only new text is set,
+  the panel keeps its place unless it was at the bottom, and Copy
+  copies it all (`DesktopView.showLogs`, `DesktopLogTest`). Passed on
+  the Pixel 10 (2026-11-26). Numbered 226: screen-dev has 222-225.
 
 ### 2026-11-26 (223): Extended screen: pairing and the link (step 2)
 
