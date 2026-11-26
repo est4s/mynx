@@ -1478,7 +1478,7 @@ def run_steps(steps):
 
 
 SCREEN_USAGE = ("usage: mynx screen [status] | pair [CODE [ADDRESS]] | connect [NAME] | disconnect"
-                " | unpair NAME|all | place left|right|above|below | send [app] NAME | take [ID|NAME|all]")
+                " | unpair NAME|all | place left|right|above|below | send [app] NAME|desktop | take [ID|NAME|all]")
 SCREEN_SIDES = ("left", "right", "above", "below")
 
 
@@ -1508,7 +1508,9 @@ def cmd_screen(args, as_json):
         out(as_json, answer, f"Asked the host to put this phone {side} it." if answer["asked"]
             else f"The screen sits {side} this phone.")
     elif sub == "send" and (len(rest) == 1 or (len(rest) == 2 and rest[0] == "app")):
-        answer = request("screen-send", "app", rest[-1])
+        # `send desktop` is the desktop; `send app desktop` an app of that name.
+        what = ["desktop"] if rest == ["desktop"] else ["app", rest[-1]]
+        answer = request("screen-send", *what)
         sent = answer["screen"]
         peer = (answer.get("connected") or {}).get("name", "the screen")
         out(as_json, answer, f"Sent {sent['title']} to {peer} (mynx screen take {sent['id']} takes it back).")
