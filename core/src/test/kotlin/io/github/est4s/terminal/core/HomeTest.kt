@@ -173,29 +173,46 @@ class HomeTest {
         assertEquals(HomeItem("Send to Nord 2", HomeAction.Menu(SCREEN_SEND_MENU)), main.first())
         assertEquals(HomeItem("Shell", HomeAction.Shell), main[1])
         val send = screenMenus(screen).items(SCREEN_SEND_MENU)
-        assertEquals(listOf("On Nord 2", "Take back Zulu", "Send an app", "alpha", "Zulu"), send.map { it.label })
+        assertEquals(
+            listOf("On Nord 2", "Take back Zulu", "Send a terminal", "New terminal", "Send an app", "alpha", "Zulu"),
+            send.map { it.label },
+        )
         assertEquals(HomeRow.SECTION, send[0].kind)
         assertEquals(HomeAction.Config("screen-take", listOf("3"), back = true), send[1].action)
-        assertEquals(HomeAction.Config("screen-send", listOf("app", "zed"), back = true), send[3].action)
-        assertTrue(send[3].logo is HomeLogo.Tile)
+        assertEquals(HomeAction.Config("screen-send", listOf("app", "zed"), back = true), send[5].action)
+        assertTrue(send[5].logo is HomeLogo.Tile)
     }
 
     @Test
     fun `a running desktop can be sent first`() {
         webApp("zed", "alpha")
         val send = screenMenus(ScreenHome("Nord 2", ScreenRole.HOST, emptyList(), emptyList(), desktop = true)).items(SCREEN_SEND_MENU)
-        assertEquals(listOf("Linux desktop", "alpha"), send.map { it.label })
-        assertEquals(HomeAction.Config("screen-send", listOf("desktop"), back = true), send[0].action)
-        assertEquals(HomeLogo.Desktop, send[0].logo)
+        assertEquals(listOf("Send the desktop", "Linux desktop", "Send a terminal", "New terminal", "Send an app", "alpha"), send.map { it.label })
+        assertEquals(HomeAction.Config("screen-send", listOf("desktop"), back = true), send[1].action)
+        assertEquals(HomeLogo.Desktop, send[1].logo)
         val sent = ScreenHome("Nord 2", ScreenRole.HOST, listOf(ScreenRef(2, "Notes")), emptyList(), desktop = true)
-        assertEquals(listOf("On Nord 2", "Take back Notes", "Send", "Linux desktop", "alpha"), screenMenus(sent).items(SCREEN_SEND_MENU).map { it.label })
+        assertEquals(
+            listOf("On Nord 2", "Take back Notes", "Send the desktop", "Linux desktop", "Send a terminal", "New terminal", "Send an app", "alpha"),
+            screenMenus(sent).items(SCREEN_SEND_MENU).map { it.label },
+        )
     }
 
     @Test
-    fun `nothing sent, the send list is just the apps`() {
+    fun `nothing sent, the send list is the terminals and the apps`() {
         webApp("zed", "alpha")
         val send = screenMenus(ScreenHome("Nord 2", ScreenRole.HOST, emptyList(), emptyList())).items(SCREEN_SEND_MENU)
-        assertEquals(listOf("alpha"), send.map { it.label })
+        assertEquals(listOf("Send a terminal", "New terminal", "Send an app", "alpha"), send.map { it.label })
+    }
+
+    @Test
+    fun `the host's terminal tabs can be sent, or a new one started there`() {
+        val screen = ScreenHome("Nord 2", ScreenRole.HOST, emptyList(), emptyList(), tabs = listOf("bash", "htop"))
+        val send = screenMenus(screen).items(SCREEN_SEND_MENU)
+        assertEquals(listOf("Send a terminal", "New terminal", "bash", "htop", "Send an app", "(no apps yet)"), send.map { it.label })
+        assertEquals(HomeAction.Config("screen-send", listOf("tab", "new"), back = true), send[1].action)
+        assertEquals(HomeAction.Config("screen-send", listOf("tab", "2"), back = true), send[3].action)
+        assertEquals(HomeLogo.Terminal, send[2].logo)
+        assertEquals("tab 2", send[3].detail)
     }
 
     @Test

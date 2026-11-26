@@ -612,16 +612,33 @@ fun localAddresses(): List<String> = runCatching {
 fun screenRequests(link: ScreenLink, share: ScreenShare? = null): Map<String, Later> = mapOf(
     "screen-status" to Later(5) { _, reply -> reply.ok(*link.status(), *(share?.status() ?: emptyArray())) },
     "screen-send" to Later(10) { args, reply ->
-        val target = when {
-            args.getOrNull(0) == "desktop" -> ScreenTarget.Desktop
-            args.getOrNull(0) == "app" && !args.getOrNull(1)?.trim().isNullOrEmpty() -> ScreenTarget.App(args[1].trim())
-            else -> return@Later reply.refuse("send what? mynx screen send app NAME, or desktop")
+        val kind = args.getOrNull(0)
+        val name = args.getOrNull(1)?.trim().orEmpty()
+        if (kind !in setOf("app", "tab", "desktop") || (kind == "app" && name.isEmpty())) {
+            return@Later reply.refuse("send what? mynx screen send app NAME, tab [N|new] or desktop")
         }
-        val name = target.name
         if (share == null) return@Later reply.refuse("this phone can't send screens")
-        share.send(target).fold(
+        if (kind == "desktop") {
+            return@Later share.send(ScreenTarget.Desktop).fold(
+                { sent ->
+                    val what = obj("id" to "${sent.id}", "kind" to json("desktop"), "title" to json(sent.title), "name" to json("desktop"))
+                    reply.ok("screen" to what, *link.status(), *share.status())
+                },
+                { reply.refuse(it.message ?: "couldn't send the desktop") },
+            )
+        }
+        if (kind == "tab") {
+            return@Later share.sendTerm(ScreenTarget.Terminal(name.ifEmpty { "new" })).fold(
+                { sent ->
+                    val what = obj("id" to "${sent.id}", "kind" to json("terminal"), "title" to json(sent.title), "name" to json(sent.target.name))
+                    reply.ok("screen" to what, *link.status(), *share.status())
+                },
+                { reply.refuse(it.message ?: "couldn't send the tab") },
+            )
+        }
+        share.send(ScreenTarget.App(name)).fold(
             { sent ->
-                val what = obj("id" to "${sent.id}", "title" to json(sent.title), "name" to json(name))
+                val what = obj("id" to "${sent.id}", "kind" to json("app"), "title" to json(sent.title), "name" to json(name))
                 reply.ok("screen" to what, *link.status(), *share.status())
             },
             { reply.refuse(it.message ?: "couldn't send $name") },

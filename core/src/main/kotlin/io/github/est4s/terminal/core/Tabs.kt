@@ -24,10 +24,16 @@ class Tab<S> internal constructor(session: S, val number: Int) {
         internal set
     /** The service's title while it isn't running (see [Tabs.setServiceTitles]); null: running. */
     internal var serviceTitle: String? = null
+    /**
+     * The phone this tab is shown from (the extended screen: its session
+     * runs there, which sent it), or null for this phone's own.
+     */
+    var from: String? = null
+        internal set
 
     val title: String
         get() = service?.let { serviceTitle ?: serviceTabTitle(it) }
-            ?: rename ?: shellTitle.ifBlank { "Tab $number" }
+            ?: rename ?: from?.let { "$it: ${shellTitle.ifBlank { "terminal" }}" } ?: shellTitle.ifBlank { "Tab $number" }
 }
 
 /** A running service's tab title: a mark and its name. */
@@ -77,6 +83,22 @@ class Tabs<S>(private val onChange: () -> Unit = {}) {
     }
 
     fun serviceTab(name: String): Tab<S>? = list.find { it.service == name }
+
+    /**
+     * Shows a terminal tab the phone [from] sent, called [title] there,
+     * after the selected tab, and selects it. It takes no number, and
+     * isn't saved ([snapshot]): it lives on that phone.
+     */
+    fun openFrom(session: S, from: String, title: String): Tab<S> {
+        val tab = Tab(session, 0).also {
+            it.from = from
+            it.shellTitle = title
+        }
+        selectedIndex += 1
+        list.add(selectedIndex, tab)
+        onChange()
+        return tab
+    }
 
     /**
      * Service [name] runs a new [session]: its tab, if open, shows it.
@@ -189,7 +211,7 @@ class Tabs<S>(private val onChange: () -> Unit = {}) {
     }
 
     private fun freeNumber(): Int {
-        val used = list.filter { it.service == null }.map { it.number }.toSet()
+        val used = list.filter { it.service == null && it.from == null }.map { it.number }.toSet()
         return generateSequence(1) { it + 1 }.first { it !in used }
     }
 

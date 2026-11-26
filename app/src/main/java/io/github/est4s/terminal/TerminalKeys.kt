@@ -2,6 +2,7 @@ package io.github.est4s.terminal
 
 import android.view.KeyEvent
 import com.termux.terminal.KeyHandler
+import com.termux.terminal.TerminalSession
 import com.termux.view.TerminalView
 import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyStroke
@@ -30,8 +31,13 @@ private val KEY_CODES: Map<String, Int> = mapOf(
  * the next key, from the bar or the keyboard (the library asks through
  * [takeCtrlLatch] and [takeAltLatch]). A terminal has no Super: its
  * sticky button does nothing, and Super+ chords send the key alone.
+ * While [routed] gives a session (a terminal sent to the other phone,
+ * touched there last: the extended screen), the keys go to it instead.
  */
-class TerminalKeys(private val terminalView: TerminalView) : KeyBarTarget {
+class TerminalKeys(
+    private val terminalView: TerminalView,
+    private val routed: () -> TerminalSession? = { null },
+) : KeyBarTarget {
     private var ctrlLatched = false
     private var altLatched = false
     override var onLatchChange: (() -> Unit)? = null
@@ -65,7 +71,7 @@ class TerminalKeys(private val terminalView: TerminalView) : KeyBarTarget {
 
     override fun press(button: KeyButton) {
         // Not started yet (or finished): there's nothing to type into.
-        val session = terminalView.currentSession?.takeIf { it.emulator != null } ?: return
+        val session = (routed() ?: terminalView.currentSession)?.takeIf { it.emulator != null } ?: return
         for (stroke in button.strokes) {
             when (stroke) {
                 KeyStroke.CtrlLatch -> {
@@ -85,6 +91,7 @@ class TerminalKeys(private val terminalView: TerminalView) : KeyBarTarget {
 
     private fun sendKey(key: KeyStroke.Key) {
         val code = KEY_CODES[key.key]
+        routed()?.let { return sendKeyTo(it, key, code) }
         if (code == null) {
             // A single character; inputCodePoint applies the sticky Ctrl and Alt itself.
             terminalView.inputCodePoint(key.key.codePointAt(0), key.ctrl, key.alt)
@@ -100,5 +107,14 @@ class TerminalKeys(private val terminalView: TerminalView) : KeyBarTarget {
         if (!terminalView.handleKeyCode(code, mod) && key.key == "Space") {
             terminalView.inputCodePoint(' '.code, ctrl, alt)
         }
+    }
+
+    // The same, for a session that isn't the one the view shows.
+    private fun sendKeyTo(session: TerminalSession, key: KeyStroke.Key, code: Int?) {
+        val ctrl = key.ctrl || takeCtrlLatch()
+        val alt = key.alt || takeAltLatch()
+        val keys = TermKeys({ false }, { false })
+        if (code == null) return keys.codePoint(session, key.key.codePointAt(0), ctrl, alt)
+        if (!keys.code(session, code, ctrl, alt, key.shift) && key.key == "Space") keys.codePoint(session, ' '.code, ctrl, alt)
     }
 }

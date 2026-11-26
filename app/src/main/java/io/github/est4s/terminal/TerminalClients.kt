@@ -22,6 +22,12 @@ class SessionClient(private val service: TerminalService) : TerminalSessionClien
     }
 
     override fun onTitleChanged(changedSession: TerminalSession) {
+        // The extended screen: a tab from the host has the host's title; a tab sent there tells it.
+        if (service.remoteTerms.isRemote(changedSession)) return
+        service.termCaster.idOf(changedSession)?.let { id ->
+            service.termCaster.titleOf(id)?.let { service.screenShare.termTitle(id, it) }
+            return
+        }
         service.tabs.setShellTitle(changedSession, changedSession.title ?: "")
     }
 
@@ -85,6 +91,8 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
             if (e.repeatCount == 0) activity.onTabAction(it)
             return true
         }
+        // The extended screen: the other phone's terminal was touched last, so typing goes there.
+        if (activity.typeToScreen(keyCode, e)) return true
         if (keyCode == KeyEvent.KEYCODE_ENTER && !session.isRunning) {
             activity.restartShell(session)
             return true
@@ -96,12 +104,19 @@ class ViewClient(private val activity: MainActivity) : TerminalViewClient {
     override fun onLongPress(event: MotionEvent) = false
     // The key bar's sticky Ctrl and Alt, used up by the next key typed.
     override fun readControlKey() = activity.takeCtrlLatch()
-    override fun readAltKey() = activity.takeAltLatch()
+    override fun readAltKey() = activity.takeAltLatch().also { altTaken = it }
+
+    // The library takes the sticky Alt before it asks onCodePoint, which doesn't pass it on.
+    private var altTaken = false
     override fun readShiftKey() = false
     override fun readFnKey() = false
-    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession) = false
+    override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession): Boolean {
+        val alt = altTaken
+        altTaken = false
+        return activity.typeToScreen(codePoint, ctrlDown, alt)
+    }
     // A new emulator (first attach, or after a resize) needs the blinker started again.
-    override fun onEmulatorSet() = activity.setCursorBlinking(true)
+    override fun onEmulatorSet() = activity.onEmulatorSet()
 
     override fun logError(tag: String?, message: String?) { Log.e(tag ?: TAG, message ?: "") }
     override fun logWarn(tag: String?, message: String?) { Log.w(tag ?: TAG, message ?: "") }

@@ -47,14 +47,22 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    send`/`take` on both, the link dropping, 30 fps / 4 Mbit/s. The
    bridge doesn't answer on a sent app, as expected. The agent's
    decisions stand (entry 225).
-4. **3c, the desktop on B: built, to test on both phones** (entry 228,
-   PR #124): a monitor of its own and the second half (`screen-desktop
-   = extend | span`). The two-phone test is in entry 228. When #123
-   (terminal tabs, protocol 3) and #124 meet, one takes protocol 4.
-5. **Then:** chats (and Files, viewers) sent to B (the chat hub
-   shows one chat at a time: it needs a second one shown), the bridge
-   (`mynx.js`) on a sent app, typing with B's own keyboard. B linking
-   again by itself (after a drop, at the app's start) too.
+4. **3b, terminal tabs on B as text: passed on both phones** (entry
+   227, PR #123; Pixel 10 as A, Nord 2 as B, 2026-11-26): sending a
+   tab and a new one, typing from A, htop / vim / less on B,
+   resizing, scrollback and copy on B, a flood, every way of taking
+   back, the link dropping, a shell's exit. The agent's decisions
+   stand (entry 227).
+5. **3c, the desktop on B: built, to test on both phones** (entry 228,
+   PR #124, protocol version 4): a monitor of its own and the second
+   half (`screen-desktop = extend | span`). The two-phone test is in
+   entry 228.
+6. **Then (left for later):** B linking again by itself (after a drop,
+   at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
+   chat hub shows one chat at a time: it needs a second one shown),
+   Files and viewers sent to B; typing with B's own keyboard (into
+   apps; into terminals it works already through B's key bar and a
+   hardware keyboard).
 
 ### 0. Desktop mode (on `desktop-dev`)
 
@@ -141,8 +149,8 @@ a PR into `desktop-dev`.
   0.75 dp X pixel: a Nord 2 (1080 x 2400 at 480 dpi) is 536 x 1200.
 - **Built:** `screen-desktop` (`extend` default, `span`), `mynx screen
   send desktop`, Home's Send list (Linux desktop first while the X
-  server runs), the desktop bar's **→ NAME** / **Take back**; protocol
-  version 3 (a Pointer message); our patch's `mynx-b` placed by
+  server runs, its own section), the desktop bar's **→ NAME** / **Take
+  back**; protocol version 4 (a Pointer message; merged after #123's 3); our patch's `mynx-b` placed by
   `screen-place`, moved live, B drawn whenever it watches (A's view
   shown or not), re-laid out after a server restart; the shared pointer
   (touchpad crosses at the shared edge); B's touches with `desktop-touch`
@@ -161,8 +169,6 @@ a PR into `desktop-dev`.
     restart keeps it.
   - When a program moves `mynx-b` (XFCE's display settings), the
     server's word wins until the layout next changes.
-  - The protocol is version 3 here as in #123; whichever merges second
-    takes 4 (the Pointer type is 49, past #123's 41-48).
 - **Two-phone test** (Pixel 10 as A, Nord 2 as B, both on this build as
   mynx dev, paired; `mynx screen connect` on B; on A the desktop running
   with XFCE, `mynx desktop open`):
@@ -200,6 +206,57 @@ a PR into `desktop-dev`.
   10. Send again, then `mynx screen disconnect` on B: same as 9 on A.
       Send again, then `mynx desktop stop` on A: within 5 s B's stream
       ends.
+### 2026-11-26 (227): Extended screen, step 3b: terminal tabs on B as text
+
+- Branch `screen-terms` from `screen-dev`, PR into `screen-dev`. Core,
+  `mynx` and the guide tested here; the app's side only compiled in
+  CI (its Robolectric tests, `MynxTerminalsTest`, run Termux's real
+  emulator there). Not tried on two phones by the agent: "Next" 0a
+  step 4 has the test.
+- **What's there** (`docs/ARCHITECTURE.md`, "Extended screen:
+  terminals on B"): protocol version 3 (TermStart, TermState,
+  TermOutput, TermTitle, TermEnd from A; TermSize, TermInput,
+  TermAck, TermTouched from B; TakeBack takes either kind);
+  `termSnapshot` (a terminal's state as the bytes that draw it),
+  `TermPacer` (flow control), `ShownTerm` (B's epochs and sizes),
+  `Tabs.openFrom` (tabs from another phone, not numbered, not saved);
+  `mynx screen send tab [N|new]`, status lists terminals; Home's Send
+  list has New terminal and the tabs; the tab menu's Send to / Give
+  back. App: `MynxTerminals` (Java in Termux's package: the tap, B's
+  process-less session), `TermCaster`, `RemoteTerms`, `TermKeys`.
+- **Agent's decisions, to confirm:**
+  - **Bytes, not screen diffs:** B runs its own Termux emulator fed
+    A's PTY output at A's size (which is B's: A's PTY takes the size
+    B's view fits), after a full state (scrollback up to 1 MiB) on
+    sending and after each resize. Native rendering, selection and
+    scrollback on B, modes for free. A's emulator answers programs;
+    B's answers are dropped (its mouse reports and pastes go).
+  - **The tap** replaces the library's per-session main thread
+    handler with a copy that tees (reflection on a final field, at
+    each session's creation, so every tab can be sent). If Termux's
+    library is upgraded, `MynxTerminals` must be checked against it.
+  - A sent tab **leaves A's strip** (like apps leave A's screen);
+    sending the last tab opens a fresh one on A. Services' tabs stay.
+    Take back, B's ×, Give back or the link dropping bring it back
+    with its name; its shell exiting with 0 closes it, with an error
+    brings it back to A to read.
+  - **Typing:** a finger down on B over the tab sends TermTouched; A's
+    terminal view keys, soft keyboard, hardware keyboard and key bar
+    then type into that session (the key bar's touches don't take
+    typing back; any other touch on A does). A's strip shows "⌨ Nord
+    2: title" (tap: typing back), and A's keyboard opens; if A shows
+    Home or a chat instead, the typing bar from 3a does it. B draws a
+    cyan line around the tab. B's key bar (and a hardware keyboard on
+    B) type into it too; a tap there doesn't open B's soft keyboard
+    (keyboard on A, as decided).
+  - Flood control: 256 KiB unacked, then A drops output and sends a
+    fresh state once B caught up.
+  - Not carried by a state: tab stops, line-drawing charsets, the
+    saved cursor, colours programs changed (B keeps its theme).
+- **CI flake seen before this work**, not fixed: ScreenLinkTest "after
+  a disconnect the screen comes back without a code" (run
+  45821641692, `lastEnd` not "Nord 2 ended the link"); likely the
+  host's read losing the Bye to a reset under load.
 
 ### 2026-11-26 (226): Desktop mode: the Log panel can be copied
 

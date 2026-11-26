@@ -24,6 +24,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.system.Os
 import android.system.OsConstants
+import com.termux.terminal.MynxTerminals
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
 import io.github.est4s.terminal.core.Mic
@@ -69,6 +70,7 @@ import io.github.est4s.terminal.core.Launch
 import io.github.est4s.terminal.core.Desktop
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.desktopRequests
+import io.github.est4s.terminal.core.ScreenCasting
 import io.github.est4s.terminal.core.ScreenHome
 import io.github.est4s.terminal.core.ScreenLink
 import io.github.est4s.terminal.core.ScreenMessage
@@ -78,6 +80,7 @@ import io.github.est4s.terminal.core.ScreenShare
 import io.github.est4s.terminal.core.ScreenShowing
 import io.github.est4s.terminal.core.ScreenTarget
 import io.github.est4s.terminal.core.SentScreen
+import io.github.est4s.terminal.core.SentTerm
 import io.github.est4s.terminal.core.ShownStream
 import io.github.est4s.terminal.core.screenRequests
 import io.github.est4s.terminal.core.agentProotCommand
@@ -466,7 +469,7 @@ class TerminalService : Service() {
         ScreenShare(
             send = { m -> screenLink.send(m) },
             peer = { screenLink.peer() },
-            casting = screenCaster,
+            casting = casting,
             showing = screenShowing,
             settingsFile = File(rootfs, "root/$CONFIG_DIR/settings.conf"),
             post = { block -> mainHandler.post(block) },
@@ -551,6 +554,111 @@ class TerminalService : Service() {
         if (desktopCaster.sent != null) desktopCaster.relayout()
     }
 
+    // Apps go as video (screenCaster), terminal tabs as text (termCaster).
+    private val casting: ScreenCasting by lazy {
+        object : ScreenCasting by screenCaster {
+            override fun openTerm(id: Int, target: ScreenTarget.Terminal) = termCaster.openTerm(id, target)
+            override fun termScreen(id: Int) = termCaster.termScreen(id)
+            override fun resizeTerm(id: Int, columns: Int, rows: Int, cellWidth: Int, cellHeight: Int) =
+                termCaster.resizeTerm(id, columns, rows, cellWidth, cellHeight)
+            override fun writeTerm(id: Int, data: ByteArray) = termCaster.writeTerm(id, data)
+            override fun closeTerm(id: Int, back: Boolean) {
+                termCaster.closeTerm(id, back)
+                activity?.onScreenLinkChanged()
+            }
+            override fun typingToTerm(term: SentTerm?) = termCaster.typingToTerm(term)
+        }
+    }
+
+    /** On the host: the terminal tabs sent to the other phone. */
+    val termCaster: TermCaster by lazy {
+        TermCaster(object : TermCaster.Host {
+            override val tabs: Tabs<TerminalSession> get() = this@TerminalService.tabs
+            override fun sessionOfShell(id: Int) = this@TerminalService.sessionOfShell(id)
+            override fun newShell(): TerminalSession = startShell()
+            override fun newTab() {
+                newSession()
+            }
+            override fun output(id: Int, data: ByteArray) = screenShare.termOutput(id, data)
+            override fun ended(session: TerminalSession) {
+                stop(session)
+                forgetFiles(session)
+            }
+            override fun typing(session: TerminalSession?, title: String) = termTyping(session, title)
+        })
+    }
+
+    /** On the host: typing on this phone goes to this sent terminal's session (the other phone touched it last), or null. */
+    val screenTypingTerm: TerminalSession? get() = termCaster.typedTo
+
+    // The terminal view types into a sent terminal while it's on screen; else a typing bar does, as for apps.
+    private fun termTyping(session: TerminalSession?, title: String) {
+        val shown = activity
+        if (session == null || shown?.terminalOnScreen == true) {
+            if (ScreenKeysActivity.target is TermKeysTarget) {
+                ScreenKeysActivity.target = null
+                ScreenKeysActivity.close()
+            }
+            shown?.onScreenTyping(session?.let { "${screenLink.peer()?.name ?: "the screen"}: $title" })
+            return
+        }
+        val keys = TermKeys(takeCtrl = { false }, takeAlt = { false })
+        ScreenKeysActivity.target = TermKeysTarget("Typing on ${screenLink.peer()?.name ?: "the screen"}: $title", session, keys) {
+            screenShare.hostTouched()
+        }
+        if (ScreenKeysActivity.open) return
+        val front = front()?.activity ?: return
+        runCatching { front.startActivity(ScreenKeysActivity.intent(front)) }
+    }
+
+    // The typing bar's text, for a sent terminal.
+    private class TermKeysTarget(
+        override val label: String,
+        private val session: TerminalSession,
+        private val keys: TermKeys,
+        private val closed: () -> Unit,
+    ) : ScreenKeysActivity.Target {
+        override fun type(text: String) {
+            text.codePoints().forEach { keys.codePoint(session, if (it == '\n'.code) '\r'.code else it, ctrl = false, alt = false) }
+        }
+        override fun press(code: Int) {
+            keys.code(session, code, ctrl = false, alt = false, shift = false)
+        }
+        override fun key(event: android.view.KeyEvent) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) keys.key(session, event.keyCode, event)
+        }
+        override fun closedHere() = closed()
+    }
+
+    /** The linked screen's name while this phone is its host (it can send there), else null. */
+    val screenPeerName: String? get() = screenLink.peer()?.takeIf { it.role == ScreenRole.HOST }?.name
+
+    /** Sends [session]'s tab to the linked screen; why not, or null. */
+    fun sendTabToScreen(session: TerminalSession): String? {
+        val index = tabs.tabs.indexOfFirst { it.session === session }
+        if (index < 0) return "that tab is gone"
+        return screenShare.sendTerm(ScreenTarget.Terminal("${index + 1}")).exceptionOrNull()?.message
+    }
+
+    /** On the screen: selects the tab of terminal [id] from the host; false if there's none. */
+    fun showRemoteTerm(id: Int): Boolean {
+        val index = tabs.tabs.indexOfFirst { remoteTerms.idOf(it.session) == id }
+        if (index < 0) return false
+        tabs.select(index)
+        return true
+    }
+
+    /** On the screen: the terminals the host sent, as tabs here. */
+    val remoteTerms: RemoteTerms by lazy {
+        RemoteTerms(
+            tabs = { tabs },
+            client = client,
+            share = { screenShare },
+            peerName = { screenLink.peer()?.name ?: "host" },
+            newTab = { newSession() },
+        )
+    }
+
     // A sent screen's field has the focus and the other phone was touched last: this phone's keyboard types into it.
     private fun screenTyping(screen: SentScreen?, editing: Boolean) {
         if (screen == null || !editing) {
@@ -592,22 +700,43 @@ class TerminalService : Service() {
         override fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) {
             activity?.onScreenPointer(stream, x, y, shown)
         }
+
+        override fun termStarted(id: Int, title: String, columns: Int, rows: Int) {
+            remoteTerms.started(id, title, columns, rows)
+            activity?.onRemoteTermStarted()
+        }
+
+        override fun termState(id: Int, columns: Int, rows: Int, data: ByteArray) = remoteTerms.state(id, columns, rows, data)
+
+        override fun termOutput(id: Int, data: ByteArray) = remoteTerms.output(id, data)
+
+        override fun termTitle(id: Int, title: String) = remoteTerms.title(id, title)
+
+        override fun termEnded(id: Int) {
+            remoteTerms.ended(id)
+            activity?.onScreenLinkChanged()
+        }
     }
 
     /** This phone was touched: typing is its own again (the extended screen). Main thread. */
     fun screenHostTouched() {
-        if (screenShare.typingTo != null) screenShare.hostTouched()
+        if (screenShare.typingTo != null || screenShare.typingToTerm != null) screenShare.hostTouched()
     }
 
     /** The link, for Home: the other phone, and what's sent or shown; null while unlinked. */
     fun screenHome(): ScreenHome? {
         val peer = screenLink.peer() ?: return null
+        val host = peer.role == ScreenRole.HOST
         return ScreenHome(
             peer.name,
             peer.role,
-            screenShare.sent.map { ScreenRef(it.id, it.title) },
-            if (peer.role == ScreenRole.SCREEN) screenShare.shown.map { ScreenRef(it.id, it.title) } else emptyList(),
-            desktop = peer.role == ScreenRole.HOST && desktopLink.connected && desktopCaster.sent == null,
+            screenShare.sent.map { ScreenRef(it.id, it.title) } + screenShare.terms.map { ScreenRef(it.id, it.title) },
+            if (host) emptyList() else {
+                screenShare.shown.map { ScreenRef(it.id, it.title) } + screenShare.shownTerms.map { ScreenRef(it.id, it.title) }
+            },
+            // This phone's own tabs, in strip order (Home's numbers are the strip's).
+            tabs = if (host) tabs.tabs.map { it.title } else emptyList(),
+            desktop = host && desktopLink.connected && desktopCaster.sent == null,
         )
     }
 
@@ -1274,6 +1403,8 @@ class TerminalService : Service() {
 
     /** Closes a tab, ending its shell; a service's tab is only hidden, the service runs on. */
     fun closeTab(session: TerminalSession) {
+        // A tab from the other phone runs there: closing it here gives it back.
+        if (remoteTerms.giveBack(session)) return
         val service = tabs.find(session)?.service
         tabs.close(session)
         if (service == null) {
@@ -1301,6 +1432,11 @@ class TerminalService : Service() {
     }
 
     fun onSessionFinished(session: TerminalSession) {
+        // A tab on the other phone: it closes there, or comes back here to show why it ended.
+        termCaster.idOf(session)?.let {
+            screenShare.closedHere(it, back = !closesOnExit(session.exitStatus))
+            return
+        }
         chats.tabChanged()
         // A service's end is the services' business; it never closes a tab.
         // An open tab still shows it (and its bar) until the service starts again.
@@ -1455,7 +1591,9 @@ class TerminalService : Service() {
     // Swaps in an empty model first, so the killed sessions' late exit
     // events find no tab and are ignored. Services' tabs are the services' to stop.
     private fun killAll() {
-        val sessions = tabs.tabs.filter { it.service == null }.map { it.session }
+        // Tabs from another phone have no process here; tabs sent there do.
+        val sessions = tabs.tabs.filter { it.service == null && it.from == null }.map { it.session } + termCaster.sessions
+        termCaster.forgetAll()
         tabs = newTabs()
         sessions.forEach(::stop)
     }
@@ -1524,6 +1662,8 @@ class TerminalService : Service() {
             2000,
             client,
         ).also {
+            // Before it starts: so the tab can be sent to another phone (the extended screen) later.
+            MynxTerminals.tee(it)
             knownCwd[it] = workDir
             shellIds[it] = shellId
             cwdFiles[it] = File(cwdDir, cwdName)
@@ -2000,7 +2140,7 @@ class TerminalService : Service() {
 
     private fun buildNotification(): Notification {
         notifiedCount = tabs.tabs.size
-        val running = runningTerminalsText(tabs.tabs.count { it.service == null }, wakeLock != null, serviceManager.active)
+        val running = runningTerminalsText(tabs.tabs.count { it.service == null && it.from == null } + termCaster.sessions.size, wakeLock != null, serviceManager.active)
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "Running terminals", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0,

@@ -6,8 +6,8 @@ A second phone (or tablet) running mynx can become a screen of this
 one: this phone, the **host**, runs everything; the other, the
 **screen**, shows what the host sends and sends its touches back.
 Both need mynx and the same Wi-Fi (or one phone's hotspot). Apps
-(web apps and games, `mynx app`) and the Linux desktop can be sent to
-the screen; terminal tabs and chats can't be yet.
+(web apps and games, `mynx app`), terminal tabs and the Linux desktop
+can be sent to the screen; chats can't be yet.
 
 | Command | Does |
 |---|---|
@@ -18,6 +18,7 @@ the screen; terminal tabs and chats can't be yet.
 | `mynx screen unpair NAME\|all` | forget a pair; a linked phone forgets it too. Pairing again needs a new code |
 | `mynx screen place left\|right\|above\|below` | where the screen sits next to the host (the `screen-place` setting); run on the screen, it asks the host |
 | `mynx screen send [app] NAME` | on the host: show app NAME on the screen (it leaves this phone's screen; `mynx app list` names them) |
+| `mynx screen send tab [N\|new]` | on the host: move terminal tab N (1 is the first in the strip; none: the tab this runs in) to the screen, or start a new one there |
 | `mynx screen send desktop` | on the host: make the screen part of the Linux desktop (a monitor of its own, or the second half: `screen-desktop`); it must be running |
 | `mynx screen take [ID\|NAME\|all]` | bring sent screens back to this phone (all by default); on the screen, it asks the host to |
 | `mynx screen [status]` | the link (which phone, its screen size, where it sits), what's sent there and where typing goes, why the last one ended, the pairs, whether this phone listens |
@@ -66,6 +67,39 @@ Each takes `--json`.
   link ending brings it back to the host; the app's page loads again
   there (what it keeps in its own storage stays).
 - A sent app has no bridge to the phone yet (`mynx.js`'s calls wait).
+
+## Sending a terminal tab
+
+- **From the host:** Home's **Send to NAME** list has
+  **New terminal** and this phone's tabs; or long-press a tab in the strip,
+  **Send to NAME**; or `mynx screen send tab N` (`new`, or no number
+  for the tab it runs in). The tab leaves this phone's strip (sending
+  the last one opens a fresh one here). Its shell and programs keep
+  running on the host: only the text travels.
+- **On the screen:** it's a tab there called "HOST: title", selected
+  as it arrives, and listed on Home ("from HOST"). The screen draws it
+  with its own font, colours and key bar; scrolling back, selecting
+  and copying happen there. Its size is the screen's: the host's
+  terminal takes the rows and columns that fit there (rotating or
+  zooming the screen resizes it, as on one phone). Full-screen
+  programs (vim, htop, less) work, mouse included.
+- **Typing:** touch the tab on the screen and the host's typing goes
+  to it: the host's keyboard, its key bar and a hardware keyboard on
+  it. The host's strip starts with "⌨ NAME: title" while it does, and
+  the screen draws a line around the tab. Touching the host's
+  terminal (or that label) takes typing back. The screen's key bar
+  types into the tab too; tapping it doesn't open the screen's
+  keyboard.
+- **Taking back:** `mynx screen take`, Home's **Take back**, the tab's
+  ×, or **Give back** in its long-press menu on the screen: it's a tab
+  on the host again, as it was. The link ending brings every tab back.
+  A shell that exits closes its tab there (with an error, it comes
+  back to the host, to read why).
+- **How it travels:** the host sends what's on the terminal (its
+  scrollback too), then the bytes its programs write, which the
+  screen's terminal draws itself. A screen that falls behind (a flood
+  of output) gets the terminal as it is now, not the backlog.
+- A service's tab stays on the host.
 
 ## The desktop on the screen
 

@@ -35,7 +35,15 @@ class ScreenMessagesTest {
             ScreenMessage.VideoAck(2, 123_456_789_012L),
             ScreenMessage.KeyFrame(2),
             ScreenMessage.TakeBack(2),
-            ScreenMessage.TerminalText(7, "ls\r\n".toByteArray()),
+            ScreenMessage.TermStart(7, "bash", 56, 40),
+            ScreenMessage.TermState(7, 3, 48, 30, "\u001bcprompt$ ".toByteArray()),
+            ScreenMessage.TermOutput(7, 3, "ls\r\n".toByteArray()),
+            ScreenMessage.TermTitle(7, "vim notes.md"),
+            ScreenMessage.TermEnd(7),
+            ScreenMessage.TermSize(7, 48, 30, 22, 51),
+            ScreenMessage.TermInput(7, "q".toByteArray()),
+            ScreenMessage.TermAck(7, 3, 123_456L),
+            ScreenMessage.TermTouched(7),
             ScreenMessage.Pointer(2, 540.5f, 1200f, true),
             ScreenMessage.Pointer(2, 0f, 0f, false),
         )
@@ -79,8 +87,20 @@ class ScreenMessagesTest {
 
     @Test
     fun `this is version 3 of the link`() {
-        // Version 1 (the pairing alone) had placeholders where video and touches are now; 2 had no desktop's pointer.
-        assertEquals(3, SCREEN_PROTOCOL)
+        // Version 1 was the pairing alone, 2 added screens as video, 3 terminals as text, 4 the desktop's pointer.
+        assertEquals(4, SCREEN_PROTOCOL)
+    }
+
+    @Test
+    fun `a terminal's bytes travel as they are`() {
+        val bytes = ByteArray(256) { it.toByte() }
+        val m = roundTrip(ScreenMessage.TermOutput(2, 9, bytes))
+        assertIs<ScreenMessage.TermOutput>(m)
+        assertContentEquals(bytes, m.data)
+        val state = roundTrip(ScreenMessage.TermState(2, 9, 80, 24, bytes))
+        assertIs<ScreenMessage.TermState>(state)
+        assertContentEquals(bytes, state.data)
+        assertEquals(Triple(9, 80, 24), Triple(state.epoch, state.columns, state.rows))
     }
 }
 
@@ -116,9 +136,9 @@ class ScreenChannelTest {
 
     @Test
     fun `messages go both ways, encrypted`() {
-        val frame = send(host, ScreenMessage.TerminalText(1, "secret text".toByteArray()))
+        val frame = send(host, ScreenMessage.TermOutput(1, 1, "secret text".toByteArray()))
         assertTrue("secret text" !in String(frame, Charsets.ISO_8859_1))
-        assertEquals(ScreenMessage.TerminalText(1, "secret text".toByteArray()), screen.read(ByteArrayInputStream(frame)))
+        assertEquals(ScreenMessage.TermOutput(1, 1, "secret text".toByteArray()), screen.read(ByteArrayInputStream(frame)))
         val back = send(screen, ScreenMessage.KeepAlive)
         assertEquals(ScreenMessage.KeepAlive, host.read(ByteArrayInputStream(back)))
     }

@@ -16,9 +16,9 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * The version of the link between the phones; a Hello with another is
  * refused. 1 was the pairing alone; 2 sends screens (video, touches);
- * 3 sends the desktop's pointer ([ScreenMessage.Pointer]).
+ * 3 sends terminal tabs as text; 4 the desktop's pointer ([ScreenMessage.Pointer]).
  */
-const val SCREEN_PROTOCOL = 3
+const val SCREEN_PROTOCOL = 4
 
 /** A [ScreenMessage.Video] part that's a key frame: it decodes alone. */
 const val VIDEO_KEY = 1
@@ -62,9 +62,13 @@ enum class RefusalReason { VERSION, NOT_PAIRING, NOT_PAIRED, WRONG_CODE, BUSY, O
  * stream: [StreamStart] and [StreamEnd] from the host; while the screen
  * [Watch]es it, [Video] parts, which it acks ([VideoAck]) and asks a
  * [KeyFrame] of when it must start over; its [Touch]es go back, and
- * [TakeBack] asks the host to have it back. [TerminalText] is a
- * placeholder for what's coming (work log "Next" 0a): its fields may
- * still change.
+ * [TakeBack] asks the host to have it back. A terminal tab the host
+ * sends travels as text ([ScreenTerms]): [TermStart], then a [TermState]
+ * (everything on it, as the bytes that draw it) and its [TermOutput]s
+ * (what its programs write), which the screen acks ([TermAck]); the
+ * screen asks for its size ([TermSize]), and sends what's typed there
+ * ([TermInput]) and that it was touched ([TermTouched]). Ids of streams
+ * and terminals are one series, so [TakeBack] takes either.
  */
 sealed class ScreenMessage(val type: Int) {
     /** The screen's first message: its version, id and name, and its SPAKE2 share. */
@@ -132,8 +136,37 @@ sealed class ScreenMessage(val type: Int) {
     /** The screen asks the host to take [stream] back. */
     data class TakeBack(val stream: Int) : ScreenMessage(TYPE_TAKE_BACK)
 
-    /** Placeholder: a terminal tab's output (host to screen) or typing (screen to host). */
-    class TerminalText(val tab: Int, val data: ByteArray) : ScreenMessage(TYPE_TERMINAL_TEXT)
+    /** The host sends terminal tab [term], [title], [columns] x [rows] for now. */
+    data class TermStart(val term: Int, val title: String, val columns: Int, val rows: Int) : ScreenMessage(TYPE_TERM_START)
+
+    /**
+     * Everything on terminal [term] at [columns] x [rows]: [data] draws it
+     * on a terminal reset to that size. It starts [epoch]: the
+     * [TermOutput]s after it carry the same number.
+     */
+    class TermState(val term: Int, val epoch: Int, val columns: Int, val rows: Int, val data: ByteArray) : ScreenMessage(TYPE_TERM_STATE)
+
+    /** What terminal [term]'s programs wrote, after [epoch]'s [TermState]. */
+    class TermOutput(val term: Int, val epoch: Int, val data: ByteArray) : ScreenMessage(TYPE_TERM_OUTPUT)
+
+    /** Terminal [term]'s tab is called [title] now. */
+    data class TermTitle(val term: Int, val title: String) : ScreenMessage(TYPE_TERM_TITLE)
+
+    /** The host has terminal [term] back (or it closed): the screen's tab goes. */
+    data class TermEnd(val term: Int) : ScreenMessage(TYPE_TERM_END)
+
+    /** The screen fits terminal [term] in [columns] x [rows] cells of [cellWidth] x [cellHeight] pixels: its size from now on. */
+    data class TermSize(val term: Int, val columns: Int, val rows: Int, val cellWidth: Int, val cellHeight: Int) :
+        ScreenMessage(TYPE_TERM_SIZE)
+
+    /** Typed on the screen for terminal [term] (keys, mouse, paste): for its programs. */
+    class TermInput(val term: Int, val data: ByteArray) : ScreenMessage(TYPE_TERM_INPUT)
+
+    /** The screen got [bytes] of terminal [term]'s output since [epoch]'s state: how far behind it is. */
+    data class TermAck(val term: Int, val epoch: Int, val bytes: Long) : ScreenMessage(TYPE_TERM_ACK)
+
+    /** Terminal [term] was touched on the screen: typing goes to it. */
+    data class TermTouched(val term: Int) : ScreenMessage(TYPE_TERM_TOUCHED)
 
     /**
      * The desktop's pointer on stream [stream] (the X server draws no
@@ -164,14 +197,22 @@ sealed class ScreenMessage(val type: Int) {
         const val TYPE_FOCUS = 21
         const val TYPE_VIDEO = 32
         const val TYPE_TOUCH = 33
-        const val TYPE_TERMINAL_TEXT = 34
+        const val TYPE_TERM_OUTPUT = 34
         const val TYPE_STREAM_START = 35
         const val TYPE_STREAM_END = 36
         const val TYPE_WATCH = 37
         const val TYPE_VIDEO_ACK = 38
         const val TYPE_KEY_FRAME = 39
         const val TYPE_TAKE_BACK = 40
-        // Past the terminals' (41-48, the screen-terms branch), so the two can meet.
+        const val TYPE_TERM_START = 41
+        const val TYPE_TERM_STATE = 42
+        const val TYPE_TERM_TITLE = 43
+        const val TYPE_TERM_END = 44
+        const val TYPE_TERM_SIZE = 45
+        const val TYPE_TERM_INPUT = 46
+        const val TYPE_TERM_ACK = 47
+        const val TYPE_TERM_TOUCHED = 48
+        // Version 4.
         const val TYPE_POINTER = 49
     }
 }
@@ -211,7 +252,19 @@ fun encodeScreenMessage(m: ScreenMessage): ByteArray {
         is ScreenMessage.VideoAck -> { out.writeInt(m.stream); out.writeLong(m.pts) }
         is ScreenMessage.KeyFrame -> out.writeInt(m.stream)
         is ScreenMessage.TakeBack -> out.writeInt(m.stream)
-        is ScreenMessage.TerminalText -> { out.writeInt(m.tab); out.write(m.data) }
+        is ScreenMessage.TermStart -> { out.writeInt(m.term); text(m.title); out.writeShort(m.columns); out.writeShort(m.rows) }
+        is ScreenMessage.TermState -> {
+            out.writeInt(m.term); out.writeInt(m.epoch); out.writeShort(m.columns); out.writeShort(m.rows); out.write(m.data)
+        }
+        is ScreenMessage.TermOutput -> { out.writeInt(m.term); out.writeInt(m.epoch); out.write(m.data) }
+        is ScreenMessage.TermTitle -> { out.writeInt(m.term); text(m.title) }
+        is ScreenMessage.TermEnd -> out.writeInt(m.term)
+        is ScreenMessage.TermSize -> {
+            out.writeInt(m.term); out.writeShort(m.columns); out.writeShort(m.rows); out.writeShort(m.cellWidth); out.writeShort(m.cellHeight)
+        }
+        is ScreenMessage.TermInput -> { out.writeInt(m.term); out.write(m.data) }
+        is ScreenMessage.TermAck -> { out.writeInt(m.term); out.writeInt(m.epoch); out.writeLong(m.bytes) }
+        is ScreenMessage.TermTouched -> out.writeInt(m.term)
         is ScreenMessage.Pointer -> { out.writeInt(m.stream); out.writeFloat(m.x); out.writeFloat(m.y); out.writeByte(if (m.shown) 1 else 0) }
         is ScreenMessage.Unknown -> out.write(m.payload)
     }
@@ -273,7 +326,20 @@ fun decodeScreenMessage(bytes: ByteArray): ScreenMessage {
             ScreenMessage.TYPE_VIDEO_ACK -> ScreenMessage.VideoAck(input.readInt(), input.readLong())
             ScreenMessage.TYPE_KEY_FRAME -> ScreenMessage.KeyFrame(input.readInt())
             ScreenMessage.TYPE_TAKE_BACK -> ScreenMessage.TakeBack(input.readInt())
-            ScreenMessage.TYPE_TERMINAL_TEXT -> ScreenMessage.TerminalText(input.readInt(), rest())
+            ScreenMessage.TYPE_TERM_START ->
+                ScreenMessage.TermStart(input.readInt(), text(), input.readUnsignedShort(), input.readUnsignedShort())
+            ScreenMessage.TYPE_TERM_STATE -> ScreenMessage.TermState(
+                input.readInt(), input.readInt(), input.readUnsignedShort(), input.readUnsignedShort(), rest(),
+            )
+            ScreenMessage.TYPE_TERM_OUTPUT -> ScreenMessage.TermOutput(input.readInt(), input.readInt(), rest())
+            ScreenMessage.TYPE_TERM_TITLE -> ScreenMessage.TermTitle(input.readInt(), text())
+            ScreenMessage.TYPE_TERM_END -> ScreenMessage.TermEnd(input.readInt())
+            ScreenMessage.TYPE_TERM_SIZE -> ScreenMessage.TermSize(
+                input.readInt(), input.readUnsignedShort(), input.readUnsignedShort(), input.readUnsignedShort(), input.readUnsignedShort(),
+            )
+            ScreenMessage.TYPE_TERM_INPUT -> ScreenMessage.TermInput(input.readInt(), rest())
+            ScreenMessage.TYPE_TERM_ACK -> ScreenMessage.TermAck(input.readInt(), input.readInt(), input.readLong())
+            ScreenMessage.TYPE_TERM_TOUCHED -> ScreenMessage.TermTouched(input.readInt())
             ScreenMessage.TYPE_POINTER ->
                 ScreenMessage.Pointer(input.readInt(), input.readFloat(), input.readFloat(), input.readUnsignedByte() != 0)
             else -> ScreenMessage.Unknown(type, rest())

@@ -11,6 +11,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Paint
+import android.graphics.drawable.GradientDrawable
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -787,8 +788,8 @@ class MainActivity : Activity(), FrontActivity {
             is HomeAction.Link -> return toastError(service.openLink(action.url))
             HomeAction.Desktop -> return showDesktop()
             is HomeAction.ScreenShow -> {
-                val stream = service.screenShare.shown.firstOrNull { it.id == action.id } ?: return
-                return onScreenStream(stream, started = false)
+                service.screenShare.shown.firstOrNull { it.id == action.id }?.let { return onScreenStream(it, started = false) }
+                if (!service.showRemoteTerm(action.id)) return
             }
             // HomeView runs these itself.
             is HomeAction.Menu, is HomeAction.Config, is HomeAction.Input, HomeAction.None -> return
@@ -861,7 +862,7 @@ class MainActivity : Activity(), FrontActivity {
             isHorizontalScrollBarEnabled = false
             addView(stripRow)
         }
-        terminalKeys = TerminalKeys(terminalView)
+        terminalKeys = TerminalKeys(terminalView) { service?.screenTypingTerm }
         keyBar = KeyBarView(this, terminalKeys, font, File(installer.rootfs, KEY_BARS_DIR))
         // Before attaching: a session's emulator copies the scheme when it starts.
         applyColors()
@@ -1008,6 +1009,20 @@ class MainActivity : Activity(), FrontActivity {
     /** Typing on the host comes to the stream shown here, or no longer. */
     fun onScreenFocus(typing: Boolean) {
         screenView?.focus(typing)
+        markRemoteTyping()
+    }
+
+    // On the screen: a line around a tab from the host while the host's typing comes to it.
+    private fun markRemoteTyping() {
+        if (!::terminalView.isInitialized) return
+        val service = service
+        val session = terminalView.currentSession
+        val on = service != null && session != null && service.screenShare.typedTo && service.remoteTerms.isRemote(session)
+        terminalView.foreground = if (on) {
+            GradientDrawable().apply { setStroke(dp(3), Pixel.CYAN) }
+        } else {
+            null
+        }
     }
 
     /** The host's desktop pointer on [stream], in its pixels, or not on it. */
@@ -1032,8 +1047,30 @@ class MainActivity : Activity(), FrontActivity {
 
     // Any finger down on this phone: typing is its own again (the extended screen's host).
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN && !screenShown) service?.screenHostTouched()
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && !screenShown) {
+            val service = service
+            val remote = if (::terminalView.isInitialized && terminalOnScreen) {
+                terminalView.currentSession?.takeIf { service?.remoteTerms?.isRemote(it) == true }
+            } else {
+                null
+            }
+            when {
+                remote != null -> service?.remoteTerms?.touched(remote)
+                // The key bar types where typing goes: pressing it doesn't take typing back.
+                service?.screenTypingTerm != null && onKeyBar(event) -> {}
+                else -> service?.screenHostTouched()
+            }
+        }
         return super.dispatchTouchEvent(event)
+    }
+
+    private fun onKeyBar(event: MotionEvent): Boolean {
+        if (!::keyBar.isInitialized || keyBar.visibility != View.VISIBLE) return false
+        val at = IntArray(2)
+        keyBar.getLocationOnScreen(at)
+        val x = event.rawX.toInt()
+        val y = event.rawY.toInt()
+        return x >= at[0] && x < at[0] + keyBar.width && y >= at[1] && y < at[1] + keyBar.height
     }
 
     private val desktopHost = object : DesktopView.Host {
@@ -1113,6 +1150,13 @@ class MainActivity : Activity(), FrontActivity {
     private fun renderStrip() {
         val tabs = service?.tabs ?: return
         stripRow.removeAllViews()
+        // Typing goes to the other phone's terminal: say so; a tap here takes it back.
+        screenTypingLabel?.let { label ->
+            stripRow.addView(stripText("⌨ $label", Pixel.CYAN).apply {
+                setPadding(dp(12), dp(8), dp(10), dp(8))
+                setOnClickListener { service?.screenHostTouched() }
+            })
+        }
         if (touchView) stripRow.addView(stripText("⌂", strip.accent).apply {
             setPadding(dp(14), dp(8), dp(10), dp(8))
             setOnClickListener { showChatHome() }
@@ -1187,8 +1231,13 @@ class MainActivity : Activity(), FrontActivity {
     private fun showTabMenu(tab: Tab<TerminalSession>) {
         val service = service ?: return
         val name = tab.service
-        val actions: List<Pair<String, () -> Unit>> = if (name == null) {
-            listOf("Rename" to { showRename(tab.session) }, "Run as service" to { showRunAsService(tab.session) })
+        val from = tab.from
+        val screen = service.screenPeerName
+        val actions: List<Pair<String, () -> Unit>> = if (from != null) {
+            listOf("Rename" to { showRename(tab.session) }, "Give back to $from" to { service.closeTab(tab.session) })
+        } else if (name == null) {
+            listOf("Rename" to { showRename(tab.session) }, "Run as service" to { showRunAsService(tab.session) }) +
+                (if (screen != null) listOf("Send to $screen" to { toastError(service.sendTabToScreen(tab.session)) }) else emptyList())
         } else {
             val running = service.serviceRunning(name)
             listOf(
@@ -1476,6 +1525,7 @@ class MainActivity : Activity(), FrontActivity {
         if (terminalView.currentSession !== session) terminalView.attachSession(session)
         renderStrip()
         refreshKeyBar()
+        markRemoteTyping()
     }
 
     fun onScreenUpdated(session: TerminalSession) {
@@ -1568,6 +1618,63 @@ class MainActivity : Activity(), FrontActivity {
         if (::terminalView.isInitialized) terminalView.setTerminalCursorBlinkerState(on && visible, true)
     }
 
+    /** The terminal view sized its session's emulator (first shown, resized): a tab from the host asks the host for that size. */
+    fun onEmulatorSet() {
+        setCursorBlinking(true)
+        if (!::terminalView.isInitialized) return
+        val session = terminalView.currentSession ?: return
+        val emulator = session.emulator ?: return
+        val remote = service?.remoteTerms ?: return
+        if (!remote.isRemote(session)) return
+        val columns = emulator.mColumns
+        val rows = emulator.mRows
+        remote.fitted(session, columns, rows, terminalView.width / columns.coerceAtLeast(1), terminalView.height / rows.coerceAtLeast(1))
+    }
+
+    // The extended screen's host: typing goes to a terminal on the other phone (touched there last).
+    private val termKeys by lazy { TermKeys(::takeCtrlLatch, ::takeAltLatch) }
+
+    /** A key for the terminal typed to on the other phone, if typing goes there; false: it's this phone's. */
+    fun typeToScreen(keyCode: Int, event: KeyEvent): Boolean {
+        val target = service?.screenTypingTerm ?: return false
+        return termKeys.key(target, keyCode, event)
+    }
+
+    /** A character for it, likewise (the soft keyboard's). */
+    fun typeToScreen(codePoint: Int, ctrl: Boolean, alt: Boolean): Boolean {
+        val target = service?.screenTypingTerm ?: return false
+        termKeys.codePoint(target, codePoint, ctrl, alt)
+        return true
+    }
+
+    /** Whether the terminal view is what this phone shows (not a touch mode screen, the desktop or a stream). */
+    val terminalOnScreen: Boolean
+        get() = onScreen && ::terminalView.isInitialized && !homeShown && !chatShown && !chatHomeShown && !chatHistoryShown &&
+            !filesShown && !desktopShown && !screenShown
+
+    // What the strip says while typing goes to the other phone's terminal, else null.
+    private var screenTypingLabel: String? = null
+
+    /** Typing goes to a terminal on the other phone ([label] says which), or (null) is this phone's again. */
+    fun onScreenTyping(label: String?) {
+        screenTypingLabel = label
+        if (!::terminalView.isInitialized) return
+        renderStrip()
+        if (label != null && terminalOnScreen) showKeyboard()
+    }
+
+    /** On the screen: the host sent a terminal; its tab is selected, and shows if the app is on screen. */
+    fun onRemoteTermStarted() {
+        onScreenLinkChanged()
+        if (!onScreen || !::terminalView.isInitialized || screenShown) return
+        hideDesktop()
+        hideHome()
+        hideChatHome()
+        hideFiles()
+        hideChat()
+        hideChatHistory()
+    }
+
     fun takeCtrlLatch() = ::terminalKeys.isInitialized && terminalKeys.takeCtrlLatch()
     fun takeAltLatch() = ::terminalKeys.isInitialized && terminalKeys.takeAltLatch()
 
@@ -1607,6 +1714,8 @@ class MainActivity : Activity(), FrontActivity {
     fun onTap(e: MotionEvent) {
         val url = runCatching { linkUnder(e) }.getOrNull()
         if (url == null) {
+            val session = terminalView.currentSession
+            if (session != null && service?.remoteTerms?.isRemote(session) == true) return
             showKeyboard()
             return
         }
