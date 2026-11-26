@@ -53,10 +53,12 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    resizing, scrollback and copy on B, a flood, every way of taking
    back, the link dropping, a shell's exit. The agent's decisions
    stand (entry 227).
-5. **3c, the desktop on B: built, to test on both phones** (entry 228,
-   PR #124, protocol version 4): a monitor of its own and the second
-   half (`screen-desktop = extend | span`). The two-phone test is in
-   entry 228.
+5. **3c, the desktop on B: passed on both phones** (entry 228, PR
+   #124, protocol version 4; Pixel 10 as A, Nord 2 as B, 2026-11-27):
+   a monitor of its own and the second half (`screen-desktop = extend
+   | span`), through the SurfaceTexture bridge; every step of entry
+   228's test, the place moving live included (run 45896394265). The
+   agent's decisions stand (entry 228).
 6. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
