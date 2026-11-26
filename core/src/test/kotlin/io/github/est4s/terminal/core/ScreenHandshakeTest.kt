@@ -115,7 +115,7 @@ class ScreenHandshakeTest {
     @Test
     fun `a Hello of another version is refused with what to do`() {
         val h = accept { "123456".toByteArray() }
-        writePlainFrame(toHost.output, ScreenMessage.Hello(2, screen.id, screen.name, HelloMode.PAIR, ByteArray(65)))
+        writePlainFrame(toHost.output, ScreenMessage.Hello(SCREEN_PROTOCOL + 1, screen.id, screen.name, HelloMode.PAIR, ByteArray(65)))
         assertEquals(RefusalReason.VERSION, assertFailsWith<ScreenRefused> { h.result() }.reason)
         val answer = readPlainFrame(toScreen.input)
         assertIs<ScreenMessage.Refusal>(answer)

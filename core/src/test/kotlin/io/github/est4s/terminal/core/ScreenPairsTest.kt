@@ -85,7 +85,7 @@ class ScreenDiscoveryTest {
         val ad = screenAd("ab".repeat(16), "Pixel 10", pairing = true)
         assertEquals("_mynx-screen._tcp", SCREEN_SERVICE_TYPE)
         assertEquals("mynx Pixel 10", ad.name)
-        assertEquals(mapOf("v" to "1", "id" to "ab".repeat(16), "pairing" to "1"), ad.txt)
+        assertEquals(mapOf("v" to "$SCREEN_PROTOCOL", "id" to "ab".repeat(16), "pairing" to "1"), ad.txt)
     }
 
     @Test
@@ -95,13 +95,13 @@ class ScreenDiscoveryTest {
 
     @Test
     fun `found services become hosts, others are skipped`() {
-        val txt = mapOf("v" to "1", "id" to "ab".repeat(16), "pairing" to "0")
+        val txt = mapOf("v" to "$SCREEN_PROTOCOL", "id" to "ab".repeat(16), "pairing" to "0")
         val host = foundScreenHost("mynx Pixel 10", txt, "192.168.1.10", 7391)!!
         assertEquals(FoundScreenHost("ab".repeat(16), "Pixel 10", "192.168.1.10", 7391, pairing = false), host)
         assertNull(foundScreenHost("mynx Pixel 10", txt - "id", "192.168.1.10", 7391))
         assertNull(foundScreenHost("mynx Pixel 10", txt + ("id" to "nope"), "192.168.1.10", 7391))
         // Another version is still a host, so the screen can say to update.
-        assertEquals(2, foundScreenHost("mynx Pixel 10", txt + ("v" to "2"), "192.168.1.10", 7391)!!.version)
+        assertEquals(9, foundScreenHost("mynx Pixel 10", txt + ("v" to "9"), "192.168.1.10", 7391)!!.version)
     }
 
     @Test
