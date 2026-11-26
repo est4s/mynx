@@ -427,7 +427,9 @@ setup() {
     for text in "mynx screen send desktop" "mynx-b" "screen-desktop" "span" "Take back" "opens the bar"; do
         grep -qF -- "$text" "$DOCS/screen.md" || { echo "not in screen.md: $text"; false; }
     done
-    grep -qF -- "mynx screen send desktop" "$DOCS/desktop.md"
+    for text in "mynx screen send desktop" "screen-desktop" "**Take back**"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
 }
 
 @test "the guide explains the desktop view: switching, touch, keys and its bar" {
