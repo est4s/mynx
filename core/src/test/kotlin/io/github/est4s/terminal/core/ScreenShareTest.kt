@@ -22,6 +22,8 @@ internal class FakeCasting : ScreenCasting {
         val name = (target as ScreenTarget.App).name
         return titles[name]?.let { Result.success(it) } ?: Result.failure(Exception("no app named $name"))
     }
+    var encoderTakes: Pair<Int, Int>? = null
+    override fun streamSize(width: Int, height: Int): Pair<Int, Int> = encoderTakes ?: Pair(width, height)
     override fun open(screen: SentScreen, density: Int): String? {
         did += "open ${screen.id} ${screen.title} ${screen.width}x${screen.height} @$density"
         return refuse
@@ -73,6 +75,14 @@ class ScreenShareTest {
         assertEquals(listOf("open ${s.id} Pixel Hero 1080x2400 @440"), casting.did)
         assertEquals(listOf<ScreenMessage>(ScreenMessage.StreamStart(s.id, "Pixel Hero", 1080, 2400)), sent)
         assertEquals(listOf(s), share.sent)
+    }
+
+    @Test
+    fun `the stream is drawn at the size the encoder takes`() {
+        casting.encoderTakes = Pair(1072, 2400)
+        val s = sendHero()
+        assertEquals(Pair(1072, 2400), Pair(s.width, s.height))
+        assertEquals(ScreenMessage.StreamStart(s.id, "Pixel Hero", 1072, 2400), sent.single())
     }
 
     @Test

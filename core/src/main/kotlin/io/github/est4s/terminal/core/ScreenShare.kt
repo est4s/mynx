@@ -37,6 +37,9 @@ interface ScreenCasting {
     /** The title of [target], or why it can't be sent (no such app). */
     fun describe(target: ScreenTarget): Result<String>
 
+    /** The size to draw and encode a screen for a [width] x [height] screen at: what the encoder takes ([encoderSizes]). */
+    fun streamSize(width: Int, height: Int): Pair<Int, Int> = Pair(width, height)
+
     /** Moves [screen] to a display of its own, at its size and [density]; null, or why not. */
     fun open(screen: SentScreen, density: Int): String?
 
@@ -133,7 +136,8 @@ class ScreenShare(
         synchronized(lock) { sentScreens.values.firstOrNull { it.target == target } }?.let { return Result.success(it) }
         val info = other.screen ?: return failure("${other.name} hasn't said its screen's size yet: try again")
         val title = casting.describe(target).getOrElse { return Result.failure(it) }.take(MAX_TITLE)
-        val screen = synchronized(lock) { SentScreen(nextId++, target, title, info.width, info.height) }
+        val (width, height) = casting.streamSize(info.width, info.height)
+        val screen = synchronized(lock) { SentScreen(nextId++, target, title, width, height) }
         casting.open(screen, info.density)?.let { return failure("couldn't show $title there: $it") }
         synchronized(lock) {
             sentScreens[screen.id] = screen
