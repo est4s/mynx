@@ -421,14 +421,26 @@ class ScreenLink(
         }
         writePlace(side)
         c?.sendLayout()
+        placeChanged?.invoke(side)
         return false
     }
+
+    /**
+     * Called with the host's new `screen-place` whenever it changes:
+     * `mynx screen place` here or asked from the screen, or the setting
+     * changed by hand ([settingsChanged]). On the link's thread or the
+     * caller's. The desktop's part on the screen moves with it.
+     */
+    @Volatile var placeChanged: ((ScreenSide) -> Unit)? = null
 
     /** The settings may have changed (`mynx set screen-place`): a linked screen hears where it sits now. */
     fun settingsChanged() {
         val c = connection ?: return
         if (c.myRole != ScreenRole.HOST) return
-        if (c.layout?.side != settings().screenPlace) c.sendLayout()
+        val side = settings().screenPlace
+        if (c.layout?.side == side) return
+        c.sendLayout()
+        placeChanged?.invoke(side)
     }
 
     private fun writePlace(side: ScreenSide) {
@@ -554,6 +566,7 @@ class ScreenLink(
                 is ScreenMessage.Layout -> if (myRole == ScreenRole.HOST) {
                     writePlace(m.side)
                     sendLayout()
+                    placeChanged?.invoke(m.side)
                 } else {
                     layout = m
                 }

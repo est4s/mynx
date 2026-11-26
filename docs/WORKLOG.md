@@ -199,6 +199,13 @@ a PR into `desktop-dev`.
   xfsettingsd gives up on applying it and leaves our layout alone, so
   it's harmless, but deleting that file (with the desktop stopped) stops
   the message.
+- **Third phone try** (run 45889959933, 2026-11-26/27): the bridge
+  works; **every step of the two-phone test passed but the place**:
+  `mynx screen place` didn't move `mynx-b` while the desktop was on B
+  (a `screen-desktop` change then applied it). `ScreenLink.placeChanged`
+  now fires on every change of place (`mynx screen place` on either
+  phone, `mynx set screen-place`), and the desktop's part follows. Once
+  step 6 passes, the PR is ready to merge.
 - **Two-phone test** (Pixel 10 as A, Nord 2 as B, both on this build as
   mynx dev, paired; `mynx screen connect` on B; on A the desktop running
   with XFCE, `mynx desktop open`):

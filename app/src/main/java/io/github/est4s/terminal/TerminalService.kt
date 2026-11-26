@@ -461,7 +461,11 @@ class TerminalService : Service() {
                 // `mynx screen place`, from either phone, lands here too.
                 screenSettingsChanged()
             }
-        }).also { it.media = screenShare }
+        }).also { link ->
+            link.media = screenShare
+            // Every change of screen-place (here, asked from the screen, or by hand) moves the desktop's part there.
+            link.placeChanged = { mainHandler.post { if (desktopCaster.sent != null) desktopCaster.relayout() } }
+        }
     }
 
     /** The screens sent over the link (core decides): the host's drawn and encoded by [screenCaster], the screen's shown by the activity. */

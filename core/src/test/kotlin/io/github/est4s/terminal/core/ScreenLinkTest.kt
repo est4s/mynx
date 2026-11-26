@@ -261,6 +261,27 @@ class ScreenLinkTest {
     }
 
     @Test
+    fun `the host hears every change of place, whichever way it came`() {
+        val heard = java.util.concurrent.CopyOnWriteArrayList<ScreenSide>()
+        host.placeChanged = { heard += it }
+        pair()
+        waitFor("linked") { connected(screen)?.get("place") == "right" }
+        // mynx screen place on the host.
+        host.place(ScreenSide.LEFT)
+        assertEquals(listOf(ScreenSide.LEFT), heard.toList())
+        // mynx screen place on the screen: it asks the host.
+        screen.place(ScreenSide.ABOVE)
+        waitFor("the host took it") { heard.lastOrNull() == ScreenSide.ABOVE }
+        // mynx set screen-place on the host.
+        hostSettings.writeText(setSetting(hostSettings.readText(), "screen-place", "below").getOrThrow())
+        host.settingsChanged()
+        assertEquals(listOf(ScreenSide.LEFT, ScreenSide.ABOVE, ScreenSide.BELOW), heard.toList())
+        waitFor("the screen knows") { connected(screen)?.get("place") == "below" }
+        assertEquals("below", connected(host)!!["place"])
+        assertEquals("below", status(host)["place"])
+    }
+
+    @Test
     fun `screen-place changed by hand on the host reaches the screen, and the status says it`() {
         pair()
         waitFor("linked") { connected(screen)?.get("place") == "right" }
