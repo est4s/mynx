@@ -36,14 +36,14 @@ private class SentLink : DesktopScreenLink {
 
 private class MenuHost : DesktopView.Host {
     override val link = SentLink()
-    var touch = DesktopTouch.TOUCHPAD
+    var saved = DesktopTouch.TOUCHPAD
     val calls = mutableListOf<String>()
     override fun status() = DesktopStatus(running = true, session = DesktopSession.XFCE, sessionRunning = true, problem = null)
     override fun start(done: (String?) -> Unit) {
         calls += "start"
     }
     override fun logs() = "07:12:03 connected to the X server\n\n/tmp/.mynx/desktop/x11.log:\nXlorie: new surface applied\n"
-    override fun touch() = touch
+    override fun touch() = saved
     override fun back() = Unit
     override fun backLabel() = desktopBackLabel(false)
     override fun stop() {
@@ -55,7 +55,7 @@ private class MenuHost : DesktopView.Host {
     }
     override fun setTouch(touch: DesktopTouch) {
         calls += "touch ${touch.word}"
-        this.touch = touch
+        saved = touch
     }
 }
 
