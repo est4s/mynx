@@ -62,27 +62,13 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
 6. **Flaky `ScreenLinkTest` on CI: fixed** (entry 229, PR into
    `screen-dev`): two races in `ScreenLink`, each reproduced by a
    test. Nothing to try on the phones; watch CI for more.
-7. **Pairing from touch settings: to try on both phones** (entry
-   230, PR into `screen-dev`, branch `screen-pair-ui`). Pixel 10 as
-   A, Nord 2 as B, both in touch view, Settings → Second screen:
-   (a) both show Status "Not linked", the two Pair rows, Paired
-   phones; (b) A: Pair this phone as the host shows a big code, the
-   name and an address; (c) B: Pair with a host lists the Pixel 10
-   within a few seconds (Looking…, then Search again); (d) B: tap it,
-   type a wrong code, Pair: B says "Wrong code…", A shows "Wrong code
-   (1 of 3)" and a new code at once; (e) the right code: B says
-   paired and linked, A too, both Status "Linked with …"; (f) A's
-   Cancel stops a waiting pairing (`mynx screen status` says no
-   pairing); three wrong codes stop it with a message and Try again;
-   (g) B: Type its address (A's shown address) then the code pairs
-   too; (h) B: Paired phones → Pixel 10 → Disconnect, then Connect
-   links again with no code; (i) Unpair asks in a dialog and both
-   forget the pair; (j) with A's screen-host Never, A's pairing says
-   why; B with A not running mynx: "Couldn't find / reach …"; (k) all
-   of it with a hardware keyboard (arrows/Tab to move, Enter to
-   pick, digits and Enter in the code field); (l) a light theme
-   (solarized-light) looks right. Screenshots: `pairing-*` in the
-   CI's `screenshots` artifact.
+7. **Pairing from touch settings: passed on both phones** (entry
+   230, PR #126; Pixel 10 as A, Nord 2 as B, 2026-11-27): the host
+   and screen pages, a wrong code, pairing, the paired phones' pages
+   ("the rest seems to be working", build 45961985287). The code's
+   2 and 5 were hard to read in the pixel font; the values' font
+   fixed it (build 45997763400), then the maintainer said merge.
+   The agent's decisions stand (entry 230).
 8. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
@@ -160,8 +146,8 @@ a PR into `desktop-dev`.
 
 ### 2026-11-27 (230): Extended screen: pairing from touch settings
 
-- Branch `screen-pair-ui` from `screen-dev`, PR into `screen-dev`
-  (not merged). Maintainer's request: pairing under Second screen in
+- Branch `screen-pair-ui` from `screen-dev`, PR #126 into
+  `screen-dev`. Maintainer's request: pairing under Second screen in
   settings, not terminal only, on both the host and the screen.
 - **Built:** Second screen leads with Pairing (Status, Pair this
   phone as the host, Pair with a host) and Paired phones (each with
@@ -182,6 +168,7 @@ a PR into `desktop-dev`.
   button, and `pixelDialog` for Unpair; new: the code row (values'
   font, cyan, 44 sp, boxed) and pink error paragraphs (the input
   page's error colour). Details: ARCHITECTURE "pairing and the link".
+- **Passed on both phones** (2026-11-27, merged as PR #126).
 - **Phone test (build 45961985287): everything worked**, but in the
   pixel title font 2 and 5 were hard to tell apart in the code; the
   code row now uses the values' monospace font (`Pixel.text`), still
