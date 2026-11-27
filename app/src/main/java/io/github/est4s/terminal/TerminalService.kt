@@ -730,7 +730,6 @@ class TerminalService : Service() {
         if (screenShare.typingTo != null || screenShare.typingToTerm != null) screenShare.hostTouched()
     }
 
-    /** The link, for Home: the other phone, and what's sent or shown; null while unlinked. */
     // Touch settings' pairing (Second screen): the same screen-* requests mynx screen sends, run in the app.
     private val screenPairing: ScreenPairing by lazy {
         ScreenPairing(screenLink, { name, args, sink -> requests.call(name, args, sink) }, {
@@ -741,6 +740,7 @@ class TerminalService : Service() {
     /** Settings' pairing pages as they are now (Home's lists). */
     fun screenPairingShown(): ScreenPairingShown = screenPairing.shown()
 
+    /** The link, for Home: the other phone, and what's sent or shown; null while unlinked. */
     fun screenHome(): ScreenHome? {
         val peer = screenLink.peer() ?: return null
         val host = peer.role == ScreenRole.HOST
