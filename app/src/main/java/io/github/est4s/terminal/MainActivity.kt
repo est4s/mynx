@@ -768,6 +768,7 @@ class MainActivity : Activity(), FrontActivity {
         return HomeMenus(
             WebApps(File(installer.rootfs, "root"), installer.rootfs.absolutePath, ToolsInstaller(filesDir).tools),
             service?.servicesActive ?: 0, services, screen = service?.screenHome(),
+            pairing = service?.let { running -> runCatching { running.screenPairingShown() }.getOrNull() },
         )
     }
 

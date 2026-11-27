@@ -748,6 +748,27 @@ See `docs/ROADMAP.md` "How it works". The details:
   `screen-place` (right). **Layout** (`arrangeScreens()`): B scaled
   to A's density, on A's side, aligned start/centre/end, both
   starting at 0, 0: the extended X screen's two monitors (step 3).
+  **Pairing from touch settings** (`core/.../ScreenPairing.kt`;
+  maintainer's request, 2026-11-27; work log entry 230): Second
+  screen leads with the link's status, **Pair this phone as the
+  host** (`screen-pair:host`), **Pair with a host**
+  (`screen-pair:join`) and the pairs (`screen-peer:ID`: Connect,
+  Disconnect, Unpair). `ScreenPairing` (one per service) keeps the
+  pages' state (`HostPairing`, `JoinPairing`, hosts found, a typed
+  address, a connect under way) and runs the very `screen-*`
+  requests `mynx screen` sends, through `MynxRequests.call`, so
+  there's no second protocol path: the host's `screen-pair` stream
+  lines become its Waiting state, the answers Paired / Stopped. Home's
+  rows are `HomeAction.Config`s named `screen-pair-*`, which
+  `TerminalService.configRequest` hands to it; its changes post
+  `onScreenLinkChanged`, which refreshes Home. Hosts are found in
+  rounds of `ScreenLink.findHosts` (`join`'s own lookup; 15 rounds of
+  4 s, a host missed once kept a round). The link's refusals are
+  reworded without terminal commands (`screenProblemText`). Home
+  gained `HomeRow.CODE` (the code, big, in the values' font: the
+  pixel title font's 2 and 5 look alike) and `ERROR` (pink text),
+  `Config`'s `open` (a page after) and `confirm` (a `pixelDialog`
+  first), and `Input`'s `numeric` and `button`.
   Not yet: B linking again by itself after a drop or the app's start.
 - **Extended screen: sending screens** (`core/.../ScreenShare.kt`,
   `ScreenVideo.kt`; `app/.../ScreenCaster.kt`, `SentAppScreen.kt`,

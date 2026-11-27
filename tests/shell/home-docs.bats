@@ -448,3 +448,10 @@ setup() {
     grep -qF -- "touch the tab on the screen and the host's typing goes" "$DOCS/screen.md"
     grep -qF -- "**Give back**" "$DOCS/screen.md"
 }
+
+@test "the guide explains pairing another phone from touch settings, on both phones" {
+    grep -qF -- "**Pairing from settings**" "$DOCS/screen.md"
+    grep -qF -- "**Pair this phone as the host**" "$DOCS/screen.md"
+    grep -qF -- "**Pair with a host**" "$DOCS/screen.md"
+    grep -qF -- "**Unpair** (asked" "$DOCS/screen.md"
+}

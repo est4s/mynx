@@ -50,10 +50,29 @@ sealed interface HomeAction {
     data object None : HomeAction
     /** [op] on the background service [name]: [ServiceManager.act]. */
     data class Service(val name: String, val op: ServiceOp) : HomeAction
-    /** The `mynx` request [request] (`set`, `theme-set`, `undo`), run in the app; [back]: then one list up. */
-    data class Config(val request: String, val args: List<String>, val back: Boolean = false) : HomeAction
-    /** Asks for a line of text, starting from [value]; [homeInputAction] says what it then does. */
-    data class Input(val title: String, val value: String, val note: String?, val target: String) : HomeAction
+    /**
+     * The `mynx` request [request] (`set`, `theme-set`, `undo`), run in the app; [back]: then one list up;
+     * [open]: then the list of that name, one down. [confirm] is asked first (Unpair).
+     */
+    data class Config(
+        val request: String,
+        val args: List<String>,
+        val back: Boolean = false,
+        val open: String? = null,
+        val confirm: String? = null,
+    ) : HomeAction
+    /**
+     * Asks for a line of text, starting from [value]; [homeInputAction] says what it then does.
+     * [numeric]: digits only (a pairing code); [button]: the button's label, if not Save.
+     */
+    data class Input(
+        val title: String,
+        val value: String,
+        val note: String?,
+        val target: String,
+        val numeric: Boolean = false,
+        val button: String? = null,
+    ) : HomeAction
     /** Opens [url] in the browser. */
     data class Link(val url: String) : HomeAction
     /** Touch mode's file manager, at [folder] (a Debian path; see FileBrowser.kt). nnn is "Files (nnn)" in Terminal apps. */
@@ -83,8 +102,11 @@ data class ScreenHome(
     val tabs: List<String> = emptyList(),
 )
 
-/** How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, or a label with its value. */
-enum class HomeRow { BUTTON, SECTION, TEXT, INFO }
+/**
+ * How a [HomeItem] is drawn: a row to tap, a heading, a paragraph, a label with its value,
+ * a pairing code shown big, or a paragraph that says what went wrong.
+ */
+enum class HomeRow { BUTTON, SECTION, TEXT, INFO, CODE, ERROR }
 
 /**
  * A background service as Home lists it, from [ServiceManager.homeServices].
@@ -137,6 +159,8 @@ class HomeMenus(
     now: () -> Long = System::currentTimeMillis,
     /** The link to another phone, while there is one. */
     private val screen: ScreenHome? = null,
+    /** Settings' pairing (Second screen), as it is now. */
+    private val pairing: ScreenPairingShown? = null,
 ) {
     private val guestHome get() = apps.guestHome
     private val settings = HomeSettings(apps, facts, now)
@@ -159,7 +183,11 @@ class HomeMenus(
             if (gitHubReady()) listOf(HomeItem("GitHub setup", act("github"))) else emptyList()
         "services" -> serviceRows()
         SCREEN_SEND_MENU -> screenSend()
-        else -> settings.items(menu)
+        "settings:screen" -> pairing?.let { shown ->
+            screenPairingItems(shown, menu).orEmpty() + HomeItem("Settings", HomeAction.None, kind = HomeRow.SECTION) +
+                settings.items(menu).orEmpty()
+        } ?: settings.items(menu).orEmpty()
+        else -> pairing?.let { screenPairingItems(it, menu) } ?: settings.items(menu)
             ?: if (menu.startsWith(SERVICE_MENU)) serviceItems(menu.removePrefix(SERVICE_MENU)) else emptyList()
     }
 

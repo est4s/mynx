@@ -296,8 +296,7 @@ class ScreenLink(
             thread(name = "mynx-screen-join", isDaemon = true) { link(host, port, HelloMode.PAIR, code.toByteArray(), null, reply) }
             return
         }
-        platform.discover(discoverMs) { found ->
-            val hosts = found.filter { it.pairing && it.id != pairs.selfId }.distinctBy { it.id }
+        findHosts { hosts ->
             when (hosts.size) {
                 0 -> reply.refuse(
                     "no phone is pairing on this network: run mynx screen pair on it, or give its address " +
@@ -311,6 +310,11 @@ class ScreenLink(
                 )
             }
         }
+    }
+
+    /** On the screen: looks for hosts pairing on the network (one round of mDNS), on any thread. */
+    fun findHosts(found: (List<FoundScreenHost>) -> Unit) {
+        platform.discover(discoverMs) { all -> found(all.filter { it.pairing && it.id != pairs.selfId }.distinctBy { it.id }) }
     }
 
     /** On the screen: links again with a paired host ([which]: its name or id; null: the only one). */
@@ -458,6 +462,24 @@ class ScreenLink(
         val tmp = File(settingsFile.path + ".tmp")
         tmp.writeText(text)
         if (!tmp.renameTo(settingsFile)) error("couldn't write the settings")
+    }
+
+    /** The link as settings shows it ([ScreenPairing]). Any thread. */
+    fun state(): ScreenLinkState {
+        val settings = settings()
+        return synchronized(lock) {
+            val c = connection
+            ScreenLinkState(
+                name = name(),
+                hosting = settings.screenHost,
+                pairingCode = pairing?.let { showPairingCode(it.code) },
+                linkedId = c?.peerId,
+                linkedName = c?.peerName,
+                lastEnd = lastEnd,
+                problem = listenProblem,
+                pairs = pairs.all().map { ScreenPairRow(it.id, it.name, it.role) },
+            )
+        }
     }
 
     /** The state for `mynx screen status`, as JSON fields. */
