@@ -74,6 +74,8 @@ import io.github.est4s.terminal.core.ScreenCasting
 import io.github.est4s.terminal.core.ScreenHome
 import io.github.est4s.terminal.core.ScreenLink
 import io.github.est4s.terminal.core.ScreenMessage
+import io.github.est4s.terminal.core.ScreenPairing
+import io.github.est4s.terminal.core.ScreenPairingShown
 import io.github.est4s.terminal.core.ScreenRef
 import io.github.est4s.terminal.core.ScreenRole
 import io.github.est4s.terminal.core.ScreenShare
@@ -729,6 +731,16 @@ class TerminalService : Service() {
     }
 
     /** The link, for Home: the other phone, and what's sent or shown; null while unlinked. */
+    // Touch settings' pairing (Second screen): the same screen-* requests mynx screen sends, run in the app.
+    private val screenPairing: ScreenPairing by lazy {
+        ScreenPairing(screenLink, { name, args, sink -> requests.call(name, args, sink) }, {
+            mainHandler.post { activity?.onScreenLinkChanged() }
+        })
+    }
+
+    /** Settings' pairing pages as they are now (Home's lists). */
+    fun screenPairingShown(): ScreenPairingShown = screenPairing.shown()
+
     fun screenHome(): ScreenHome? {
         val peer = screenLink.peer() ?: return null
         val host = peer.role == ScreenRole.HOST
@@ -1247,6 +1259,7 @@ class TerminalService : Service() {
      * refusal's text, or null. Main thread.
      */
     fun configRequest(name: String, args: List<String>): String? {
+        if (screenPairing.handles(name)) return screenPairing.act(name, args)
         var answered: String? = null
         requests.call(name, args, object : ReplySink {
             override fun waiting(seconds: Int?) {}

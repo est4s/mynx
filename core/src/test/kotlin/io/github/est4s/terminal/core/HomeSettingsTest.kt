@@ -126,6 +126,20 @@ class HomeSettingsTest {
     }
 
     @Test
+    fun `second screen leads with pairing when the app gives it`() {
+        val state = ScreenLinkState("Pixel 10", ScreenHosting.AUTO, null, null, null, null, null, emptyList())
+        val screen = HomeMenus(WebApps(home, rootfs.path, tools), facts = { facts }, pairing = ScreenPairingShown(state)).items("settings:screen")
+        assertEquals(screenPairingItems(ScreenPairingShown(state), "settings:screen"), screen.takeWhile { it.label != "Settings" })
+        assertEquals(HomeItem("Settings", HomeAction.None, kind = HomeRow.SECTION), screen.first { it.label == "Settings" })
+        assertEquals("Take paired screens", screen.dropWhile { it.label != "Settings" }[1].label)
+        assertEquals(
+            HomeMenus(WebApps(home, rootfs.path, tools), facts = { facts }, pairing = ScreenPairingShown(state)).items(SCREEN_PAIR_JOIN_MENU),
+            screenPairingItems(ScreenPairingShown(state), SCREEN_PAIR_JOIN_MENU),
+        )
+        assertEquals(HomeAction.Config("screen-pair-address", listOf("10.0.0.2:7000"), back = true), homeInputAction("screen-address", " 10.0.0.2:7000 "))
+    }
+
+    @Test
     fun `desktop has the session and how touch works, with their choices named`() {
         settings("desktop = none\n")
         val desktop = items("settings:desktop")

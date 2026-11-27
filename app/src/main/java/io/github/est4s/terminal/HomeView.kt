@@ -174,14 +174,28 @@ class HomeView(
                 refresh()
             }
             is HomeAction.Config -> {
-                val refusal = config(action.request, action.args)
-                when {
-                    refusal != null -> showRefusal(refusal)
-                    action.back -> back()
-                    else -> refresh()
+                val confirm = action.confirm
+                if (confirm == null) runConfig(item, action) else {
+                    // Asked as Files' Delete is: a pixel dialog, the main button pink.
+                    pixelDialog(context, "${item.label}?", message = confirm, ok = item.label, danger = true) { runConfig(item, action) }
                 }
             }
             else -> act(action)
+        }
+    }
+
+    private fun runConfig(item: HomeItem, action: HomeAction.Config) {
+        val refusal = config(action.request, action.args)
+        val open = action.open
+        when {
+            refusal != null -> showRefusal(refusal)
+            action.back -> back()
+            open != null -> {
+                levels.add(Level(open, item.label))
+                scroll.scrollTo(0, 0)
+                refresh()
+            }
+            else -> refresh()
         }
     }
 
@@ -205,6 +219,8 @@ class HomeView(
                 HomeRow.TEXT -> paragraph(item.label)
                 HomeRow.INFO -> infoRow(item)
                 HomeRow.BUTTON -> row(item)
+                HomeRow.CODE -> codeRow(item.label)
+                HomeRow.ERROR -> paragraph(item.label).apply { setTextColor(Pixel.PINK_TEXT) }
             }
             rows.addView(view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(8) })
         }
@@ -241,7 +257,8 @@ class HomeView(
         }
         val end = when {
             item.checked -> PixelIcon.CHECK
-            item.action is HomeAction.Menu || item.action is HomeAction.Input -> PixelIcon.CHEVRON
+            item.action is HomeAction.Menu || item.action is HomeAction.Input ||
+                (item.action as? HomeAction.Config)?.open != null -> PixelIcon.CHEVRON
             else -> null
         }
         end?.let {
@@ -289,6 +306,19 @@ class HomeView(
         setTextColor(Pixel.DIM)
         setLineSpacing(0f, 1.15f)
         setTextIsSelectable(true)
+    }
+
+    // A pairing code: the page's title font in cyan, big enough to read from the other phone, boxed as a fact.
+    private fun codeRow(code: String) = TextView(context).apply {
+        text = code
+        typeface = Pixel.label(context, 700)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 44f)
+        setTextColor(Pixel.CYAN)
+        gravity = Gravity.CENTER
+        letterSpacing = 0.08f
+        setPadding(dp(16), dp(12), dp(16), dp(12))
+        background = Pixel.box(context, fill = Pixel.BACKGROUND, border = Pixel.CYAN)
+        contentDescription = "Pairing code " + code.toCharArray().joinToString(" ")
     }
 
     // A fact: its name, and its value in the text font; nothing to tap.
@@ -343,7 +373,7 @@ class HomeView(
                 minLines = 4
                 gravity = Gravity.TOP or Gravity.START
             } else {
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                inputType = if (input.numeric) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
                 setSingleLine(true)
                 imeOptions = EditorInfo.IME_ACTION_DONE
             }
@@ -373,7 +403,7 @@ class HomeView(
         }
         rows.addView(field, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
         rows.addView(error, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
-        rows.addView(saveButton(if (report) "Next" else "Save") { save() }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+        rows.addView(saveButton(input.button ?: if (report) "Next" else "Save") { save() }, LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
         field.requestFocus()
         field.post { (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(field, 0) }
     }

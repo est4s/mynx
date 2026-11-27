@@ -62,7 +62,28 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
 6. **Flaky `ScreenLinkTest` on CI: fixed** (entry 229, PR into
    `screen-dev`): two races in `ScreenLink`, each reproduced by a
    test. Nothing to try on the phones; watch CI for more.
-7. **Then (left for later):** B linking again by itself (after a drop,
+7. **Pairing from touch settings: to try on both phones** (entry
+   230, PR into `screen-dev`, branch `screen-pair-ui`). Pixel 10 as
+   A, Nord 2 as B, both in touch view, Settings → Second screen:
+   (a) both show Status "Not linked", the two Pair rows, Paired
+   phones; (b) A: Pair this phone as the host shows a big code, the
+   name and an address; (c) B: Pair with a host lists the Pixel 10
+   within a few seconds (Looking…, then Search again); (d) B: tap it,
+   type a wrong code, Pair: B says "Wrong code…", A shows "Wrong code
+   (1 of 3)" and a new code at once; (e) the right code: B says
+   paired and linked, A too, both Status "Linked with …"; (f) A's
+   Cancel stops a waiting pairing (`mynx screen status` says no
+   pairing); three wrong codes stop it with a message and Try again;
+   (g) B: Type its address (A's shown address) then the code pairs
+   too; (h) B: Paired phones → Pixel 10 → Disconnect, then Connect
+   links again with no code; (i) Unpair asks in a dialog and both
+   forget the pair; (j) with A's screen-host Never, A's pairing says
+   why; B with A not running mynx: "Couldn't find / reach …"; (k) all
+   of it with a hardware keyboard (arrows/Tab to move, Enter to
+   pick, digits and Enter in the code field); (l) a light theme
+   (solarized-light) looks right. Screenshots: `pairing-*` in the
+   CI's `screenshots` artifact.
+8. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
    Files and viewers sent to B; typing with B's own keyboard (into
@@ -136,6 +157,35 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-27 (230): Extended screen: pairing from touch settings
+
+- Branch `screen-pair-ui` from `screen-dev`, PR into `screen-dev`
+  (not merged). Maintainer's request: pairing under Second screen in
+  settings, not terminal only, on both the host and the screen.
+- **Built:** Second screen leads with Pairing (Status, Pair this
+  phone as the host, Pair with a host) and Paired phones (each with
+  Connect / Disconnect / Unpair), then its settings as before. Host
+  page: the code big, name, addresses, live (new code after a wrong
+  try, the reason it stopped), Cancel, "Paired with …, and linked".
+  Join page: hosts found on the Wi-Fi (mDNS rounds, live), Type its
+  address, a number field for the code with Pair, success or a clear
+  error. Errors are on the page (pink), never only in a log.
+- **Decisions (agent's, to confirm):** core's `ScreenPairing` runs
+  the same `screen-*` requests as `mynx screen` through
+  `MynxRequests.call` (no second protocol path); `ScreenLink` gained
+  only `state()` and `findHosts()` (which `join` uses too). Leaving
+  the host page doesn't cancel: the group's row shows the code to go
+  back. Search: 15 rounds of 4 s, then Search again. Refusals are
+  reworded without `mynx` commands (`screenProblemText`). Reused
+  Home's rows, sections, info rows, paragraph, input page and Save
+  button, and `pixelDialog` for Unpair; new: the code row (title
+  font, cyan, 44 sp, boxed) and pink error paragraphs (the input
+  page's error colour). Details: ARCHITECTURE "pairing and the link".
+- Tests: `ScreenPairingTest` (both flows over real loopback links:
+  pairing, a wrong code, cancel, refusals, address, connect,
+  disconnect, unpair; the pages' rows; the texts), HomeSettingsTest;
+  Robolectric `ScreenPairingScreenshotTest` (`pairing-*`).
 
 ### 2026-11-27 (229): The flaky `ScreenLinkTest` failures
 

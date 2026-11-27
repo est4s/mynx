@@ -121,13 +121,18 @@ fun readSystemFacts(rootfs: File): SystemFacts {
     )
 }
 
-/** What an [HomeAction.Input]'s text does: its [target] is `set:KEY` or `report`. Nothing for blank text. */
+/** What an [HomeAction.Input]'s text does: its [target] is `set:KEY`, `report`, `screen-join:ADDRESS NAME` or `screen-address`. Nothing for blank text. */
 fun homeInputAction(target: String, text: String): HomeAction {
     val value = text.trim()
     if (value.isEmpty()) return HomeAction.None
     return when {
         target.startsWith("set:") -> HomeAction.Config("set", listOf(target.removePrefix("set:"), value), back = true)
         target == "report" -> HomeAction.Tab(runThenShell("mynx report " + shellQuote(value)))
+        // A host to pair with: its address, then its name (an address has no spaces).
+        target.startsWith("screen-join:") -> target.removePrefix("screen-join:").let { host ->
+            HomeAction.Config("screen-pair-join", listOf(value, host.substringBefore(' '), host.substringAfter(' ', host)), back = true)
+        }
+        target == "screen-address" -> HomeAction.Config("screen-pair-address", listOf(value), back = true)
         else -> HomeAction.None
     }
 }

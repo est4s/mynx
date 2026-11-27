@@ -25,6 +25,17 @@ can be sent to the screen; chats can't be yet.
 
 Each takes `--json`.
 
+- **Pairing from settings** (touch mode: Settings → Second screen),
+  no terminal needed. On the host, **Pair this phone as the host**
+  shows the code big, with the phone's name and address; it updates
+  by itself (a new code after a wrong try, why it stopped) and has
+  **Cancel**. On the screen, **Pair with a host** lists the phones
+  pairing on the Wi-Fi as it finds them (or **Type its address**);
+  pick one, type its code and **Pair**. The group also shows the
+  link's status and **Paired phones**: each one's page has
+  **Connect** (on the screen), **Disconnect** and **Unpair** (asked
+  first). It runs the same requests as `mynx screen`, so either way
+  works on either phone.
 - **Pairing:** the host shows the code, the screen types it. Each
   code takes one try: after a wrong one the host shows a new code,
   and three wrong codes stop the pairing. The phones then keep a key
