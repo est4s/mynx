@@ -7,7 +7,13 @@ const val SHUT_DOWN_CONFIRM_MS = 3000L
 fun desktopMenuShortcut(press: KeyPress): Boolean = press.key == "M" && press.ctrl && press.shift && !press.alt
 
 /** What a row of the desktop's ⋮ menu does. */
-enum class DesktopMenuAction { TOUCH, LOG, RESTART, SHUT_DOWN }
+enum class DesktopMenuAction { TOUCH, LOG, RESTART, SHUT_DOWN, SCREEN_PLACE, SCREEN_DESKTOP, ALIGN }
+
+/** The other phone (the extended screen) while one is linked to this host: where it sits (`screen-place`), how the desktop uses it (`screen-desktop`). */
+data class DesktopMenuOther(val side: ScreenSide, val mode: ScreenDesktopMode)
+
+private val PLACE_LABELS = listOf("Left", "Right", "Above", "Below")
+private val SCREEN_DESKTOP_LABELS = listOf("Own monitor", "Half of one")
 
 /** What the menu's rows depend on. */
 data class DesktopMenuState(
@@ -15,6 +21,8 @@ data class DesktopMenuState(
     /** The X server or the session runs: there's something to restart or shut down. */
     val running: Boolean,
     val logShown: Boolean,
+    /** A phone linked as this one's screen: the menu's Other phone section. */
+    val other: DesktopMenuOther? = null,
 )
 
 /**
@@ -42,6 +50,12 @@ sealed interface DesktopMenuCommand {
     data object Restart : DesktopMenuCommand
     /** As `mynx desktop stop`, then back where the desktop was opened from. */
     data object ShutDown : DesktopMenuCommand
+    /** Sets `screen-place` (as `mynx screen place` does): the other phone's part moves at once. */
+    data class Place(val side: ScreenSide) : DesktopMenuCommand
+    /** Sets `screen-desktop` (as `mynx set` does), applied at once. */
+    data class ScreenDesktop(val mode: ScreenDesktopMode) : DesktopMenuCommand
+    /** Aligning both phones' pictures (the rulers along the seam). */
+    data object Align : DesktopMenuCommand
 }
 
 /** The keys the open menu takes ([desktopMenuKey]). */
@@ -78,7 +92,7 @@ fun desktopMenuKey(keyCode: Int, shift: Boolean): DesktopMenuKey? = when (keyCod
  * the row the keyboard is on, and Shut down's two taps: the first turns
  * it into "Tap again to shut down" for [confirmMs], the second shuts
  * down; anything else in between takes it back. Taps and keys return
- * what the view must do. Touch's choices keep the menu open (the change
+ * what the view must do. Choices (Touch, the other phone's) keep the menu open (the change
  * shows at once); the other rows close it. Main thread.
  */
 class DesktopMenu(private val confirmMs: Long = SHUT_DOWN_CONFIRM_MS) {
@@ -131,7 +145,14 @@ class DesktopMenu(private val confirmMs: Long = SHUT_DOWN_CONFIRM_MS) {
                 ))
             }
         }
-        val sections = listOf(DesktopMenuSection(null, desktop))
+        val other = state.other?.let { o ->
+            DesktopMenuSection("Other phone", listOf(
+                DesktopMenuItem(DesktopMenuAction.SCREEN_PLACE, "Screen sits", PLACE_LABELS, ScreenSide.entries.indexOf(o.side)),
+                DesktopMenuItem(DesktopMenuAction.SCREEN_DESKTOP, "Desktop there", SCREEN_DESKTOP_LABELS, ScreenDesktopMode.entries.indexOf(o.mode)),
+                DesktopMenuItem(DesktopMenuAction.ALIGN, "Align screens…"),
+            ))
+        }
+        val sections = listOfNotNull(DesktopMenuSection(null, desktop), other)
         val count = sections.sumOf { it.items.size }
         if (selected >= count) selected = count - 1
         return sections
@@ -193,6 +214,9 @@ class DesktopMenu(private val confirmMs: Long = SHUT_DOWN_CONFIRM_MS) {
             DesktopMenuAction.TOUCH -> DesktopTouch.entries.getOrNull(choice)?.let { DesktopMenuCommand.Touch(it) }
             DesktopMenuAction.LOG -> DesktopMenuCommand.ToggleLog.also { close() }
             DesktopMenuAction.RESTART -> DesktopMenuCommand.Restart.also { close() }
+            DesktopMenuAction.SCREEN_PLACE -> ScreenSide.entries.getOrNull(choice)?.let { DesktopMenuCommand.Place(it) }
+            DesktopMenuAction.SCREEN_DESKTOP -> ScreenDesktopMode.entries.getOrNull(choice)?.let { DesktopMenuCommand.ScreenDesktop(it) }
+            DesktopMenuAction.ALIGN -> DesktopMenuCommand.Align.also { close() }
             DesktopMenuAction.SHUT_DOWN -> null
         }
     }

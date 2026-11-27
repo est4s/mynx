@@ -7,6 +7,7 @@ import io.github.est4s.terminal.core.ScreenHome
 import io.github.est4s.terminal.core.ScreenMessage
 import io.github.est4s.terminal.core.ScreenRef
 import io.github.est4s.terminal.core.ScreenRole
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.ShownStream
 import io.github.est4s.terminal.core.WebApps
 import org.junit.After
@@ -106,5 +107,39 @@ class ScreenShareScreenshotTest {
         view.focus(true)
         Screenshots.settle()
         Screenshots.save(view, "screen-stream-typed-to")
+    }
+
+    // Aligning, on the screen: its ruler along the edge facing the host (its left: it sits right of it), the panel.
+    @Test
+    fun aligningStream() {
+        val view = Screenshots.open(1080, 2400) { activity ->
+            ScreenStreamView(activity, object : ScreenStreamView.Host {
+                override fun touch(touch: ScreenMessage.Touch) {}
+                override fun decoded(stream: Int, pts: Long) {}
+                override fun askKeyFrame(stream: Int) {}
+            })
+        }
+        view.show(ShownStream(2, "Linux desktop", 1080, 2400))
+        Screenshots.settle()
+        view.align(ScreenMessage.Align(2, true, ScreenSide.RIGHT, 286f, 32.2f, 1.5f, 1.012f))
+        Screenshots.settle()
+        Screenshots.save(view, "screen-align-stream")
+    }
+
+    // Below the host: the ruler along its top edge, the panel at the bottom.
+    @Test
+    fun aligningStreamBelow() {
+        val view = Screenshots.open(1080, 2400) { activity ->
+            ScreenStreamView(activity, object : ScreenStreamView.Host {
+                override fun touch(touch: ScreenMessage.Touch) {}
+                override fun decoded(stream: Int, pts: Long) {}
+                override fun askKeyFrame(stream: Int) {}
+            })
+        }
+        view.show(ShownStream(2, "Linux desktop", 1080, 2400))
+        Screenshots.settle()
+        view.align(ScreenMessage.Align(2, true, ScreenSide.BELOW, 17f, 31.3f, 0f, 1f))
+        Screenshots.settle()
+        Screenshots.save(view, "screen-align-stream-below")
     }
 }

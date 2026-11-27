@@ -47,7 +47,7 @@ Commands:
   audio        audio play FILE | record FILE [--seconds N]: sound
   sound        sound [status] | start | install: the sound device
   desktop      desktop [status] | open | start | stop: desktop mode's X server and desktop (XFCE)
-  screen       screen [status] | pair [CODE [ADDRESS]] | connect | disconnect | unpair NAME | place SIDE | send app NAME | send tab [N|new] | take [ID]: another phone as a screen
+  screen       screen [status] | pair [CODE [ADDRESS]] | connect | disconnect | unpair NAME | place SIDE | send app NAME | send tab [N|new] | take [ID] | align: another phone as a screen
   usb          usb [list] | allow [DEVICE] | url|path [PORT] | monitor [PORT]: USB devices and serial ports
   bt           bt [list] | bind DEVICE [PORT] | unbind PORT|DEVICE | settings: Bluetooth serial ports
   ble          ble scan | services DEVICE | read|write|notify DEVICE CHAR | connect DEVICE | bind DEVICE [nusN] | unbind PORT|DEVICE: Bluetooth LE devices
@@ -1479,7 +1479,7 @@ def run_steps(steps):
 
 SCREEN_USAGE = ("usage: mynx screen [status] | pair [CODE [ADDRESS]] | connect [NAME] | disconnect"
                 " | unpair NAME|all | place left|right|above|below | send [app] NAME | send tab [N|new] | send desktop"
-                " | take [ID|NAME|all]")
+                " | take [ID|NAME|all] | align [offset MM | scale X | reset]")
 SCREEN_SIDES = ("left", "right", "above", "below")
 
 
@@ -1521,6 +1521,10 @@ def cmd_screen(args, as_json):
         sent = answer["screen"]
         peer = (answer.get("connected") or {}).get("name", "the screen")
         out(as_json, answer, f"Sent {sent['title']} to {peer} (mynx screen take {sent['id']} takes it back).")
+    elif sub == "align" and (not rest or rest == ["reset"] or (len(rest) == 2 and rest[0] in ("offset", "scale"))):
+        answer = request("screen-align", *rest)
+        note = " (as the phones' dpi say)" if answer.get("default") else ""
+        out(as_json, answer, f"{answer['phone']}: {answer['text']}{note}")
     elif sub == "take" and len(rest) <= 1:
         answer = request("screen-take", rest[0] if rest else "all")
         titles = ", ".join(t["title"] for t in answer["taken"])

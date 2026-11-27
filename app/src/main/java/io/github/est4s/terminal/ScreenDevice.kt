@@ -31,7 +31,9 @@ class ScreenDevice(private val context: Context, private val changed: () -> Unit
             ?: return ScreenMessage.ScreenInfo(0, 0, 0, 0)
         val metrics = DisplayMetrics()
         display.getRealMetrics(metrics)
-        return ScreenMessage.ScreenInfo(metrics.widthPixels, metrics.heightPixels, metrics.densityDpi, display.rotation)
+        return ScreenMessage.ScreenInfo(
+            metrics.widthPixels, metrics.heightPixels, metrics.densityDpi, display.rotation, metrics.xdpi, metrics.ydpi,
+        )
     }
 
     @Synchronized

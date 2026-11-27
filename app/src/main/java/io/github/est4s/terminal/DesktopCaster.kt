@@ -8,14 +8,21 @@ import android.view.ViewConfiguration
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import io.github.est4s.terminal.core.ACTION_DOWN
+import io.github.est4s.terminal.core.AlignStep
+import io.github.est4s.terminal.core.DesktopAlignKey
 import io.github.est4s.terminal.core.DesktopGestures
 import io.github.est4s.terminal.core.DesktopKeyboard
 import io.github.est4s.terminal.core.DesktopOther
+import io.github.est4s.terminal.core.DesktopRuler
 import io.github.est4s.terminal.core.DesktopTouch
+import io.github.est4s.terminal.core.ScreenAlignment
 import io.github.est4s.terminal.core.ScreenMessage
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.SentScreen
 import io.github.est4s.terminal.core.Settings
 import io.github.est4s.terminal.core.X11Input
+import io.github.est4s.terminal.core.alignNudge
+import io.github.est4s.terminal.core.alignText
 import io.github.est4s.terminal.core.desktopGestures
 import io.github.est4s.terminal.core.desktopScale
 import io.github.est4s.terminal.core.desktopTouch
@@ -25,6 +32,9 @@ private const val TALLY_MS = 5000L
 
 /** What the desktop is called on the other phone and in Home's lists. */
 const val DESKTOP_TITLE = "Linux desktop"
+
+/** Aligning both phones' pictures, as this phone's desktop view shows it: its ruler along the seam ([side]: where the other phone sits), the values. */
+data class DesktopAligning(val side: ScreenSide, val ruler: DesktopRuler, val text: String, val other: String)
 
 /**
  * The desktop's part on the other phone, on the host (the extended
@@ -39,7 +49,12 @@ const val DESKTOP_TITLE = "Linux desktop"
  * pointer is on its part goes to [pointerTo] (the X server draws no
  * cursor). A click there while it's typed to and the desktop isn't on
  * this phone's screen opens the typing bar ([typing]); its keys go to X
- * ([type], [press], [key]). Main thread, but [keyFrame].
+ * ([type], [press], [key]). Its picture there is sized and placed as
+ * core's desktopFit says (an X pixel the same size on both phones, bands
+ * on the taller), lined up by the pair's alignment ([alignment]), which
+ * Align screens fine-tunes ([startAlign]: rulers on both phones, drags
+ * and pinches on the other phone, keys here; Done keeps it
+ * ([saveAlignment]), Cancel puts it back). Main thread, but [keyFrame].
  */
 class DesktopCaster(
     context: Context,
@@ -55,7 +70,21 @@ class DesktopCaster(
     private val shownHere: () -> Boolean,
     /** What's sent changed: Home's lists and the desktop's bar follow. */
     private val changed: () -> Unit,
+    /** The other phone's screen as it said (its pixels and dpi), while linked. */
+    private val peerScreen: () -> ScreenMessage.ScreenInfo?,
+    /** The pair's alignment, as kept. */
+    private val alignment: () -> ScreenAlignment,
+    /** Keeps the pair's alignment (Done); why not, or null. */
+    private val saveAlignment: (ScreenAlignment) -> String?,
+    /** The ruler (or its end) to the other phone. */
+    private val sendAlign: (ScreenMessage.Align) -> Unit,
+    /** The other phone's name. */
+    private val otherName: () -> String,
 ) {
+    // While aligning: the alignment it started from (Cancel goes back to it).
+    private var alignFrom: ScreenAlignment? = null
+    // The ruler last sent to the other phone, so each change goes once.
+    private var rulerSent: ScreenMessage.Align? = null
     private var screen: SentScreen? = null
     private var density = 0
     @Volatile private var encoder: ScreenEncoder? = null
@@ -103,6 +132,7 @@ class DesktopCaster(
         if (!link.connected) return "the desktop isn't running"
         this.screen = screen
         this.density = density
+        link.align(alignment())
         relayout()
         changed()
         return null
@@ -113,21 +143,117 @@ class DesktopCaster(
         val s = settings() ?: last ?: return link.note("the settings can't be read: the other phone's part stays where it is")
         last = s
         val sent = screen
-        link.other(sent?.let { DesktopOther(it.width, it.height, density, it.width, it.height) }, s.screenPlace, s.screenDesktop)
+        val info = peerScreen()
+        link.other(
+            sent?.let {
+                // Its screen as it said; the video's size until it has (the video keeps its shape).
+                val w = info?.width?.takeIf { v -> v > 0 } ?: it.width
+                val h = info?.height?.takeIf { v -> v > 0 } ?: it.height
+                DesktopOther(w, h, info?.xdpi ?: 0f, info?.ydpi ?: 0f, it.width, it.height, density)
+            },
+            s.screenPlace, s.screenDesktop,
+        )
         follow()
     }
 
-    // The layout or the pointer moved: the other phone's gestures stay on its part, and its pointer is drawn where it is.
+    /** The pair's alignment was kept anew (`mynx screen align`): applied, unless aligning is under way here. */
+    fun alignmentSaved(to: ScreenAlignment) {
+        if (alignFrom != null || screen == null) return
+        link.align(to)
+        follow()
+    }
+
+    /** Aligning, as this phone's view shows it; null when it isn't. */
+    val aligning: DesktopAligning?
+        get() {
+            if (alignFrom == null) return null
+            val fit = link.screens.fit ?: return null
+            val side = last?.screenPlace ?: ScreenSide.RIGHT
+            return DesktopAligning(side, fit.hostRuler, alignText(link.screens.alignment), otherName())
+        }
+
+    /** Align screens: rulers on both phones along the seam; null, or why not. */
+    fun startAlign(): String? {
+        if (screen == null) return "the desktop isn't on ${otherName()}"
+        if (link.screens.fit == null) return "the desktop isn't laid out on ${otherName()} yet"
+        if (alignFrom == null) alignFrom = link.screens.alignment
+        link.note("aligning with ${otherName()}: ${alignText(link.screens.alignment)}")
+        follow()
+        changed()
+        return null
+    }
+
+    private fun alignTo(to: ScreenAlignment) {
+        link.align(to)
+        follow()
+    }
+
+    /** A key on this phone while aligning. */
+    fun alignKey(key: DesktopAlignKey) {
+        if (alignFrom == null) return
+        when (key) {
+            DesktopAlignKey.DONE -> alignStep(AlignStep.DONE)
+            DesktopAlignKey.RESET -> alignStep(AlignStep.RESET)
+            DesktopAlignKey.CANCEL -> alignStep(AlignStep.CANCEL)
+            else -> alignTo(alignNudge(link.screens.alignment, key))
+        }
+    }
+
+    /** Done (keeps it), Reset (the default, still aligning) or Cancel (back as it was), from either phone. */
+    fun alignStep(step: AlignStep) {
+        val from = alignFrom ?: return
+        when (step) {
+            AlignStep.RESET -> return alignTo(ScreenAlignment())
+            AlignStep.DONE -> {
+                val now = link.screens.alignment
+                saveAlignment(now)?.let { why -> link.note("the alignment wasn't kept: $why") }
+                    ?: link.note("aligned with ${otherName()}: ${alignText(now)}")
+            }
+            AlignStep.CANCEL -> link.align(from)
+        }
+        endAlign()
+    }
+
+    private fun endAlign() {
+        if (alignFrom == null) return
+        alignFrom = null
+        follow()
+        changed()
+    }
+
+    // The layout or the pointer moved: the other phone's gestures stay on its part, its picture where
+    // the layout puts it, its pointer drawn where it is, and its ruler (while aligning) where its X lines are.
     private fun follow() {
         val s = screen ?: return
         val rect = link.screens.otherRect
         gestures?.let { g -> if (rect != null && g.monitor != rect) g.monitor(rect) }
+        bridge?.picture = link.screens.fit?.picture
         val at = link.screens.toStream(link.pointer.x, link.pointer.y)
         pointerTo(s.id, at?.first ?: 0f, at?.second ?: 0f, at != null)
+        sendRuler(s)
+    }
+
+    private fun sendRuler(s: SentScreen) {
+        val fit = link.screens.fit
+        val a = link.screens.alignment
+        val side = last?.screenPlace ?: ScreenSide.RIGHT
+        val m = if (alignFrom != null && fit != null) {
+            ScreenMessage.Align(s.id, true, side, fit.otherRuler.origin, fit.otherRuler.step, a.offset, a.scale)
+        } else {
+            ScreenMessage.Align(s.id, false, side, 0f, 0f, a.offset, a.scale)
+        }
+        // Once for each change; an end only after a start.
+        if (m == rulerSent || (!m.on && rulerSent?.on != true)) return
+        rulerSent = m
+        sendAlign(m)
     }
 
     fun close(screen: SentScreen) {
         if (this.screen?.id != screen.id) return
+        // Aligning ends with it, as Cancel.
+        alignFrom?.let { from -> link.align(from) }
+        alignFrom = null
+        rulerSent = null
         stopEncoder()
         handler.removeCallbacks(longPress)
         gestures?.let { link.send(keys.pointer(it.cancel())) }
@@ -165,10 +291,11 @@ class DesktopCaster(
                     link.note("the other phone's part goes through the bridge (a SurfaceTexture of ours, into the encoder)")
                 }.input
             } catch (e: Exception) {
-                link.note("the bridge didn't start (${e.message}): the X server draws straight into the encoder")
+                link.note("the bridge didn't start (${e.message}): the X server draws straight into the encoder (the picture fills the video: no bands, so touches there may be off)")
                 started.surface
             }
             link.secondSurface(through)
+            bridge?.picture = link.screens.fit?.picture
             follow()
             handler.removeCallbacks(tally)
             handler.postDelayed(tally, TALLY_MS)
@@ -196,8 +323,16 @@ class DesktopCaster(
         bridge?.repeat()
     }
 
+    /** A drag or pinch on the other phone while aligning: its picture moves, its ruler with it. */
+    fun alignInput(screen: SentScreen, input: ScreenMessage.AlignInput) {
+        if (this.screen?.id != screen.id || alignFrom == null) return
+        alignTo(link.screens.aligned(input))
+    }
+
     fun touch(screen: SentScreen, touch: ScreenMessage.Touch) {
         if (this.screen?.id != screen.id) return
+        // While aligning, the other phone's touches are its picture's (they come as AlignInput).
+        if (alignFrom != null) return
         val g = gesturesFor(touch)
         pointerEvents(desktopTouch(g, touch, link.screens::fromStream, SystemClock.uptimeMillis()))
         handler.removeCallbacks(longPress)

@@ -658,9 +658,17 @@ See `docs/ROADMAP.md` "How it works". The details:
   decision, 2026-11-27: nothing needs leaving the desktop) is core's
   `DesktopMenu` (`DesktopMenu.kt`): `sections()` is the one place its
   rows are built (Touch: Touchpad | Direct; Log or Hide log; Restart
-  desktop and Shut down while something runs), in sections so a
-  later group (the extended screen's "Other phone") is one more
-  `DesktopMenuSection` with a heading; the keyboard's row
+  desktop and Shut down while something runs), in sections: the
+  extended screen's **Other phone** (work log entry 232, while a phone
+  is linked as this one's screen, `DesktopMenuState.other`) is one
+  more `DesktopMenuSection` with a heading: Screen sits (`Place`,
+  through `ScreenLink.place` as `mynx screen place`), Desktop there
+  (`ScreenDesktop`, written as `mynx set` writes it, then
+  `screenSettingsChanged()`), both choices that keep the menu open,
+  and Align screens… (below, "the desktop on B"); a choice row whose
+  label and choices pass 22 characters puts its segments under its
+  label (360 dp has no room beside), and the box scrolls
+  (landscape), keeping the keyboard's row in sight; the keyboard's row
   (`desktopMenuKey()`: arrows, Tab, Enter/Space, Esc/Back) and Shut
   down's two taps (`SHUT_DOWN_CONFIRM_MS`, 3 s; any other row, key or
   closing takes it back) are its state, and taps and keys return a
@@ -750,7 +758,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   dpi, rotation), Layout (side, alignment: the host's word is final;
   B's `place` asks), KeepAlive (after 5 s idle; a link silent for
   15 s ends), Bye, Unpaired (the other forgets the pair too), Focus,
-  and the screens' and terminals' messages (next entries). **The link** (`ScreenLink`, plain JDK sockets, so
+  and the screens' and terminals' messages (next entries). Version 5
+  added ScreenInfo's real xdpi and ydpi (`DisplayMetrics`; trailing
+  floats, read only when there, so a version 4 message reads as 0:
+  "not said") and the Align messages; a Hello of another version is
+  refused, as before. **The link** (`ScreenLink`, plain JDK sockets, so
   tested on loopback): A listens on `screen-port` (all interfaces)
   only while `screen-host = auto` and a screen is paired or a pairing
   waits, and advertises `_mynx-screen._tcp` with TXT `v`, `id`,
@@ -768,7 +780,15 @@ See `docs/ROADMAP.md` "How it works". The details:
   Requests: `screen-status|pair` (a stream: a line per code)
   `|join|connect|disconnect|unpair|place` (`screenRequests()`).
   **Settings:** `screen-host` (`auto`/`off`), `screen-port` (7391),
-  `screen-place` (right). **Layout** (`arrangeScreens()`): B scaled
+  `screen-place` (right). **The alignment** (`ScreenAlignment`: offset
+  mm along the seam, scale) is kept with the pair, in the host's
+  `peers/ID.conf` (`align-offset`, `align-scale`, written only when not
+  the default; `ScreenPairs.align`): it depends on the pair, goes
+  when the pair goes (unpair), and only the host lays the desktop out,
+  so nothing has to agree between a Debian file and the pairs (agent's
+  choice, entry 232; `mynx screen align` reads and sets it, the
+  `screen-align` request, on the linked screen's or the only paired
+  one's; `ScreenLink.alignChanged` applies it live). **Layout** (`arrangeScreens()`): B scaled
   to A's density, on A's side, aligned start/centre/end, both
   starting at 0, 0: the extended X screen's two monitors (step 3).
   **Pairing from touch settings** (`core/.../ScreenPairing.kt`;
@@ -892,7 +912,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   `DesktopGestures.kt`'s `DesktopPointer`; `app/.../DesktopCaster.kt`,
   `ScreenEncoder.kt`, `PointerArrow.kt`, `DesktopLink.kt`; our patch;
   work log entry 228, "Next" 0a; agent's design, to confirm). Protocol
-  version 4 (Pointer, type 49).
+  version 4 (Pointer, type 49); 5 (B's real dpi, aligning: Align 50, AlignInput 51,
+  AlignAction 52; `ScreenFit.kt`, `AlignViews.kt`).
   `ScreenTarget.Desktop` is sent like an app (`mynx screen send desktop`,
   Home's Send list while the X server runs, the desktop's bar
   **→ NAME** / **Take back**), but nothing is drawn on a display of
@@ -904,13 +925,37 @@ See `docs/ROADMAP.md` "How it works". The details:
   EGL_BAD_MATCH from `eglMakeCurrent` with every config; an ordinary
   surface works, as the spike's SurfaceView did. If the bridge doesn't
   start, the encoder's surface is handed over as before (the Log says
-  which). **Layout** (`DesktopScreens`, owned by the `DesktopLink`):
-  A's monitor is the size its view gives (before it ever did, the phone's
-  whole screen); B's is its screen at its own 0.75 dp X pixel
-  (`secondMonitorSize`, width a mode step: a Nord 2 is 536x1200), placed
-  by `screen-place` from 0, 0 (`desktopMonitors`, `arrangeScreens` at
-  scale 1); `screen-desktop = span` scales B's part to A's shared edge so
-  both make one rectangle. The link sends it as `X11Input.Monitors`
+  which; then the picture fills the video, no bands). **Layout**
+  (`DesktopScreens`, owned by the `DesktopLink`; `desktopFit()` in
+  `ScreenFit.kt`, entry 232; maintainer's request): from A's view's
+  area (its layer's pixels, without the keyboard; `DesktopScreenLink.view`,
+  before it ever said, the phone's whole screen), A's real dpi and its
+  X pixel (`desktopScale`), and B's screen and real dpi (ScreenInfo
+  version 5; its density bucket stands in before). **An X pixel is the
+  same physical size on both** (B's pixels an X pixel = A's × B's dpi /
+  A's dpi × the alignment's scale); **along the seam both share the
+  smaller usable extent** (A loses height to its bars), centred on each
+  other and moved by the alignment's offset (kept so they share at
+  least half the smaller); the taller shows black bands: B's in its
+  video (`EncoderBridge.picture`, a glViewport of the picture's rect,
+  the rest cleared black), A's by its SurfaceView sized and placed in
+  the layer (`hostSurface`; touches and the pointer go by its offset).
+  Across, B's part is the rest of its screen (to a mode step), its
+  picture against the edge facing A. Extend and span get the same
+  sizes, so span's halves meet exactly. B's touches map through the
+  picture (`fromStream`, bands held at its edge). **Aligning**
+  (Align screens…, `DesktopCaster.startAlign`): both phones draw a ruler
+  of the same X lines along the seam (`DesktopRuler`, every 2 mm by A's
+  dpi, a long cyan one each cm; `AlignRulerView`, drawn by the app over
+  the picture) and an `AlignPanel` (Cancel, Reset, Done); B's touches
+  become `AlignGestures` (one finger shifts, two pinch about their
+  middle), sent as AlignInput (type 51) and previewed on B's ruler at
+  once; A applies them (`alignAfter`: the line under the fingers
+  stays), lays out again and sends the ruler (Align, type 50) when it
+  changes; A's keys nudge (`desktopAlignKey`, `alignNudge`). Done (either
+  phone; AlignAction, type 52) keeps it with the pair, Reset sets the
+  default and stays, Cancel (or Back on A, or the desktop going) puts
+  back where it started. The link sends it as `X11Input.Monitors`
   (our event 100: mode 0 alone / 1 `mynx-b` / 2 one monitor over both,
   then both rects as width, height, x, y) after every ScreenSize and on
   every (re)connection, so a restarted server gets it again; the server

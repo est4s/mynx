@@ -69,7 +69,64 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    2 and 5 were hard to read in the pixel font; the values' font
    fixed it (build 45997763400), then the maintainer said merge.
    The agent's decisions stand (entry 230).
-8. **Then (left for later):** B linking again by itself (after a drop,
+8. **The desktop across both phones (entry 232, PR into `screen-dev`,
+   branch `screen-desktop-fit`): to try on both phones.** The ⋮
+   menu's Other phone section, sizes so an X pixel is as big on both
+   (bands on the taller), Align screens (rulers, drag and pinch on B,
+   keys on A), `mynx screen align`; protocol version 5, so **both
+   phones need this build**. PR #128 (desktop-dev's ⋮ menu merged
+   into screen-dev) passed CI but wasn't tried on the phones on its
+   own: this test covers the menu with the desktop on B too (Touch
+   with a shared pointer, Shut down while the desktop is on B). Test
+   (Pixel 10 as A, Nord 2 as B, both on this build as mynx dev,
+   paired and linked; on A the desktop running with XFCE, `mynx
+   desktop open`):
+   1. A: ⋮: Touch, Log, Restart, Shut down, then OTHER PHONE: Screen
+      sits [Left|Right|Above|Below] (Right marked), Desktop there [Own
+      monitor|Half of one] (Own monitor marked), Align screens…; its
+      choices under their labels. B unlinked (`mynx screen
+      disconnect` on B): the section is gone.
+   2. A: → Nord 2 (bar). B shows the desktop with black bands above
+      and below (B is taller); its picture is as tall as A's
+      desktop area. Hold a ruler (or a card) across both: a window's
+      title bar dragged across the seam keeps its height on B.
+      A's Log: "the desktop's monitors: … its picture … of its video".
+   3. ⋮ → Desktop there: Half of one (menu stays; `mynx settings` on A
+      says `screen-desktop = span`); maximise a window (XFCE
+      terminal): it fills both phones and its top edge, title bar and
+      bottom line up across the seam (no step). Back to Own monitor:
+      maximised fills A only, and on B fills B's picture only.
+   4. ⋮ → Screen sits: Above, then Left, then Right: `mynx-b` moves at
+      once each time (`xrandr --listmonitors`), the pointer crosses at
+      the new edge; for Above, B's bands are at its left and right.
+   5. ⋮ → Align screens…: A shows a ruler strip along its right edge
+      (cyan lines each cm, short ones each 2 mm) and the panel (Align
+      screens, the hint, "offset 0 mm · scale 1.000", Cancel, Reset,
+      Done); B shows a strip along its left edge and the same panel.
+   6. On B: drag up and down: B's picture and its ruler move; stop
+      when B's lines continue A's across the seam. Pinch on B: its
+      lines spread or close; match the long lines 5 cm apart. Both
+      panels' values follow. On A (hardware keyboard): Down, Up, +,
+      - nudge it.
+   7. Done (on B, or Enter on A): rulers and panels go on both; `mynx
+      screen align` on A shows the values; a window across the seam
+      lines up. Disconnect and connect again: the same alignment.
+      Align again, move it, Cancel (or Back on A): back as it was.
+      Reset: "offset 0 mm · scale 1.000", still aligning.
+   8. `mynx screen align offset 3` on A while the desktop is on B: B's
+      picture moves at once; `mynx screen align reset`. On B, `mynx
+      screen align`: "Pixel 10 keeps the alignment, as the host".
+   9. The ⋮ menu with the desktop on B (PR #128's part): Touch: Direct
+      from A's menu: taps on B now click where they touch, and on A;
+      back to Touchpad: one pointer, crossing between the phones.
+      Shut down (two taps) while the desktop is on B: A goes back to
+      the terminal, B's stream ends within 5 s, B back on its Home.
+   10. A in landscape, the desktop sent, Screen sits: Below: A's own
+       desktop shows bands at its left and right (A is wider);
+       touches and the pointer still land where they should on A.
+       In landscape the ⋮ menu scrolls to Align screens… (Ctrl+Shift+M,
+       Up).
+9. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
    Files and viewers sent to B; typing with B's own keyboard (into
@@ -146,6 +203,58 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-27 (232): Extended screen: the desktop across both phones
+
+- Branch `screen-desktop-fit` from `screen-dev`, PR into
+  `screen-dev`. Core and `mynx` tested here (`ScreenFitTest`,
+  `DesktopScreensTest`, `DesktopMenuTest`, `ScreenPairsTest`,
+  `ScreenLinkTest`, `ScreenShareTest`, `test_mynx.py`); the app's side
+  only compiled in CI, with Robolectric tests (`DesktopMenuViewTest`)
+  and screenshots (`desktop-menu-other*`, `desktop-align*`,
+  `screen-align-stream*`). Not tried on two phones by the agent:
+  "Next" 0a step 8 has the test.
+- **Maintainer's requests (2026-11-27):** an Other phone section in
+  the ⋮ menu (Screen sits, Desktop there, Align screens…); default
+  sizes so a full-screen window in span mode lines up across the
+  seam (an X pixel the same physical size on both, by each phone's
+  real dpi; the shared extent the smaller usable one, bands on the
+  taller; both modes); Align screens for fine-tuning (rulers on both,
+  drag and pinch on B, Done / Reset / Cancel, per pair) and `mynx
+  screen align`.
+- **Built:** core's `desktopFit()` (`ScreenFit.kt`) does all the
+  geometry: sizes, bands on either phone, the offset and scale, the
+  rulers, B's gestures (`AlignGestures`, `alignAfter`), A's keys.
+  Protocol version 5: ScreenInfo carries `xdpi`/`ydpi`, and Align /
+  AlignInput / AlignAction (50-52). B's bands are drawn into its video
+  by `EncoderBridge` (a viewport), so B needs nothing new to show them;
+  A's by sizing its SurfaceView inside the view. The menu's choice
+  rows put their segments under the label when long, and the menu
+  scrolls (landscape).
+- **Agent's decisions, to confirm:**
+  - The alignment is kept **with the pair** (the host's
+    `peers/ID.conf`, `align-offset`/`align-scale`), not a Debian
+    setting: it's a measurement of that pair, it goes with an unpair,
+    only the host lays the desktop out, and `mynx screen align` reads
+    and sets it (so agents can). Re-pairing starts from the default.
+  - Default placement along the seam: **centred on each other**; the
+    offset (mm, + is down or right for B's picture) moves from there.
+    If B's picture would leave B's screen, the shared part shrinks and
+    A shows the band instead (the phones overlap less).
+  - Extend now uses the same sizes as span (B's monitor is the shared
+    height, not B's whole screen), as asked ("both modes").
+  - Align screens… sends the desktop to B first if it isn't there.
+    While aligning, B's touches move its picture (none reach X); A's
+    desktop still works. Done on either phone, Reset stays aligning,
+    Back on A cancels. Ruler lines every 2 mm, a long cyan one each cm.
+  - Keys on A while aligning: arrows along the seam 0.1 mm, + / - the
+    scale by 0.001, R reset, Enter Done, Esc Cancel.
+  - Limits: offset ±50 mm, scale 0.8-1.25, the phones always share at
+    least half the smaller extent.
+- **Not done:** B saying its screen again after it rotates (the link
+  sends ScreenInfo once, at its start: rotate B before linking); the
+  fallback when the bridge doesn't start (the X server straight into
+  the encoder) has no bands (the Log says so).
 
 ### 2026-11-27 (231): Desktop mode: the ⋮ menu
 

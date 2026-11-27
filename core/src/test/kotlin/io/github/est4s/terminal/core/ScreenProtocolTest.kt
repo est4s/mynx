@@ -21,6 +21,7 @@ class ScreenMessagesTest {
             ScreenMessage.Confirm(byteArrayOf(9, 8)),
             ScreenMessage.Refusal(RefusalReason.WRONG_CODE, "wrong code"),
             ScreenMessage.ScreenInfo(1080, 2400, 420, 1),
+            ScreenMessage.ScreenInfo(1080, 2400, 480, 0, 409.4f, 411.2f),
             ScreenMessage.Layout(ScreenSide.LEFT, ScreenAlign.CENTER),
             ScreenMessage.KeepAlive,
             ScreenMessage.Bye("unpaired"),
@@ -46,8 +47,18 @@ class ScreenMessagesTest {
             ScreenMessage.TermTouched(7),
             ScreenMessage.Pointer(2, 540.5f, 1200f, true),
             ScreenMessage.Pointer(2, 0f, 0f, false),
+            ScreenMessage.Align(2, true, ScreenSide.RIGHT, -12.5f, 33.25f, 1.5f, 1.012f),
+            ScreenMessage.Align(2, false, ScreenSide.ABOVE, 0f, 0f, 0f, 1f),
+            ScreenMessage.AlignInput(2, -4.5f, 1.02f, 600f),
+            ScreenMessage.AlignAction(2, AlignStep.RESET),
         )
         for (m in messages) assertEquals(m, roundTrip(m), m.toString())
+    }
+
+    @Test
+    fun `a screen's size from before version 5 has no dpi of its own`() {
+        val old = byteArrayOf(ScreenMessage.TYPE_SCREEN_INFO.toByte(), 0, 0, 4, 56, 0, 0, 9, 96, 0, 0, 1, 224.toByte(), 1)
+        assertEquals(ScreenMessage.ScreenInfo(1080, 2400, 480, 1, 0f, 0f), decodeScreenMessage(old))
     }
 
     @Test
@@ -86,9 +97,10 @@ class ScreenMessagesTest {
     }
 
     @Test
-    fun `this is version 3 of the link`() {
-        // Version 1 was the pairing alone, 2 added screens as video, 3 terminals as text, 4 the desktop's pointer.
-        assertEquals(4, SCREEN_PROTOCOL)
+    fun `this is version 5 of the link`() {
+        // Version 1 was the pairing alone, 2 added screens as video, 3 terminals as text, 4 the desktop's pointer,
+        // 5 the screens' own dpi and aligning the desktop across them.
+        assertEquals(5, SCREEN_PROTOCOL)
     }
 
     @Test

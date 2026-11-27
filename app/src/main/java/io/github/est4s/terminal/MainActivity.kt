@@ -73,6 +73,11 @@ import io.github.est4s.terminal.core.desktopShortcut
 import io.github.est4s.terminal.core.HomeAction
 import io.github.est4s.terminal.core.HomeMenus
 import io.github.est4s.terminal.core.ScreenMessage
+import io.github.est4s.terminal.core.ScreenSide
+import io.github.est4s.terminal.core.ScreenDesktopMode
+import io.github.est4s.terminal.core.AlignStep
+import io.github.est4s.terminal.core.DesktopAlignKey
+import io.github.est4s.terminal.core.DesktopMenuOther
 import io.github.est4s.terminal.core.ShownStream
 import io.github.est4s.terminal.core.ServiceOp
 import io.github.est4s.terminal.core.ToolsInstaller
@@ -980,6 +985,14 @@ class MainActivity : Activity(), FrontActivity {
         override fun askKeyFrame(stream: Int) {
             service?.screenShare?.askKeyFrame(stream)
         }
+
+        override fun alignInput(input: ScreenMessage.AlignInput) {
+            service?.screenShare?.alignInput(input)
+        }
+
+        override fun alignAction(stream: Int, step: AlignStep) {
+            service?.screenShare?.alignAction(stream, step)
+        }
     }
 
     private val screenShown get() = screenView?.visibility == View.VISIBLE
@@ -1030,6 +1043,11 @@ class MainActivity : Activity(), FrontActivity {
     /** The host's desktop pointer on [stream], in its pixels, or not on it. */
     fun onScreenPointer(stream: Int, x: Float, y: Float, shown: Boolean) {
         screenView?.pointer(stream, x, y, shown)
+    }
+
+    /** The host aligns the desktop across both phones (its ruler on [message]'s stream), or no longer. */
+    fun onScreenAlign(message: ScreenMessage.Align) {
+        screenView?.align(message)
     }
 
     /** The link, or what's sent over it, changed: Home's lists follow. */
@@ -1088,6 +1106,27 @@ class MainActivity : Activity(), FrontActivity {
         override fun backLabel() = desktopBackLabel(desktopFromTouch)
         override fun screen(): Pair<String, Boolean>? = service?.screenDesktop()
         override fun screenToggle(): String? = service?.screenDesktopToggle()
+        override fun otherPhone(): DesktopMenuOther? = service?.desktopOtherPhone()
+        // Null is done: without the service, why not.
+        override fun setScreenPlace(side: ScreenSide): String? {
+            val running = service ?: return "the app isn't ready yet"
+            return running.setScreenPlace(side)
+        }
+        override fun setScreenDesktop(mode: ScreenDesktopMode): String? {
+            val running = service ?: return "the app isn't ready yet"
+            return running.setScreenDesktop(mode)
+        }
+        override fun align(): String? {
+            val running = service ?: return "the app isn't ready yet"
+            return running.desktopAlign()
+        }
+        override fun aligning(): DesktopAligning? = service?.desktopAligning()
+        override fun alignKey(key: DesktopAlignKey) {
+            service?.desktopAlignKey(key)
+        }
+        override fun alignStep(step: AlignStep) {
+            service?.desktopAlignStep(step)
+        }
         override fun stop() {
             service?.stopDesktop()
             hideDesktop()

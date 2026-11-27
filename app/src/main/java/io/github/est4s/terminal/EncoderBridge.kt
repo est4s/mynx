@@ -12,6 +12,7 @@ import android.opengl.GLES20
 import android.os.Handler
 import android.os.HandlerThread
 import android.view.Surface
+import io.github.est4s.terminal.core.PixelRect
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -51,9 +52,10 @@ void main() {
  * spike #118's SurfaceView. So it gets [input], a SurfaceTexture's
  * surface of [width] x [height], and each frame that arrives there is
  * drawn here, on a thread and EGL context of our own with a recordable
- * config, into the encoder's [output] (grafika's pattern). [repeat]
- * draws the last frame again (a key frame asked for). [frames] counts
- * what came in. [start] throws when EGL won't do it.
+ * config, into the encoder's [output] (grafika's pattern), into its
+ * [picture] (the rest black: the other phone's bands, core's
+ * desktopFit). [repeat] draws the last frame again (a key frame asked
+ * for). [frames] counts what came in. [start] throws when EGL won't do it.
  */
 class EncoderBridge private constructor(
     private val output: Surface,
@@ -79,6 +81,14 @@ class EncoderBridge private constructor(
 
     /** Frames that came in from the X server since last read. */
     val frames = AtomicInteger()
+
+    /** Where in the video the picture goes (its pixels, from the top left); null: all of it. Drawn again at once. */
+    @Volatile var picture: PixelRect? = null
+        set(value) {
+            if (value == field) return
+            field = value
+            handler.post { draw(update = false) }
+        }
 
     private val positions = floats(-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f)
     private val coords = floats(0f, 0f, 1f, 0f, 0f, 1f, 1f, 1f)
@@ -162,6 +172,8 @@ class EncoderBridge private constructor(
             GLES20.glViewport(0, 0, width, height)
             GLES20.glClearColor(0f, 0f, 0f, 1f)
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+            // GL counts from the bottom; the picture's rect from the top.
+            picture?.let { p -> GLES20.glViewport(p.x, height - p.y - p.height, p.width, p.height) }
             GLES20.glUseProgram(program)
             val pos = GLES20.glGetAttribLocation(program, "aPos")
             val tex = GLES20.glGetAttribLocation(program, "aTex")

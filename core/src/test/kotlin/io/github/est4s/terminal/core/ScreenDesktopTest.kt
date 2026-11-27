@@ -7,62 +7,19 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class DesktopMonitorsTest {
-    // The Pixel 10's desktop view in portrait (2 phone pixels an X pixel), and a Nord 2's monitor.
-    private val pixel = Pair(528, 943)
-    private val nord = Pair(536, 1200)
-
-    @Test
-    fun `the other phone's monitor is its screen at its own X pixel, the width a whole mode step`() {
-        // A Nord 2: 1080 x 2400 at 480 dpi is 3 px a dp, so 2 px an X pixel (0.75 dp); 540 rounds down to 536.
-        assertEquals(Pair(536, 1200), secondMonitorSize(1080, 2400, 480))
-        // A Pixel 10 at 420 dpi: 2.625 px a dp, 2 px an X pixel too.
-        assertEquals(Pair(1208, 540), secondMonitorSize(2424, 1080, 420))
-        // A low-density tablet: 1 px an X pixel.
-        assertEquals(Pair(800, 1280), secondMonitorSize(800, 1280, 160))
-    }
-
-    @Test
-    fun `right of this phone the other monitor starts where this one ends`() {
-        val m = desktopMonitors(pixel, nord, ScreenSide.RIGHT, ScreenDesktopMode.EXTEND)
-        assertEquals(PixelRect(0, 0, 528, 943), m.host)
-        assertEquals(PixelRect(528, 0, 536, 1200), m.screen)
-        assertEquals(Pair(1064, 1200), Pair(m.width, m.height))
-    }
-
-    @Test
-    fun `left and above put the other monitor first, everything from 0, 0`() {
-        val left = desktopMonitors(pixel, nord, ScreenSide.LEFT, ScreenDesktopMode.EXTEND)
-        assertEquals(PixelRect(0, 0, 536, 1200), left.screen)
-        assertEquals(PixelRect(536, 0, 528, 943), left.host)
-        val above = desktopMonitors(pixel, nord, ScreenSide.ABOVE, ScreenDesktopMode.EXTEND)
-        assertEquals(PixelRect(0, 0, 536, 1200), above.screen)
-        assertEquals(PixelRect(0, 1200, 528, 943), above.host)
-        val below = desktopMonitors(pixel, nord, ScreenSide.BELOW, ScreenDesktopMode.EXTEND)
-        assertEquals(PixelRect(0, 0, 528, 943), below.host)
-        assertEquals(PixelRect(0, 943, 536, 1200), below.screen)
-    }
-
-    @Test
-    fun `as the second half, the other phone's part matches this one's edge, so both make one rectangle`() {
-        val right = desktopMonitors(pixel, nord, ScreenSide.RIGHT, ScreenDesktopMode.SPAN)
-        // 536 x 1200 scaled to 943 high is 421 wide: 416, a whole mode step.
-        assertEquals(PixelRect(528, 0, 416, 943), right.screen)
-        assertEquals(Pair(944, 943), Pair(right.width, right.height))
-        val below = desktopMonitors(pixel, nord, ScreenSide.BELOW, ScreenDesktopMode.SPAN)
-        assertEquals(PixelRect(0, 943, 528, 1182), below.screen)
-        assertEquals(Pair(528, 2125), Pair(below.width, below.height))
-    }
+    // The Pixel 10's monitor and a Nord 2's beside it, as desktopFit lays them out.
+    private val left = DesktopMonitors(ScreenDesktopMode.EXTEND, PixelRect(536, 0, 528, 943), PixelRect(0, 0, 536, 943))
 
     @Test
     fun `the X server is told the layout in one event`() {
-        val m = desktopMonitors(pixel, nord, ScreenSide.LEFT, ScreenDesktopMode.EXTEND)
-        val bytes = ByteBuffer.wrap(X11Input.Monitors(m).encode()).order(ByteOrder.LITTLE_ENDIAN)
+        val bytes = ByteBuffer.wrap(X11Input.Monitors(left).encode()).order(ByteOrder.LITTLE_ENDIAN)
         assertEquals(24, bytes.capacity())
         assertEquals(100, bytes.get(0).toInt())
         assertEquals(1, bytes.get(1).toInt())
-        assertEquals(listOf(528, 943, 536, 0, 536, 1200, 0, 0), (0 until 8).map { bytes.getShort(2 + 2 * it).toInt() })
-        val span = ByteBuffer.wrap(X11Input.Monitors(desktopMonitors(pixel, nord, ScreenSide.RIGHT, ScreenDesktopMode.SPAN)).encode())
+        assertEquals(listOf(528, 943, 536, 0, 536, 943, 0, 0), (0 until 8).map { bytes.getShort(2 + 2 * it).toInt() })
+        val span = ByteBuffer.wrap(X11Input.Monitors(left.copy(mode = ScreenDesktopMode.SPAN)).encode())
         assertEquals(2, span.get(1).toInt())
+        assertEquals(Pair(1064, 943), Pair(left.width, left.height))
     }
 
     @Test
@@ -88,26 +45,28 @@ class DesktopMonitorsTest {
 }
 
 class DesktopScreensTest {
-    private val screens = DesktopScreens().apply { host(528, 943) }
-    // The other phone: a Nord 2, its video 1080 x 2400.
+    // The Pixel 10's desktop view (536 x 943 X pixels), and a Nord 2, its video 1080 x 2400: desktopFit's numbers.
+    private val screens = DesktopScreens().apply { view(1080, 1886, 422f, 422f, 2) }
     private fun nordRight(mode: ScreenDesktopMode = ScreenDesktopMode.EXTEND) =
-        screens.other(DesktopOther(1080, 2400, 480, 1080, 2400), ScreenSide.RIGHT, mode)
+        screens.other(DesktopOther(1080, 2400, 409f, 409f, 1080, 2400), ScreenSide.RIGHT, mode)
 
     @Test
     fun `alone, the screen is this phone's monitor`() {
         assertNull(screens.monitors)
-        assertEquals(PixelRect(0, 0, 528, 943), screens.hostRect)
+        assertNull(screens.hostSurface)
+        assertEquals(PixelRect(0, 0, 536, 943), screens.hostRect)
         assertNull(screens.otherRect)
-        assertEquals(listOf(PixelRect(0, 0, 528, 943)), screens.areas)
-        assertEquals(X11Input.Monitors.alone(528, 943), screens.event())
+        assertEquals(listOf(PixelRect(0, 0, 536, 943)), screens.areas)
+        assertEquals(X11Input.Monitors.alone(536, 943), screens.event())
     }
 
     @Test
     fun `with the other phone it lays out both`() {
         nordRight()
-        assertEquals(PixelRect(528, 0, 536, 1200), screens.otherRect)
-        assertEquals(listOf(PixelRect(0, 0, 528, 943), PixelRect(528, 0, 536, 1200)), screens.areas)
+        assertEquals(PixelRect(536, 0, 552, 943), screens.otherRect)
+        assertEquals(listOf(PixelRect(0, 0, 536, 943), PixelRect(536, 0, 552, 943)), screens.areas)
         assertEquals(X11Input.Monitors(screens.monitors!!), screens.event())
+        assertEquals(PixelRect(0, 0, 1080, 1886), screens.hostSurface)
         screens.other(null, ScreenSide.RIGHT, ScreenDesktopMode.EXTEND)
         assertNull(screens.otherRect)
     }
@@ -116,41 +75,58 @@ class DesktopScreensTest {
     fun `what the server says it shows wins, until the layout changes`() {
         nordRight()
         // A client (XFCE's display settings) put the other monitor on the left.
-        screens.shown(X11ServerEvent.MonitorsShown(PixelRect(536, 0, 528, 943), PixelRect(0, 0, 536, 1200)))
-        assertEquals(PixelRect(536, 0, 528, 943), screens.hostRect)
-        assertEquals(PixelRect(0, 0, 536, 1200), screens.otherRect)
-        screens.host(600, 943)
+        screens.shown(X11ServerEvent.MonitorsShown(PixelRect(552, 0, 536, 943), PixelRect(0, 0, 552, 943)))
+        assertEquals(PixelRect(552, 0, 536, 943), screens.hostRect)
+        assertEquals(PixelRect(0, 0, 552, 943), screens.otherRect)
+        screens.view(1200, 1886, 422f, 422f, 2)
         assertEquals(PixelRect(0, 0, 600, 943), screens.hostRect)
-        assertEquals(PixelRect(600, 0, 536, 1200), screens.otherRect)
+        assertEquals(PixelRect(600, 0, 552, 943), screens.otherRect)
     }
 
     @Test
     fun `a server alone says nothing of the other phone`() {
         nordRight()
-        screens.shown(X11ServerEvent.MonitorsShown(PixelRect(0, 0, 528, 943), null))
-        assertEquals(PixelRect(528, 0, 536, 1200), screens.otherRect)
+        screens.shown(X11ServerEvent.MonitorsShown(PixelRect(0, 0, 536, 943), null))
+        assertEquals(PixelRect(536, 0, 552, 943), screens.otherRect)
     }
 
     @Test
-    fun `the other phone's video maps to its monitor and back`() {
+    fun `the other phone's video maps to its picture and back, the bands held at its edge`() {
         nordRight()
-        assertEquals(Pair(268f, 600f), screens.fromStream(540f, 1200f))
-        assertEquals(Pair(540f, 1200f), screens.toStream(528f + 268f, 600f))
+        // The picture is 0, 286, 1078 x 1828 of the video.
+        assertEquals(Pair(0f, 0f), screens.fromStream(0f, 286f))
+        assertEquals(Pair(552f, 943f), screens.fromStream(1078f, 2114f))
+        assertEquals(0f, screens.fromStream(500f, 100f).second)
+        val (x, y) = screens.toStream(536f + 276f, 471.5f)!!
+        assertEquals(539f, x, 0.01f)
+        assertEquals(1200f, y, 0.01f)
         // The pointer on this phone isn't on the other.
         assertNull(screens.toStream(100f, 100f))
     }
 
     @Test
-    fun `the second half stretches the other phone's part over its video`() {
+    fun `the second half is one monitor over both`() {
         nordRight(ScreenDesktopMode.SPAN)
-        assertEquals(PixelRect(528, 0, 416, 943), screens.otherRect)
-        assertEquals(Pair(208f, 471.5f), screens.fromStream(540f, 1200f))
+        assertEquals(PixelRect(536, 0, 552, 943), screens.otherRect)
         assertEquals(ScreenDesktopMode.SPAN, screens.monitors!!.mode)
     }
 
     @Test
+    fun `the alignment moves the other phone's picture`() {
+        nordRight()
+        assertEquals(true, screens.align(ScreenAlignment(offset = 5f)))
+        assertEquals(367, screens.fit!!.picture.y)
+        assertEquals(false, screens.align(ScreenAlignment(offset = 5f)))
+        val dragged = screens.aligned(ScreenMessage.AlignInput(1, 50f, 1f, 0f))
+        assertEquals(5f + 50f / 16.1f, dragged.offset, 0.05f)
+        // Kept within its limits.
+        screens.align(ScreenAlignment(offset = 900f))
+        assertEquals(MAX_ALIGN_OFFSET_MM, screens.alignment.offset)
+    }
+
+    @Test
     fun `nothing changed, nothing to tell`() {
-        assertEquals(true, screens.host(528, 943).not())
+        assertEquals(false, screens.view(1080, 1886, 422f, 422f, 2))
         assertEquals(true, nordRight())
         assertEquals(false, nordRight())
         assertEquals(true, nordRight(ScreenDesktopMode.SPAN))

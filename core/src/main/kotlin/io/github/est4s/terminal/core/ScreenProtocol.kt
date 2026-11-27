@@ -16,9 +16,11 @@ import javax.crypto.spec.SecretKeySpec
 /**
  * The version of the link between the phones; a Hello with another is
  * refused. 1 was the pairing alone; 2 sends screens (video, touches);
- * 3 sends terminal tabs as text; 4 the desktop's pointer ([ScreenMessage.Pointer]).
+ * 3 sends terminal tabs as text; 4 the desktop's pointer ([ScreenMessage.Pointer]);
+ * 5 each screen's own dpi ([ScreenMessage.ScreenInfo]'s xdpi, ydpi) and
+ * aligning the desktop across both ([ScreenMessage.Align]).
  */
-const val SCREEN_PROTOCOL = 4
+const val SCREEN_PROTOCOL = 5
 
 /** A [ScreenMessage.Video] part that's a key frame: it decodes alone. */
 const val VIDEO_KEY = 1
@@ -46,6 +48,9 @@ enum class ScreenSide(val word: String) { LEFT("left"), RIGHT("right"), ABOVE("a
 
 /** How the screen lines up along the host's edge: its start (top or left), centre or end. */
 enum class ScreenAlign(val word: String) { START("start"), CENTER("center"), END("end") }
+
+/** How aligning the desktop across both phones ends, or starts over: [ScreenMessage.AlignAction]. */
+enum class AlignStep { DONE, RESET, CANCEL }
 
 /** A [ScreenMessage.Hello]'s purpose: pairing with a code, or a paired phone coming back. */
 enum class HelloMode { PAIR, RESUME }
@@ -84,8 +89,19 @@ sealed class ScreenMessage(val type: Int) {
 
     class Refusal(val reason: RefusalReason, val text: String) : ScreenMessage(TYPE_REFUSAL)
 
-    /** A phone's screen: its size in pixels, density (dpi) and rotation (0-3, quarter turns). */
-    data class ScreenInfo(val width: Int, val height: Int, val density: Int, val rotation: Int) : ScreenMessage(TYPE_SCREEN_INFO)
+    /**
+     * A phone's screen: its size in pixels, density (dpi, Android's
+     * bucket) and rotation (0-3, quarter turns), and its real pixels an
+     * inch across and down ([xdpi], [ydpi]; 0: not said, before version 5).
+     */
+    data class ScreenInfo(
+        val width: Int,
+        val height: Int,
+        val density: Int,
+        val rotation: Int,
+        val xdpi: Float = 0f,
+        val ydpi: Float = 0f,
+    ) : ScreenMessage(TYPE_SCREEN_INFO)
 
     /** Where the screen sits; the host's word is final. */
     data class Layout(val side: ScreenSide, val align: ScreenAlign) : ScreenMessage(TYPE_LAYOUT)
@@ -175,6 +191,33 @@ sealed class ScreenMessage(val type: Int) {
      */
     data class Pointer(val stream: Int, val x: Float, val y: Float, val shown: Boolean) : ScreenMessage(TYPE_POINTER)
 
+    /**
+     * Aligning the desktop across both phones ([on]; off: it ended), on
+     * stream [stream]: the screen draws a ruler along its edge facing
+     * the host (it sits on the host's [side]), a line at [origin] + k ×
+     * [step] of the video's pixels along that edge (every fifth longer),
+     * and says the alignment, [offset] mm and [scale].
+     */
+    data class Align(
+        val stream: Int,
+        val on: Boolean,
+        val side: ScreenSide,
+        val origin: Float,
+        val step: Float,
+        val offset: Float,
+        val scale: Float,
+    ) : ScreenMessage(TYPE_ALIGN)
+
+    /**
+     * A drag or pinch on the screen while aligning: its picture moves
+     * [shift] of the video's pixels along the shared edge, and grows
+     * [zoom] times about [focus] (along the edge, the video's pixels).
+     */
+    data class AlignInput(val stream: Int, val shift: Float, val zoom: Float, val focus: Float) : ScreenMessage(TYPE_ALIGN_INPUT)
+
+    /** The screen's Done, Reset or Cancel while aligning. */
+    data class AlignAction(val stream: Int, val step: AlignStep) : ScreenMessage(TYPE_ALIGN_ACTION)
+
     class Unknown(type: Int, val payload: ByteArray) : ScreenMessage(type)
 
     override fun equals(other: Any?): Boolean =
@@ -214,6 +257,10 @@ sealed class ScreenMessage(val type: Int) {
         const val TYPE_TERM_TOUCHED = 48
         // Version 4.
         const val TYPE_POINTER = 49
+        // Version 5.
+        const val TYPE_ALIGN = 50
+        const val TYPE_ALIGN_INPUT = 51
+        const val TYPE_ALIGN_ACTION = 52
     }
 }
 
@@ -235,7 +282,10 @@ fun encodeScreenMessage(m: ScreenMessage): ByteArray {
         }
         is ScreenMessage.Confirm -> bytesField(m.confirm)
         is ScreenMessage.Refusal -> { out.writeByte(m.reason.ordinal); text(m.text) }
-        is ScreenMessage.ScreenInfo -> { out.writeInt(m.width); out.writeInt(m.height); out.writeInt(m.density); out.writeByte(m.rotation) }
+        is ScreenMessage.ScreenInfo -> {
+            out.writeInt(m.width); out.writeInt(m.height); out.writeInt(m.density); out.writeByte(m.rotation)
+            out.writeFloat(m.xdpi); out.writeFloat(m.ydpi)
+        }
         is ScreenMessage.Layout -> { out.writeByte(m.side.ordinal); out.writeByte(m.align.ordinal) }
         ScreenMessage.KeepAlive, ScreenMessage.Unpaired -> {}
         is ScreenMessage.Bye -> text(m.reason)
@@ -266,6 +316,12 @@ fun encodeScreenMessage(m: ScreenMessage): ByteArray {
         is ScreenMessage.TermAck -> { out.writeInt(m.term); out.writeInt(m.epoch); out.writeLong(m.bytes) }
         is ScreenMessage.TermTouched -> out.writeInt(m.term)
         is ScreenMessage.Pointer -> { out.writeInt(m.stream); out.writeFloat(m.x); out.writeFloat(m.y); out.writeByte(if (m.shown) 1 else 0) }
+        is ScreenMessage.Align -> {
+            out.writeInt(m.stream); out.writeByte(if (m.on) 1 else 0); out.writeByte(m.side.ordinal)
+            out.writeFloat(m.origin); out.writeFloat(m.step); out.writeFloat(m.offset); out.writeFloat(m.scale)
+        }
+        is ScreenMessage.AlignInput -> { out.writeInt(m.stream); out.writeFloat(m.shift); out.writeFloat(m.zoom); out.writeFloat(m.focus) }
+        is ScreenMessage.AlignAction -> { out.writeInt(m.stream); out.writeByte(m.step.ordinal) }
         is ScreenMessage.Unknown -> out.write(m.payload)
     }
     out.flush()
@@ -303,8 +359,18 @@ fun decodeScreenMessage(bytes: ByteArray): ScreenMessage {
             ScreenMessage.TYPE_WELCOME -> ScreenMessage.Welcome(input.readUnsignedShort(), text(), text(), bytesField(), bytesField())
             ScreenMessage.TYPE_CONFIRM -> ScreenMessage.Confirm(bytesField())
             ScreenMessage.TYPE_REFUSAL -> ScreenMessage.Refusal(pick(RefusalReason.entries.toTypedArray(), "refusal"), text())
-            ScreenMessage.TYPE_SCREEN_INFO ->
-                ScreenMessage.ScreenInfo(input.readInt(), input.readInt(), input.readInt(), input.readUnsignedByte())
+            ScreenMessage.TYPE_SCREEN_INFO -> {
+                val width = input.readInt()
+                val height = input.readInt()
+                val density = input.readInt()
+                val rotation = input.readUnsignedByte()
+                // Version 4's ended here.
+                if (input.available() >= 8) {
+                    ScreenMessage.ScreenInfo(width, height, density, rotation, input.readFloat(), input.readFloat())
+                } else {
+                    ScreenMessage.ScreenInfo(width, height, density, rotation)
+                }
+            }
             ScreenMessage.TYPE_LAYOUT ->
                 ScreenMessage.Layout(pick(ScreenSide.entries.toTypedArray(), "side"), pick(ScreenAlign.entries.toTypedArray(), "alignment"))
             ScreenMessage.TYPE_KEEP_ALIVE -> ScreenMessage.KeepAlive
@@ -342,6 +408,12 @@ fun decodeScreenMessage(bytes: ByteArray): ScreenMessage {
             ScreenMessage.TYPE_TERM_TOUCHED -> ScreenMessage.TermTouched(input.readInt())
             ScreenMessage.TYPE_POINTER ->
                 ScreenMessage.Pointer(input.readInt(), input.readFloat(), input.readFloat(), input.readUnsignedByte() != 0)
+            ScreenMessage.TYPE_ALIGN -> ScreenMessage.Align(
+                input.readInt(), input.readUnsignedByte() != 0, pick(ScreenSide.entries.toTypedArray(), "side"),
+                input.readFloat(), input.readFloat(), input.readFloat(), input.readFloat(),
+            )
+            ScreenMessage.TYPE_ALIGN_INPUT -> ScreenMessage.AlignInput(input.readInt(), input.readFloat(), input.readFloat(), input.readFloat())
+            ScreenMessage.TYPE_ALIGN_ACTION -> ScreenMessage.AlignAction(input.readInt(), pick(AlignStep.entries.toTypedArray(), "alignment step"))
             else -> ScreenMessage.Unknown(type, rest())
         }
     } catch (e: EOFException) {
