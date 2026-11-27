@@ -405,6 +405,7 @@ class MainActivity : Activity(), FrontActivity {
     private fun goBack() {
         when {
             screenShown -> hideScreenStream()
+            desktopShown && desktopView?.back() == true -> Unit
             desktopShown -> hideDesktop()
             filesShown && filesView?.back() == true -> Unit
             filesShown -> showChatHome()
@@ -1091,6 +1092,19 @@ class MainActivity : Activity(), FrontActivity {
             service?.stopDesktop()
             hideDesktop()
         }
+        override fun restart(done: (String?) -> Unit) {
+            val running = service ?: return done("the app isn't ready yet")
+            running.stopDesktop()
+            running.startDesktop(done)
+        }
+        // As pinching writes font-size; the view applies it itself.
+        override fun setTouch(touch: DesktopTouch) {
+            val file = File(installer.rootfs, SETTINGS_FILE)
+            runCatching {
+                file.parentFile!!.mkdirs()
+                file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "desktop-touch", touch.word).getOrThrow())
+            }.onFailure { Toast.makeText(this@MainActivity, "Couldn't save desktop-touch: ${it.message}", Toast.LENGTH_LONG).show() }
+        }
         // A tab, so the terminal shows, whatever the desktop covered.
         override fun install() {
             service?.newSession(DESKTOP_INSTALL_TAB_COMMAND) ?: return
@@ -1566,6 +1580,8 @@ class MainActivity : Activity(), FrontActivity {
         service?.setCursorStyle(settings.cursorStyle)
         terminalView.setTerminalCursorBlinkerRate(if (settings.cursorBlink) CURSOR_BLINK_MS else 0)
         tabSwipeOn = settings.tabSwipe
+        // `mynx set desktop-touch …` applies at once, as the desktop menu's Touch does.
+        desktopView?.useTouch(settings.desktopTouch)
         applyView(settings.view)
         setCursorBlinking(true)
         terminalView.onScreenUpdated()

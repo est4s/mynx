@@ -246,30 +246,13 @@ class PixelMenuEntry(val label: String, val greyed: Boolean = false, val onTap: 
 /** A small menu in the pixel style, dropped from [anchor]'s end: Android's PopupMenu takes the system theme. */
 fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
     val context = anchor.context
-    val dp = { v: Int -> Pixel.dp(context, v) }
-    val shadow = dp(Pixel.SHADOW_DP)
-    val column = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.CYAN, shadow = true)
-        // Inside the 2 dp border, and the shadow's room right and bottom.
-        setPadding(dp(2), dp(2), dp(2) + shadow, dp(2) + shadow)
-        minimumWidth = dp(200)
-    }
+    val column = pixelMenuBox(context)
     val popup = PopupWindow(column, WRAP_CONTENT, WRAP_CONTENT, true).apply {
         setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
         isOutsideTouchable = true
     }
     entries.forEach { entry ->
-        column.addView(TextView(context).apply {
-            text = entry.label
-            typeface = Pixel.label(context, 500)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setTextColor(if (entry.greyed) Pixel.DIM else Pixel.TEXT)
-            gravity = Gravity.CENTER_VERTICAL
-            minHeight = dp(48)
-            setPadding(dp(16), 0, dp(16), 0)
-            background = pixelRipple()
-            isFocusable = true
+        column.addView(pixelMenuRow(context, entry.label, entry.greyed).apply {
             setOnClickListener {
                 popup.dismiss()
                 entry.onTap()
@@ -277,6 +260,57 @@ fun pixelMenu(anchor: View, entries: List<PixelMenuEntry>) {
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
     popup.showAsDropDown(anchor, 0, 0, Gravity.END)
+}
+
+/** [pixelMenu]'s box, for its rows: the card with a cyan border and the pink shadow. */
+fun pixelMenuBox(context: Context): LinearLayout {
+    val dp = { v: Int -> Pixel.dp(context, v) }
+    val shadow = dp(Pixel.SHADOW_DP)
+    return LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.CYAN, shadow = true)
+        // Inside the 2 dp border, and the shadow's room right and bottom.
+        setPadding(dp(2), dp(2), dp(2) + shadow, dp(2) + shadow)
+        minimumWidth = dp(200)
+    }
+}
+
+/** One of [pixelMenu]'s rows, 48 dp high ([greyed]: dim text). */
+fun pixelMenuRow(context: Context, label: String, greyed: Boolean = false) = TextView(context).apply {
+    text = label
+    typeface = Pixel.label(context, 500)
+    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    setTextColor(if (greyed) Pixel.DIM else Pixel.TEXT)
+    gravity = Gravity.CENTER_VERTICAL
+    minHeight = Pixel.dp(context, 48)
+    setPadding(Pixel.dp(context, 16), 0, Pixel.dp(context, 16), 0)
+    background = pixelRipple()
+    isFocusable = true
+}
+
+/** A row of choices (the text viewer's View | Edit): a box holding [pixelSegment]s. */
+fun pixelSegments(context: Context) = LinearLayout(context).apply {
+    orientation = LinearLayout.HORIZONTAL
+    background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE)
+    val p = Pixel.dp(context, 2)
+    setPadding(p, p, p, p)
+}
+
+/** One of [pixelSegments]' choices, styled by [stylePixelSegment]. */
+fun pixelSegment(context: Context, label: String, onTap: () -> Unit) = TextView(context).apply {
+    text = label
+    typeface = Pixel.label(context, 600)
+    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+    gravity = Gravity.CENTER
+    setPadding(Pixel.dp(context, 14), 0, Pixel.dp(context, 14), 0)
+    isFocusable = true
+    setOnClickListener { onTap() }
+}
+
+/** A choice that's [on] is filled cyan. */
+fun stylePixelSegment(view: TextView, on: Boolean) {
+    view.setTextColor(if (on) Pixel.BACKGROUND else Pixel.TEXT)
+    view.background = if (on) Pixel.box(view.context, fill = Pixel.CYAN, border = 0) else pixelRipple()
 }
 
 /** A [pixelDialog] on screen: [setOkEnabled] greys its main button (a [PixelDialog] field's check), [setNote] says why, [ok] presses it. */
