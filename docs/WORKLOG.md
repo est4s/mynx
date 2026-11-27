@@ -44,7 +44,10 @@ a PR into `desktop-dev`.
    #115, entry 221).
 5. **The Log panel keeps a selection and has Copy: passed on the
    phone** (PR #120, entry 226).
-6. **Then, what's left:** start the X server and session again if
+6. **The ⋮ menu: passed on the phone** (entry 231, PR #127; Pixel
+   10, 2026-11-27, build 46010220070: "works well"). The agent's
+   decisions stand (entry 231).
+7. **Then, what's left:** start the X server and session again if
    either dies (now the notice offers Start); an external display
    (Android's desktop windowing) later; a last pass over
    `tools/docs/desktop.md`; then merge `desktop-dev` into `main`.
@@ -93,6 +96,68 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-27 (231): Desktop mode: the ⋮ menu
+
+- **Passed on the Pixel 10** (build 46010220070), merged as PR #127.
+
+- Branch `desktop-menu` from `desktop-dev`. Core tested here
+  (`DesktopMenuTest`); the app's side only compiled in CI, with
+  Robolectric tests of the rows (`DesktopMenuViewTest`) and
+  screenshots (`desktop-menu*.png`). Numbered 231: screen-dev has
+  up to 230.
+- **Maintainer's request (2026-11-27):** the desktop's bar gets ⋮
+  (in place of Log), a menu so nothing needs leaving the desktop:
+  Touch: Touchpad | Direct (switches `desktop-touch` live and saves
+  it), Log, Restart desktop, Shut down (two taps: the row turns pink,
+  "Tap again to shut down", for 3 s). Stop desktop left the Log
+  panel: Shut down is it.
+- **Built from what's there:** core's `DesktopMenu` builds the rows
+  (in sections, so screen-dev's "Other phone" is one more section),
+  keeps the keyboard's row and Shut down's state; the view draws
+  them with `pixelMenu`'s box and rows (split out as
+  `pixelMenuBox`/`pixelMenuRow`), the text viewer's View | Edit
+  segments (now `pixelSegments`), and `pixelDialog`'s danger pink
+  (with the background's colour for its text, as Chat's pink tiles
+  have: the dialog's pink-on-pink Delete reads poorly in the
+  screenshots).
+  It lies in the view's own frame, not a `PopupWindow`, so keys and
+  screenshots are the view's.
+- **Decisions to confirm (maintainer's):** the shortcut Ctrl+Shift+M
+  (M for menu, beside Ctrl+Shift+D; it hides a program's own
+  Ctrl+Shift+M, as Firefox's responsive design mode); Touch's choice
+  keeps the menu open (the change shows), the other rows close it;
+  Restart and Shut down show only while something runs; `mynx set
+  desktop-touch` now applies at once too (a settings reload);
+  keyboard: Up/Down/Tab choose, Left/Right Touch's choice, Enter or
+  Space does it (Shut down: Enter twice, "Enter again to shut
+  down"), Esc or Back closes, and other keys do nothing while it's
+  open.
+- **Phone test** (mynx dev, XFCE installed, desktop running):
+  1. The bar: ← Terminal, the status, ⌨, ⋮; no Log button. Tap ⋮: a
+     card under it (cyan border, pink shadow, as other menus) with
+     Touch [Touchpad|Direct], Log, Restart desktop, Shut down.
+  2. Tap Direct: the bar's status ends "· direct", the menu stays;
+     tap beside the menu: it closes, and that tap didn't click on the
+     desktop. A tap now clicks where it touches. `mynx settings`
+     shows `desktop-touch = direct`. Back to Touchpad from the menu.
+  3. In XFCE's terminal, `mynx set desktop-touch direct`: the status
+     says direct at once; set it back.
+  4. ⋮ → Log: the logs, Copy at the top, no Stop desktop; ⋮ shows
+     Hide log; tap it: the logs go.
+  5. ⋮ → Restart desktop: the notice (starting), then XFCE again.
+  6. ⋮ → Shut down: the row turns pink, "Tap again to shut down";
+     wait 3 s: it's Shut down again. Tap it twice: back to the
+     terminal (or touch view, if opened from there), ▣ gone, `mynx
+     desktop` says not running.
+  7. Hardware keyboard on the desktop: Ctrl+Shift+M opens it with
+     Touch marked; Down/Up move (round at the ends), Right/Left switch
+     Touch, Esc closes, and no key typed into XFCE meanwhile (nor
+     stuck Ctrl or Shift afterwards: type in XFCE's terminal). Open
+     it, Up, Enter: "Enter again to shut down"; Enter: shut down.
+  8. Open the menu, then Back (gesture or key): only the menu closes.
+  9. With the desktop stopped (it has a notice): ⋮ has only Touch
+     and Log.
 
 ### 2026-11-26 (226): Desktop mode: the Log panel can be copied
 
@@ -157,7 +222,8 @@ a PR into `desktop-dev`.
      the same chat, scrolled as it was. In Files, open a subfolder,
      Ctrl+Shift+D, then Back: Files at that folder.
   4. Log on the desktop: Stop desktop at the top; tap it: back where
-     it was opened, ▣ gone, `mynx desktop` says not running.
+     it was opened, ▣ gone, `mynx desktop` says not running (now
+     Shut down in ⋮, entry 231).
   5. `mynx set view desktop`: refused; edit settings.conf to `view =
      desktop`, restart the app: the terminal, with a settings problem
      saying `view = desktop is gone…`; `mynx check` lists it.

@@ -147,12 +147,9 @@ class TextViewerView(
         text = path.substringBeforeLast('/', "").ifEmpty { "/" }.replaceFirst(Regex("^/root(?=/|$)"), "~")
     }
     private val editButton = barButton("Edit") { startEditing() }
-    private val viewSwitch = segment("View") { setEditing(false) }
-    private val editSwitch = segment("Edit") { startEditing() }
-    private val modeSwitch = LinearLayout(context).apply {
-        orientation = HORIZONTAL
-        background = Pixel.box(context, fill = Pixel.CARD, border = Pixel.LINE)
-        setPadding(dp(2), dp(2), dp(2), dp(2))
+    private val viewSwitch = pixelSegment(context, "View") { setEditing(false) }
+    private val editSwitch = pixelSegment(context, "Edit") { startEditing() }
+    private val modeSwitch = pixelSegments(context).apply {
         addView(viewSwitch, LayoutParams(WRAP_CONTENT, dp(40)))
         addView(editSwitch, LayoutParams(WRAP_CONTENT, dp(40)))
     }
@@ -511,8 +508,8 @@ class TextViewerView(
         editButton.visibility = if (shown != null && !editing) View.VISIBLE else View.GONE
         editButton.alpha = if (canEdit) 1f else 0.5f
         modeSwitch.visibility = if (shown != null) View.VISIBLE else View.GONE
-        styleSegment(viewSwitch, !editing)
-        styleSegment(editSwitch, editing)
+        stylePixelSegment(viewSwitch, !editing)
+        stylePixelSegment(editSwitch, editing)
         editSwitch.alpha = if (canEdit) 1f else 0.5f
         editRow.visibility = if (editing || dirty) View.VISIBLE else View.GONE
         undoButton.visibility = if (editing) View.VISIBLE else View.INVISIBLE
@@ -862,21 +859,6 @@ class TextViewerView(
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
         setTextIsSelectable(true)
         setOnTouchListener(MdLinkTaps())
-    }
-
-    private fun segment(label: String, onTap: () -> Unit) = TextView(context).apply {
-        text = label
-        typeface = Pixel.label(context, 600)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-        gravity = Gravity.CENTER
-        setPadding(dp(14), 0, dp(14), 0)
-        isFocusable = true
-        setOnClickListener { onTap() }
-    }
-
-    private fun styleSegment(view: TextView, on: Boolean) {
-        view.setTextColor(if (on) Pixel.BACKGROUND else Pixel.TEXT)
-        view.background = if (on) Pixel.box(context, fill = Pixel.CYAN, border = 0) else pixelRipple()
     }
 
     private fun barButton(label: String, main: Boolean = false, onTap: () -> Unit) = TextView(context).apply {

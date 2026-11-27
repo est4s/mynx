@@ -418,7 +418,15 @@ setup() {
     grep -qF 'Linux desktop opens from either view' "$CORE"
     grep -qF '| `desktop` | the Linux desktop (`mynx desktop open`) |' "$CORE"
     for text in "Linux desktop in the launcher menu" "touch view's ☰" "mynx desktop open" \
-        "Linux desktop = desktop" "← Terminal" "← Touch view" "as you left it" "Stop desktop"; do
+        "Linux desktop = desktop" "← Terminal" "← Touch view" "as you left it" "Shut down"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}
+
+@test "the guide explains the desktop's ⋮ menu and its shortcut" {
+    grep -qF 'switch it on the desktop with ⋮' "$CORE"
+    for text in "The ⋮ menu" "Ctrl+Shift+M" "Touch: Touchpad | Direct" "Restart desktop" \
+        "Tap again to shut down" "Hide log" "Esc or Back closes the menu"; do
         grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
     done
 }
