@@ -737,7 +737,11 @@ See `docs/ROADMAP.md` "How it works". The details:
   first, then mDNS. One link at a time. A writer thread per link
   sends (Android's main thread mustn't touch the network; requests
   run there); a last Bye or Unpaired is followed by a half-close, so
-  closing doesn't reset the connection before the other reads it.
+  closing doesn't reset the connection before the other reads it (the
+  writer stops after writing that message itself, not after whatever
+  it wrote once closed: work log entry 229). Closing the server waits
+  for its accept thread: the JDK only frees the port once that thread
+  wakes, so listening on it again at once could fail.
   Requests: `screen-status|pair` (a stream: a line per code)
   `|join|connect|disconnect|unpair|place` (`screenRequests()`).
   **Settings:** `screen-host` (`auto`/`off`), `screen-port` (7391),
