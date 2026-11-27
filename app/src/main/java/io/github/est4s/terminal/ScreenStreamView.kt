@@ -190,8 +190,11 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         // Out of the ruler's way: at the top when the ruler is at the bottom.
         val gravity = if (edge == ScreenSide.BELOW) Gravity.TOP else Gravity.BOTTOM
         val params = alignPanel.layoutParams as LayoutParams
-        if (params.gravity != gravity) {
+        val margins = alignPanelMargins(context, edge)
+        if (params.gravity != gravity || params.leftMargin != margins.first || params.rightMargin != margins.second) {
             params.gravity = gravity
+            params.leftMargin = margins.first
+            params.rightMargin = margins.second
             alignPanel.layoutParams = params
         }
         alignPanel.visibility = View.VISIBLE

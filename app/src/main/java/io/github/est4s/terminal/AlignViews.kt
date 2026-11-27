@@ -96,6 +96,13 @@ class AlignRulerView(context: Context) : View(context) {
     }
 }
 
+/** The align panel's left and right margins with the ruler on [edge]: 16 dp, and clear of the strip on its side. */
+fun alignPanelMargins(context: Context, edge: ScreenSide): Pair<Int, Int> {
+    val margin = Pixel.dp(context, 16)
+    val clear = Pixel.dp(context, STRIP_DP) + margin
+    return Pair(if (edge == ScreenSide.LEFT) clear else margin, if (edge == ScreenSide.RIGHT) clear else margin)
+}
+
 // Three side by side fit a 360 dp phone: no minimum width.
 private fun TextView.narrow() = apply { minWidth = 0 }
 
