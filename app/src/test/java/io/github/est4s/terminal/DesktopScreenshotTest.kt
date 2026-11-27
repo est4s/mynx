@@ -3,6 +3,9 @@ package io.github.est4s.terminal
 import android.app.Application
 import android.graphics.Typeface
 import android.view.Surface
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import io.github.est4s.terminal.core.DesktopSession
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
@@ -38,6 +41,8 @@ private class SampleHost(
     override fun back() = Unit
     override fun backLabel() = desktopBackLabel(fromTouch)
     override fun stop() = Unit
+    override fun restart(done: (String?) -> Unit) = Unit
+    override fun setTouch(touch: DesktopTouch) = Unit
     override fun install() = Unit
 }
 
@@ -53,7 +58,9 @@ private val RUNNING = DesktopStatus(running = true, session = DesktopSession.XFC
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34], application = Application::class, qualifiers = PHONE_QUALIFIERS)
 class DesktopScreenshotTest {
-    private fun shoot(w: Int, h: Int, name: String, host: DesktopView.Host, log: Boolean = false) {
+    private fun shoot(
+        w: Int, h: Int, name: String, host: DesktopView.Host, log: Boolean = false, then: (DesktopView) -> Unit = {},
+    ) {
         val bars = Files.createTempDirectory("keybars").toFile()
         val view = Screenshots.open(w, h) { activity ->
             DesktopView(activity, Typeface.MONOSPACE, bars, host).apply { colors = Screenshots.colors }
@@ -61,10 +68,17 @@ class DesktopScreenshotTest {
         view.shown()
         Screenshots.settle()
         if (log) view.toggleLog()
+        then(view)
         Screenshots.settle()
         Screenshots.save(view, name)
         view.hidden()
     }
+
+    private fun views(root: View): List<View> =
+        listOf(root) + ((root as? ViewGroup)?.let { g -> (0 until g.childCount).flatMap { views(g.getChildAt(it)) } } ?: emptyList())
+
+    private fun tap(view: DesktopView, label: String) =
+        views(view).filterIsInstance<TextView>().first { it.isShown && it.text == label }.performClick()
 
     @Test
     fun missing() = shoot(1080, 2400, "desktop", SampleHost(XFCE_MISSING, NoServer()))
@@ -76,12 +90,46 @@ class DesktopScreenshotTest {
     @Test
     fun connected() = shoot(1080, 2400, "desktop-connected", SampleHost(RUNNING, NoServer(connected = true)))
 
-    // Opened from touch view: its back button says so. The log has Stop desktop.
+    // Opened from touch view: its back button says so.
     @Test
     fun fromTouch() = shoot(1080, 2400, "desktop-from-touch", SampleHost(RUNNING, NoServer(connected = true), fromTouch = true))
 
     @Test
     fun log() = shoot(1080, 2400, "desktop-log", SampleHost(RUNNING, NoServer(connected = true)), log = true)
+
+    // The bar's ⋮: Touch (its choice), Log, Restart desktop, Shut down.
+    @Test
+    fun menu() = shoot(1080, 2400, "desktop-menu", SampleHost(RUNNING, NoServer(connected = true))) { it.toggleMenu(byKeyboard = false) }
+
+    // Shut down's first tap: the row turns pink and asks for a second.
+    @Test
+    fun menuShutDown() = shoot(1080, 2400, "desktop-menu-shut-down", SampleHost(RUNNING, NoServer(connected = true))) {
+        it.toggleMenu(byKeyboard = false)
+        tap(it, "Shut down")
+    }
+
+    // Opened with Ctrl+Shift+M: the keyboard's row is marked; the log is behind it.
+    @Test
+    fun menuKeyboard() = shoot(1080, 2400, "desktop-menu-keyboard", SampleHost(RUNNING, NoServer(connected = true)), log = true) {
+        it.toggleMenu(byKeyboard = true)
+    }
+
+    // Nothing runs: only Touch and Log.
+    @Test
+    fun menuStopped() = shoot(1080, 2400, "desktop-menu-stopped", SampleHost(XFCE_MISSING, NoServer())) { it.toggleMenu(byKeyboard = false) }
+
+    @Test
+    @Config(qualifiers = NARROW_QUALIFIERS)
+    fun menuNarrow() = shoot(945, 2100, "desktop-menu-360dp", SampleHost(RUNNING, NoServer(connected = true))) {
+        it.toggleMenu(byKeyboard = false)
+        tap(it, "Shut down")
+    }
+
+    @Test
+    @Config(qualifiers = LANDSCAPE_QUALIFIERS)
+    fun menuLandscape() = shoot(2400, 1080, "desktop-menu-landscape", SampleHost(RUNNING, NoServer(connected = true))) {
+        it.toggleMenu(byKeyboard = false)
+    }
 
     @Test
     @Config(qualifiers = NARROW_QUALIFIERS)

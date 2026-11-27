@@ -38,15 +38,23 @@ import io.github.est4s.terminal.core.DESKTOP_DISPLAY
 import io.github.est4s.terminal.core.DesktopGeometry
 import io.github.est4s.terminal.core.DesktopGestures
 import io.github.est4s.terminal.core.DesktopKeyboard
+import io.github.est4s.terminal.core.DesktopMenu
+import io.github.est4s.terminal.core.DesktopMenuCommand
+import io.github.est4s.terminal.core.DesktopMenuItem
+import io.github.est4s.terminal.core.DesktopMenuSection
+import io.github.est4s.terminal.core.DesktopMenuState
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
 import io.github.est4s.terminal.core.Finger
 import io.github.est4s.terminal.core.KeyButton
+import io.github.est4s.terminal.core.KeyPress
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.desktopBackLabel
 import io.github.est4s.terminal.core.desktopGestures
+import io.github.est4s.terminal.core.desktopMenuKey
+import io.github.est4s.terminal.core.desktopMenuShortcut
 import io.github.est4s.terminal.core.desktopNotice
 import io.github.est4s.terminal.core.desktopScale
 import io.github.est4s.terminal.core.desktopStartsOnOpen
@@ -63,7 +71,7 @@ private const val DEFAULT_FRAMERATE = 60
 /**
  * Desktop mode's view (`view = desktop`, or Ctrl+Shift+D): the X
  * server's screen, which the server draws into our SurfaceView, below a
- * bar of our own (back to the tabs, the soft keyboard, the log) and above
+ * bar of our own (back, the soft keyboard, the ⋮ menu: core's DesktopMenu) and above
  * the desktop's key bar, so nothing of ours covers it. Touches go
  * through core's gestures (`desktop-touch`), keys through its keyboard.
  * While the soft keyboard is up the X screen keeps its size: the screen
@@ -96,6 +104,10 @@ class DesktopView(
         fun backLabel(): String
         /** Stops the desktop and the X server (`mynx desktop stop`), then goes [back]. */
         fun stop()
+        /** Stops the desktop and starts it again (`mynx desktop stop`, then `start`); [done] as [start]'s. */
+        fun restart(done: (String?) -> Unit)
+        /** Saves [touch] as the `desktop-touch` setting (as `mynx set` does). */
+        fun setTouch(touch: DesktopTouch)
         /** A tab that installs what the desktop needs (`mynx desktop install`), shown. */
         fun install()
     }
@@ -132,14 +144,17 @@ class DesktopView(
     }
     private val backButton = barText(desktopBackLabel(fromTouch = false)).apply { setOnClickListener { host.back() } }
     private val keyboardButton = barText("⌨").apply { setOnClickListener { toggleKeyboard() } }
-    private val logButton = barText("Log").apply { setOnClickListener { toggleLog() } }
+    private val menuButton = barText("⋮").apply {
+        contentDescription = "Desktop menu"
+        setOnClickListener { toggleMenu(byKeyboard = false) }
+    }
     private val topBar = LinearLayout(context).apply {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(backButton)
         addView(statusText, LayoutParams(0, WRAP_CONTENT, 1f))
         addView(keyboardButton)
-        addView(logButton)
+        addView(menuButton)
     }
 
     private val surfaceView = SurfaceView(context)
@@ -182,11 +197,6 @@ class DesktopView(
         })
     }
     private val logText = logView()
-    // Stop sits with the logs, out of the way of a stray tap on the bar.
-    private val stopButton = barText("Stop desktop").apply {
-        gravity = Gravity.CENTER
-        setOnClickListener { host.stop() }
-    }
     private val copyButton = barText("Copy").apply {
         gravity = Gravity.CENTER
         setOnClickListener {
@@ -198,21 +208,34 @@ class DesktopView(
         visibility = GONE
         addView(LinearLayout(context).apply {
             orientation = VERTICAL
-            addView(LinearLayout(context).apply {
-                orientation = HORIZONTAL
-                addView(copyButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { setMargins(0, 0, dp(8), 0) })
-                addView(stopButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
-            }, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+            addView(copyButton, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
                 gravity = Gravity.END
                 setMargins(dp(8), dp(8), dp(8), 0)
             })
             addView(logText, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         })
     }
+
+    // The ⋮ menu: core's DesktopMenu says what's in it, the rows are pixelMenu's, dropped from ⋮.
+    private val menu = DesktopMenu()
+    private var shownMenu: Pair<List<DesktopMenuSection>, Int>? = null
+    // Keys whose press the menu took (Ctrl+Shift+M's M too): their release isn't the X server's either.
+    private val menuKeysDown = HashSet<Int>()
+    private val menuBox = pixelMenuBox(context).apply { isClickable = true }
+    private val menuLayer = FrameLayout(context).apply {
+        visibility = GONE
+        // A tap beside the menu closes it, and doesn't reach the desktop.
+        isClickable = true
+        setOnClickListener { closeMenu() }
+        addView(menuBox, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END))
+    }
+    private val menuLapse = Runnable { renderMenu() }
+
     private val frame = ScreenFrame(context).apply {
         addView(layer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(notice, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(logPanel, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(menuLayer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
     val keyBar = KeyBarView(context, barTarget, font, keyBarDir)
 
@@ -220,9 +243,9 @@ class DesktopView(
         set(value) {
             field = value ?: return
             topBar.setBackgroundColor(value.background)
-            for (b in listOf(backButton, keyboardButton, logButton)) b.setTextColor(value.accent)
+            for (b in listOf(backButton, keyboardButton, menuButton)) b.setTextColor(value.accent)
             statusText.setTextColor(value.text)
-            for (b in listOf(startButton, installButton, stopButton, copyButton)) {
+            for (b in listOf(startButton, installButton, copyButton)) {
                 b.setTextColor(value.accent)
                 b.setBackgroundColor(value.selectedBackground)
             }
@@ -281,16 +304,8 @@ class DesktopView(
 
     /** The view came on screen: picks up setting and bar changes, and starts the desktop if nothing runs. */
     fun shown() {
-        val touch = host.touch()
-        if (touch != touchMode) {
-            send(gestures.cancel())
-            val x = gestures.pointerX
-            val y = gestures.pointerY
-            touchMode = touch
-            gestures = desktopGestures(touch, slop)
-            geometry?.let { gestures.screen(it.width, it.height) }
-            gestures.moveTo(x, y)
-        }
+        useTouch(host.touch())
+        closeMenu()
         keyBar.refresh(null, force = true, fallback = DESKTOP_KEY_BAR)
         backButton.text = host.backLabel()
         requestFocus()
@@ -302,8 +317,23 @@ class DesktopView(
         post(poll)
     }
 
+    /** Touches work as [touch] from now on (the menu's Touch, the `desktop-touch` setting); the pointer stays. */
+    fun useTouch(touch: DesktopTouch) {
+        if (touch == touchMode) return
+        send(gestures.cancel())
+        removeCallbacks(longPress)
+        val x = gestures.pointerX
+        val y = gestures.pointerY
+        touchMode = touch
+        gestures = desktopGestures(touch, slop)
+        geometry?.let { gestures.screen(it.width, it.height) }
+        gestures.moveTo(x, y)
+        refresh()
+    }
+
     /** The view is going: let go of every key and button the X server still has down. */
     fun hidden() {
+        closeMenu()
         removeCallbacks(poll)
         removeCallbacks(longPress)
         clipboard.removePrimaryClipChangedListener(clipChanged)
@@ -312,6 +342,7 @@ class DesktopView(
     }
 
     override fun onDetachedFromWindow() {
+        removeCallbacks(menuLapse)
         removeCallbacks(poll)
         removeCallbacks(longPress)
         clipboard.removePrimaryClipChangedListener(clipChanged)
@@ -365,19 +396,150 @@ class DesktopView(
             if (shown.showLog) host.logs().let { if (noticeLog.text.toString() != it) noticeLog.text = it }
         }
         if (logPanel.visibility == VISIBLE) showLogs(host.logs())
-        stopButton.visibility = if (connected || status?.running == true) VISIBLE else GONE
+        renderMenu()
     }
 
-    private fun start() {
+    // Restart stops it first (`mynx desktop stop`, then `start`); the notice says Starting meanwhile.
+    private fun start(restart: Boolean = false) {
         if (starting) return
         starting = true
         error = null
         refresh()
-        host.start { failure ->
+        val done: (String?) -> Unit = { failure ->
             starting = false
             error = failure
             refresh()
         }
+        if (restart) host.restart(done) else host.start(done)
+    }
+
+    private fun menuState() = DesktopMenuState(
+        touch = touchMode,
+        running = host.link?.connected == true || host.status()?.running == true,
+        logShown = logPanel.visibility == VISIBLE,
+    )
+
+    /** The ⋮ menu, opened or closed (⋮, Ctrl+Shift+M); [byKeyboard]: its first row selected. */
+    fun toggleMenu(byKeyboard: Boolean) {
+        if (menu.isOpen) {
+            closeMenu()
+            return
+        }
+        // Keys held for the shortcut (Ctrl, Shift) went to the X server: it lets go of them now.
+        send(keys.releaseAll())
+        menu.open(byKeyboard)
+        renderMenu()
+    }
+
+    private fun closeMenu() {
+        menu.close()
+        renderMenu()
+    }
+
+    /** Back while the desktop shows: closes the menu if it's open (true), else it's the app's. */
+    fun back(): Boolean {
+        if (!menu.isOpen) return false
+        closeMenu()
+        return true
+    }
+
+    /** Draws the menu's rows again if they changed (refreshed every second, so a press isn't redrawn under a finger). */
+    private fun renderMenu() {
+        removeCallbacks(menuLapse)
+        if (!menu.isOpen) {
+            shownMenu = null
+            menuBox.removeAllViews()
+            menuLayer.visibility = GONE
+            return
+        }
+        val now = SystemClock.uptimeMillis()
+        val sections = menu.sections(menuState(), now)
+        menu.confirmDeadline?.let { postDelayed(menuLapse, (it - now).coerceAtLeast(0)) }
+        menuLayer.visibility = VISIBLE
+        val next = sections to menu.selected
+        if (next == shownMenu) return
+        shownMenu = next
+        menuBox.removeAllViews()
+        var index = 0
+        for (section in sections) {
+            section.title?.let { title ->
+                menuBox.addView(sectionLabel(context, title).apply { setPadding(dp(16), dp(12), dp(16), dp(4)) })
+            }
+            for (item in section.items) {
+                menuBox.addView(menuRow(item, index == menu.selected), LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+                index++
+            }
+        }
+    }
+
+    // A row as pixelMenu's; a choice row (Touch) with its choices as the text viewer's View | Edit.
+    private fun menuRow(item: DesktopMenuItem, selected: Boolean): View {
+        if (item.choices.isNotEmpty()) return LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(48)
+            setPadding(0, 0, dp(8), 0)
+            if (selected) setBackgroundColor(Pixel.LINE)
+            addView(pixelMenuRow(context, item.label).apply {
+                isFocusable = false
+                background = null
+            }, LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(pixelSegments(context).apply {
+                item.choices.forEachIndexed { i, label ->
+                    val segment = pixelSegment(context, label) { act(menu.tap(item.action, i, SystemClock.uptimeMillis())) }
+                    stylePixelSegment(segment, i == item.chosen)
+                    addView(segment, LayoutParams(WRAP_CONTENT, dp(36)))
+                }
+            }, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(12) })
+        }
+        return pixelMenuRow(context, item.label).apply {
+            when {
+                // As pixelDialog's pink button: the one that can't be undone.
+                item.confirming -> {
+                    typeface = Pixel.label(context, 600)
+                    setTextColor(Pixel.PINK_TEXT)
+                    background = Pixel.box(context, fill = Pixel.PINK, border = 0)
+                }
+                selected -> setBackgroundColor(Pixel.LINE)
+            }
+            setOnClickListener { act(menu.tap(item.action, now = SystemClock.uptimeMillis())) }
+        }
+    }
+
+    private fun act(command: DesktopMenuCommand?) {
+        when (command) {
+            null -> Unit
+            is DesktopMenuCommand.Touch -> {
+                host.setTouch(command.touch)
+                useTouch(command.touch)
+            }
+            DesktopMenuCommand.ToggleLog -> toggleLog()
+            DesktopMenuCommand.Restart -> start(restart = true)
+            DesktopMenuCommand.ShutDown -> host.stop()
+        }
+        renderMenu()
+    }
+
+    /**
+     * Ctrl+Shift+M, and every key while the menu is open (arrows, Tab, Enter,
+     * Esc or Back; the others do nothing): true when the menu took [event].
+     */
+    private fun menuKey(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (event.action == KeyEvent.ACTION_UP && menuKeysDown.remove(code)) return true
+        if (event.action == KeyEvent.ACTION_DOWN && code == KeyEvent.KEYCODE_M &&
+            desktopMenuShortcut(KeyPress("M", ctrl = event.isCtrlPressed, shift = event.isShiftPressed, alt = event.isAltPressed))
+        ) {
+            menuKeysDown += code
+            if (event.repeatCount == 0) toggleMenu(byKeyboard = true)
+            return true
+        }
+        if (!menu.isOpen) return false
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            menuKeysDown += code
+            desktopMenuKey(code, event.isShiftPressed)?.let { act(menu.key(it, menuState(), SystemClock.uptimeMillis())) }
+        }
+        return true
     }
 
     /**
@@ -394,7 +556,7 @@ class DesktopView(
         logPanel.post { if (atBottom) logPanel.fullScroll(FOCUS_DOWN) else logPanel.scrollTo(0, y) }
     }
 
-    /** The Log button: the logs over the screen, or not. */
+    /** The menu's Log: the logs over the screen, or not. */
     fun toggleLog() {
         logPanel.visibility = if (logPanel.visibility == VISIBLE) GONE else VISIBLE
         refresh()
@@ -487,6 +649,7 @@ class DesktopView(
 
     /** A key event while the desktop shows; false when it isn't the desktop's (Back, volume). */
     fun onKey(event: KeyEvent): Boolean {
+        if (menuKey(event)) return true
         if (event.action == KeyEvent.ACTION_MULTIPLE) {
             val chars = event.characters ?: return false
             send(keys.typed(chars))

@@ -626,9 +626,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   Ctrl+Shift+D and `desktop-open` (`desktopRequests(open =)`, refused
   off screen). A chat under it notifies as if left
   (`noticeRules`), and the service's `desktopOpen` reopens it in a
-  recreated activity. Stop desktop (in the Log panel) stops it and
-  goes back. `DesktopView`
-  lays the screen out between its own bar (back, ⌨, Log) and the
+  recreated activity. `DesktopView`
+  lays the screen out between its own bar (back, ⌨, ⋮) and the
   `desktop` key bar; an X pixel is `desktopScale()` phone pixels
   (0.75 dp, whole), the width a multiple of 8 (libxcvt's step)
   (`DesktopGeometry`). **A new surface is drawn whole:** the
@@ -641,7 +640,9 @@ See `docs/ROADMAP.md` "How it works". The details:
   keyboard (`isVisible(ime())`, API 30+) and moves it up
   (`keyboardPan()`) to keep the pointer in sight, so the X screen
   isn't resized; rotation resizes it. Touch is core's
-  `DesktopGestures` (`desktop-touch`, read when the view shows):
+  `DesktopGestures` (`desktop-touch`, read when the view shows and
+  applied at once by the menu's Touch and a settings reload,
+  `useTouch()`):
   `TouchpadGestures` keeps its own pointer and sends absolute
   moves (so the view draws it, `PointerView`: the server's cursor
   needs the shared state), `DirectGestures` the finger's. Keys are
@@ -653,7 +654,29 @@ See `docs/ROADMAP.md` "How it works". The details:
   Ctrl+Shift+D (`desktopShortcut()`), Back and the volume keys.
   `desktopNotice()` says what shows while there's no picture,
   `desktopStartsOnOpen()` when opening starts the desktop, and the
-  log shown is `desktopLogs()`. **Key bars** send through a
+  log shown is `desktopLogs()`. **The ⋮ menu** (maintainer's
+  decision, 2026-11-27: nothing needs leaving the desktop) is core's
+  `DesktopMenu` (`DesktopMenu.kt`): `sections()` is the one place its
+  rows are built (Touch: Touchpad | Direct; Log or Hide log; Restart
+  desktop and Shut down while something runs), in sections so a
+  later group (the extended screen's "Other phone") is one more
+  `DesktopMenuSection` with a heading; the keyboard's row
+  (`desktopMenuKey()`: arrows, Tab, Enter/Space, Esc/Back) and Shut
+  down's two taps (`SHUT_DOWN_CONFIRM_MS`, 3 s; any other row, key or
+  closing takes it back) are its state, and taps and keys return a
+  `DesktopMenuCommand`. The view draws it in its own frame (not a
+  `PopupWindow`, so its keys and screenshots are the view's) from
+  `PixelStyle.kt`'s parts: `pixelMenuBox`/`pixelMenuRow` (what
+  `pixelMenu` is built of), `pixelSegments` (the text viewer's View |
+  Edit), the pink of `pixelDialog`'s danger button for the
+  confirmation, `sectionLabel` for headings. Touch writes the setting
+  as pinching writes `font-size` (`Host.setTouch`); Restart is
+  `stopDesktop()` then `startDesktop()` with the notice's Starting;
+  Shut down is the old Stop desktop (`Host.stop`, then back).
+  Ctrl+Shift+M (`desktopMenuShortcut()`) is taken in the view's
+  `onKey`; opening releases the keys X holds (the shortcut's Ctrl and
+  Shift), and while it's open every key is the menu's, their releases
+  too (`menuKeysDown`). **Key bars** send through a
   `KeyBarTarget`: `TerminalKeys` (the terminal's, sticky Ctrl and Alt
   through the library's `readControlKey`/`readAltKey`) or the
   desktop's.

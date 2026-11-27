@@ -40,6 +40,8 @@ private class LogHost(var text: String) : DesktopView.Host {
     override fun back() = Unit
     override fun backLabel() = desktopBackLabel(false)
     override fun stop() = Unit
+    override fun restart(done: (String?) -> Unit) = Unit
+    override fun setTouch(touch: DesktopTouch) = Unit
     override fun install() = Unit
 }
 
