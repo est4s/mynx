@@ -12,6 +12,8 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
+import android.hardware.display.DisplayManager
 import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Binder
@@ -474,6 +476,14 @@ class TerminalService : Service() {
             link.placeChanged = { mainHandler.post { if (desktopCaster.sent != null) desktopCaster.relayout() } }
             // mynx screen align (or Align screens' Done): the desktop's picture there follows.
             link.alignChanged = { a -> mainHandler.post { desktopCaster.alignmentSaved(a) } }
+            // The screen turned (or its size changed): what's sent there follows its new shape, at the latest
+            // size it said by the time this runs (quick turns coalesce: an older one finds nothing to change).
+            link.peerScreenChanged = { said ->
+                mainHandler.post {
+                    val peer = screenLink.peer()
+                    if (peer?.role == ScreenRole.HOST) screenShare.peerScreenChanged(peer.screen ?: said)
+                }
+            }
         }
     }
 
@@ -745,6 +755,10 @@ class TerminalService : Service() {
 
         override fun ended(stream: Int) {
             activity?.onScreenStreamEnded(stream)
+        }
+
+        override fun resized(stream: ShownStream) {
+            activity?.onScreenStreamResized(stream)
         }
 
         override fun video(message: ScreenMessage.Video) {
@@ -1156,6 +1170,22 @@ class TerminalService : Service() {
         }
         // A paired screen can come back: listen while one is (screen-host).
         runCatching { screenLink.refresh() }
+        // This phone turning (or its screen changing) reaches a linked host, which lays out what it sends here anew.
+        runCatching { getSystemService(DisplayManager::class.java)?.registerDisplayListener(displayWatcher, mainHandler) }
+    }
+
+    // The default display changing (a turn, upside down too, a new size or density): the link says it once settled.
+    private val displayWatcher = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId == android.view.Display.DEFAULT_DISPLAY) screenLink.screenChanged()
+        }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        screenLink.screenChanged()
     }
 
     // Rewrites the stand-in on every change, and often enough for the current; until onDestroy.
@@ -1394,6 +1424,7 @@ class TerminalService : Service() {
         mic.stop()
         sound.stop()
         runCatching { desktopLink.stop() }
+        runCatching { getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(displayWatcher) }
         runCatching { screenLink.stop() }
         runCatching { screenCaster.closeAll() }
         runCatching { desktop.stop() }

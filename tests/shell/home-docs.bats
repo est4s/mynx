@@ -467,6 +467,12 @@ setup() {
     grep -qF -- "**Give back**" "$DOCS/screen.md"
 }
 
+@test "the guide explains turning either phone while screens are sent" {
+    grep -qF -- "**Turning the screen**" "$DOCS/screen.md"
+    grep -qF -- "**Turning either phone** lays the desktop out again" "$DOCS/screen.md"
+    grep -qF -- "Turning either phone lays both parts out again." "$DOCS/desktop.md"
+}
+
 @test "the guide explains pairing another phone from touch settings, on both phones" {
     grep -qF -- "**Pairing from settings**" "$DOCS/screen.md"
     grep -qF -- "**Pair this phone as the host**" "$DOCS/screen.md"

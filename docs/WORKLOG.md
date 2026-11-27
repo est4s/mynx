@@ -76,7 +76,40 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    modes, Align screens and `mynx screen align`, and PR #128's menu
    with the desktop on B (Touch with the shared pointer, Shut down).
    The agent's decisions stand (entry 232).
-9. **Then (left for later):** B linking again by itself (after a drop,
+9. **Turning B: built, to try on both phones** (entry 233, PR into
+   `screen-dev`, protocol version 6; update both phones). Both on this
+   build as mynx dev, paired and linked, the desktop running on A with
+   XFCE and sent to B (`mynx screen send desktop`), `screen-place =
+   right`:
+   1. Turn B to landscape: within about a second B's picture fills its
+      landscape screen (no big black bands at the sides), and A's
+      desktop Log says "Nord 2 turned: its screen 2400x1080, its video
+      …". `xrandr --listmonitors` on A: `mynx-b` is the new shape
+      (wider than high), as high as A's part shares with it (A shows
+      bands above and below its own part now, as B is the shorter).
+   2. Turn B back to portrait: as before turning (the layout of step
+      8). Turn it quickly a few times and leave it: it ends on the
+      last shape, without a stuck or black picture.
+   3. Turn A to landscape too, then B (and the other way round, B
+      first): the same layout either way. `mynx screen place below`
+      (then `above`): one tall desktop, about 4:3 (`xrandr
+      --listmonitors`: both monitors the same width); a window dragged
+      down crosses onto B where it should. `mynx set screen-desktop
+      span`: one monitor over both; a maximised window fills both.
+   4. With an alignment kept (`mynx screen align offset 2`), turn B:
+      the lines still meet across the seam after Align screens… (and
+      the rulers follow a turn while Align screens is open; Done keeps
+      it).
+   5. Back on B (its Home showing, the desktop not watched), turn B,
+      then tap Linux desktop on its Home: the desktop shows at the new
+      shape at once.
+   6. Touch on B after a turn: the pointer and taps land where the
+      finger is (direct) / move as a touchpad, and the arrow B draws
+      is where X's pointer is.
+   7. A sent app (`mynx screen send app NAME`) and a terminal tab on B:
+      turn B; the app lays out for landscape (touches land right); the
+      terminal takes B's new rows and columns (as before).
+10. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
    Files and viewers sent to B; typing with B's own keyboard (into
@@ -154,6 +187,51 @@ a PR into `desktop-dev`.
 
 ## Log
 
+### 2026-11-28 (233): Extended screen: turning B
+
+- Branch `screen-rotate` from `screen-dev`, PR into `screen-dev`.
+  Core tested here (`ScreenTurnTest`, `DesktopTurnTest`,
+  `ScreenLinkTest`, `ScreenProtocolTest`); the app's side only
+  compiled in CI. Not tried on two phones by the agent: "Next" 0a step
+  9 has the test.
+- **Maintainer's request (2026-11-28):** turning A re-laid out the
+  desktop, but turning B did nothing on A: B kept the portrait picture,
+  shrunk into its landscape screen with big bands (the link sent
+  ScreenInfo once, as it started). Now B's turns reach A and the
+  layout follows, in both modes.
+- **Built:** protocol version 6. `ScreenLink.screenChanged()` (the
+  service's `DisplayListener` on the default display, and its
+  `onConfigurationChanged`) says this phone's ScreenInfo again once
+  it has settled (`SCREEN_SETTLE_MS`, 250 ms; quick turns say only
+  the last, and nothing goes if it's what the other heard last); the
+  host hears each new one (`peerScreenChanged`) and
+  `ScreenShare.peerScreenChanged` resizes what's sent there: the
+  encoder stops, `ScreenCasting.resize` (an app's VirtualDisplay
+  resized; the desktop laid out again by `desktopFit` with B's new
+  size and video), the stream announced again at its new size (a
+  StreamStart of a known stream), the encoder started again if
+  watched, its pacer waiting for a key frame. B turns that StreamStart
+  into `resized` (not a new show: its Home stays if it's on) and
+  restarts its decoder at the new size; the codec config is kept by
+  the view, as the new one may reach the old decoder first.
+- **Agent's decisions, to confirm:**
+  - A version bump, though ScreenInfo existed: a version 5 host would
+    take B's new size silently and do nothing, so both phones must
+    update (the usual "update mynx on both").
+  - The stream keeps its id across a turn (announced again, not ended
+    and sent anew), so B's Home and what it watches stay as they were.
+  - Debounced on B only (250 ms); A coalesces by reading the latest
+    size when its posted work runs, so an older one finds nothing new.
+  - Terminal tabs on B were already fine (B's view asks its own size);
+    nothing changed there. A turning was already handled by A's view.
+  - Turning upside down (same size) re-lays out (no change) but doesn't
+    restart the video.
+- **Tests that passed at once:** `DesktopTurnTest` (both orders, both
+  landscape stacked and side by side, the offset after the seam's edge
+  changes, rulers and drags after a turn) passed without code changes:
+  `desktopFit` already took any shape; they pin that down. The link's,
+  the share's and the version's tests failed first.
+
 ### 2026-11-27 (232): Extended screen: the desktop across both phones
 
 - **Passed on both phones** (2026-11-28, build 46031614799), merged
@@ -204,9 +282,8 @@ a PR into `desktop-dev`.
     scale by 0.001, R reset, Enter Done, Esc Cancel.
   - Limits: offset ±50 mm, scale 0.8-1.25, the phones always share at
     least half the smaller extent.
-- **Not done:** B saying its screen again after it rotates (the link
-  sends ScreenInfo once, at its start: rotate B before linking); the
-  fallback when the bridge doesn't start (the X server straight into
+- **Not done:** B saying its screen again after it rotates (done in
+  entry 233); the fallback when the bridge doesn't start (the X server straight into
   the encoder) has no bands (the Log says so).
 
 ### 2026-11-27 (231): Desktop mode: the ⋮ menu

@@ -78,6 +78,9 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
     @Volatile private var stream: ShownStream? = null
     @Volatile private var decoder: Decoder? = null
     @Volatile private var holder: SurfaceHolder? = null
+    // The stream's codec config (H.264's SPS and PPS) as it came last, kept here rather than in a decoder:
+    // after a resize the new encoder's config may reach the old decoder before the new one starts.
+    @Volatile private var lastConfig: ByteArray? = null
 
     /** The stream shown, or null. */
     val shown: ShownStream? get() = stream
@@ -112,6 +115,7 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
 
     /** Shows [shown] (from its next key frame). */
     fun show(shown: ShownStream) {
+        if (stream?.id != shown.id) lastConfig = null
         stream = shown
         mark.on = false
         pointerAt = null
@@ -119,6 +123,21 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         visibility = View.VISIBLE
         fitVideo()
         restart()
+    }
+
+    /**
+     * The host announced the stream shown again at a new size (this phone
+     * turned): the video fits anew and its decoder starts over at that
+     * size, from the new encoder's first key frame.
+     */
+    fun resized(shown: ShownStream) {
+        if (stream?.id != shown.id) return
+        stream = shown
+        fitVideo()
+        restart()
+        // The host's pointer and ruler for the new size came just before (the layout goes first).
+        drawPointer()
+        drawRuler()
     }
 
     /** Stops showing it. */
@@ -134,6 +153,7 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
     fun video(message: ScreenMessage.Video) {
         val shown = stream ?: return
         if (message.stream != shown.id) return
+        if (message.config) lastConfig = message.data
         decoder?.offer(message)
     }
 
@@ -278,7 +298,7 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         private val queue = LinkedBlockingQueue<ScreenMessage.Video>()
         @Volatile private var running = true
         private var codec: MediaCodec? = null
-        private var config: ByteArray? = null
+        private var config: ByteArray? = lastConfig
         private var asked = 0L
 
         fun start() {

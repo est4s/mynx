@@ -50,7 +50,7 @@ class ScreenCaster(
     /** The desktop's part on the other phone. */
     private val desktop: DesktopCaster,
 ) : ScreenCasting {
-    private class Cast(val screen: SentScreen, val display: VirtualDisplay, val view: SentAppScreen) {
+    private class Cast(var screen: SentScreen, val display: VirtualDisplay, val view: SentAppScreen) {
         var cancelOpen: (() -> Unit)? = null
         @Volatile var encoder: ScreenEncoder? = null
         var downTime = 0L
@@ -112,6 +112,19 @@ class ScreenCaster(
             { result -> result.exceptionOrNull()?.let { view.showStatus(it.message ?: it.toString()) } },
         )
         return null
+    }
+
+    // The other phone turned: the app's display takes its new size (the page lays out again); the
+    // encoder, stopped meanwhile, starts again at it when watched (ScreenShare).
+    override fun resize(screen: SentScreen, density: Int) {
+        if (screen.target == ScreenTarget.Desktop) return desktop.resize(screen, density)
+        val cast = casts[screen.id] ?: return
+        cast.screen = screen
+        try {
+            cast.display.resize(screen.width, screen.height, density)
+        } catch (e: RuntimeException) {
+            cast.view.showStatus("Couldn't resize to ${screen.width}x${screen.height}: ${e.message ?: e.javaClass.simpleName}")
+        }
     }
 
     override fun close(screen: SentScreen, back: Boolean) {

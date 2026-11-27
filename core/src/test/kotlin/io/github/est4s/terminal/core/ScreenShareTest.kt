@@ -31,6 +31,7 @@ internal class FakeCasting : ScreenCasting {
         return refuse
     }
     override fun close(screen: SentScreen, back: Boolean) { did += "close ${screen.id} back=$back" }
+    override fun resize(screen: SentScreen, density: Int) { did += "resize ${screen.id} ${screen.width}x${screen.height} @$density" }
     override fun encode(screen: SentScreen, on: Boolean, fps: Int, kbps: Int) {
         did += if (on) "encode ${screen.id} $fps fps $kbps kbit/s" else "stop ${screen.id}"
     }
@@ -67,6 +68,7 @@ internal class FakeShowing : ScreenShowing {
     val did = mutableListOf<String>()
     override fun started(stream: ShownStream) { did += "started ${stream.id} ${stream.title} ${stream.width}x${stream.height}" }
     override fun ended(stream: Int) { did += "ended $stream" }
+    override fun resized(stream: ShownStream) { did += "resized ${stream.id} ${stream.width}x${stream.height}" }
     override fun video(message: ScreenMessage.Video) { did += "video ${message.stream} ${message.pts}" }
     override fun focus(typing: Boolean) { did += "focus $typing" }
     override fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) { did += "pointer $stream $x $y $shown" }
