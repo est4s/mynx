@@ -179,9 +179,14 @@ a PR into `desktop-dev`.
   back. Search: 15 rounds of 4 s, then Search again. Refusals are
   reworded without `mynx` commands (`screenProblemText`). Reused
   Home's rows, sections, info rows, paragraph, input page and Save
-  button, and `pixelDialog` for Unpair; new: the code row (title
+  button, and `pixelDialog` for Unpair; new: the code row (values'
   font, cyan, 44 sp, boxed) and pink error paragraphs (the input
   page's error colour). Details: ARCHITECTURE "pairing and the link".
+- **Phone test (build 45961985287): everything worked**, but in the
+  pixel title font 2 and 5 were hard to tell apart in the code; the
+  code row now uses the values' monospace font (`Pixel.text`), still
+  cyan, boxed and 44 sp. The other places a code shows (Status, the
+  Pair row's detail) already used it.
 - Tests: `ScreenPairingTest` (both flows over real loopback links:
   pairing, a wrong code, cancel, refusals, address, connect,
   disconnect, unpair; the pages' rows; the texts), HomeSettingsTest;

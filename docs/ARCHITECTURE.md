@@ -765,7 +765,8 @@ See `docs/ROADMAP.md` "How it works". The details:
   rounds of `ScreenLink.findHosts` (`join`'s own lookup; 15 rounds of
   4 s, a host missed once kept a round). The link's refusals are
   reworded without terminal commands (`screenProblemText`). Home
-  gained `HomeRow.CODE` (the code, big) and `ERROR` (pink text),
+  gained `HomeRow.CODE` (the code, big, in the values' font: the
+  pixel title font's 2 and 5 look alike) and `ERROR` (pink text),
   `Config`'s `open` (a page after) and `confirm` (a `pixelDialog`
   first), and `Input`'s `numeric` and `button`.
   Not yet: B linking again by itself after a drop or the app's start.

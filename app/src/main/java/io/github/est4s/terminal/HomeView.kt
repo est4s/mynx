@@ -308,10 +308,11 @@ class HomeView(
         setTextIsSelectable(true)
     }
 
-    // A pairing code: the page's title font in cyan, big enough to read from the other phone, boxed as a fact.
+    // A pairing code: the values' font (the pixel title font's 2 and 5 look alike: maintainer, 2026-11-27)
+    // in cyan, big enough to read from the other phone, boxed as a fact.
     private fun codeRow(code: String) = TextView(context).apply {
         text = code
-        typeface = Pixel.label(context, 700)
+        typeface = Pixel.text(context)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 44f)
         setTextColor(Pixel.CYAN)
         gravity = Gravity.CENTER
