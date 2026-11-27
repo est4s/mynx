@@ -66,17 +66,36 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 - **Leaving it:** Back, the bar's first button (top left: ← Terminal
   or ← Touch view, where it goes) and Ctrl+Shift+D go back to the
   screen you opened it from, as you left it. The desktop keeps
-  running meanwhile. **Stop desktop** (in Log) or `mynx desktop stop`
+  running meanwhile. **Shut down** (in ⋮) or `mynx desktop stop`
   ends it.
+- **The ⋮ menu** (top right, or Ctrl+Shift+M on a hardware
+  keyboard), so nothing needs leaving the desktop:
+  - **Touch: Touchpad | Direct** switches `desktop-touch` (below) at
+    once and saves it, as `mynx set desktop-touch …` does; the menu
+    stays open to show it.
+  - **Log** shows the logs (below); **Hide log** hides them.
+  - **Restart desktop** stops the desktop and starts it again (as
+    `mynx desktop stop`, then `start`).
+  - **Shut down** asks first: the row turns pink,
+    "Tap again to shut down", for 3 seconds; a second tap stops the
+    desktop (as `mynx desktop stop`) and goes back to where you
+    opened it from.
+  Restart and Shut down show only while something runs. From the
+  keyboard: Up, Down (or Tab, Shift+Tab) choose a row, Left and Right
+  Touch's choice, Enter (or Space) does it (Shut down: Enter twice),
+  Esc or Back closes the menu. While it's open, keys don't reach the
+  desktop. Ctrl+Shift+M is the app's on the desktop, as Ctrl+Shift+D
+  is (a program's own Ctrl+Shift+M, as Firefox's responsive design
+  mode, can't be reached there).
 - **Starting:** opening the desktop starts it (as `mynx desktop
   start`) if nothing runs and nothing is missing. Otherwise it says
   why there's no picture: what to install, a start that failed, the
   server not answering yet, with Start to try again and the logs.
-  **Log** (top right) shows them at any time: the app's own lines,
+  **Log** (in ⋮) shows them at any time: the app's own lines,
   then the ends of `x11.log` and `session.log`; **Copy** copies
   them all, and you can select part of them. The desktop keeps
   running when you leave the app or go back from it; it stops
-  with Stop desktop, `mynx desktop stop`, or when the app exits.
+  with Shut down, `mynx desktop stop`, or when the app exits.
 - **The screen** is the X server's, at about 0.75 dp a pixel (2 phone
   pixels on most phones), between the app's bar and the key bar.
   Turning the phone resizes it (RandR: programs see a new screen
@@ -92,7 +111,8 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 - **Touch, `desktop-touch = direct`**: the pointer is where you
   touch. A tap clicks there, a finger that moves drags from where it
   went down, a long press is a right click, and two fingers scroll
-  or, tapped, right-click. Changes apply when the desktop next shows.
+  or, tapped, right-click. A change (⋮'s Touch, `mynx set
+  desktop-touch`) applies at once.
 - **The clipboard** is shared, text only: what a program on the
   desktop copies (to X's clipboard, as Ctrl+C or a Copy menu does, not
   a mere selection) is on the phone's clipboard, and what you copy in
@@ -112,10 +132,10 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
 - **Keys:** a hardware keyboard's keys go to the X server as they
   are (by key, not by character, so its layout is the server's: US
   unless you run `setxkbmap de` or another in Debian), Ctrl and Alt
-  chords too. Ctrl+Shift+D stays the app's; Back and the volume
-  keys stay the phone's, but a keyboard's Esc key is Esc. ⌨ (top
-  right) shows the soft keyboard, which types characters (any
-  language), Enter, Tab and Backspace. The pointer is the app's own
+  chords too. Ctrl+Shift+D and Ctrl+Shift+M (⋮) stay the app's;
+  Back and the volume keys stay the phone's, but a keyboard's Esc
+  key is Esc. ⌨ (top right) shows the soft keyboard, which types
+  characters (any language), Enter, Tab and Backspace. The pointer is the app's own
   arrow: programs can't change its shape.
 - **The key bar** is `desktop`: Esc, Tab, Ctrl, Alt, Super and the
   arrows. Ctrl, Alt and Super are sticky: tap one, then a key, a
