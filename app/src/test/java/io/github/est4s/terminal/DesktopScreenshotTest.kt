@@ -69,7 +69,7 @@ class DesktopScreenshotTest {
         Screenshots.settle()
         if (log) view.toggleLog()
         then(view)
-        Screenshots.settle()
+        // No settle here: save()'s 1.5 s keeps Shut down's 3 s confirmation on screen.
         Screenshots.save(view, name)
         view.hidden()
     }

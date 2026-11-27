@@ -494,10 +494,10 @@ class DesktopView(
         }
         return pixelMenuRow(context, item.label).apply {
             when {
-                // As pixelDialog's pink button: the one that can't be undone.
+                // Pink as pixelDialog's danger button (it can't be undone), its text the background's as on Chat's pink tiles.
                 item.confirming -> {
                     typeface = Pixel.label(context, 600)
-                    setTextColor(Pixel.PINK_TEXT)
+                    setTextColor(Pixel.BACKGROUND)
                     background = Pixel.box(context, fill = Pixel.PINK, border = 0)
                 }
                 selected -> setBackgroundColor(Pixel.LINE)

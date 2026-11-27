@@ -114,7 +114,10 @@ a PR into `desktop-dev`.
   keeps the keyboard's row and Shut down's state; the view draws
   them with `pixelMenu`'s box and rows (split out as
   `pixelMenuBox`/`pixelMenuRow`), the text viewer's View | Edit
-  segments (now `pixelSegments`), and `pixelDialog`'s danger pink.
+  segments (now `pixelSegments`), and `pixelDialog`'s danger pink
+  (with the background's colour for its text, as Chat's pink tiles
+  have: the dialog's pink-on-pink Delete reads poorly in the
+  screenshots).
   It lies in the view's own frame, not a `PopupWindow`, so keys and
   screenshots are the view's.
 - **Decisions to confirm (maintainer's):** the shortcut Ctrl+Shift+M
