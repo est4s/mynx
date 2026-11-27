@@ -11,7 +11,9 @@ val SCREEN_ID = Regex("[0-9a-f]{32}")
  * A phone this one paired with: its [id] and [name], its [role] (the
  * other phone's: a host we show for, or a screen we send to), the
  * long-term [key] from pairing, where it was last reached ([address],
- * `HOST:PORT`, for a screen to come back) and when it paired (ms).
+ * `HOST:PORT`, for a screen to come back), when it paired (ms), and on
+ * the host how the desktop's pictures line up across both ([align]: it
+ * depends on the pair, so it's kept with it and goes with it).
  */
 class ScreenPeer(
     val id: String,
@@ -20,6 +22,7 @@ class ScreenPeer(
     val key: ByteArray,
     val address: String?,
     val paired: Long,
+    val align: ScreenAlignment = ScreenAlignment(),
 )
 
 /**
@@ -54,6 +57,10 @@ class ScreenPairs(private val dir: File, private val rng: SecureRandom = SecureR
                 Base64.getDecoder().decode(values.getValue("key")).also { require(it.size == 32) },
                 values["address"]?.takeIf { it.isNotEmpty() },
                 values["paired"]?.toLongOrNull() ?: 0L,
+                ScreenAlignment(
+                    values["align-offset"]?.toFloatOrNull() ?: 0f,
+                    values["align-scale"]?.toFloatOrNull() ?: 1f,
+                ).clamped(),
             )
         }.getOrNull()
     }
@@ -71,8 +78,19 @@ class ScreenPairs(private val dir: File, private val rng: SecureRandom = SecureR
             append("key = ${Base64.getEncoder().encodeToString(peer.key)}\n")
             peer.address?.let { append("address = $it\n") }
             append("paired = ${peer.paired}\n")
+            if (!peer.align.isDefault) {
+                append("align-offset = ${peer.align.offset}\n")
+                append("align-scale = ${peer.align.scale}\n")
+            }
         }
         write(File(peers, "${peer.id}.conf"), text)
+    }
+
+    /** Pair [id]'s alignment is [align] from now on; false if there's no such pair. */
+    fun align(id: String, align: ScreenAlignment): Boolean {
+        val peer = get(id) ?: return false
+        save(ScreenPeer(peer.id, peer.name, peer.role, peer.key, peer.address, peer.paired, align.clamped()))
+        return true
     }
 
     /** Forgets a pair; false if there was none. */

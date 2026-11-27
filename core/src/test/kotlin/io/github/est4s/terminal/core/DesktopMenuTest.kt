@@ -1,6 +1,9 @@
 package io.github.est4s.terminal.core
 
+import io.github.est4s.terminal.core.DesktopMenuAction.ALIGN
 import io.github.est4s.terminal.core.DesktopMenuAction.LOG
+import io.github.est4s.terminal.core.DesktopMenuAction.SCREEN_DESKTOP
+import io.github.est4s.terminal.core.DesktopMenuAction.SCREEN_PLACE
 import io.github.est4s.terminal.core.DesktopMenuAction.RESTART
 import io.github.est4s.terminal.core.DesktopMenuAction.SHUT_DOWN
 import io.github.est4s.terminal.core.DesktopMenuAction.TOUCH
@@ -32,6 +35,7 @@ private const val KEYCODE_NUMPAD_ENTER = 160
 
 private val RUNNING = DesktopMenuState(touch = DesktopTouch.TOUCHPAD, running = true, logShown = false)
 private val STOPPED = RUNNING.copy(running = false)
+private val LINKED = RUNNING.copy(other = DesktopMenuOther(ScreenSide.RIGHT, ScreenDesktopMode.EXTEND))
 
 class DesktopMenuTest {
     private fun DesktopMenu.rows(state: DesktopMenuState = RUNNING, now: Long = 0) = sections(state, now).flatMap { it.items }
@@ -222,6 +226,46 @@ class DesktopMenuTest {
         menu.rows(STOPPED)
         assertEquals(1, menu.selected)
         assertEquals(DesktopMenuCommand.ToggleLog, menu.key(ENTER, STOPPED, 0))
+    }
+
+    @Test
+    fun `while a phone is linked, an Other phone section follows`() {
+        val sections = DesktopMenu().sections(LINKED, 0)
+        assertEquals(listOf(null, "Other phone"), sections.map { it.title })
+        val other = sections[1].items
+        assertEquals(listOf(SCREEN_PLACE, SCREEN_DESKTOP, ALIGN), other.map { it.action })
+        assertEquals(listOf("Screen sits", "Desktop there", "Align screens…"), other.map { it.label })
+        assertEquals(listOf("Left", "Right", "Above", "Below"), other[0].choices)
+        assertEquals(1, other[0].chosen)
+        assertEquals(listOf("Own monitor", "Half of one"), other[1].choices)
+        assertEquals(0, other[1].chosen)
+        val below = DesktopMenu().sections(LINKED.copy(other = DesktopMenuOther(ScreenSide.BELOW, ScreenDesktopMode.SPAN)), 0)[1].items
+        assertEquals(listOf(3, 1), below.take(2).map { it.chosen })
+        assertEquals(1, DesktopMenu().sections(RUNNING, 0).size)
+    }
+
+    @Test
+    fun `the other phone's choices set the settings and keep the menu open, Align closes it`() {
+        val menu = DesktopMenu().apply { open(byKeyboard = false) }
+        assertEquals(DesktopMenuCommand.Place(ScreenSide.ABOVE), menu.tap(SCREEN_PLACE, choice = 2, now = 0))
+        assertEquals(DesktopMenuCommand.ScreenDesktop(ScreenDesktopMode.SPAN), menu.tap(SCREEN_DESKTOP, choice = 1, now = 0))
+        assertTrue(menu.isOpen)
+        assertEquals(DesktopMenuCommand.Align, menu.tap(ALIGN, now = 0))
+        assertFalse(menu.isOpen)
+    }
+
+    @Test
+    fun `the keyboard reaches the other phone's rows, after Shut down`() {
+        val menu = DesktopMenu().apply { open(byKeyboard = true) }
+        repeat(4) { menu.key(DOWN, LINKED, 0) }
+        assertEquals("Screen sits", menu.sections(LINKED, 0).flatMap { it.items }[menu.selected].label)
+        assertEquals(DesktopMenuCommand.Place(ScreenSide.ABOVE), menu.key(RIGHT, LINKED, 0))
+        assertEquals(DesktopMenuCommand.Place(ScreenSide.LEFT), menu.key(LEFT, LINKED, 0))
+        menu.key(DOWN, LINKED, 0)
+        assertEquals(DesktopMenuCommand.ScreenDesktop(ScreenDesktopMode.SPAN), menu.key(ENTER, LINKED, 0))
+        menu.key(DOWN, LINKED, 0)
+        assertEquals(DesktopMenuCommand.Align, menu.key(ENTER, LINKED, 0))
+        assertFalse(menu.isOpen)
     }
 
     @Test

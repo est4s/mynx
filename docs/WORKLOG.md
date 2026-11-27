@@ -69,7 +69,14 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    2 and 5 were hard to read in the pixel font; the values' font
    fixed it (build 45997763400), then the maintainer said merge.
    The agent's decisions stand (entry 230).
-8. **Then (left for later):** B linking again by itself (after a drop,
+8. **The desktop across both phones: passed on both phones** (entry
+   232, PR #129, protocol version 5; Pixel 10 as A, Nord 2 as B,
+   2026-11-28, build 46031614799: "all seem to work well"): the ⋮
+   menu's Other phone section, the matched default sizes in both
+   modes, Align screens and `mynx screen align`, and PR #128's menu
+   with the desktop on B (Touch with the shared pointer, Shut down).
+   The agent's decisions stand (entry 232).
+9. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
    Files and viewers sent to B; typing with B's own keyboard (into
@@ -146,6 +153,61 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-27 (232): Extended screen: the desktop across both phones
+
+- **Passed on both phones** (2026-11-28, build 46031614799), merged
+  as PR #129.
+
+- Branch `screen-desktop-fit` from `screen-dev`, PR into
+  `screen-dev`. Core and `mynx` tested here (`ScreenFitTest`,
+  `DesktopScreensTest`, `DesktopMenuTest`, `ScreenPairsTest`,
+  `ScreenLinkTest`, `ScreenShareTest`, `test_mynx.py`); the app's side
+  only compiled in CI, with Robolectric tests (`DesktopMenuViewTest`)
+  and screenshots (`desktop-menu-other*`, `desktop-align*`,
+  `screen-align-stream*`). Not tried on two phones by the agent:
+  "Next" 0a step 8 has the test.
+- **Maintainer's requests (2026-11-27):** an Other phone section in
+  the ⋮ menu (Screen sits, Desktop there, Align screens…); default
+  sizes so a full-screen window in span mode lines up across the
+  seam (an X pixel the same physical size on both, by each phone's
+  real dpi; the shared extent the smaller usable one, bands on the
+  taller; both modes); Align screens for fine-tuning (rulers on both,
+  drag and pinch on B, Done / Reset / Cancel, per pair) and `mynx
+  screen align`.
+- **Built:** core's `desktopFit()` (`ScreenFit.kt`) does all the
+  geometry: sizes, bands on either phone, the offset and scale, the
+  rulers, B's gestures (`AlignGestures`, `alignAfter`), A's keys.
+  Protocol version 5: ScreenInfo carries `xdpi`/`ydpi`, and Align /
+  AlignInput / AlignAction (50-52). B's bands are drawn into its video
+  by `EncoderBridge` (a viewport), so B needs nothing new to show them;
+  A's by sizing its SurfaceView inside the view. The menu's choice
+  rows put their segments under the label when long, and the menu
+  scrolls (landscape).
+- **Agent's decisions, to confirm:**
+  - The alignment is kept **with the pair** (the host's
+    `peers/ID.conf`, `align-offset`/`align-scale`), not a Debian
+    setting: it's a measurement of that pair, it goes with an unpair,
+    only the host lays the desktop out, and `mynx screen align` reads
+    and sets it (so agents can). Re-pairing starts from the default.
+  - Default placement along the seam: **centred on each other**; the
+    offset (mm, + is down or right for B's picture) moves from there.
+    If B's picture would leave B's screen, the shared part shrinks and
+    A shows the band instead (the phones overlap less).
+  - Extend now uses the same sizes as span (B's monitor is the shared
+    height, not B's whole screen), as asked ("both modes").
+  - Align screens… sends the desktop to B first if it isn't there.
+    While aligning, B's touches move its picture (none reach X); A's
+    desktop still works. Done on either phone, Reset stays aligning,
+    Back on A cancels. Ruler lines every 2 mm, a long cyan one each cm.
+  - Keys on A while aligning: arrows along the seam 0.1 mm, + / - the
+    scale by 0.001, R reset, Enter Done, Esc Cancel.
+  - Limits: offset ±50 mm, scale 0.8-1.25, the phones always share at
+    least half the smaller extent.
+- **Not done:** B saying its screen again after it rotates (the link
+  sends ScreenInfo once, at its start: rotate B before linking); the
+  fallback when the bridge doesn't start (the X server straight into
+  the encoder) has no bands (the Log says so).
 
 ### 2026-11-27 (231): Desktop mode: the ⋮ menu
 

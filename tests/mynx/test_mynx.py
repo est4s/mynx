@@ -3337,6 +3337,35 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("screen", "place", "above")
         self.assertEqual(run.stdout, "Asked the host to put this phone above it.\n")
 
+    ALIGN = {"ok": True, "phone": "Nord 2", "id": "bb" * 16, "offset": 1.5, "scale": 1.012, "default": False,
+             "text": "offset +1.5 mm · scale 1.012"}
+
+    def test_screen_align_shows_sets_and_resets(self):
+        self.start_app({"screen-align": self.ALIGN})
+        run = self.mynx("screen", "align")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(run.stdout, "Nord 2: offset +1.5 mm · scale 1.012\n")
+        self.mynx("screen", "align", "offset", "1.5")
+        self.mynx("screen", "align", "scale", "1.012")
+        self.mynx("screen", "align", "reset")
+        self.assertEqual(self.app.requests, [["screen-align"], ["screen-align", "offset", "1.5"],
+                                             ["screen-align", "scale", "1.012"], ["screen-align", "reset"]])
+        run = self.mynx("--json", "screen", "align")
+        self.assertEqual(json.loads(run.stdout)["scale"], 1.012)
+
+    def test_screen_align_says_when_its_the_default(self):
+        self.start_app({"screen-align": dict(self.ALIGN, offset=0.0, scale=1.0, default=True,
+                                             text="offset 0 mm · scale 1.000")})
+        run = self.mynx("screen", "align", "reset")
+        self.assertEqual(run.stdout, "Nord 2: offset 0 mm · scale 1.000 (as the phones' dpi say)\n")
+
+    def test_screen_align_wants_a_number(self):
+        self.start_app({})
+        run = self.mynx("screen", "align", "offset")
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("align", run.stderr)
+        self.assertEqual(self.app.requests, [])
+
     LINKED = {"id": "bb" * 16, "name": "Nord 2", "role": "screen", "since": 0,
               "screen": {"width": 1080, "height": 2400, "density": 440, "rotation": 0}, "place": "right"}
     HERO = {"id": 1, "kind": "app", "name": "pixel-hero", "title": "Pixel Hero", "width": 1080, "height": 2400,

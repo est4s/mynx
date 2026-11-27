@@ -37,6 +37,8 @@ internal class FakeCasting : ScreenCasting {
     override fun keyFrame(screen: SentScreen) { did += "key ${screen.id}" }
     override fun touch(screen: SentScreen, touch: ScreenMessage.Touch) { did += "touch ${screen.id} ${touch.action}" }
     override fun typingTo(screen: SentScreen?) { did += "typing ${screen?.id}" }
+    override fun alignInput(screen: SentScreen, input: ScreenMessage.AlignInput) { did += "align ${screen.id} ${input.shift} ${input.zoom}" }
+    override fun alignAction(screen: SentScreen, step: AlignStep) { did += "align ${screen.id} $step" }
 
     // Terminals: the tabs this phone has, by what `mynx screen send tab` names.
     val tabs = mutableMapOf("1" to "bash", "2" to "htop", "new" to "Tab 3")
@@ -68,6 +70,7 @@ internal class FakeShowing : ScreenShowing {
     override fun video(message: ScreenMessage.Video) { did += "video ${message.stream} ${message.pts}" }
     override fun focus(typing: Boolean) { did += "focus $typing" }
     override fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) { did += "pointer $stream $x $y $shown" }
+    override fun align(message: ScreenMessage.Align) { did += "align ${message.stream} ${message.on} ${message.origin}" }
     override fun termStarted(id: Int, title: String, columns: Int, rows: Int) { did += "term $id $title ${columns}x$rows" }
     override fun termState(id: Int, columns: Int, rows: Int, data: ByteArray) { did += "state $id ${columns}x$rows" }
     override fun termOutput(id: Int, data: ByteArray) { did += "output $id ${String(data)}" }
@@ -393,6 +396,33 @@ class ScreenShareTest {
         share.received(ScreenMessage.StreamStart(3, "Linux desktop", 1080, 2400))
         share.received(ScreenMessage.Pointer(3, 5f, 6f, true))
         assertEquals("pointer 3 5.0 6.0 true", showing.did.last())
+    }
+
+    @Test
+    fun `aligning, the ruler goes to the screen, its drags and buttons come back`() {
+        val s = share.send(ScreenTarget.Desktop).getOrThrow()
+        sent.clear()
+        val ruler = ScreenMessage.Align(s.id, true, ScreenSide.RIGHT, 286f, 32.2f, 0f, 1f)
+        assertTrue(share.align(ruler))
+        assertEquals(listOf<ScreenMessage>(ruler), sent)
+        // Not for a screen that isn't there.
+        assertFalse(share.align(ruler.copy(stream = 99)))
+        share.received(ScreenMessage.AlignInput(s.id, 12f, 1f, 600f))
+        share.received(ScreenMessage.AlignAction(s.id, AlignStep.DONE))
+        share.received(ScreenMessage.AlignAction(99, AlignStep.DONE))
+        assertEquals(listOf("align ${s.id} 12.0 1.0", "align ${s.id} DONE"), casting.did.takeLast(2))
+    }
+
+    @Test
+    fun `the screen draws the ruler and sends what's done on it`() {
+        share.received(ScreenMessage.StreamStart(3, "Linux desktop", 1080, 2400))
+        share.received(ScreenMessage.Align(3, true, ScreenSide.LEFT, 10f, 20f, 0f, 1f))
+        share.received(ScreenMessage.Align(9, true, ScreenSide.LEFT, 10f, 20f, 0f, 1f))
+        assertEquals("align 3 true 10.0", showing.did.last())
+        assertEquals(1, showing.did.count { it.startsWith("align") })
+        share.alignInput(ScreenMessage.AlignInput(3, 1f, 1f, 0f))
+        share.alignAction(3, AlignStep.CANCEL)
+        assertEquals(listOf<ScreenMessage>(ScreenMessage.AlignInput(3, 1f, 1f, 0f), ScreenMessage.AlignAction(3, AlignStep.CANCEL)), sent.takeLast(2))
     }
 }
 

@@ -21,6 +21,7 @@ can be sent to the screen; chats can't be yet.
 | `mynx screen send tab [N\|new]` | on the host: move terminal tab N (1 is the first in the strip; none: the tab this runs in) to the screen, or start a new one there |
 | `mynx screen send desktop` | on the host: make the screen part of the Linux desktop (a monitor of its own, or the second half: `screen-desktop`); it must be running |
 | `mynx screen take [ID\|NAME\|all]` | bring sent screens back to this phone (all by default); on the screen, it asks the host to |
+| `mynx screen align [offset MM\|scale X\|reset]` | on the host: how the desktop's picture on the screen lines up with this phone's (below); none: show it |
 | `mynx screen [status]` | the link (which phone, its screen size, where it sits), what's sent there and where typing goes, why the last one ended, the pairs, whether this phone listens |
 
 Each takes `--json`.
@@ -120,18 +121,44 @@ Each takes `--json`.
   own part; the screen shows its part full screen. **Take back** (the
   same button), `mynx screen take desktop`, the link ending or the
   desktop stopping take the screen's part away again.
+- **Sizes:** an X pixel is the same size on both phones, as each
+  phone's own dpi says, so a window keeps its size as it moves
+  across. Along the shared edge both get the shorter of the two
+  (this phone's desktop loses height to its bars, the screen shows
+  full screen); the taller one shows black bands there. Across, the
+  screen's part is the rest of its screen.
 - **A monitor of its own** (`screen-desktop = extend`, default): the X
   server gets a second monitor, `mynx-b` (RandR, `xrandr
-  --listmonitors` lists it), the screen's size at its own density, on
-  the side `screen-place` says. XFCE gives it its own workspace area:
+  --listmonitors` lists it), sized as above, on the side
+  `screen-place` says. XFCE gives it its own workspace area:
   a window maximised there fills that phone, windows move across, and
   a panel can go on it (Panel Preferences → Output: mynx-b). Windows
   left on it come back to this phone's monitor when it goes.
   `mynx screen place` (or `mynx set screen-place`) moves it at once.
 - **The second half** (`screen-desktop = span`): both phones are one
-  wide monitor, for programs that should stretch across; the screen's
-  part is scaled to this phone's edge, so the two make a rectangle.
-  `mynx set screen-desktop span` (or `extend`) switches while it's sent.
+  wide monitor, for programs that should stretch across: a window
+  maximised there fills both and lines up across the seam. `mynx set
+  screen-desktop span` (or `extend`) switches while it's sent.
+- **The desktop's ⋮ menu** has an **Other phone** section while a
+  screen is linked: where it sits, a monitor of its own or half of
+  one, and **Align screens…**.
+- **Aligning** (Android's dpi figures are often a little off, and
+  phones lie side by side a little out of line): ⋮ → **Align
+  screens…** puts a ruler along the edge where the phones meet on
+  both, a line every 2 mm and a long cyan one every centimetre (the
+  same lines of the desktop on both). On the screen, drag along the
+  edge to move its picture along it, and pinch to make it a little
+  bigger or smaller, until its lines meet this phone's across the
+  edge; it works the same sideways for `above` and `below`. On this
+  phone the arrows along the edge move it (a tenth of a millimetre a
+  press), + and - scale it, R resets, Enter is Done and Esc (or Back)
+  Cancel. **Done** keeps it, **Reset** goes back to what the dpi say
+  (still aligning), **Cancel** puts back what was there. It's kept
+  with the pair, on the host (unpairing forgets it), and applies to
+  both kinds of desktop. `mynx screen align` shows it as `offset`
+  (mm the screen's picture moves along the edge, down or right; -50 to
+  50) and `scale` (its size; 0.8 to 1.25, 1 as the dpi say); `mynx
+  screen align offset 1.5`, `scale 1.01` or `reset` set it, at once.
 - **Touch on the screen** works as on this phone's desktop
   (`desktop-touch`: touchpad by default, or direct), with the same
   gestures. There is one pointer: on a touchpad it moves across from

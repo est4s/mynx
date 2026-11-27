@@ -6,9 +6,13 @@ import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import io.github.est4s.terminal.core.DesktopMenuOther
+import io.github.est4s.terminal.core.DesktopRuler
 import io.github.est4s.terminal.core.DesktopSession
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
+import io.github.est4s.terminal.core.ScreenDesktopMode
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.desktopBackLabel
 import org.junit.Test
@@ -33,8 +37,12 @@ private class SampleHost(
     override val link: DesktopScreenLink,
     private val fromTouch: Boolean = false,
     private val other: Pair<String, Boolean>? = null,
+    private val linkedPhone: DesktopMenuOther? = null,
+    private val alignShown: DesktopAligning? = null,
 ) : DesktopView.Host {
     override fun screen() = other
+    override fun otherPhone() = linkedPhone
+    override fun aligning() = alignShown
     override fun status() = status
     override fun start(done: (String?) -> Unit) = Unit
     override fun logs() = link.log() + "\n\n/tmp/.mynx/desktop/x11.log:\nXlorie: new surface applied\n" +
@@ -54,6 +62,14 @@ private val XFCE_MISSING = DesktopStatus(
     install = listOf("xfce4", "xfce4-terminal", "dbus-x11", "tango-icon-theme"),
 )
 private val RUNNING = DesktopStatus(running = true, session = DesktopSession.XFCE, sessionRunning = true, problem = null)
+private val NORD = DesktopMenuOther(ScreenSide.RIGHT, ScreenDesktopMode.EXTEND)
+
+// The desktop on a Nord 2 beside it: the Other phone section, the bar's Take back.
+private fun linked(shown: DesktopAligning? = null) =
+    SampleHost(RUNNING, NoServer(connected = true), other = Pair("Nord 2", true), linkedPhone = NORD, alignShown = shown)
+
+// Aligning: this phone's ruler (2 mm lines, 33 px apart at 422 dpi) along the edge facing the other phone.
+private fun alignOn(side: ScreenSide) = DesktopAligning(side, DesktopRuler(0f, 33.2f), "offset +1.5 mm · scale 1.012", "Nord 2")
 
 /** The desktop's view without an X server: its bar, notices, key bar and pointer (see [Screenshots]). */
 @RunWith(RobolectricTestRunner::class)
@@ -144,4 +160,33 @@ class DesktopScreenshotTest {
     @Test
     @Config(qualifiers = LANDSCAPE_QUALIFIERS)
     fun landscape() = shoot(2400, 1080, "desktop-landscape", SampleHost(RUNNING, NoServer(connected = true)))
+
+    // A phone linked as this one's screen: the menu's Other phone section, under the desktop's rows.
+    @Test
+    fun menuOtherPhone() = shoot(1080, 2400, "desktop-menu-other", linked()) { it.toggleMenu(byKeyboard = false) }
+
+    @Test
+    @Config(qualifiers = NARROW_QUALIFIERS)
+    fun menuOtherPhoneNarrow() = shoot(945, 2100, "desktop-menu-other-360dp", linked()) { it.toggleMenu(byKeyboard = true) }
+
+    // In landscape the menu scrolls; opened by the keyboard on Align screens, the last row, it scrolls there.
+    @Test
+    @Config(qualifiers = LANDSCAPE_QUALIFIERS)
+    fun menuOtherPhoneLandscape() = shoot(2400, 1080, "desktop-menu-other-landscape", linked()) {
+        it.toggleMenu(byKeyboard = true)
+        it.onKey(android.view.KeyEvent(0, 0, android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_UP, 0))
+        Screenshots.settle()
+    }
+
+    // Aligning: the ruler at the right edge (the Nord 2 sits right), the panel at the bottom.
+    @Test
+    fun align() = shoot(1080, 2400, "desktop-align", linked(alignOn(ScreenSide.RIGHT)))
+
+    // The Nord 2 below: the ruler along the bottom edge, the panel at the top.
+    @Test
+    fun alignBelow() = shoot(1080, 2400, "desktop-align-below", linked(alignOn(ScreenSide.BELOW)))
+
+    @Test
+    @Config(qualifiers = NARROW_QUALIFIERS)
+    fun alignNarrow() = shoot(945, 2100, "desktop-align-360dp", linked(alignOn(ScreenSide.LEFT)))
 }

@@ -322,6 +322,53 @@ class ScreenLinkTest {
     }
 
     @Test
+    fun `the host keeps the linked screen's alignment, shown, set and reset by request`() {
+        val heard = java.util.concurrent.CopyOnWriteArrayList<ScreenAlignment>()
+        host.alignChanged = { heard += it }
+        pair()
+        waitFor("linked") { connected(host) != null }
+        val requests = screenRequests(host)
+        fun ask(vararg args: String): Map<*, *> = Answers().also { requests.getValue("screen-align").start(args.toList(), reply(it)) }.answer!!
+        val shown = ask()
+        assertEquals("Nord 2", shown["phone"], shown.toString())
+        assertEquals(0.0, (shown["offset"] as Number).toDouble())
+        assertEquals(1.0, (shown["scale"] as Number).toDouble())
+        assertEquals(true, shown["default"])
+        assertEquals(1.5, (ask("offset", "1.5")["offset"] as Number).toDouble(), 0.001)
+        val scaled = ask("scale", "1.012")
+        assertEquals(1.012, (scaled["scale"] as Number).toDouble(), 0.0001)
+        assertEquals(false, scaled["default"])
+        assertEquals(ScreenAlignment(1.5f, 1.012f), host.alignment())
+        assertEquals(listOf(ScreenAlignment(1.5f, 1f), ScreenAlignment(1.5f, 1.012f)), heard.toList())
+        // Out of range, or not a number: refused, nothing changed.
+        assertTrue((ask("scale", "2")["error"] as String).contains("0.8"))
+        assertTrue((ask("offset", "far")["error"] as String).contains("mm"))
+        assertTrue((ask("tilt")["error"] as String).contains("offset"))
+        // It stays with the pair when the screen comes back.
+        screen.disconnect()
+        waitFor("down") { connected(host) == null }
+        screen.connect(null, reply(Answers()))
+        waitFor("linked again") { connected(host) != null }
+        assertEquals(ScreenAlignment(1.5f, 1.012f), host.alignment())
+        assertEquals(true, ask("reset")["default"])
+        assertEquals(ScreenAlignment(), heard.last())
+    }
+
+    @Test
+    fun `the screen's alignment is the host's to keep`() {
+        pair()
+        waitFor("linked") { connected(screen) != null }
+        val sink = Answers()
+        screenRequests(screen).getValue("screen-align").start(emptyList(), reply(sink))
+        assertTrue((sink.answer!!["error"] as String).contains("Pixel 10"), sink.answer.toString())
+        // Unlinked and no screen paired: nothing to align.
+        val alone = ScreenLink(File(root, "c/private"), hostSettings, { "Pixel 10" }, hostPlatform)
+        val none = Answers()
+        screenRequests(alone).getValue("screen-align").start(emptyList(), reply(none))
+        assertTrue((none.answer!!["error"] as String).contains("paired"), none.answer.toString())
+    }
+
+    @Test
     fun `screen-host off refuses pairing and doesn't listen`() {
         hostSettings.appendText("screen-host = off\n")
         val shown = Answers()

@@ -24,6 +24,25 @@ class ScreenPairsTest {
         ScreenPeer(id, name, ScreenRole.SCREEN, ByteArray(32) { it.toByte() }, "192.168.1.20:7391", 1000L)
 
     @Test
+    fun `a pair keeps its alignment, none until one is set`() {
+        val pairs = ScreenPairs(dir)
+        pairs.save(peer())
+        assertEquals(ScreenAlignment(), pairs.get("ab".repeat(16))!!.align)
+        assertFalse("align" in File(dir, "peers/${"ab".repeat(16)}.conf").readText())
+        assertTrue(pairs.align("ab".repeat(16), ScreenAlignment(1.5f, 1.012f)))
+        val back = ScreenPairs(dir).get("ab".repeat(16))!!
+        assertEquals(ScreenAlignment(1.5f, 1.012f), back.align)
+        // The rest of the pair is as it was.
+        assertEquals("Nord 2", back.name)
+        assertContentEquals(ByteArray(32) { it.toByte() }, back.key)
+        assertTrue("align-offset = 1.5" in File(dir, "peers/${"ab".repeat(16)}.conf").readText())
+        // The default again writes none.
+        pairs.align("ab".repeat(16), ScreenAlignment())
+        assertFalse("align" in File(dir, "peers/${"ab".repeat(16)}.conf").readText())
+        assertFalse(pairs.align("cd".repeat(16), ScreenAlignment(1f, 1f)))
+    }
+
+    @Test
     fun `this phone's id is made once and kept`() {
         val id = ScreenPairs(dir).selfId
         assertTrue(SCREEN_ID.matches(id))

@@ -79,6 +79,12 @@ interface ScreenCasting {
     /** Typing on this phone goes to [screen] now (null: to this phone's own screens). */
     fun typingTo(screen: SentScreen?)
 
+    /** A drag or pinch on [screen] while aligning (the desktop's). */
+    fun alignInput(screen: SentScreen, input: ScreenMessage.AlignInput) {}
+
+    /** Done, Reset or Cancel on [screen] while aligning. */
+    fun alignAction(screen: SentScreen, step: AlignStep) {}
+
     /**
      * Takes [target]'s tab off this phone's strip, as terminal [id] (its
      * session runs on, its output going to [ScreenShare.termOutput]):
@@ -117,6 +123,10 @@ interface ScreenShowing {
 
     /** The desktop's pointer on [stream], at [x], [y] of its pixels, or not [shown] there. */
     fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) {}
+
+    /** Aligning the desktop on [ScreenMessage.Align.stream] (its ruler), or no longer ([ScreenMessage.Align.on] false). */
+    fun align(message: ScreenMessage.Align) {}
+
     /** The host sent terminal [id], [title], [columns] x [rows]: a tab for it. */
     fun termStarted(id: Int, title: String, columns: Int, rows: Int) {}
 
@@ -373,6 +383,12 @@ class ScreenShare(
         send(m)
     }
 
+    /** Aligning: [message]'s ruler to the screen showing its stream; false if that isn't sent. Main thread. */
+    fun align(message: ScreenMessage.Align): Boolean {
+        if (synchronized(lock) { message.stream !in sentScreens }) return false
+        return send(message)
+    }
+
     /** An encoded frame of [id] (encoder thread): sent if the pacer says so. */
     fun encoded(id: Int, flags: Int, pts: Long, data: ByteArray) {
         val (pacer, screen) = synchronized(lock) { (pacers[id] ?: return) to (sentScreens[id] ?: return) }
@@ -458,6 +474,16 @@ class ScreenShare(
         send(touch)
     }
 
+    /** A drag or pinch on the stream shown, while aligning: to the host. Main thread. */
+    fun alignInput(input: ScreenMessage.AlignInput) {
+        send(input)
+    }
+
+    /** Done, Reset or Cancel on stream [stream] while aligning: to the host. Main thread. */
+    fun alignAction(stream: Int, step: AlignStep) {
+        send(ScreenMessage.AlignAction(stream, step))
+    }
+
     /** This phone's terminal view fits terminal [id] in [columns] x [rows]: asks the host for that size. Main thread. */
     fun fitTerm(id: Int, columns: Int, rows: Int, cellWidth: Int, cellHeight: Int) {
         val term = synchronized(lock) { shownTermsById[id] } ?: return
@@ -519,6 +545,9 @@ class ScreenShare(
                 showing.focus(typedTo)
             }
             is ScreenMessage.Pointer -> if (synchronized(lock) { m.stream in shownStreams }) showing.pointer(m.stream, m.x, m.y, m.shown)
+            is ScreenMessage.Align -> if (synchronized(lock) { m.stream in shownStreams }) showing.align(m)
+            is ScreenMessage.AlignInput -> synchronized(lock) { sentScreens[m.stream] }?.let { casting.alignInput(it, m) }
+            is ScreenMessage.AlignAction -> synchronized(lock) { sentScreens[m.stream] }?.let { casting.alignAction(it, m.step) }
             is ScreenMessage.TermStart -> {
                 synchronized(lock) { shownTermsById[m.term] = ShownTerm(m.term, m.title, m.columns, m.rows) }
                 showing.termStarted(m.term, m.title, m.columns, m.rows)

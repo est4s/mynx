@@ -14,10 +14,17 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.widget.FrameLayout
+import io.github.est4s.terminal.core.AlignGestures
+import io.github.est4s.terminal.core.AlignStep
+import io.github.est4s.terminal.core.DesktopRuler
+import io.github.est4s.terminal.core.Finger
+import io.github.est4s.terminal.core.ScreenAlignment
 import io.github.est4s.terminal.core.ScreenMessage
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.ShownStream
 import io.github.est4s.terminal.core.TouchPoint
 import io.github.est4s.terminal.core.TouchTrack
+import io.github.est4s.terminal.core.alignText
 import io.github.est4s.terminal.core.streamFit
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -30,6 +37,10 @@ import kotlin.concurrent.thread
  * SurfaceView as big as fits; touches go back in the video's pixels
  * ([TouchTrack]). A line around it while the host's typing comes here;
  * the host's desktop pointer over it while it's on this phone's part.
+ * While the host aligns the desktop across both phones ([align]), a
+ * ruler along the edge facing it and a panel (Cancel, Reset, Done) are
+ * over the picture, and touches drag or pinch the picture instead
+ * ([AlignGestures], sent as the host's AlignInput).
  */
 @SuppressLint("ViewConstructor", "ClickableViewAccessibility")
 class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(context) {
@@ -39,6 +50,10 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         fun decoded(stream: Int, pts: Long)
         /** The decoder starts over and needs a key frame. Any thread. */
         fun askKeyFrame(stream: Int)
+        /** A drag or pinch while aligning, for the host. */
+        fun alignInput(input: ScreenMessage.AlignInput) {}
+        /** Done, Reset or Cancel while aligning, for the host. */
+        fun alignAction(stream: Int, step: AlignStep) {}
     }
 
     private val video = SurfaceView(context)
@@ -47,6 +62,18 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
     // The desktop's pointer, in the video's pixels (null: not on this stream).
     private var pointerAt: Pair<Float, Float>? = null
     private val track = TouchTrack()
+    private val ruler = AlignRulerView(context).apply { visibility = View.GONE }
+    private val alignPanel = AlignPanel(context, "Drag along the edge, or pinch, until the lines meet the other phone's.") { step ->
+        stream?.let { host.alignAction(it.id, step) }
+    }.apply { visibility = View.GONE }
+    // Aligning: the host's last word, the ruler drawn (moved at once by a drag, before the host's answer), the gestures.
+    private var aligning: ScreenMessage.Align? = null
+    private var shownRuler: DesktopRuler? = null
+    private var alignGestures: AlignGestures? = null
+    private var fingers = 0
+
+    /** Whether the host aligns the desktop here now. */
+    val isAligning: Boolean get() = aligning != null
 
     @Volatile private var stream: ShownStream? = null
     @Volatile private var decoder: Decoder? = null
@@ -60,6 +87,11 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         addView(video, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         addView(arrow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(mark, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(ruler, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        val margin = Pixel.dp(context, 16)
+        addView(alignPanel, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM).apply {
+            setMargins(margin, margin, margin, margin)
+        })
         visibility = View.GONE
         isClickable = true
         video.holder.addCallback(object : SurfaceHolder.Callback {
@@ -91,6 +123,7 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
 
     /** Stops showing it. */
     fun hide() {
+        endAlign()
         stream = null
         decoder?.stop()
         decoder = null
@@ -118,6 +151,84 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         arrow.at(fit.left + at.first * fit.scale, fit.top + at.second * fit.scale)
     }
 
+    /** The host aligns the desktop across both phones on [message]'s stream: its ruler and values; off, it's over. */
+    fun align(message: ScreenMessage.Align) {
+        if (stream?.id != message.stream) return
+        if (!message.on) return endAlign()
+        aligning = message
+        alignPanel.values = alignText(ScreenAlignment(message.offset, message.scale))
+        // While a finger is down the ruler follows it; the host's answers catch up after.
+        if (fingers == 0 || shownRuler == null) shownRuler = DesktopRuler(message.origin, message.step)
+        if (alignGestures == null) alignGestures = AlignGestures(vertical(message.side))
+        drawRuler()
+    }
+
+    private fun vertical(side: ScreenSide) = side == ScreenSide.LEFT || side == ScreenSide.RIGHT
+
+    private fun endAlign() {
+        aligning = null
+        shownRuler = null
+        alignGestures = null
+        fingers = 0
+        ruler.hide()
+        alignPanel.visibility = View.GONE
+    }
+
+    private fun drawRuler() {
+        val a = aligning ?: return
+        val shown = stream ?: return
+        val r = shownRuler ?: return
+        val fit = streamFit(width, height, shown.width, shown.height) ?: return
+        val edge = screenSeamEdge(a.side)
+        val vertical = vertical(a.side)
+        ruler.show(
+            edge, r,
+            start = if (vertical) fit.top else fit.left,
+            scale = fit.scale,
+            length = (if (vertical) shown.height else shown.width).toFloat(),
+        )
+        // Out of the ruler's way: at the top when the ruler is at the bottom.
+        val gravity = if (edge == ScreenSide.BELOW) Gravity.TOP else Gravity.BOTTOM
+        val params = alignPanel.layoutParams as LayoutParams
+        val margins = alignPanelMargins(context, edge)
+        if (params.gravity != gravity || params.leftMargin != margins.first || params.rightMargin != margins.second) {
+            params.gravity = gravity
+            params.leftMargin = margins.first
+            params.rightMargin = margins.second
+            alignPanel.layoutParams = params
+        }
+        alignPanel.visibility = View.VISIBLE
+    }
+
+    // A touch while aligning: the picture's, in the video's pixels.
+    private fun alignTouch(event: MotionEvent, shown: ShownStream) {
+        val g = alignGestures ?: return
+        val fit = streamFit(width, height, shown.width, shown.height) ?: return
+        fun finger(i: Int) = Finger(event.getPointerId(i), (event.getX(i) - fit.left) / fit.scale, (event.getY(i) - fit.top) / fit.scale)
+        val i = event.actionIndex
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val f = finger(i)
+                g.down(f.id, f.x, f.y)
+                fingers = event.pointerCount
+            }
+            MotionEvent.ACTION_MOVE -> g.move((0 until event.pointerCount).map(::finger))?.let { m ->
+                val input = m.copy(stream = shown.id)
+                host.alignInput(input)
+                shownRuler = shownRuler?.let { g.preview(it, input) }
+                drawRuler()
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                g.up(event.getPointerId(i))
+                fingers = event.pointerCount - 1
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                g.cancel()
+                fingers = 0
+            }
+        }
+    }
+
     /** Whether the host's typing comes to this screen. */
     fun focus(typing: Boolean) {
         mark.on = typing
@@ -136,6 +247,7 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
         post {
             fitVideo()
             drawPointer()
+            drawRuler()
         }
     }
 
@@ -151,6 +263,10 @@ class ScreenStreamView(context: Context, private val host: Host) : FrameLayout(c
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
         val shown = stream ?: return true
+        if (aligning != null) {
+            alignTouch(event, shown)
+            return true
+        }
         val fit = streamFit(width, height, shown.width, shown.height) ?: return true
         val points = (0 until event.pointerCount).map { TouchPoint(event.getPointerId(it), event.getX(it), event.getY(it)) }
         track.map(shown.id, event.actionMasked, event.actionIndex, points, fit, shown.width, shown.height)?.let(host::touch)

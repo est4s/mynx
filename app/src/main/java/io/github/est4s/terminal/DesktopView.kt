@@ -31,7 +31,9 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import io.github.est4s.terminal.core.AlignStep
 import io.github.est4s.terminal.core.DESKTOP_DISPLAY
+import io.github.est4s.terminal.core.DesktopAlignKey
 import io.github.est4s.terminal.core.DesktopGeometry
 import io.github.est4s.terminal.core.DesktopGestures
 import io.github.est4s.terminal.core.DesktopKeyboard
@@ -39,6 +41,7 @@ import io.github.est4s.terminal.core.DesktopPointer
 import io.github.est4s.terminal.core.DesktopMenu
 import io.github.est4s.terminal.core.DesktopMenuCommand
 import io.github.est4s.terminal.core.DesktopMenuItem
+import io.github.est4s.terminal.core.DesktopMenuOther
 import io.github.est4s.terminal.core.DesktopMenuSection
 import io.github.est4s.terminal.core.DesktopMenuState
 import io.github.est4s.terminal.core.DesktopStatus
@@ -48,8 +51,11 @@ import io.github.est4s.terminal.core.KeyButton
 import io.github.est4s.terminal.core.KeyPress
 import io.github.est4s.terminal.core.KeyStroke
 import io.github.est4s.terminal.core.PixelRect
+import io.github.est4s.terminal.core.ScreenDesktopMode
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.StripColors
 import io.github.est4s.terminal.core.X11Input
+import io.github.est4s.terminal.core.desktopAlignKey
 import io.github.est4s.terminal.core.desktopBackLabel
 import io.github.est4s.terminal.core.desktopGestures
 import io.github.est4s.terminal.core.desktopMenuKey
@@ -66,6 +72,8 @@ const val DESKTOP_KEY_BAR = "desktop"
 private const val POLL_MS = 1000L
 private const val PAN_MARGIN_DP = 48
 private const val DEFAULT_FRAMERATE = 60
+// A choice row whose label and choices are longer than this (characters) puts its choices under its label.
+private const val STACK_CHOICES_PAST = 22
 
 /**
  * Desktop mode's view (`view = desktop`, or Ctrl+Shift+D): the X
@@ -113,6 +121,20 @@ class DesktopView(
         fun screen(): Pair<String, Boolean>? = null
         /** Sends the desktop to the other phone, or takes it back; null, or why not. */
         fun screenToggle(): String? = null
+        /** The phone linked as this one's screen (the menu's Other phone section), or null. */
+        fun otherPhone(): DesktopMenuOther? = null
+        /** Where the other phone sits (`screen-place`, as `mynx screen place`); null, or why not. */
+        fun setScreenPlace(side: ScreenSide): String? = null
+        /** How the desktop uses it (`screen-desktop`, as `mynx set`); null, or why not. */
+        fun setScreenDesktop(mode: ScreenDesktopMode): String? = null
+        /** Align screens…: rulers on both phones (the desktop sent there first if it isn't); null, or why not. */
+        fun align(): String? = null
+        /** Aligning, as this view shows it; null when it isn't. */
+        fun aligning(): DesktopAligning? = null
+        /** A key while aligning (nudges, Done, Reset, Cancel). */
+        fun alignKey(key: DesktopAlignKey) {}
+        /** The align panel's Done, Reset or Cancel. */
+        fun alignStep(step: AlignStep) {}
     }
 
     private val scale = desktopScale(resources.displayMetrics.density)
@@ -171,10 +193,16 @@ class DesktopView(
 
     private val surfaceView = SurfaceView(context)
     private val pointer = PointerArrow(context)
+    // Aligning with the other phone: the ruler along the seam, over the picture (it pans with it).
+    private val ruler = AlignRulerView(context).apply { visibility = GONE }
     private val layer = FrameLayout(context).apply {
         addView(surfaceView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(pointer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(ruler, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
+    private val alignPanel = AlignPanel(context, "") { step -> host.alignStep(step); renderAlign() }.apply { visibility = GONE }
+    // Where the surface sits in the layer (the bands while the other phone is the smaller): touches and the pointer go by it.
+    private var surfaceAt: PixelRect? = null
 
     private val noticeText = TextView(context).apply {
         typeface = font
@@ -234,12 +262,17 @@ class DesktopView(
     // Keys whose press the menu took (Ctrl+Shift+M's M too): their release isn't the X server's either.
     private val menuKeysDown = HashSet<Int>()
     private val menuBox = pixelMenuBox(context).apply { isClickable = true }
+    // It scrolls when it's taller than the screen (the Other phone section, in landscape).
+    private val menuScroll = ScrollView(context).apply {
+        isVerticalScrollBarEnabled = false
+        addView(menuBox, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+    }
     private val menuLayer = FrameLayout(context).apply {
         visibility = GONE
         // A tap beside the menu closes it, and doesn't reach the desktop.
         isClickable = true
         setOnClickListener { closeMenu() }
-        addView(menuBox, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END))
+        addView(menuScroll, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END))
     }
     private val menuLapse = Runnable { renderMenu() }
 
@@ -247,6 +280,9 @@ class DesktopView(
         addView(layer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(notice, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         addView(logPanel, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        addView(alignPanel, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.BOTTOM).apply {
+            setMargins(dp(16), dp(16), dp(16), dp(16))
+        })
         addView(menuLayer, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
     val keyBar = KeyBarView(context, barTarget, font, keyBarDir)
@@ -317,7 +353,7 @@ class DesktopView(
     /** The view came on screen: picks up setting and bar changes, and starts the desktop if nothing runs. */
     fun shown() {
         useTouch(host.touch())
-        host.link?.watch { post { followMonitor(geometry); pointerMoved() } }
+        host.link?.watch { post { followMonitor(geometry); pointerMoved(); renderAlign() } }
         closeMenu()
         keyBar.refresh(null, force = true, fallback = DESKTOP_KEY_BAR)
         backButton.text = host.backLabel()
@@ -417,7 +453,35 @@ class DesktopView(
             if (shown.showLog) host.logs().let { if (noticeLog.text.toString() != it) noticeLog.text = it }
         }
         if (logPanel.visibility == VISIBLE) showLogs(host.logs())
+        renderAlign()
         renderMenu()
+    }
+
+    /** Aligning with the other phone: the ruler along the seam and the panel, or neither. */
+    private fun renderAlign() {
+        val a = host.aligning()
+        if (a == null) {
+            ruler.hide()
+            alignPanel.visibility = GONE
+            return
+        }
+        val vertical = a.side == ScreenSide.LEFT || a.side == ScreenSide.RIGHT
+        val length = (if (vertical) layer.height else layer.width).toFloat()
+        ruler.show(a.side, a.ruler, length = length)
+        alignPanel.hint = "Drag along the edge on ${a.other}, or pinch there, until its lines meet these. " +
+            (if (vertical) "Up and Down" else "Left and Right") + " move it from here, + and - scale it, R resets."
+        alignPanel.values = a.text
+        // Out of the ruler's way: at the top when the ruler is at the bottom.
+        val gravity = if (a.side == ScreenSide.BELOW) Gravity.TOP else Gravity.BOTTOM
+        val params = alignPanel.layoutParams as FrameLayout.LayoutParams
+        val margins = alignPanelMargins(context, a.side)
+        if (params.gravity != gravity || params.leftMargin != margins.first || params.rightMargin != margins.second) {
+            params.gravity = gravity
+            params.leftMargin = margins.first
+            params.rightMargin = margins.second
+            alignPanel.layoutParams = params
+        }
+        alignPanel.visibility = VISIBLE
     }
 
     // Restart stops it first (`mynx desktop stop`, then `start`); the notice says Starting meanwhile.
@@ -438,6 +502,7 @@ class DesktopView(
         touch = touchMode,
         running = host.link?.connected == true || host.status()?.running == true,
         logShown = logPanel.visibility == VISIBLE,
+        other = host.otherPhone(),
     )
 
     /** The ⋮ menu, opened or closed (⋮, Ctrl+Shift+M); [byKeyboard]: its first row selected. */
@@ -457,11 +522,18 @@ class DesktopView(
         renderMenu()
     }
 
-    /** Back while the desktop shows: closes the menu if it's open (true), else it's the app's. */
+    /** Back while the desktop shows: closes the menu if it's open, or cancels aligning (true); else it's the app's. */
     fun back(): Boolean {
-        if (!menu.isOpen) return false
-        closeMenu()
-        return true
+        if (menu.isOpen) {
+            closeMenu()
+            return true
+        }
+        if (host.aligning() != null) {
+            host.alignStep(AlignStep.CANCEL)
+            renderAlign()
+            return true
+        }
+        return false
     }
 
     /** Draws the menu's rows again if they changed (refreshed every second, so a press isn't redrawn under a finger). */
@@ -482,36 +554,55 @@ class DesktopView(
         shownMenu = next
         menuBox.removeAllViews()
         var index = 0
+        var selectedRow: View? = null
         for (section in sections) {
             section.title?.let { title ->
                 menuBox.addView(sectionLabel(context, title).apply { setPadding(dp(16), dp(12), dp(16), dp(4)) })
             }
             for (item in section.items) {
-                menuBox.addView(menuRow(item, index == menu.selected), LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+                val row = menuRow(item, index == menu.selected)
+                if (index == menu.selected) selectedRow = row
+                menuBox.addView(row, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
                 index++
             }
         }
+        // The keyboard's row in sight, when the menu scrolls.
+        selectedRow?.let { row ->
+            menuScroll.post { menuScroll.requestChildRectangleOnScreen(menuBox, android.graphics.Rect(row.left, row.top, row.right, row.bottom), true) }
+        }
     }
 
-    // A row as pixelMenu's; a choice row (Touch) with its choices as the text viewer's View | Edit.
+    // A row as pixelMenu's; a choice row (Touch) with its choices as the text viewer's View | Edit,
+    // beside its label, or under it when they're long (the other phone's: a 360 dp phone has no room beside).
     private fun menuRow(item: DesktopMenuItem, selected: Boolean): View {
-        if (item.choices.isNotEmpty()) return LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(48)
-            setPadding(0, 0, dp(8), 0)
-            if (selected) setBackgroundColor(Pixel.LINE)
-            addView(pixelMenuRow(context, item.label).apply {
-                isFocusable = false
-                background = null
-            }, LayoutParams(0, WRAP_CONTENT, 1f))
-            addView(pixelSegments(context).apply {
+        if (item.choices.isNotEmpty()) {
+            val stacked = item.label.length + item.choices.sumOf { it.length } > STACK_CHOICES_PAST
+            val segments = pixelSegments(context).apply {
                 item.choices.forEachIndexed { i, label ->
                     val segment = pixelSegment(context, label) { act(menu.tap(item.action, i, SystemClock.uptimeMillis())) }
                     stylePixelSegment(segment, i == item.chosen)
                     addView(segment, LayoutParams(WRAP_CONTENT, dp(36)))
                 }
-            }, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(12) })
+            }
+            val label = pixelMenuRow(context, item.label).apply {
+                isFocusable = false
+                background = null
+            }
+            return LinearLayout(context).apply {
+                orientation = if (stacked) VERTICAL else HORIZONTAL
+                gravity = if (stacked) Gravity.START else Gravity.CENTER_VERTICAL
+                minimumHeight = dp(48)
+                setPadding(0, 0, dp(8), if (stacked) dp(8) else 0)
+                if (selected) setBackgroundColor(Pixel.LINE)
+                if (stacked) {
+                    label.minHeight = dp(40)
+                    addView(label, LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+                    addView(segments, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(12) })
+                } else {
+                    addView(label, LayoutParams(0, WRAP_CONTENT, 1f))
+                    addView(segments, LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(12) })
+                }
+            }
         }
         return pixelMenuRow(context, item.label).apply {
             when {
@@ -537,8 +628,26 @@ class DesktopView(
             DesktopMenuCommand.ToggleLog -> toggleLog()
             DesktopMenuCommand.Restart -> start(restart = true)
             DesktopMenuCommand.ShutDown -> host.stop()
+            is DesktopMenuCommand.Place -> host.setScreenPlace(command.side)?.let { statusText.text = it }
+            is DesktopMenuCommand.ScreenDesktop -> host.setScreenDesktop(command.mode)?.let { statusText.text = it }
+            DesktopMenuCommand.Align -> {
+                host.align()?.let { statusText.text = it }
+                refresh()
+            }
         }
         renderMenu()
+    }
+
+    /** Keys while aligning (arrows along the seam, + and −, Enter, Esc, R): true when they were aligning's. */
+    private fun alignKey(event: KeyEvent): Boolean {
+        val a = host.aligning() ?: return false
+        val vertical = a.side == ScreenSide.LEFT || a.side == ScreenSide.RIGHT
+        val key = desktopAlignKey(event.keyCode, vertical) ?: return false
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            host.alignKey(key)
+            renderAlign()
+        }
+        return true
     }
 
     /**
@@ -620,9 +729,9 @@ class DesktopView(
         val i = e.actionIndex
         val out = when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
-                gestures.down(e.getPointerId(i), g.toX(e.getX(i)), g.toY(e.getY(i)), e.eventTime)
+                gestures.down(e.getPointerId(i), g.toX(e.getX(i) - left0()), g.toY(e.getY(i) - top0()), e.eventTime)
             MotionEvent.ACTION_MOVE -> gestures.move(
-                (0 until e.pointerCount).map { Finger(e.getPointerId(it), g.toX(e.getX(it)), g.toY(e.getY(it))) },
+                (0 until e.pointerCount).map { Finger(e.getPointerId(it), g.toX(e.getX(it) - left0()), g.toY(e.getY(it) - top0())) },
                 e.eventTime,
             )
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> gestures.up(e.getPointerId(i), e.eventTime)
@@ -642,7 +751,7 @@ class DesktopView(
         if (e.actionMasked == MotionEvent.ACTION_SCROLL) {
             out += X11Input.Scroll(e.getAxisValue(MotionEvent.AXIS_HSCROLL), -e.getAxisValue(MotionEvent.AXIS_VSCROLL))
         } else {
-            out += gestures.moveTo(g.toX(e.x), g.toY(e.y))
+            out += gestures.moveTo(g.toX(e.x - left0()), g.toY(e.y - top0()))
         }
         val buttons = e.buttonState
         for ((android, x) in MOUSE_BUTTONS) {
@@ -654,11 +763,32 @@ class DesktopView(
         return true
     }
 
-    // This phone's part of the X screen (all of it, unless the other phone has a part): the gestures' monitor.
+    // Where the surface sits in the layer, its left and top (0, 0 but for the bands).
+    private fun left0(): Float = surfaceAt?.x?.toFloat() ?: 0f
+
+    private fun top0(): Float = surfaceAt?.y?.toFloat() ?: 0f
+
+    // This phone's part of the X screen (all of it, unless the other phone has a part): the gestures' monitor;
+    // and the surface where the layout puts it in the layer (all of it, unless this phone shows bands).
     private fun followMonitor(g: DesktopGeometry?) {
+        placeSurface()
         g ?: return
         val rect = host.link?.hostMonitor ?: PixelRect(0, 0, g.width, g.height)
         if (rect != gestures.monitor) gestures.monitor(rect)
+    }
+
+    private fun placeSurface() {
+        val at = host.link?.hostSurface?.takeIf { it.width > 0 && it.height > 0 }
+        if (at == surfaceAt) return
+        surfaceAt = at
+        surfaceView.layoutParams = if (at == null) {
+            FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        } else {
+            FrameLayout.LayoutParams(at.width, at.height).apply {
+                leftMargin = at.x
+                topMargin = at.y
+            }
+        }
     }
 
     // The pointer is drawn where it is on this phone's part, or not at all while it's on the other phone's.
@@ -671,14 +801,14 @@ class DesktopView(
             pointer.away()
             return
         }
-        pointer.at(g.fromX(x), g.fromY(y))
+        pointer.at(left0() + g.fromX(x), top0() + g.fromY(y))
         // A finger on the screen is where the pointer is: moving the screen under it would chase it.
         if (touchMode == DesktopTouch.TOUCHPAD) updatePan()
     }
 
     private fun updatePan() {
         val g = geometry
-        val pointerY = if (g == null) 0f else g.fromY(gestures.pointerY - gestures.monitor.y)
+        val pointerY = if (g == null) 0f else top0() + g.fromY(gestures.pointerY - gestures.monitor.y)
         pan = keyboardPan(layer.height, frame.height, pointerY, pan, dp(PAN_MARGIN_DP))
         layer.translationY = -pan.toFloat()
     }
@@ -686,6 +816,7 @@ class DesktopView(
     /** A key event while the desktop shows; false when it isn't the desktop's (Back, volume). */
     fun onKey(event: KeyEvent): Boolean {
         if (menuKey(event)) return true
+        if (alignKey(event)) return true
         if (event.action == KeyEvent.ACTION_MULTIPLE) {
             val chars = event.characters ?: return false
             send(keys.typed(chars))
@@ -762,6 +893,8 @@ class DesktopView(
 
         override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
             super.onLayout(changed, left, top, right, bottom)
+            // The screen's area (without the keyboard): the layout of both phones follows it.
+            if (layer.width > 0 && layer.height > 0) host.link?.view(layer.width, layer.height)
             // Before the first surface (and in screenshots): the pointer where it will be.
             if (geometry == null && layer.width > 0 && layer.height > 0) {
                 val g = DesktopGeometry(layer.width, layer.height, scale)

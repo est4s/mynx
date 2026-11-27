@@ -13,12 +13,12 @@ import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import android.view.Surface
 import io.github.est4s.terminal.core.DesktopClipboard
-import io.github.est4s.terminal.core.DesktopGeometry
 import io.github.est4s.terminal.core.DesktopOther
 import io.github.est4s.terminal.core.DesktopPointer
 import io.github.est4s.terminal.core.DesktopScreens
 import io.github.est4s.terminal.core.DesktopSurface
 import io.github.est4s.terminal.core.PixelRect
+import io.github.est4s.terminal.core.ScreenAlignment
 import io.github.est4s.terminal.core.ScreenDesktopMode
 import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.X11Events
@@ -67,6 +67,12 @@ interface DesktopScreenLink {
     /** This phone's part of the X screen, once the view gave its size; null: all of it. */
     val hostMonitor: PixelRect? get() = null
 
+    /** The view's screen area is [width] x [height] pixels (without the soft keyboard): the layout follows. */
+    fun view(width: Int, height: Int) {}
+
+    /** Where the view's surface goes in that area (its pixels) while the other phone has a part; null: all of it. */
+    val hostSurface: PixelRect? get() = null
+
     /** [watcher] hears the pointer move from elsewhere (the other phone), and the monitors change; null stops. */
     fun watch(watcher: (() -> Unit)?) {}
 }
@@ -113,6 +119,37 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     var onGone: (() -> Unit)? = null
 
     override val hostMonitor: PixelRect? get() = if (hostKnown) screens.hostRect else null
+
+    override val hostSurface: PixelRect? get() = screens.hostSurface
+
+    // An X pixel's size here: the view's density's, at this phone's real dpi.
+    private fun viewOf(width: Int, height: Int): Boolean {
+        val metrics = context.resources.displayMetrics
+        hostKnown = true
+        return screens.view(width, height, metrics.xdpi, metrics.ydpi, desktopScale(metrics.density))
+    }
+
+    override fun view(width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        if (!viewOf(width, height)) return
+        if (screens.monitors != null) {
+            note(layoutLine())
+            sendLayout()
+        }
+        monitorsChanged()
+    }
+
+    /** The pair's alignment (the extended screen) is [to]: the other phone's part moves at once. */
+    fun align(to: ScreenAlignment) {
+        if (!screens.align(to)) return
+        if (screens.monitors != null) sendLayout()
+        monitorsChanged()
+    }
+
+    private fun layoutLine(): String = screens.fit?.let {
+        "the desktop's monitors: this phone ${it.monitors.host} (its surface ${it.hostSurface} of its view), " +
+            "the other ${it.monitors.screen} (${it.monitors.mode.word}, its picture ${it.picture} of its video)"
+    } ?: "the desktop is this phone's alone"
 
     override fun watch(watcher: (() -> Unit)?) {
         this.watcher = watcher
@@ -285,13 +322,8 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
         this.width = width
         this.height = height
         this.framerate = framerate
-        hostKnown = true
-        val moved = screens.host(width, height)
+        // The layout follows the view's area (view()), which the surface's size comes from.
         if (connected) handOver(surface, fresh)
-        if (moved) {
-            if (screens.monitors != null) sendLayout()
-            monitorsChanged()
-        }
     }
 
     private fun handOver(s: Surface, fresh: Boolean) {
@@ -307,12 +339,10 @@ class DesktopLink(private val context: Context, private val main: Handler) : Des
     fun other(to: DesktopOther?, side: ScreenSide, mode: ScreenDesktopMode) {
         if (!hostKnown && to != null) {
             val metrics = context.resources.displayMetrics
-            val g = DesktopGeometry(metrics.widthPixels, metrics.heightPixels, desktopScale(metrics.density))
-            screens.host(g.width, g.height)
-            hostKnown = true
+            viewOf(metrics.widthPixels, metrics.heightPixels)
         }
         if (!screens.other(to, side, mode)) return
-        note(screens.monitors?.let { "the desktop's monitors: this phone ${it.host}, the other ${it.screen} (${it.mode.word}, ${side.word})" } ?: "the desktop is this phone's alone")
+        note("${layoutLine()}, ${side.word}")
         sendLayout()
         monitorsChanged()
     }

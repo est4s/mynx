@@ -339,6 +339,22 @@ class PixelDialog internal constructor(
     }
 }
 
+/** [pixelDialog]'s buttons: [label] on [fill] with a [border] (0: none) in [color], 44 dp high, at least 96 wide. */
+fun pixelButton(context: Context, label: String, fill: Int, border: Int, color: Int, onTap: () -> Unit) = TextView(context).apply {
+    val dp = { v: Int -> Pixel.dp(context, v) }
+    text = label
+    typeface = Pixel.label(context, 600)
+    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+    setTextColor(color)
+    gravity = Gravity.CENTER
+    minHeight = dp(44)
+    minWidth = dp(96)
+    setPadding(dp(16), 0, dp(16), 0)
+    background = Pixel.box(context, fill = fill, border = border, ripple = Pixel.LINE)
+    isFocusable = true
+    setOnClickListener { onTap() }
+}
+
 /**
  * A small dialog in the pixel style, as [pixelMenu]'s box: [title], then
  * [message] and/or [field] (styled here, the keyboard up for it), then
@@ -358,19 +374,7 @@ fun pixelDialog(
     val dp = { v: Int -> Pixel.dp(context, v) }
     val shadow = dp(Pixel.SHADOW_DP)
     val dialog = Dialog(context).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
-    fun button(label: String, fill: Int, border: Int, color: Int, onTap: () -> Unit) = TextView(context).apply {
-        text = label
-        typeface = Pixel.label(context, 600)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-        setTextColor(color)
-        gravity = Gravity.CENTER
-        minHeight = dp(44)
-        minWidth = dp(96)
-        setPadding(dp(16), 0, dp(16), 0)
-        background = Pixel.box(context, fill = fill, border = border, ripple = Pixel.LINE)
-        isFocusable = true
-        setOnClickListener { onTap() }
-    }
+    fun button(label: String, fill: Int, border: Int, color: Int, onTap: () -> Unit) = pixelButton(context, label, fill, border, color, onTap)
     val okButton = if (danger) {
         button(ok, Pixel.PINK, 0, Pixel.PINK_TEXT) {}
     } else {

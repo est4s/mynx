@@ -7,9 +7,15 @@ import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import io.github.est4s.terminal.core.AlignStep
+import io.github.est4s.terminal.core.DesktopAlignKey
+import io.github.est4s.terminal.core.DesktopMenuOther
+import io.github.est4s.terminal.core.DesktopRuler
 import io.github.est4s.terminal.core.DesktopSession
 import io.github.est4s.terminal.core.DesktopStatus
 import io.github.est4s.terminal.core.DesktopTouch
+import io.github.est4s.terminal.core.ScreenDesktopMode
+import io.github.est4s.terminal.core.ScreenSide
 import io.github.est4s.terminal.core.X11Input
 import io.github.est4s.terminal.core.desktopBackLabel
 import org.junit.Assert.assertEquals
@@ -56,6 +62,34 @@ private class MenuHost : DesktopView.Host {
     override fun setTouch(touch: DesktopTouch) {
         calls += "touch ${touch.word}"
         saved = touch
+    }
+
+    // The extended screen: a phone linked as this one's screen, and aligning with it.
+    var other: DesktopMenuOther? = null
+    var alignShown: DesktopAligning? = null
+    override fun otherPhone() = other
+    override fun setScreenPlace(side: ScreenSide): String? {
+        calls += "place ${side.word}"
+        other = other?.copy(side = side)
+        return null
+    }
+    override fun setScreenDesktop(mode: ScreenDesktopMode): String? {
+        calls += "screen-desktop ${mode.word}"
+        other = other?.copy(mode = mode)
+        return null
+    }
+    override fun align(): String? {
+        calls += "align"
+        alignShown = DesktopAligning(ScreenSide.RIGHT, DesktopRuler(0f, 33f), "offset 0 mm · scale 1.000", "Nord 2")
+        return null
+    }
+    override fun aligning() = alignShown
+    override fun alignKey(key: DesktopAlignKey) {
+        calls += "key $key"
+    }
+    override fun alignStep(step: AlignStep) {
+        calls += "step $step"
+        if (step != AlignStep.RESET) alignShown = null
     }
 }
 
@@ -187,6 +221,72 @@ class DesktopMenuViewTest {
         tap(view, "⋮")
         assertTrue(view.back())
         assertFalse("Restart desktop" in shownTexts(view))
+        assertFalse(view.back())
+        view.hidden()
+    }
+
+    @Test
+    fun theOtherPhonesSectionShowsOnlyWhileOneIsLinked() {
+        val view = open(MenuHost())
+        tap(view, "⋮")
+        assertFalse("OTHER PHONE" in shownTexts(view))
+        view.hidden()
+        val linked = MenuHost().apply { other = DesktopMenuOther(ScreenSide.RIGHT, ScreenDesktopMode.EXTEND) }
+        val shown = open(linked)
+        tap(shown, "⋮")
+        val texts = shownTexts(shown)
+        for (t in listOf("OTHER PHONE", "Screen sits", "Left", "Right", "Above", "Below", "Desktop there", "Own monitor", "Half of one", "Align screens…")) {
+            assertTrue(t, t in texts)
+        }
+        shown.hidden()
+    }
+
+    @Test
+    fun theOtherPhonesChoicesSetTheSettingsAndKeepTheMenuOpen() {
+        val host = MenuHost().apply { other = DesktopMenuOther(ScreenSide.RIGHT, ScreenDesktopMode.EXTEND) }
+        val view = open(host)
+        tap(view, "⋮")
+        tap(view, "Above")
+        tap(view, "Half of one")
+        assertEquals(listOf("place above", "screen-desktop span"), host.calls)
+        assertTrue("Align screens…" in shownTexts(view))
+        tap(view, "Align screens…")
+        assertEquals("align", host.calls.last())
+        assertFalse("Screen sits" in shownTexts(view))
+        view.hidden()
+    }
+
+    @Test
+    fun aligningShowsItsPanelAndTakesTheKeys() {
+        val host = MenuHost().apply { other = DesktopMenuOther(ScreenSide.RIGHT, ScreenDesktopMode.EXTEND) }
+        val view = open(host)
+        host.align()
+        view.refresh()
+        Screenshots.settle()
+        assertTrue("Align screens" in shownTexts(view))
+        assertTrue("offset 0 mm · scale 1.000" in shownTexts(view))
+        host.link.sent.clear()
+        assertTrue(key(view, KeyEvent.KEYCODE_DPAD_DOWN))
+        assertTrue(key(view, KeyEvent.KEYCODE_PLUS))
+        assertEquals(listOf("align", "key FORWARD", "key BIGGER"), host.calls)
+        // Not the desktop's keys meanwhile.
+        assertEquals(emptyList<X11Input>(), host.link.sent)
+        tap(view, "Reset")
+        assertEquals("step RESET", host.calls.last())
+        tap(view, "Done")
+        assertEquals("step DONE", host.calls.last())
+        assertFalse("Align screens" in shownTexts(view))
+        view.hidden()
+    }
+
+    @Test
+    fun backCancelsAligning() {
+        val host = MenuHost().apply { other = DesktopMenuOther(ScreenSide.RIGHT, ScreenDesktopMode.EXTEND) }
+        val view = open(host)
+        host.align()
+        view.refresh()
+        assertTrue(view.back())
+        assertEquals("step CANCEL", host.calls.last())
         assertFalse(view.back())
         view.hidden()
     }

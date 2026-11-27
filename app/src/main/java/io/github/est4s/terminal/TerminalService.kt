@@ -78,6 +78,11 @@ import io.github.est4s.terminal.core.ScreenPairing
 import io.github.est4s.terminal.core.ScreenPairingShown
 import io.github.est4s.terminal.core.ScreenRef
 import io.github.est4s.terminal.core.ScreenRole
+import io.github.est4s.terminal.core.ScreenSide
+import io.github.est4s.terminal.core.ScreenDesktopMode
+import io.github.est4s.terminal.core.AlignStep
+import io.github.est4s.terminal.core.DesktopAlignKey
+import io.github.est4s.terminal.core.DesktopMenuOther
 import io.github.est4s.terminal.core.ScreenShare
 import io.github.est4s.terminal.core.ScreenShowing
 import io.github.est4s.terminal.core.ScreenTarget
@@ -467,6 +472,8 @@ class TerminalService : Service() {
             link.media = screenShare
             // Every change of screen-place (here, asked from the screen, or by hand) moves the desktop's part there.
             link.placeChanged = { mainHandler.post { if (desktopCaster.sent != null) desktopCaster.relayout() } }
+            // mynx screen align (or Align screens' Done): the desktop's picture there follows.
+            link.alignChanged = { a -> mainHandler.post { desktopCaster.alignmentSaved(a) } }
         }
     }
 
@@ -511,9 +518,53 @@ class TerminalService : Service() {
             pointerTo = { id, x, y, shown -> screenShare.pointer(id, x, y, shown) },
             typing = ::desktopTyping,
             shownHere = { desktopOpen && activity?.onScreen == true },
-            changed = { activity?.onScreenLinkChanged() },
+            changed = {
+                activity?.onScreenLinkChanged()
+                activity?.onDesktopChanged()
+            },
+            peerScreen = { screenLink.peer()?.screen },
+            alignment = { screenLink.alignment() },
+            saveAlignment = { a -> screenLink.align(a) },
+            sendAlign = { m -> screenShare.align(m) },
+            otherName = { screenLink.peer()?.name ?: "the other phone" },
         )
     }
+
+    /** The desktop menu's Other phone section: the phone linked as this one's screen, where it sits and how the desktop uses it. */
+    fun desktopOtherPhone(): DesktopMenuOther? {
+        if (screenLink.peer()?.role != ScreenRole.HOST) return null
+        val s = currentSettings() ?: return null
+        return DesktopMenuOther(s.screenPlace, s.screenDesktop)
+    }
+
+    /** The menu's Screen sits: as `mynx screen place` (the setting, the screen told, the desktop's part moved); null, or why not. */
+    fun setScreenPlace(side: ScreenSide): String? =
+        runCatching { screenLink.place(side) }.exceptionOrNull()?.let { "couldn't save screen-place: ${it.message}" }
+
+    /** The menu's Desktop there: as `mynx set screen-desktop`, applied at once; null, or why not. */
+    fun setScreenDesktop(mode: ScreenDesktopMode): String? {
+        val file = File(rootfs, "root/$CONFIG_DIR/settings.conf")
+        return runCatching {
+            file.parentFile!!.mkdirs()
+            file.writeText(setSetting(file.takeIf { it.isFile }?.readText(), "screen-desktop", mode.word).getOrThrow())
+            screenSettingsChanged()
+        }.exceptionOrNull()?.let { "couldn't save screen-desktop: ${it.message}" }
+    }
+
+    /** The menu's Align screens…: the desktop goes to the other phone if it isn't there, then the rulers; null, or why not. */
+    fun desktopAlign(): String? {
+        if (desktopCaster.sent == null) {
+            screenShare.send(ScreenTarget.Desktop).exceptionOrNull()?.let { return it.message }
+        }
+        return desktopCaster.startAlign()
+    }
+
+    /** Aligning, as the desktop's view shows it; null when it isn't. */
+    fun desktopAligning(): DesktopAligning? = desktopCaster.aligning
+
+    fun desktopAlignKey(key: DesktopAlignKey) = desktopCaster.alignKey(key)
+
+    fun desktopAlignStep(step: AlignStep) = desktopCaster.alignStep(step)
 
     // The desktop on the other phone was clicked, typed to: this phone's keyboard types into X there.
     private fun desktopTyping(on: Boolean) {
@@ -706,6 +757,10 @@ class TerminalService : Service() {
 
         override fun pointer(stream: Int, x: Float, y: Float, shown: Boolean) {
             activity?.onScreenPointer(stream, x, y, shown)
+        }
+
+        override fun align(message: ScreenMessage.Align) {
+            activity?.onScreenAlign(message)
         }
 
         override fun termStarted(id: Int, title: String, columns: Int, rows: Int) {

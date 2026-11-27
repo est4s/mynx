@@ -244,7 +244,7 @@ class ScreenLink(
                     if (pairing === p) pairing = null
                 } else {
                     pairs.get(linked.peerId)?.let {
-                        pairs.save(ScreenPeer(it.id, linked.peerName, it.role, it.key, it.address, it.paired))
+                        pairs.save(ScreenPeer(it.id, linked.peerName, it.role, it.key, it.address, it.paired, it.align))
                     }
                 }
             }
@@ -445,6 +445,54 @@ class ScreenLink(
      * caller's. The desktop's part on the screen moves with it.
      */
     @Volatile var placeChanged: ((ScreenSide) -> Unit)? = null
+
+    /**
+     * Called with the linked screen's new alignment whenever it's set
+     * ([align]: `mynx screen align`, the desktop's Align screens). On the
+     * caller's thread. The desktop's part on the screen follows it.
+     */
+    @Volatile var alignChanged: ((ScreenAlignment) -> Unit)? = null
+
+    /** The screen whose alignment this host keeps: the linked one, else the only one paired; or why there's none. */
+    internal fun alignPeer(): Result<ScreenPeer> {
+        val c = connection
+        if (c != null) {
+            if (c.myRole == ScreenRole.SCREEN) {
+                return Result.failure(Exception("${c.peerName} keeps the alignment, as the host: run it there"))
+            }
+            return pairs.get(c.peerId)?.let { Result.success(it) } ?: Result.failure(Exception("${c.peerName} isn't paired any more"))
+        }
+        val screens = pairs.all().filter { it.role == ScreenRole.SCREEN }
+        return when (screens.size) {
+            0 -> Result.failure(Exception("no screen is paired (mynx screen pair pairs one)"))
+            1 -> Result.success(screens.single())
+            else -> Result.failure(Exception("more than one screen is paired: link the one to align (mynx screen connect on it)"))
+        }
+    }
+
+    /** The linked screen's alignment (the default when there's none). */
+    fun alignment(): ScreenAlignment =
+        connection?.takeIf { it.myRole == ScreenRole.HOST }?.let { pairs.get(it.peerId)?.align } ?: ScreenAlignment()
+
+    /** Keeps [to] as the screen's alignment ([alignPeer]'s), and tells [alignChanged]; why not, or null. */
+    fun align(to: ScreenAlignment): String? {
+        val peer = alignPeer().getOrElse { return it.message }
+        pairs.align(peer.id, to)
+        alignChanged?.invoke(to.clamped())
+        return null
+    }
+
+    /** The alignment for `mynx screen align`, as JSON fields; or why there's none. */
+    fun alignStatus(): Result<Array<Pair<String, String>>> = alignPeer().map { peer ->
+        arrayOf(
+            "phone" to json(peer.name),
+            "id" to json(peer.id),
+            "offset" to peer.align.offset.toString(),
+            "scale" to peer.align.scale.toString(),
+            "default" to peer.align.isDefault.toString(),
+            "text" to json(alignText(peer.align)),
+        )
+    }
 
     /** The settings may have changed (`mynx set screen-place`): a linked screen hears where it sits now. */
     fun settingsChanged() {
@@ -722,6 +770,24 @@ fun screenRequests(link: ScreenLink, share: ScreenShare? = null): Map<String, La
         if (which.isEmpty()) return@Later reply.refuse("unpair needs a phone's name, or all")
         val gone = link.unpair(which) ?: return@Later reply.refuse("not paired with $which (mynx screen status lists the pairs)")
         reply.ok("unpaired" to array(gone.map(::json)), *link.status())
+    },
+    // The desktop's alignment across both phones (the host keeps it with the pair).
+    "screen-align" to Later(5) { args, reply ->
+        val now = link.alignPeer().getOrElse { return@Later reply.refuse(it.message ?: "nothing to align") }.align
+        val what = args.getOrNull(0)?.trim().orEmpty()
+        val value = args.getOrNull(1)?.trim()?.toFloatOrNull()
+        val most = MAX_ALIGN_OFFSET_MM.toInt()
+        val next = when (what) {
+            "", "show" -> return@Later reply.ok(*link.alignStatus().getOrThrow())
+            "reset" -> ScreenAlignment()
+            "offset" -> value?.takeIf { it in -MAX_ALIGN_OFFSET_MM..MAX_ALIGN_OFFSET_MM }?.let { now.copy(offset = it) }
+                ?: return@Later reply.refuse("offset is in mm, from -$most to $most")
+            "scale" -> value?.takeIf { it in MIN_ALIGN_SCALE..MAX_ALIGN_SCALE }?.let { now.copy(scale = it) }
+                ?: return@Later reply.refuse("scale is from $MIN_ALIGN_SCALE to $MAX_ALIGN_SCALE (1: as the phones' dpi say)")
+            else -> return@Later reply.refuse("align takes offset MM, scale X or reset")
+        }
+        link.align(next)?.let { return@Later reply.refuse(it) }
+        reply.ok(*link.alignStatus().getOrThrow())
     },
     "screen-place" to Later(5, change = { args -> "set screen-place ${args.firstOrNull().orEmpty()}" }) { args, reply ->
         val side = args.getOrNull(0)?.trim()?.let(::screenSide)

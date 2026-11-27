@@ -15,6 +15,7 @@ import io.github.est4s.terminal.core.ACTION_DOWN
 import io.github.est4s.terminal.core.ACTION_POINTER_DOWN
 import io.github.est4s.terminal.core.ACTION_POINTER_UP
 import io.github.est4s.terminal.core.ACTION_UP
+import io.github.est4s.terminal.core.AlignStep
 import io.github.est4s.terminal.core.ScreenCasting
 import io.github.est4s.terminal.core.ScreenMessage
 import io.github.est4s.terminal.core.ScreenTarget
@@ -154,6 +155,15 @@ class ScreenCaster(
     override fun keyFrame(screen: SentScreen) {
         if (screen.target == ScreenTarget.Desktop) return desktop.keyFrame()
         casts[screen.id]?.encoder?.keyFrame()
+    }
+
+    // Aligning is the desktop's alone (its picture's place on the other phone).
+    override fun alignInput(screen: SentScreen, input: ScreenMessage.AlignInput) {
+        if (screen.target == ScreenTarget.Desktop) desktop.alignInput(screen, input)
+    }
+
+    override fun alignAction(screen: SentScreen, step: AlignStep) {
+        if (screen.target == ScreenTarget.Desktop) desktop.alignStep(step)
     }
 
     override fun touch(screen: SentScreen, touch: ScreenMessage.Touch) {

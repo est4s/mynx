@@ -440,6 +440,16 @@ setup() {
     done
 }
 
+@test "the guide explains the desktop across two phones: its sizes, the menu's Other phone, aligning" {
+    for text in "mynx screen align" "the same size on both" "black bands" "**Align screens…**" "**Other phone**" \
+        "**Done** keeps it" "offset" "scale"; do
+        grep -qF -- "$text" "$DOCS/screen.md" || { echo "not in screen.md: $text"; false; }
+    done
+    for text in "**Other phone**" "**Screen sits: Left | Right |" "**Desktop there: Own monitor | Half of one**" "**Align screens…**"; do
+        grep -qF -- "$text" "$DOCS/desktop.md" || { echo "not in desktop.md: $text"; false; }
+    done
+}
+
 @test "the guide explains the desktop view: switching, touch, keys and its bar" {
     grep -qF 'Ctrl+Shift+D' "$CORE"
     for text in "Ctrl+Shift+D" "two-finger tap is a right click" "long press is a right click" \

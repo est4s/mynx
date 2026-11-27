@@ -80,9 +80,16 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
     "Tap again to shut down", for 3 seconds; a second tap stops the
     desktop (as `mynx desktop stop`) and goes back to where you
     opened it from.
+  - **Other phone** (only while a phone is linked as this one's
+    screen, `/opt/mynx/docs/screen.md`): **Screen sits: Left | Right |
+    Above | Below** (`screen-place`, as `mynx screen place`) and
+    **Desktop there: Own monitor | Half of one** (`screen-desktop`
+    `extend` or `span`, as `mynx set`), both applied at once with the
+    menu kept open; **Align screens…** lines the two pictures up
+    (sending the desktop there first if it isn't).
   Restart and Shut down show only while something runs. From the
   keyboard: Up, Down (or Tab, Shift+Tab) choose a row, Left and Right
-  Touch's choice, Enter (or Space) does it (Shut down: Enter twice),
+  a row's choice, Enter (or Space) does it (Shut down: Enter twice),
   Esc or Back closes the menu. While it's open, keys don't reach the
   desktop. Ctrl+Shift+M is the app's on the desktop, as Ctrl+Shift+D
   is (a program's own Ctrl+Shift+M, as Firefox's responsive design
