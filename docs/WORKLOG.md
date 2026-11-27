@@ -44,8 +44,9 @@ a PR into `desktop-dev`.
    #115, entry 221).
 5. **The Log panel keeps a selection and has Copy: passed on the
    phone** (PR #120, entry 226).
-6. **The ⋮ menu** (entry 231, PR into `desktop-dev`): built, CI's
-   screenshots looked at; to try on the phone (entry 231's test).
+6. **The ⋮ menu: passed on the phone** (entry 231, PR #127; Pixel
+   10, 2026-11-27, build 46010220070: "works well"). The agent's
+   decisions stand (entry 231).
 7. **Then, what's left:** start the X server and session again if
    either dies (now the notice offers Start); an external display
    (Android's desktop windowing) later; a last pass over
@@ -97,6 +98,8 @@ a PR into `desktop-dev`.
 ## Log
 
 ### 2026-11-27 (231): Desktop mode: the ⋮ menu
+
+- **Passed on the Pixel 10** (build 46010220070), merged as PR #127.
 
 - Branch `desktop-menu` from `desktop-dev`. Core tested here
   (`DesktopMenuTest`); the app's side only compiled in CI, with
