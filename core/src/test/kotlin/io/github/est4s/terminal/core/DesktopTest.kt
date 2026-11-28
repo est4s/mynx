@@ -18,11 +18,16 @@ class DesktopTest {
     private val host = FakeHost(server)
     private val names = mutableMapOf<Int, String>()
     private val signals = mutableListOf<Pair<Int, Int>>()
+    // Run at once, unless a test holds them back to run by hand.
+    private var holdLater = false
+    private val delayed = mutableListOf<Pair<Long, () -> Unit>>()
+    private var clock = 0L
     private val desktop = Desktop(
         rootfs, host,
         processName = { names[it] },
         signal = { pid, sig -> signals += pid to sig },
-        later = { _, action -> action() },
+        later = { ms, action -> if (holdLater) delayed += ms to action else action() },
+        now = { clock },
     )
     // Whether the app is on screen, and how many times desktop-open showed the desktop.
     private var onScreen = true
@@ -43,28 +48,43 @@ class DesktopTest {
         var serverUp = false
         var sessionUp = false
         var serverFails: String? = null
+        // What each process's end calls, as the app does when it ends, by itself or stopped.
+        var serverEnded: () -> Unit = {}
+        var sessionEnded: () -> Unit = {}
 
-        override fun startServer(launch: Launch, workDir: File, log: File): String? {
+        override fun startServer(launch: Launch, workDir: File, log: File, ended: () -> Unit): String? {
             serverFails?.let { return it }
             events += "server"
             serverLaunch = launch
             serverLog = log
             serverUp = true
+            serverEnded = ended
             return null
+        }
+
+        fun serverDies() {
+            serverUp = false
+            serverEnded()
+        }
+
+        fun sessionDies() {
+            sessionUp = false
+            sessionEnded()
         }
 
         override fun serverRunning() = serverUp
 
         override fun stopServer() {
             events += "stop server"
-            serverUp = false
+            if (serverUp) serverDies()
         }
 
-        override fun startSession(command: List<String>, log: File): String? {
+        override fun startSession(command: List<String>, log: File, ended: () -> Unit): String? {
             events += "session"
             sessionCommand = command
             sessionLog = log
             sessionUp = true
+            sessionEnded = ended
             return null
         }
 
@@ -72,7 +92,7 @@ class DesktopTest {
 
         override fun stopSession() {
             events += "stop session"
-            sessionUp = false
+            if (sessionUp) sessionDies()
         }
     }
 
@@ -162,7 +182,7 @@ class DesktopTest {
 
         assertEquals(
             """{"ok":true,"started":true,"running":true,"display":":0","session":"xfce","sessionRunning":true,""" +
-                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null,"install":[]}""",
+                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null,"install":[],"restarting":false,"gaveUp":null}""",
             answer,
         )
         assertEquals(listOf("server", "session"), host.events)
@@ -204,7 +224,7 @@ class DesktopTest {
         host.server = null
 
         assertEquals("""{"ok":false,"error":"this build of mynx has no X server yet"}""", ask("desktop-start"))
-        assertTrue(ask("desktop-status").endsWith(""""problem":"this build of mynx has no X server yet","install":[]}"""))
+        assertTrue(ask("desktop-status").endsWith(""""problem":"this build of mynx has no X server yet","install":[],"restarting":false,"gaveUp":null}"""))
         assertEquals(emptyList(), host.events)
     }
 
@@ -244,7 +264,7 @@ class DesktopTest {
         val status = desktop.status()
 
         assertEquals(listOf("xfonts-base", "xfce4", "dbus-x11", "tango-icon-theme"), status.install)
-        assertTrue(ask("desktop-status").endsWith(""""install":["xfonts-base","xfce4","dbus-x11","tango-icon-theme"]}"""))
+        assertTrue(ask("desktop-status").endsWith(""""install":["xfonts-base","xfce4","dbus-x11","tango-icon-theme"],"restarting":false,"gaveUp":null}"""))
         settings("desktop = none\n")
         assertEquals(listOf("xfonts-base"), desktop.status().install)
         File(rootfs, "var/lib/dpkg/status").delete()
@@ -270,7 +290,7 @@ class DesktopTest {
         installXfce()
         assertEquals(
             """{"ok":true,"running":false,"display":null,"session":"xfce","sessionRunning":false,""" +
-                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null,"install":[]}""",
+                """"socket":"/tmp/.X11-unix/X0","log":"/tmp/.mynx/desktop/x11.log","problem":null,"install":[],"restarting":false,"gaveUp":null}""",
             ask("desktop-status"),
         )
         ask("desktop-start")
@@ -429,5 +449,155 @@ class DesktopTest {
         assertEquals("Xvfb", runningProcessName(13, proc))
         assertEquals("kworker", runningProcessName(14, proc))
         assertNull(runningProcessName(15, proc))
+    }
+
+    // The delayed actions waiting, run in order.
+    private fun runDelayed(): List<Long> {
+        val waits = delayed.map { it.first }
+        val actions = delayed.map { it.second }
+        delayed.clear()
+        actions.forEach { it() }
+        return waits
+    }
+
+    private fun startHeld() {
+        installXfce()
+        ask("desktop-start")
+        holdLater = true
+        host.events.clear()
+    }
+
+    @Test
+    fun `an X server that dies is started again, with its session`() {
+        startHeld()
+        clock = 60_000
+        host.serverDies()
+
+        assertEquals(listOf("stop session"), host.events)
+        assertTrue(ask("desktop-status").contains(""""running":false,"display":null,"session":"xfce","sessionRunning":false,"""))
+        assertTrue(ask("desktop-status").contains(""""restarting":true,"gaveUp":null"""))
+        assertEquals(listOf(1000L), runDelayed())
+        assertEquals(listOf("stop session", "server", "session"), host.events)
+        assertTrue(ask("desktop-status").contains(""""running":true,"""))
+        assertTrue(ask("desktop-status").contains(""""restarting":false,"""))
+    }
+
+    @Test
+    fun `a session that ends while the X server runs is started again`() {
+        startHeld()
+        clock = 60_000
+        host.sessionDies()
+
+        assertTrue(ask("desktop-status").contains(""""sessionRunning":false,"""))
+        assertTrue(ask("desktop-status").contains(""""restarting":true,"""))
+        assertEquals(listOf(1000L), runDelayed())
+        assertEquals(listOf("session"), host.events)
+        assertTrue(ask("desktop-status").contains(""""sessionRunning":true,"""))
+        assertTrue(ask("desktop-status").contains(""""restarting":false,"""))
+    }
+
+    @Test
+    fun `quick deaths wait longer each time, and after three in a row it gives up`() {
+        startHeld()
+        val waits = (1..3).flatMap {
+            clock += 1000
+            host.serverDies()
+            runDelayed()
+        }
+        assertEquals(listOf(1000L, 2000L, 4000L), waits)
+        clock += 1000
+        host.events.clear()
+        host.serverDies()
+
+        assertEquals(emptyList(), runDelayed())
+        assertEquals(listOf("stop session"), host.events)
+        assertTrue(
+            ask("desktop-status").contains(
+                """"restarting":false,"gaveUp":"the X server stopped 4 times in a row soon after starting, so it wasn't started again"""",
+            ),
+        )
+        // Starting it by hand starts the count over.
+        assertTrue(ask("desktop-start").contains(""""gaveUp":null"""))
+        clock += 1000
+        host.serverDies()
+        assertEquals(listOf(1000L), runDelayed())
+    }
+
+    @Test
+    fun `a death after a long run starts the count over`() {
+        startHeld()
+        repeat(3) {
+            clock += 1000
+            host.serverDies()
+            runDelayed()
+        }
+        clock += 60_000
+        host.serverDies()
+        assertEquals(listOf(1000L), runDelayed())
+    }
+
+    @Test
+    fun `a session that keeps ending is given up on, the X server left running`() {
+        startHeld()
+        repeat(3) {
+            clock += 1000
+            host.sessionDies()
+            runDelayed()
+        }
+        clock += 1000
+        host.sessionDies()
+
+        assertEquals(emptyList(), runDelayed())
+        assertTrue(host.serverUp)
+        assertTrue(
+            ask("desktop-status").contains(
+                """"gaveUp":"the xfce session ended 4 times in a row soon after starting, so it wasn't started again"""",
+            ),
+        )
+    }
+
+    @Test
+    fun `stopping it, or a restart pending, starts nothing again`() {
+        startHeld()
+        ask("desktop-stop")
+        assertEquals(emptyList(), runDelayed())
+
+        ask("desktop-start")
+        host.serverDies()
+        ask("desktop-stop")
+        host.events.clear()
+        assertEquals(listOf(1000L), runDelayed())
+        assertEquals(emptyList(), host.events)
+        assertTrue(ask("desktop-status").contains(""""restarting":false,"gaveUp":null"""))
+    }
+
+    @Test
+    fun `the old processes ending after a restart by hand are not deaths`() {
+        startHeld()
+        val oldServer = host.serverEnded
+        val oldSession = host.sessionEnded
+        host.serverUp = false
+        host.sessionUp = false
+        ask("desktop-start")
+        host.events.clear()
+        oldSession()
+        oldServer()
+
+        assertEquals(emptyList(), runDelayed())
+        assertEquals(emptyList(), host.events)
+    }
+
+    @Test
+    fun `a restart that can't start says why, and stops trying`() {
+        startHeld()
+        host.serverFails = "app_process: no such file"
+        host.serverDies()
+        runDelayed()
+
+        assertTrue(
+            ask("desktop-status").contains(
+                """"restarting":false,"gaveUp":"the X server stopped and didn't start again: the X server didn't start: app_process: no such file"""",
+            ),
+        )
     }
 }

@@ -47,10 +47,15 @@ a PR into `desktop-dev`.
 6. **The ⋮ menu: passed on the phone** (entry 231, PR #127; Pixel
    10, 2026-11-27, build 46010220070: "works well"). The agent's
    decisions stand (entry 231).
-7. **Then, what's left:** start the X server and session again if
-   either dies (now the notice offers Start); an external display
-   (Android's desktop windowing) later; a last pass over
-   `tools/docs/desktop.md`; then merge `desktop-dev` into `main`.
+7. **Starting again by itself** (entry 234, branch
+   `desktop-restart`, PR into `desktop-dev`): built, waiting for
+   the phone test in entry 234.
+8. **Then, what's left:** a last pass over `tools/docs/desktop.md`;
+   then merge `desktop-dev` into `main` (with the README, roadmap
+   and this log brought up to date, and a release build checked:
+   `assembleRelease` runs lint-vital, which debug builds skip). An
+   external display isn't wanted for now (maintainer's decision,
+   2026-11-28).
 
 ### 1. Development boards: what's left (the maintainer picks)
 
@@ -96,6 +101,48 @@ a PR into `desktop-dev`.
 ---
 
 ## Log
+
+### 2026-11-28 (234): Desktop mode: starting again by itself
+
+- Branch `desktop-restart` from `desktop-dev`. Numbered 234:
+  screen-dev has up to 233. Core tested here (`DesktopTest`,
+  `DesktopNoticeTest`), `mynx desktop status` in `tests/mynx`; the
+  app's side (`DesktopProcesses` reports each process's end) only
+  compiled in CI.
+- **Maintainer's request (2026-11-28):** start the X server and the
+  session again if either dies; no external display for now (the
+  roadmap says so).
+- **Branches cleaned up (maintainer's request):** the spike PRs
+  #108, #117 and #118 closed and their branches deleted (their
+  commits stay reachable from the PRs), and
+  `desktop-touch-clipboard-full` deleted: its commits are in
+  `desktop-dev`'s history (47fe251, before the roll-back).
+- **How it works:** once started, a server that ends by itself is
+  started again with a fresh session; a session that ends while the
+  server runs, alone. The sound server's `RestartPolicy`: 1 s,
+  doubling while each run is under 30 s; after 3 such restarts in a
+  row the 4th end is given up on (`gaveUp`, shown with Start and the
+  log). Status gets `restarting` and `gaveUp`.
+- **Decisions to confirm (maintainer's):** XFCE's Log Out counts as
+  the session ending, so it starts again (in mynx Shut down is the
+  way to stop); the limits above; opening the desktop after it was
+  given up on shows why instead of starting it (Start does). A
+  session whose proot lingers after XFCE ends (a daemon left) isn't
+  noticed as ended; its server dying still is.
+- **Phone test** (mynx dev, XFCE installed, desktop open):
+  1. In a tab: `kill $(cat /tmp/.X0-lock)`. The desktop shows "The
+     desktop stopped: starting it again…" with the log, then XFCE
+     again within a few seconds. `mynx desktop` says running.
+  2. In XFCE: Log Out. XFCE comes back by itself (a second or so;
+     the bar's status says "no xfce session" meanwhile).
+  3. `for i in 1 2 3 4; do kill $(cat /tmp/.X0-lock); sleep 12;
+     done`: three restarts, then "The desktop stopped: the X server
+     stopped 4 times in a row soon after starting, so it wasn't
+     started again" with Start and the log; `mynx desktop` says the
+     same. Back, then open the desktop again: the same notice, not
+     started. Start: XFCE.
+  4. ⋮ → Restart desktop, and ⋮ → Shut down: as before, nothing
+     restarts after Shut down (`mynx desktop` stays not running).
 
 ### 2026-11-27 (231): Desktop mode: the ⋮ menu
 

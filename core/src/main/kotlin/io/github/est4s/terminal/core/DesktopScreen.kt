@@ -91,15 +91,20 @@ fun desktopNotice(connected: Boolean, status: DesktopStatus?, starting: Boolean,
     status == null -> DesktopNotice("Waiting for the app…", canStart = false, showLog = false)
     error != null -> DesktopNotice("The desktop didn't start: $error", canStart = true, showLog = true)
     starting -> DesktopNotice("Starting the desktop…", canStart = false, showLog = false)
+    status.restarting -> DesktopNotice("The desktop stopped: starting it again…", canStart = false, showLog = true)
     status.running -> DesktopNotice("Connecting to the X server…", canStart = false, showLog = true)
+    status.gaveUp != null -> DesktopNotice("The desktop stopped: ${status.gaveUp}", canStart = true, showLog = true)
     status.problem != null && status.install.isNotEmpty() -> DesktopNotice(status.problem, canStart = false, showLog = false, canInstall = true)
     status.problem != null -> DesktopNotice(status.problem, canStart = true, showLog = false)
     else -> DesktopNotice("The desktop isn't running.", canStart = true, showLog = false)
 }
 
-/** Opening the desktop starts it when nothing runs and nothing it needs is missing. */
+/**
+ * Opening the desktop starts it when nothing runs, nothing it needs is
+ * missing and it isn't about to start again, or given up on (the notice says why).
+ */
 fun desktopStartsOnOpen(connected: Boolean, status: DesktopStatus?): Boolean =
-    !connected && status != null && !status.running && status.problem == null
+    !connected && status != null && !status.running && status.problem == null && !status.restarting && status.gaveUp == null
 
 /**
  * The log the desktop's view shows (we can't read logcat): the link's
