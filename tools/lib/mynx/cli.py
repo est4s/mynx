@@ -1498,10 +1498,16 @@ def cmd_desktop(args, as_json):
         text = (f"Desktop: opened, running on {where}" if answer["running"]
                 else "Desktop: opened (it starts if it isn't running)")
     elif answer["running"] and answer["session"] != "none" and not answer["sessionRunning"]:
-        text = (f"Desktop: running on DISPLAY={answer['display']}; the {session} session has ended "
-                "(mynx desktop start starts it again)")
+        ended = (f"the {session} session ended, starting it again" if answer.get("restarting")
+                 else f"{answer['gaveUp']} (mynx desktop start starts it again)" if answer.get("gaveUp")
+                 else f"the {session} session has ended (mynx desktop start starts it again)")
+        text = f"Desktop: running on DISPLAY={answer['display']}; {ended}"
     elif answer["running"]:
         text = f"Desktop: running on {where}"
+    elif answer.get("restarting"):
+        text = "Desktop: stopped by itself, starting it again"
+    elif answer.get("gaveUp"):
+        text = f"Desktop: not running: {answer['gaveUp']} (mynx desktop start starts it)"
     elif answer["problem"]:
         text = f"Desktop: not running: {answer['problem']}"
     else:

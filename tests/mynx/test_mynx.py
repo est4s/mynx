@@ -3237,7 +3237,7 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         """The app's desktop-* answer: nothing running, unless [fields] say."""
         answer = {"ok": True, "running": False, "display": None, "session": "xfce", "sessionRunning": False,
                   "socket": os.path.join(self.tmp.name, "X0"), "log": "/tmp/.mynx/desktop/x11.log", "problem": None,
-                  "install": []}
+                  "install": [], "restarting": False, "gaveUp": None}
         answer.update(fields)
         if answer["running"]:
             answer["display"] = ":0"
@@ -3271,6 +3271,28 @@ while read -r line; do echo "$line"; done < {self.tmp.name}/git.src > {bin_dir}/
         run = self.mynx("desktop", "status")
         self.assertEqual(run.stdout, "Desktop: running on DISPLAY=:0; the XFCE session has ended "
                                      "(mynx desktop start starts it again)\n")
+
+    def test_desktop_status_while_it_starts_again(self):
+        self.start_app({"desktop-status": self.desktop_status(restarting=True)})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, "Desktop: stopped by itself, starting it again\n")
+
+    def test_desktop_status_while_its_session_starts_again(self):
+        self.start_app({"desktop-status": self.desktop_status(running=True, restarting=True)})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, "Desktop: running on DISPLAY=:0; the XFCE session ended, starting it again\n")
+
+    def test_desktop_status_says_why_it_was_given_up_on(self):
+        why = "the X server stopped 4 times in a row soon after starting, so it wasn't started again"
+        self.start_app({"desktop-status": self.desktop_status(gaveUp=why)})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, f"Desktop: not running: {why} (mynx desktop start starts it)\n")
+
+    def test_desktop_status_says_why_its_session_was_given_up_on(self):
+        why = "the xfce session ended 4 times in a row soon after starting, so it wasn't started again"
+        self.start_app({"desktop-status": self.desktop_status(running=True, gaveUp=why)})
+        run = self.mynx("desktop", "status")
+        self.assertEqual(run.stdout, f"Desktop: running on DISPLAY=:0; {why} (mynx desktop start starts it again)\n")
 
     def test_desktop_status_when_stopped(self):
         self.start_app({"desktop-status": self.desktop_status()})

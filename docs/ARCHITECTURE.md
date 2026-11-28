@@ -550,7 +550,19 @@ See `docs/ROADMAP.md` "How it works". The details:
   then `dbus-launch --exit-with-session startxfce4`), in a proot of
   its own like the sound server's. Logs: `/tmp/.mynx/desktop/x11.log`
   and `session.log`, written afresh each start. `mynx desktop start`
-  returns once the socket takes connections. New tabs and services get
+  returns once the socket takes connections. **Restarts:** once
+  started (`wanted`, until `stop()`), a server that ends by itself is
+  started again with a new session (the old one stopped), a session
+  that ends while the server runs alone, each by its own
+  `RestartPolicy` (1 s, doubling while runs are under 30 s, given up
+  after `DESKTOP_RESTART_LIMIT`, 3, in a row: `gaveUp`); a start by
+  hand starts the counts over. The host's `ended` callbacks (a thread
+  per process in `DesktopProcesses` waits for it) carry the run's
+  number, so an old process ending after a restart is no death, and
+  each start or stop drops a restart that waits (`restartTurn`).
+  The status has `restarting` and `gaveUp`; the notice shows both,
+  and opening doesn't start one given up on (`desktopStartsOnOpen`).
+  New tabs and services get
   `DISPLAY=:0` while the server runs (`prootLaunch(display =)`). The
   server's start broadcast is taken by **the view's link**, below.
   **Debian's side** (step 5): `desktopPackages()` is what a session

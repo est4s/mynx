@@ -172,6 +172,28 @@ class DesktopNoticeTest {
         assertFalse(desktopStartsOnOpen(connected = false, status = status(problem = "no xkb-data")))
         assertFalse(desktopStartsOnOpen(connected = false, status = null))
     }
+
+    @Test
+    fun `while a desktop that stopped waits to start again, it says so, with the log`() {
+        assertEquals(
+            DesktopNotice("The desktop stopped: starting it again…", canStart = false, showLog = true),
+            desktopNotice(false, status().copy(restarting = true), starting = false, error = null),
+        )
+        assertFalse(desktopStartsOnOpen(connected = false, status = status().copy(restarting = true)))
+    }
+
+    @Test
+    fun `a desktop given up on says why, with Start and the log, and opening doesn't start it`() {
+        val gaveUp = status().copy(gaveUp = "the X server stopped 4 times in a row soon after starting, so it wasn't started again")
+        assertEquals(
+            DesktopNotice(
+                "The desktop stopped: the X server stopped 4 times in a row soon after starting, so it wasn't started again",
+                canStart = true, showLog = true,
+            ),
+            desktopNotice(false, gaveUp, starting = false, error = null),
+        )
+        assertFalse(desktopStartsOnOpen(connected = false, status = gaveUp))
+    }
 }
 
 class DesktopLogsTest {

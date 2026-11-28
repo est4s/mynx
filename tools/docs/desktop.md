@@ -96,6 +96,15 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   them all, and you can select part of them. The desktop keeps
   running when you leave the app or go back from it; it stops
   with Shut down, `mynx desktop stop`, or when the app exits.
+- **If it stops by itself** (the X server crashes, or Android kills
+  it), the app starts the X server and a fresh session again after a
+  second; a session that ends while the server runs (XFCE's Log Out
+  too) is started again alone. Meanwhile the screen says "starting it
+  again", and `mynx desktop status` too (`restarting` in `--json`).
+  If it keeps stopping soon after starting (4 times in a row, each
+  within half a minute; the waits double), it's left stopped and
+  says why (`gaveUp`), with the logs: Start, or `mynx desktop start`,
+  tries again. Shut down and `mynx desktop stop` stop it for good.
 - **The screen** is the X server's, at about 0.75 dp a pixel (2 phone
   pixels on most phones), between the app's bar and the key bar.
   Turning the phone resizes it (RandR: programs see a new screen

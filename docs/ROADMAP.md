@@ -74,7 +74,8 @@ IDE) on the phone, through **Termux:X11**, an X server for Android.
   direct taps (maintainer's decision, 2026-11-24). The clipboard is
   shared (text).
 - An external display with a keyboard and mouse (Android's desktop
-  windowing) is a separate piece of work, after the first version.
+  windowing) isn't planned for now (maintainer's decision,
+  2026-11-28).
 - If Termux:X11 can't work for us, a VNC server in Debian and a
   viewer of our own may be the fallback; not decided.
 - To check first, in a spike: whether its X server runs for an app

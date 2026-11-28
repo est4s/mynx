@@ -24,6 +24,8 @@ private const val SIGKILL = 9
 private const val SIGTERM = 15
 private const val LEFTOVER_CHECK_MS = 100L
 private const val LEFTOVER_CHECKS = 20
+/** Restarts in a row, each after a short run, before the desktop isn't started again. */
+const val DESKTOP_RESTART_LIMIT = 3
 
 /**
  * This build's X server (Termux:X11, a separate GPL program): its native
@@ -80,18 +82,22 @@ fun desktopSessionCommand(session: DesktopSession): List<String>? = when (sessio
     )
 }
 
-/** What [Desktop] needs from the app: running its two processes. */
+/**
+ * What [Desktop] needs from the app: running its two processes. Each
+ * start's `ended` is called on the main thread once that process has
+ * ended, by itself or stopped.
+ */
 interface DesktopHost {
     /** This build's X server, or null: it has none. */
     val server: X11Server?
 
     /** Starts [launch] outside proot in [workDir], its output written afresh to [log]; null when started, else why not. */
-    fun startServer(launch: Launch, workDir: File, log: File): String?
+    fun startServer(launch: Launch, workDir: File, log: File, ended: () -> Unit): String?
     fun serverRunning(): Boolean
     fun stopServer()
 
     /** Starts [command] in Debian with what a tab has, its output written afresh to [log]; null when started, else why not. */
-    fun startSession(command: List<String>, log: File): String?
+    fun startSession(command: List<String>, log: File, ended: () -> Unit): String?
     fun sessionRunning(): Boolean
     fun stopSession()
 }
@@ -99,6 +105,8 @@ interface DesktopHost {
 /**
  * What `mynx desktop status` reports. [problem] is why it can't start,
  * with how to fix it; [install] the [desktopPackages] not installed.
+ * [restarting]: the X server or the session stopped by itself and starts again soon;
+ * [gaveUp]: why something that stopped wasn't started again.
  */
 data class DesktopStatus(
     val running: Boolean,
@@ -106,6 +114,8 @@ data class DesktopStatus(
     val sessionRunning: Boolean,
     val problem: String?,
     val install: List<String> = emptyList(),
+    val restarting: Boolean = false,
+    val gaveUp: String? = null,
 ) {
     val display: String? get() = DESKTOP_DISPLAY.takeIf { running }
 
@@ -118,6 +128,8 @@ data class DesktopStatus(
         "log" to json(X11_LOG),
         "problem" to (problem?.let(::json) ?: "null"),
         "install" to array(install.map(::json)),
+        "restarting" to restarting.toString(),
+        "gaveUp" to (gaveUp?.let(::json) ?: "null"),
     )
 }
 
@@ -153,6 +165,14 @@ val DESKTOP_INSTALL_TAB_COMMAND: List<String> = runThenShell("mynx desktop insta
  * is removed, and a leftover server of ours stopped ([signal], checking
  * through [later]); another program's X server is left alone. Main
  * thread. [processName] names a running process, null when it's gone.
+ *
+ * Once started, the desktop is kept running until stopped: an X server
+ * that ends by itself is started again with a fresh session (the old
+ * one goes with it), a session that ends while the server runs (XFCE's
+ * Log Out too) is started again alone, each per a [RestartPolicy]: a
+ * second, doubling while they end within half a minute, and given up
+ * after [DESKTOP_RESTART_LIMIT] such restarts in a row ([DesktopStatus.gaveUp]).
+ * A start by hand starts the count over. [now] is a clock in ms.
  */
 class Desktop(
     private val rootfs: File,
@@ -160,10 +180,25 @@ class Desktop(
     private val processName: (Int) -> String? = { runningProcessName(it) },
     private val signal: (Int, Int) -> Unit,
     private val later: (Long, () -> Unit) -> Unit,
+    private val now: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
     private val lock = File(rootfs, X11_LOCK.removePrefix("/"))
     private val socket = File(rootfs, X11_SOCKET.removePrefix("/"))
     private val logs = File(rootfs, DESKTOP_DIR.removePrefix("/"))
+
+    // Started and not stopped since: what ends by itself is started again.
+    private var wanted = false
+    // Each process started gets a number, so an older one's end is told apart.
+    private var serverRun = 0
+    private var sessionRun = 0
+    private var serverStarted = 0L
+    private var sessionStarted = 0L
+    // Each start and stop takes a new number, dropping a restart that waits.
+    private var restartTurn = 0
+    private val serverRestarts = RestartPolicy(Restart.ALWAYS, DESKTOP_RESTART_LIMIT)
+    private val sessionRestarts = RestartPolicy(Restart.ALWAYS, DESKTOP_RESTART_LIMIT)
+    private var restarting = false
+    private var gaveUp: String? = null
 
     /** `DISPLAY` for new tabs: set while the X server runs. */
     val display: String? get() = DESKTOP_DISPLAY.takeIf { host.serverRunning() }
@@ -176,6 +211,7 @@ class Desktop(
         return DesktopStatus(
             host.serverRunning(), session, host.sessionRunning(), problem(session),
             desktopPackages(session).filter { it !in installed },
+            restarting, gaveUp,
         )
     }
 
@@ -199,19 +235,34 @@ class Desktop(
      * ended; [done] gets whether the server started now, or fails with why not.
      */
     fun start(done: (Result<Boolean>) -> Unit) {
+        restartTurn++
+        restarting = false
+        gaveUp = null
+        serverRestarts.reset()
+        sessionRestarts.reset()
+        launch(done)
+    }
+
+    private fun launch(done: (Result<Boolean>) -> Unit) {
         val session = session()
         problem(session)?.let { return done(Result.failure(Exception(it))) }
         if (host.serverRunning()) {
             if (!host.sessionRunning()) startSession(session)?.let { return done(Result.failure(Exception(it))) }
+            wanted = true
             return done(Result.success(false))
         }
         clearDisplay { taken ->
             if (taken != null) return@clearDisplay done(Result.failure(Exception(taken)))
             val server = host.server ?: return@clearDisplay done(Result.failure(Exception("this build of mynx has no X server yet")))
             logs.mkdirs()
-            host.startServer(x11Launch(server, rootfs.path), File(rootfs, "tmp"), File(logs, "x11.log"))?.let {
+            val run = ++serverRun
+            serverStarted = now()
+            host.startServer(x11Launch(server, rootfs.path), File(rootfs, "tmp"), File(logs, "x11.log")) {
+                if (run == serverRun) serverEnded()
+            }?.let {
                 return@clearDisplay done(Result.failure(Exception("the X server didn't start: $it")))
             }
+            wanted = true
             done(startSession(session)?.let { Result.failure(Exception(it)) } ?: Result.success(true))
         }
     }
@@ -219,11 +270,57 @@ class Desktop(
     private fun startSession(session: DesktopSession): String? {
         val command = desktopSessionCommand(session) ?: return null
         logs.mkdirs()
-        return host.startSession(command, File(logs, "session.log"))?.let { "the ${session.word} session didn't start: $it" }
+        val run = ++sessionRun
+        sessionStarted = now()
+        return host.startSession(command, File(logs, "session.log")) {
+            if (run == sessionRun) sessionEnded()
+        }?.let { "the ${session.word} session didn't start: $it" }
+    }
+
+    // Its session goes with it: both start again.
+    private fun serverEnded() {
+        if (!wanted) return
+        sessionRun++
+        host.stopSession()
+        val wait = serverRestarts.after(null, now() - serverStarted)
+            ?: return giveUp("the X server stopped ${DESKTOP_RESTART_LIMIT + 1} times in a row soon after starting, so it wasn't started again")
+        restarting = true
+        val turn = ++restartTurn
+        later(wait) {
+            if (turn != restartTurn) return@later
+            restarting = false
+            launch { result ->
+                result.exceptionOrNull()?.let { giveUp("the X server stopped and didn't start again: ${it.message}") }
+            }
+        }
+    }
+
+    private fun sessionEnded() {
+        if (!wanted || !host.serverRunning()) return
+        val session = session()
+        val wait = sessionRestarts.after(null, now() - sessionStarted)
+            ?: return giveUp("the ${session.word} session ended ${DESKTOP_RESTART_LIMIT + 1} times in a row soon after starting, so it wasn't started again")
+        restarting = true
+        val turn = ++restartTurn
+        later(wait) {
+            if (turn != restartTurn) return@later
+            restarting = false
+            if (!wanted || !host.serverRunning() || host.sessionRunning()) return@later
+            startSession(session())?.let { giveUp("the session ended and didn't start again: $it") }
+        }
+    }
+
+    private fun giveUp(why: String) {
+        gaveUp = why
+        restarting = false
     }
 
     /** Stops the session and the X server; true if anything ran. */
     fun stop(): Boolean {
+        wanted = false
+        restartTurn++
+        restarting = false
+        gaveUp = null
         val ran = host.serverRunning() || host.sessionRunning()
         host.stopSession()
         host.stopServer()

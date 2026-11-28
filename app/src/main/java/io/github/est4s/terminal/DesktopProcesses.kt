@@ -17,7 +17,8 @@ import java.io.File
  * outside proot, and the session, in a proot of its own started by
  * [sessionLaunch] (as the sound server's). The server is Termux:X11's,
  * in the APK as `libXlorie.so` and the assets' `x11/termux-x11.jar`; a
- * build without them has none ([server] is null). Call from [handler]'s thread.
+ * build without them has none ([server] is null). Call from [handler]'s thread;
+ * each start's `ended` is posted to it when that process ends.
  */
 class DesktopProcesses(
     private val context: Context,
@@ -36,9 +37,9 @@ class DesktopProcesses(
     private fun hasJarAsset(): Boolean =
         runCatching { context.assets.list("x11")?.contains(JAR_ASSET_NAME) == true }.getOrDefault(false)
 
-    override fun startServer(launch: Launch, workDir: File, log: File): String? = failure {
+    override fun startServer(launch: Launch, workDir: File, log: File, ended: () -> Unit): String? = failure {
         copyJar()
-        serverProcess = start(launch, workDir, log)
+        serverProcess = start(launch, workDir, log, ended)
     }
 
     // A fresh copy each start (the app may have been updated), read-only:
@@ -58,8 +59,8 @@ class DesktopProcesses(
         serverProcess = null
     }
 
-    override fun startSession(command: List<String>, log: File): String? = failure {
-        sessionProcess = start(sessionLaunch(command), context.filesDir, log)
+    override fun startSession(command: List<String>, log: File, ended: () -> Unit): String? = failure {
+        sessionProcess = start(sessionLaunch(command), context.filesDir, log, ended)
     }
 
     override fun sessionRunning(): Boolean = sessionProcess?.isAlive == true
@@ -79,7 +80,7 @@ class DesktopProcesses(
         )
     }
 
-    private fun start(launch: Launch, workDir: File, log: File): Process {
+    private fun start(launch: Launch, workDir: File, log: File, ended: () -> Unit): Process {
         log.parentFile?.mkdirs()
         val builder = ProcessBuilder(launch.argv).directory(workDir)
             .redirectErrorStream(true)
@@ -87,7 +88,12 @@ class DesktopProcesses(
         val env = builder.environment()
         launch.unset.forEach { env.remove(it) }
         env.putAll(launch.env)
-        return builder.start()
+        return builder.start().also { process ->
+            Thread({
+                runCatching { process.waitFor() }
+                handler.post(ended)
+            }, "desktop-watch").apply { isDaemon = true }.start()
+        }
     }
 
     private fun failure(action: () -> Unit): String? = try {
