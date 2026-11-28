@@ -76,39 +76,10 @@ is the Pixel 10 (Android 17), phone B the OnePlus Nord 2 (Android
    modes, Align screens and `mynx screen align`, and PR #128's menu
    with the desktop on B (Touch with the shared pointer, Shut down).
    The agent's decisions stand (entry 232).
-9. **Turning B: built, to try on both phones** (entry 233, PR into
-   `screen-dev`, protocol version 6; update both phones). Both on this
-   build as mynx dev, paired and linked, the desktop running on A with
-   XFCE and sent to B (`mynx screen send desktop`), `screen-place =
-   right`:
-   1. Turn B to landscape: within about a second B's picture fills its
-      landscape screen (no big black bands at the sides), and A's
-      desktop Log says "Nord 2 turned: its screen 2400x1080, its video
-      …". `xrandr --listmonitors` on A: `mynx-b` is the new shape
-      (wider than high), as high as A's part shares with it (A shows
-      bands above and below its own part now, as B is the shorter).
-   2. Turn B back to portrait: as before turning (the layout of step
-      8). Turn it quickly a few times and leave it: it ends on the
-      last shape, without a stuck or black picture.
-   3. Turn A to landscape too, then B (and the other way round, B
-      first): the same layout either way. `mynx screen place below`
-      (then `above`): one tall desktop, about 4:3 (`xrandr
-      --listmonitors`: both monitors the same width); a window dragged
-      down crosses onto B where it should. `mynx set screen-desktop
-      span`: one monitor over both; a maximised window fills both.
-   4. With an alignment kept (`mynx screen align offset 2`), turn B:
-      the lines still meet across the seam after Align screens… (and
-      the rulers follow a turn while Align screens is open; Done keeps
-      it).
-   5. Back on B (its Home showing, the desktop not watched), turn B,
-      then tap Linux desktop on its Home: the desktop shows at the new
-      shape at once.
-   6. Touch on B after a turn: the pointer and taps land where the
-      finger is (direct) / move as a touchpad, and the arrow B draws
-      is where X's pointer is.
-   7. A sent app (`mynx screen send app NAME`) and a terminal tab on B:
-      turn B; the app lays out for landscape (touches land right); the
-      terminal takes B's new rows and columns (as before).
+9. **Turning B: passed on both phones** (entry 233, PR #130,
+   protocol version 6; Pixel 10 as A, Nord 2 as B, 2026-11-28, build
+   46082567112: "it works really well"). The agent's decisions stand
+   (entry 233).
 10. **Then (left for later):** B linking again by itself (after a drop,
    at the app's start); the bridge (`mynx.js`) on a sent app; chats (the
    chat hub shows one chat at a time: it needs a second one shown),
@@ -188,6 +159,8 @@ a PR into `desktop-dev`.
 ## Log
 
 ### 2026-11-28 (233): Extended screen: turning B
+
+- **Passed on both phones** (build 46082567112), merged as PR #130.
 
 - Branch `screen-rotate` from `screen-dev`, PR into `screen-dev`.
   Core tested here (`ScreenTurnTest`, `DesktopTurnTest`,
