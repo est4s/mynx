@@ -134,6 +134,7 @@ the desktop's `/tmp/.mynx/desktop/session.log`.
   screen (`/opt/mynx/docs/screen.md`), **→ NAME** on the bar, or
   `mynx screen send desktop`, makes it a second monitor of the desktop,
   or the second half of one (`screen-desktop`); **Take back** ends it.
+  Turning either phone lays both parts out again.
 - **A mouse** (USB or Bluetooth) points and clicks as on a computer,
   its wheel scrolls.
 - **Keys:** a hardware keyboard's keys go to the X server as they

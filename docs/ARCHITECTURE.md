@@ -762,7 +762,14 @@ See `docs/ROADMAP.md` "How it works". The details:
   added ScreenInfo's real xdpi and ydpi (`DisplayMetrics`; trailing
   floats, read only when there, so a version 4 message reads as 0:
   "not said") and the Align messages; a Hello of another version is
-  refused, as before. **The link** (`ScreenLink`, plain JDK sockets, so
+  refused, as before. Version 6 (work log entry 233): each phone says
+  its ScreenInfo again whenever it changes (`ScreenLink.screenChanged`,
+  from the service's `DisplayListener` on the default display and
+  `onConfigurationChanged`; debounced, `SCREEN_SETTLE_MS` 250 ms, so
+  quick turns say only the last; not said again when it's what the
+  other heard last), the host hears each new one
+  (`peerScreenChanged`), and a StreamStart of a stream already shown
+  is that stream at a new size. **The link** (`ScreenLink`, plain JDK sockets, so
   tested on loopback): A listens on `screen-port` (all interfaces)
   only while `screen-host = auto` and a screen is paired or a pairing
   waits, and advertises `_mynx-screen._tcp` with TXT `v`, `id`,
@@ -847,6 +854,18 @@ See `docs/ROADMAP.md` "How it works". The details:
   thread, MediaCodec onto a SurfaceView fitted to the view) starts at
   a key frame. Back, or leaving the app, stops watching (the host
   stops encoding); Home's first rows list the streams to show again.
+  **B turning** (version 6, `ScreenShare.peerScreenChanged`, entry
+  233): each sent screen gets the size the encoder takes for B's new
+  shape; if that's new, its encoder stops, the screen is resized
+  (`ScreenCasting.resize`: an app's `VirtualDisplay.resize`, the
+  desktop laid out again), a StreamStart at the new size goes, and
+  while watched the encoder starts again at it (the pacer waiting for
+  a key frame). B's `ScreenShare` turns a known stream's StreamStart
+  into `ScreenShowing.resized`, and `ScreenStreamView.resized` refits
+  and restarts its decoder (not shown anew: B's Home stays if it's
+  on). The codec config is kept by the view, not the decoder, as the
+  new encoder's may reach the old decoder before the swap. Terminals
+  need none of this: B's view asks its own size (TermSize).
   Not yet: chats, Files and viewers sent; B's own keyboard.
 - **Extended screen: terminals on B** (`core/.../ScreenTerms.kt`,
   `ScreenShare.kt`'s terminal half, `Tabs.openFrom`;
@@ -963,7 +982,12 @@ See `docs/ROADMAP.md` "How it works". The details:
   which wins until the layout changes (a client like XFCE's display
   settings may move `mynx-b`). Changes to `screen-place` (`mynx screen
   place`, through the link's change callback) and `screen-desktop` (any
-  config reload) move it live (`DesktopCaster.relayout`). **The patch**
+  config reload) move it live (`DesktopCaster.relayout`), and so does
+  B turning (`DesktopCaster.resize`, from `ScreenShare.peerScreenChanged`:
+  the new ScreenInfo and video size, laid out by `desktopFit` afresh, so
+  the order of turns doesn't matter and the alignment's mm stay along
+  the seam whichever edge of B faces it; aligning goes on, its rulers
+  sent anew). **The patch**
   (InitOutput.c): a second CRTC and output `mynx-b`, disconnected until
   mode 1 connects it at the app's place; mode 2 makes the first output's
   mode as big as both; `lorieConfigureNotify` keeps the layout when A's

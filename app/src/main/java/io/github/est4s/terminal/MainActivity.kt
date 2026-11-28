@@ -1010,6 +1010,12 @@ class MainActivity : Activity(), FrontActivity {
         view.show(stream)
     }
 
+    /** The host announced [stream] again at a new size (this phone turned): the one shown starts over at it. */
+    fun onScreenStreamResized(stream: ShownStream) {
+        screenView?.resized(stream)
+        onScreenLinkChanged()
+    }
+
     /** The host has the stream back: it goes, and Home with it. */
     fun onScreenStreamEnded(stream: Int) {
         if (screenView?.shown?.id == stream) hideScreenStream(tell = false)

@@ -12,6 +12,7 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.security.SecureRandom
 import java.util.Timer
+import java.util.TimerTask
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.schedule
@@ -46,6 +47,13 @@ const val MAX_WRONG_CODES = 3
 private const val HANDSHAKE_MS = 10_000
 private const val CONNECT_MS = 4_000
 private const val LAST_WORD_MS = 2_000L
+
+/**
+ * How long this phone's screen must stay the same after a change (a
+ * turn, a new density) before the other phone hears it: a turn and back,
+ * or Android's several display changes for one turn, say only the last.
+ */
+const val SCREEN_SETTLE_MS = 250L
 
 /**
  * The extended screen's link (roadmap "Extended screen"; work log "Next"
@@ -90,6 +98,8 @@ class ScreenLink(
     private var connection: Connection? = null
     private var lastEnd: String? = null
     private var stopped = false
+    // This phone's screen changed: said once it has settled ([screenChanged]).
+    private var screenTask: TimerTask? = null
 
     /** Tests only: called on a link's writer thread just before it writes each message. */
     @Volatile internal var beforeWrite: ((ScreenMessage) -> Unit)? = null
@@ -159,6 +169,7 @@ class ScreenLink(
     fun stop() {
         synchronized(lock) {
             stopped = true
+            screenTask?.cancel()
             closeServer()
             pairing?.reply?.refuse("the app stopped")
             pairing = null
@@ -494,6 +505,26 @@ class ScreenLink(
         )
     }
 
+    /**
+     * Called with the linked phone's screen whenever it says a new one
+     * (as the link starts, and each time it turns or its screen changes
+     * otherwise). On the link's thread. The host's screens sent there
+     * follow it ([ScreenShare.peerScreenChanged]).
+     */
+    @Volatile var peerScreenChanged: ((ScreenMessage.ScreenInfo) -> Unit)? = null
+
+    /**
+     * This phone's screen may have changed (it turned, or its size or
+     * density changed): once it has stayed the same for [SCREEN_SETTLE_MS],
+     * the linked phone hears it, if it isn't what it heard last. Any thread.
+     */
+    fun screenChanged() {
+        synchronized(lock) {
+            screenTask?.cancel()
+            screenTask = if (stopped) null else timer.schedule(SCREEN_SETTLE_MS) { connection?.sendScreen() }
+        }
+    }
+
     /** The settings may have changed (`mynx set screen-place`): a linked screen hears where it sits now. */
     fun settingsChanged() {
         val c = connection ?: return
@@ -570,6 +601,9 @@ class ScreenLink(
         @Volatile var layout: ScreenMessage.Layout? = null
             private set
 
+        // This phone's screen as the other phone heard it last.
+        private var screenSaid: ScreenMessage.ScreenInfo? = null
+
         @Volatile private var closed = false
 
         // What to send, written by a thread of its own: callers may be on Android's main thread,
@@ -577,10 +611,20 @@ class ScreenLink(
         private val outbox = LinkedBlockingQueue<ScreenMessage>()
 
         fun start() {
-            send(platform.screen())
+            sendScreen()
             if (myRole == ScreenRole.HOST) sendLayout()
             thread(name = "mynx-screen-read", isDaemon = true) { read() }
             thread(name = "mynx-screen-write", isDaemon = true) { write() }
+        }
+
+        /** This phone's screen, unless it's what the other phone heard last. */
+        fun sendScreen() {
+            val now = platform.screen()
+            synchronized(this) {
+                if (now == screenSaid) return
+                screenSaid = now
+            }
+            send(now)
         }
 
         fun sendLayout() {
@@ -644,7 +688,11 @@ class ScreenLink(
 
         private fun handle(m: ScreenMessage) {
             when (m) {
-                is ScreenMessage.ScreenInfo -> peerScreen = m
+                is ScreenMessage.ScreenInfo -> {
+                    val was = peerScreen
+                    peerScreen = m
+                    if (m != was) peerScreenChanged?.invoke(m)
+                }
                 is ScreenMessage.Layout -> if (myRole == ScreenRole.HOST) {
                     writePlace(m.side)
                     sendLayout()

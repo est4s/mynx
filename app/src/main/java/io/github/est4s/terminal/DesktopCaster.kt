@@ -138,6 +138,24 @@ class DesktopCaster(
         return null
     }
 
+    /**
+     * The other phone turned (or its screen changed): its part is laid out
+     * again for its new shape, the video [screen]'s new size (its encoder
+     * stopped meanwhile and started again by ScreenShare, when watched).
+     * Aligning goes on, its rulers redrawn for the new layout.
+     */
+    fun resize(screen: SentScreen, density: Int) {
+        val was = this.screen ?: return
+        if (was.id != screen.id) return
+        this.screen = screen
+        this.density = density
+        val info = peerScreen()
+        if (was.width != screen.width || was.height != screen.height) {
+            link.note("${otherName()} turned: its screen ${info?.width}x${info?.height}, its video ${screen.width}x${screen.height}")
+        }
+        relayout()
+    }
+
     /** `screen-place` or `screen-desktop` may have changed: the other phone's part moves. */
     fun relayout() {
         val s = settings() ?: last ?: return link.note("the settings can't be read: the other phone's part stays where it is")

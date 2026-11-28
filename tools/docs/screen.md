@@ -75,6 +75,9 @@ Each takes `--json`.
   of its own, the size of the other phone's screen, encodes it as
   H.264 and sends it over the encrypted link; when the screen falls
   behind, frames are dropped, not queued, so it stays current.
+- **Turning the screen** (portrait to landscape, or back) resizes the
+  sent app to the screen's new shape: the page lays out again, as on
+  one phone, after a moment's black while the video starts over.
 - **Taking back:** `mynx screen take`, Home's **Take back**, or the
   link ending brings it back to the host; the app's page loads again
   there (what it keeps in its own storage stays).
@@ -127,6 +130,15 @@ Each takes `--json`.
   (this phone's desktop loses height to its bars, the screen shows
   full screen); the taller one shows black bands there. Across, the
   screen's part is the rest of its screen.
+- **Turning either phone** lays the desktop out again for both
+  phones' shapes as they are now, at once: this phone's own part as on
+  one phone, the screen's part (and its video) its new shape. Both on
+  their sides, one above the other (`screen-place = above` or
+  `below`), make one tall desktop, about 4:3; side by side, one wide
+  one. The alignment (below) still applies, in millimetres along the
+  shared edge, whichever edge of the screen faces this phone now.
+  This works while the screen shows its own Home too, and while
+  aligning (the rulers follow).
 - **A monitor of its own** (`screen-desktop = extend`, default): the X
   server gets a second monitor, `mynx-b` (RandR, `xrandr
   --listmonitors` lists it), sized as above, on the side

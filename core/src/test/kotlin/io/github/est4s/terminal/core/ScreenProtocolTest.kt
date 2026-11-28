@@ -97,10 +97,11 @@ class ScreenMessagesTest {
     }
 
     @Test
-    fun `this is version 5 of the link`() {
+    fun `this is version 6 of the link`() {
         // Version 1 was the pairing alone, 2 added screens as video, 3 terminals as text, 4 the desktop's pointer,
-        // 5 the screens' own dpi and aligning the desktop across them.
-        assertEquals(5, SCREEN_PROTOCOL)
+        // 5 the screens' own dpi and aligning the desktop across them, 6 the screen saying its size again as it
+        // turns (and a stream announced again at its new size).
+        assertEquals(6, SCREEN_PROTOCOL)
     }
 
     @Test

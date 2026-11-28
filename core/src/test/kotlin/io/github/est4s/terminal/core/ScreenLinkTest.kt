@@ -38,7 +38,7 @@ class ScreenLinkTest {
     private val root = Files.createTempDirectory("link").toFile()
     private val port = ServerSocket(0).use { it.localPort }
 
-    private class Platform(val info: ScreenMessage.ScreenInfo) : ScreenPlatform {
+    private class Platform(@Volatile var info: ScreenMessage.ScreenInfo) : ScreenPlatform {
         @Volatile var ad: ScreenAd? = null
         @Volatile var adPort = 0
         var hosts: () -> List<FoundScreenHost> = { emptyList() }
@@ -190,6 +190,49 @@ class ScreenLinkTest {
         waitFor("connected") { back.answer != null }
         assertEquals(true, back.answer!!["ok"], back.answer.toString())
         waitFor("linked again") { connected(host) != null }
+    }
+
+    @Test
+    fun `the screen says its screen again when it turns, once it settles, and the host hears the last`() {
+        val heard = java.util.concurrent.CopyOnWriteArrayList<ScreenMessage.ScreenInfo>()
+        host.peerScreenChanged = { heard += it }
+        val said = java.util.concurrent.CopyOnWriteArrayList<ScreenMessage.ScreenInfo>()
+        screen.beforeWrite = { if (it is ScreenMessage.ScreenInfo) said += it }
+        // Turning before it's linked: nothing to tell, and nothing breaks.
+        screen.screenChanged()
+        pair()
+        waitFor("the host knows its size") { host.peer()?.screen != null }
+        val portrait = ScreenMessage.ScreenInfo(1080, 2400, 480, 0)
+        val landscape = ScreenMessage.ScreenInfo(2400, 1080, 480, 1, 409f, 409f)
+        // Quick turns (and back, and over): only the last goes, once it has settled.
+        screenPlatform.info = landscape
+        screen.screenChanged()
+        screenPlatform.info = portrait.copy(rotation = 2)
+        screen.screenChanged()
+        screenPlatform.info = landscape.copy(rotation = 3)
+        screen.screenChanged()
+        waitFor("the host has the last") { host.peer()?.screen == landscape.copy(rotation = 3) }
+        Thread.sleep(SCREEN_SETTLE_MS * 3)
+        assertEquals(listOf(portrait, landscape.copy(rotation = 3)), said.toList())
+        assertEquals(listOf(portrait, landscape.copy(rotation = 3)), heard.toList())
+        // Nothing changed: nothing said.
+        screen.screenChanged()
+        Thread.sleep(SCREEN_SETTLE_MS * 3)
+        assertEquals(2, said.size)
+        // The status says the new size.
+        assertEquals("2400", (connected(host)!!["screen"] as Map<*, *>)["width"].toString().removeSuffix(".0"))
+    }
+
+    @Test
+    fun `linking again says the screen as it is now`() {
+        pair()
+        waitFor("linked") { host.peer()?.screen != null }
+        assertTrue(screen.disconnect())
+        waitFor("both down") { connected(host) == null && connected(screen) == null }
+        screenPlatform.info = ScreenMessage.ScreenInfo(2400, 1080, 480, 1)
+        val back = Answers()
+        screen.connect(null, reply(back))
+        waitFor("linked again, the new size known") { host.peer()?.screen?.width == 2400 }
     }
 
     @Test

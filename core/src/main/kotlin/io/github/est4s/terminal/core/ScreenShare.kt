@@ -64,6 +64,14 @@ interface ScreenCasting {
     /** Moves [screen] to a display of its own, at its size and [density]; null, or why not. */
     fun open(screen: SentScreen, density: Int): String?
 
+    /**
+     * The other phone's screen changed (it turned): [screen] is drawn at
+     * its new size (the same, if only its rotation changed) and [density]
+     * from now on. Its encoder is stopped first and started again after,
+     * when it's watched.
+     */
+    fun resize(screen: SentScreen, density: Int) {}
+
     /** Closes [screen]'s display; [back]: and shows it on this phone again. */
     fun close(screen: SentScreen, back: Boolean)
 
@@ -114,6 +122,9 @@ interface ScreenShowing {
     fun started(stream: ShownStream)
 
     fun ended(stream: Int)
+
+    /** The host announced [stream] again at a new size (it turned here): the decoder starts over at it, if it's shown. */
+    fun resized(stream: ShownStream) {}
 
     /** A part of a stream's video, on the link's thread: straight to the decoder. */
     fun video(message: ScreenMessage.Video)
@@ -244,6 +255,43 @@ class ScreenShare(
     }
 
     private fun failure(why: String): Result<SentScreen> = Result.failure(Exception(why))
+
+    /**
+     * On the host: the linked screen said its screen anew ([info]: it
+     * turned, or its size or density changed). Each screen sent there is
+     * drawn at the size the encoder takes for its new shape
+     * ([ScreenCasting.resize]: an app's display resized, the desktop laid
+     * out again); when that size is new, its stream is announced again at
+     * it and, while watched, its encoder starts again there, the pacer
+     * waiting for its first key frame. Terminals ask for their size
+     * themselves ([ScreenMessage.TermSize]). Main thread.
+     */
+    fun peerScreenChanged(info: ScreenMessage.ScreenInfo) {
+        if (info.width <= 0 || info.height <= 0) return
+        val settings by lazy { loadSettings(settingsFile).settings }
+        for (screen in sent) {
+            val (width, height) = casting.streamSize(info.width, info.height)
+            val resized = width != screen.width || height != screen.height
+            val now = screen.copy(width = width, height = height)
+            if (synchronized(lock) { screen.id !in sentScreens }) continue
+            val pacer = synchronized(lock) {
+                sentScreens[screen.id] = now
+                pointers.remove(screen.id)
+                pacers[screen.id]
+            }
+            if (resized && screen.watched) {
+                pacer?.watch(false)
+                casting.encode(screen, false, 0, 0)
+            }
+            casting.resize(now, info.density)
+            if (!resized) continue
+            send(ScreenMessage.StreamStart(now.id, now.title, width, height))
+            if (now.watched) {
+                pacer?.watch(true)
+                casting.encode(now, true, settings.screenFps, settings.screenBitrate * 1000)
+            }
+        }
+    }
 
     /** Sends terminal tab [target] to the linked screen, as text. Main thread. */
     fun sendTerm(target: ScreenTarget.Terminal): Result<SentTerm> {
@@ -536,8 +584,11 @@ class ScreenShare(
             is ScreenMessage.TermTouched -> touchedTerm(m.term)
             is ScreenMessage.StreamStart -> {
                 val stream = ShownStream(m.stream, m.title, m.width, m.height)
-                synchronized(lock) { shownStreams[m.stream] = stream }
-                showing.started(stream)
+                val was = synchronized(lock) { shownStreams.put(m.stream, stream) }
+                when {
+                    was == null -> showing.started(stream)
+                    was != stream -> showing.resized(stream)
+                }
             }
             is ScreenMessage.StreamEnd -> endShown(m.stream)
             is ScreenMessage.Focus -> {

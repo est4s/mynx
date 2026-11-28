@@ -18,9 +18,12 @@ import javax.crypto.spec.SecretKeySpec
  * refused. 1 was the pairing alone; 2 sends screens (video, touches);
  * 3 sends terminal tabs as text; 4 the desktop's pointer ([ScreenMessage.Pointer]);
  * 5 each screen's own dpi ([ScreenMessage.ScreenInfo]'s xdpi, ydpi) and
- * aligning the desktop across both ([ScreenMessage.Align]).
+ * aligning the desktop across both ([ScreenMessage.Align]); 6 the screen
+ * saying its [ScreenMessage.ScreenInfo] again whenever it changes (it
+ * turned), and the host announcing a stream again at its new size (a
+ * [ScreenMessage.StreamStart] of a stream already shown).
  */
-const val SCREEN_PROTOCOL = 5
+const val SCREEN_PROTOCOL = 6
 
 /** A [ScreenMessage.Video] part that's a key frame: it decodes alone. */
 const val VIDEO_KEY = 1
@@ -93,6 +96,7 @@ sealed class ScreenMessage(val type: Int) {
      * A phone's screen: its size in pixels, density (dpi, Android's
      * bucket) and rotation (0-3, quarter turns), and its real pixels an
      * inch across and down ([xdpi], [ydpi]; 0: not said, before version 5).
+     * Sent as a link starts, and again (version 6) whenever it changes.
      */
     data class ScreenInfo(
         val width: Int,
@@ -134,7 +138,7 @@ sealed class ScreenMessage(val type: Int) {
      */
     data class Touch(val stream: Int, val action: Int, val index: Int, val points: List<TouchPoint>) : ScreenMessage(TYPE_TOUCH)
 
-    /** The host sends a screen, [title], drawn at [width] x [height] pixels. */
+    /** The host sends a screen, [title], drawn at [width] x [height] pixels; again for a stream sent already, its new size (the screen turned). */
     data class StreamStart(val stream: Int, val title: String, val width: Int, val height: Int) : ScreenMessage(TYPE_STREAM_START)
 
     /** The host has the screen back (or it closed): the screen stops showing it. */
